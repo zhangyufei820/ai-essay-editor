@@ -33,6 +33,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
     def test_codex_allowed_models_include_only_public_15k_image_model(self) -> None:
         self.assertIn("image 2电商商品图快速通道(1.5K)", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("gpt-5.6-luna", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("gpt-5.6-terra", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("gpt-5.6-sol", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.3-codex-spark", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.5-openai-compact", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("codex-auto-review", self.module.CODEX_ALLOWED_MODELS)
@@ -44,7 +47,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -52,7 +55,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_token_cache_key_uses_crypto_secret_hmac(self) -> None:
@@ -96,12 +99,15 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 ["1", "gpt-5.5", "text,openai,codex"],
                 ["2", "gpt-5.4", "text,openai,codex"],
                 ["3", "gpt-5.4-mini", "text,openai,codex"],
-                ["4", "gpt-5.3-codex-spark", "text,codex"],
-                ["5", "gpt-5.5-openai-compact", "text,codex"],
-                ["6", "codex-auto-review", "text,codex"],
-                ["7", "image 2电商商品图快速通道(1.5K)", "image,openai,ecommerce,1.5k,dragtokens"],
-                ["8", "gpt-image-2-4K", "image,openai"],
-                ["9", "geek2api-image-2", "image,openai,geek2api"],
+                ["4", "gpt-5.6-luna", "text,openai,codex"],
+                ["5", "gpt-5.6-terra", "text,openai,codex"],
+                ["6", "gpt-5.6-sol", "text,openai,codex"],
+                ["7", "gpt-5.3-codex-spark", "text,codex"],
+                ["8", "gpt-5.5-openai-compact", "text,codex"],
+                ["9", "codex-auto-review", "text,codex"],
+                ["10", "image 2电商商品图快速通道(1.5K)", "image,openai,ecommerce,1.5k,dragtokens"],
+                ["11", "gpt-image-2-4K", "image,openai"],
+                ["12", "geek2api-image-2", "image,openai,geek2api"],
             ]
 
         self.module.mysql = fake_mysql
@@ -114,6 +120,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 "gpt-5.5",
                 "gpt-5.4",
                 "gpt-5.4-mini",
+                "gpt-5.6-luna",
+                "gpt-5.6-terra",
+                "gpt-5.6-sol",
                 "gpt-5.3-codex-spark",
                 "gpt-5.5-openai-compact",
                 "codex-auto-review",
@@ -170,7 +179,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.module.sync_tokens(
             {
-                "codex": ["gpt-5.5", "image 2电商商品图快速通道(1.5K)"],
+                "codex": [
+                    "gpt-5.5",
+                    "gpt-5.6-luna",
+                    "gpt-5.6-terra",
+                    "gpt-5.6-sol",
+                    "image 2电商商品图快速通道(1.5K)",
+                ],
                 "claude": ["claude-opus-4-8"],
                 "image": ["gpt-image-2-4K", "geek2api-image-2"],
                 "video": ["seedance-2.0-cl-mini"],
@@ -180,6 +195,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sql = "\n".join(captured)
         self.assertIn("AND user_id = 1", sql)
         self.assertEqual(sql.count("AND user_id = 1"), 5)
+        self.assertIn("gpt-5.6-luna", sql)
+        self.assertIn("gpt-5.6-terra", sql)
+        self.assertIn("gpt-5.6-sol", sql)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertIn("CACHE:admin-key-1,admin-key-2", sql)
@@ -194,7 +212,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn("COALESCE(`key`, '')", query)
             self.assertNotIn("model_limits_enabled = 1", query)
             full_limits = (
-                "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark,"
+                "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,"
                 "gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)"
             )
             return [
@@ -220,12 +238,41 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("WHERE id = '105'", sql)
         self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105", sql)
         self.assertIn("model_limits_enabled = 1", sql)
-        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
-        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertNotIn("gpt-image-2-4K", sql)
         self.assertNotIn("claude-opus-4-8", sql)
         self.assertNotIn("seedance-2.0-cl-mini", sql)
+
+    def test_ensure_public_openai_text_models_uses_public_chat_metadata(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_public_openai_text_models()
+
+        sql = "\n".join(captured)
+        for model in ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
+            self.assertIn(model, sql)
+        self.assertIn("text,openai,codex", sql)
+        self.assertIn('{"openai":"/v1/chat/completions"}', sql)
+        self.assertIn("vendor_id = 1", sql)
+
+    def test_sync_public_openai_text_pricing_sets_ratio_prices(self) -> None:
+        captured_options: dict[str, dict[str, float]] = {}
+        self.module.parse_json_option = lambda _key: {}
+        self.module.upsert_json_option = lambda key, values: captured_options.update({key: values})
+
+        self.module.sync_public_openai_text_pricing()
+
+        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-luna"], 0.5)
+        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-terra"], 1.25)
+        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-sol"], 2.5)
+        for model in ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
+            self.assertEqual(captured_options["CompletionRatio"][model], 6.0)
+            self.assertEqual(captured_options["CacheRatio"][model], 0.1)
+            self.assertEqual(captured_options["CreateCacheRatio"][model], 1.25)
+            self.assertNotIn(model, captured_options["ModelPrice"])
 
     def test_sync_supplier_safe_public_metadata_removes_supplier_price_keys(self) -> None:
         captured_options: dict[str, dict[str, float]] = {}

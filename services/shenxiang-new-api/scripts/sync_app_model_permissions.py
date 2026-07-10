@@ -60,6 +60,9 @@ CODEX_ALLOWED_MODELS = [
     "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
     "gpt-5.3-codex-spark",
     "gpt-5.5-openai-compact",
     "codex-auto-review",
@@ -84,6 +87,10 @@ PUBLIC_SEEDANCE_CHANNEL_MODELS = [
     *PUBLIC_SEEDANCE_VIDEO_MODELS,
 ]
 PUBLIC_SEEDANCE_MODEL_MAPPING = '{"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
+CODEX_TEXT_CHANNEL_ID = "21"
+CODEX_TEXT_CHANNEL_MODEL_MAPPING = {
+    "gpt-5.3-codex-spark": "gpt-5.3-spark",
+}
 PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
     # Customer price = official RMB token price * 1.08.
     # New API ratio formula: input CNY per 1M = model_ratio * 2 * USDExchangeRate.
@@ -91,6 +98,29 @@ PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
         "input_with_video": Decimal("11.90") * Decimal("1.08"),
         "output": Decimal("19.55") * Decimal("1.08"),
     }
+}
+PUBLIC_OPENAI_TEXT_MODELS = {
+    "gpt-5.6-luna": {
+        "description": "OpenAI GPT-5.6 Luna 文本模型，适合日常对话、写作和轻量推理。",
+        "input_usd": Decimal("1.0000"),
+        "output_usd": Decimal("6.0000"),
+        "cache_read_usd": Decimal("0.1000"),
+        "cache_create_usd": Decimal("1.2500"),
+    },
+    "gpt-5.6-terra": {
+        "description": "OpenAI GPT-5.6 Terra 文本模型，适合更高质量的写作、分析和代码任务。",
+        "input_usd": Decimal("2.5000"),
+        "output_usd": Decimal("15.0000"),
+        "cache_read_usd": Decimal("0.2500"),
+        "cache_create_usd": Decimal("3.1250"),
+    },
+    "gpt-5.6-sol": {
+        "description": "OpenAI GPT-5.6 Sol 文本模型，适合复杂推理、长文分析和高质量代码任务。",
+        "input_usd": Decimal("5.0000"),
+        "output_usd": Decimal("30.0000"),
+        "cache_read_usd": Decimal("0.5000"),
+        "cache_create_usd": Decimal("6.2500"),
+    },
 }
 
 
@@ -353,6 +383,79 @@ def sync_public_seedance_pricing() -> None:
 
     upsert_json_option("ModelRatio", model_ratios)
     upsert_json_option("CompletionRatio", completion_ratios)
+    upsert_json_option("ModelPrice", model_prices)
+
+
+def ensure_public_openai_text_models() -> None:
+    statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
+    for model, config in PUBLIC_OPENAI_TEXT_MODELS.items():
+        statements.append(
+            "SET @openai_text_model := "
+            + sql_quote(model)
+            + " COLLATE utf8mb4_unicode_ci;"
+            "SET @keep_model_id := ("
+            "SELECT MIN(id) FROM models WHERE model_name = @openai_text_model AND deleted_at IS NULL"
+            ");"
+            "SET @keep_model_id := IFNULL(@keep_model_id, ("
+            "SELECT MIN(id) FROM models WHERE model_name = @openai_text_model"
+            "));"
+            "INSERT INTO models "
+            "(model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) "
+            "SELECT "
+            + ", ".join(
+                [
+                    "@openai_text_model",
+                    sql_quote(str(config["description"])),
+                    sql_quote("OpenAI"),
+                    sql_quote("text,openai,codex"),
+                    "1",
+                    sql_quote('{"openai":"/v1/chat/completions"}'),
+                    "1",
+                    "0",
+                    "@now",
+                    "@now",
+                    "0",
+                ]
+            )
+            + " WHERE @keep_model_id IS NULL;"
+            "SET @keep_model_id := IFNULL(@keep_model_id, LAST_INSERT_ID());"
+            "UPDATE models SET "
+            "description = "
+            + sql_quote(str(config["description"]))
+            + ", icon = "
+            + sql_quote("OpenAI")
+            + ", tags = "
+            + sql_quote("text,openai,codex")
+            + ", vendor_id = 1, endpoints = "
+            + sql_quote('{"openai":"/v1/chat/completions"}')
+            + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
+            "WHERE id = @keep_model_id;"
+            "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+            "WHERE model_name = @openai_text_model AND id <> @keep_model_id;"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+
+
+def sync_public_openai_text_pricing() -> None:
+    model_ratios = parse_json_option("ModelRatio")
+    completion_ratios = parse_json_option("CompletionRatio")
+    cache_ratios = parse_json_option("CacheRatio")
+    create_cache_ratios = parse_json_option("CreateCacheRatio")
+    model_prices = parse_json_option("ModelPrice")
+
+    for model, prices in PUBLIC_OPENAI_TEXT_MODELS.items():
+        input_usd = prices["input_usd"]
+        model_ratios[model] = decimal_to_float(input_usd / Decimal("2"))
+        completion_ratios[model] = decimal_to_float(prices["output_usd"] / input_usd)
+        cache_ratios[model] = decimal_to_float(prices["cache_read_usd"] / input_usd)
+        create_cache_ratios[model] = decimal_to_float(prices["cache_create_usd"] / input_usd)
+        model_prices.pop(model, None)
+
+    upsert_json_option("ModelRatio", model_ratios)
+    upsert_json_option("CompletionRatio", completion_ratios)
+    upsert_json_option("CacheRatio", cache_ratios)
+    upsert_json_option("CreateCacheRatio", create_cache_ratios)
     upsert_json_option("ModelPrice", model_prices)
 
 
@@ -803,7 +906,9 @@ def refresh_codex() -> None:
 def main() -> int:
     ensure_public_seedance_models()
     ensure_discount_image2_backing_model()
+    ensure_public_openai_text_models()
     sync_public_seedance_pricing()
+    sync_public_openai_text_pricing()
     metadata_result = sync_supplier_safe_public_metadata()
     profiles = model_lists()
     missing = [name for name, values in profiles.items() if not values]
