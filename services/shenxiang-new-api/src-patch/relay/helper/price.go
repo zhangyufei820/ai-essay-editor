@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -243,17 +244,32 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 }
 
 func HasModelBillingConfig(modelName string) bool {
-	if _, ok := ratio_setting.GetModelPrice(modelName, false); ok {
-		return true
+	for _, candidate := range modelBillingConfigCandidates(modelName) {
+		if _, ok := ratio_setting.GetModelPrice(candidate, false); ok {
+			return true
+		}
+		if _, ok, _ := ratio_setting.GetModelRatio(candidate); ok {
+			return true
+		}
+		if billing_setting.GetBillingMode(candidate) != billing_setting.BillingModeTieredExpr {
+			continue
+		}
+		expr, ok := billing_setting.GetBillingExpr(candidate)
+		if ok && strings.TrimSpace(expr) != "" {
+			return true
+		}
 	}
-	if _, ok, _ := ratio_setting.GetModelRatio(modelName); ok {
-		return true
+	return false
+}
+
+func modelBillingConfigCandidates(modelName string) []string {
+	trimmed := strings.TrimSpace(modelName)
+	candidates := []string{trimmed}
+	normalized, _, changed := service.NormalizeImageGenerationModelName(trimmed)
+	if changed && !strings.EqualFold(normalized, trimmed) {
+		candidates = append(candidates, normalized)
 	}
-	if billing_setting.GetBillingMode(modelName) != billing_setting.BillingModeTieredExpr {
-		return false
-	}
-	expr, ok := billing_setting.GetBillingExpr(modelName)
-	return ok && strings.TrimSpace(expr) != ""
+	return candidates
 }
 
 func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {

@@ -5,7 +5,9 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -34,4 +36,15 @@ func TestModelPriceHelperUsesImageCNYFixedPrice(t *testing.T) {
 	require.InDelta(t, 0.008, priceData.ModelPrice, 0.000001)
 	require.Equal(t, 4000, priceData.QuotaToPreConsume)
 	require.Equal(t, priceData, info.PriceData)
+}
+
+func TestHasModelBillingConfigAcceptsPublicDiscountImage2Alias(t *testing.T) {
+	oldModelPrice := ratio_setting.ModelPrice2JSONString()
+	defer func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(oldModelPrice))
+	}()
+
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"`+service.InternalDiscountImage2ModelName+`":0.03}`))
+
+	require.True(t, HasModelBillingConfig(service.PublicDiscountImage2ModelName))
 }
