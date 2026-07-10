@@ -110,24 +110,24 @@ PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
 PUBLIC_OPENAI_TEXT_MODELS = {
     "gpt-5.6-luna": {
         "description": "OpenAI GPT-5.6 Luna 文本模型，适合日常对话、写作和轻量推理。",
-        "input_usd": Decimal("1.0000"),
-        "output_usd": Decimal("6.0000"),
-        "cache_read_usd": Decimal("0.1000"),
-        "cache_create_usd": Decimal("1.2500"),
+        "input_cny": Decimal("1.0000"),
+        "output_cny": Decimal("6.0000"),
+        "cache_read_cny": Decimal("0.1000"),
+        "cache_create_cny": Decimal("1.2500"),
     },
     "gpt-5.6-terra": {
         "description": "OpenAI GPT-5.6 Terra 文本模型，适合更高质量的写作、分析和代码任务。",
-        "input_usd": Decimal("2.5000"),
-        "output_usd": Decimal("15.0000"),
-        "cache_read_usd": Decimal("0.2500"),
-        "cache_create_usd": Decimal("3.1250"),
+        "input_cny": Decimal("2.5000"),
+        "output_cny": Decimal("15.0000"),
+        "cache_read_cny": Decimal("0.2500"),
+        "cache_create_cny": Decimal("3.1250"),
     },
     "gpt-5.6-sol": {
         "description": "OpenAI GPT-5.6 Sol 文本模型，适合复杂推理、长文分析和高质量代码任务。",
-        "input_usd": Decimal("5.0000"),
-        "output_usd": Decimal("30.0000"),
-        "cache_read_usd": Decimal("0.5000"),
-        "cache_create_usd": Decimal("6.2500"),
+        "input_cny": Decimal("5.0000"),
+        "output_cny": Decimal("30.0000"),
+        "cache_read_cny": Decimal("0.5000"),
+        "cache_create_cny": Decimal("6.2500"),
     },
 }
 
@@ -497,13 +497,16 @@ def sync_public_openai_text_pricing() -> None:
     cache_ratios = parse_json_option("CacheRatio")
     create_cache_ratios = parse_json_option("CreateCacheRatio")
     model_prices = parse_json_option("ModelPrice")
+    exchange_rate = usd_exchange_rate()
 
     for model, prices in PUBLIC_OPENAI_TEXT_MODELS.items():
-        input_usd = prices["input_usd"]
-        model_ratios[model] = decimal_to_float(input_usd / Decimal("2"))
-        completion_ratios[model] = decimal_to_float(prices["output_usd"] / input_usd)
-        cache_ratios[model] = decimal_to_float(prices["cache_read_usd"] / input_usd)
-        create_cache_ratios[model] = decimal_to_float(prices["cache_create_usd"] / input_usd)
+        input_cny = prices["input_cny"]
+        # Model plaza prices are the actual RMB sale prices. New API displays
+        # input CNY per 1M as model_ratio * 2 * USDExchangeRate.
+        model_ratios[model] = decimal_to_float(input_cny / (Decimal("2") * exchange_rate))
+        completion_ratios[model] = decimal_to_float(prices["output_cny"] / input_cny)
+        cache_ratios[model] = decimal_to_float(prices["cache_read_cny"] / input_cny)
+        create_cache_ratios[model] = decimal_to_float(prices["cache_create_cny"] / input_cny)
         model_prices.pop(model, None)
 
     upsert_json_option("ModelRatio", model_ratios)

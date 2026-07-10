@@ -271,13 +271,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
     def test_sync_public_openai_text_pricing_sets_ratio_prices(self) -> None:
         captured_options: dict[str, dict[str, float]] = {}
         self.module.parse_json_option = lambda _key: {}
+        self.module.option_value = lambda key: "7.3" if key == "USDExchangeRate" else ""
         self.module.upsert_json_option = lambda key, values: captured_options.update({key: values})
 
         self.module.sync_public_openai_text_pricing()
 
-        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-luna"], 0.5)
-        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-terra"], 1.25)
-        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-sol"], 2.5)
+        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-luna"], 0.068493150685)
+        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-terra"], 0.171232876712)
+        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-sol"], 0.342465753425)
         for model in ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
             self.assertEqual(captured_options["CompletionRatio"][model], 6.0)
             self.assertEqual(captured_options["CacheRatio"][model], 0.1)
