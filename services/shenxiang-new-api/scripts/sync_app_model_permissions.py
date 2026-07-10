@@ -88,6 +88,11 @@ PUBLIC_SEEDANCE_CHANNEL_MODELS = [
 ]
 PUBLIC_SEEDANCE_MODEL_MAPPING = '{"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
 CODEX_TEXT_CHANNEL_ID = "21"
+CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
+]
 CODEX_TEXT_CHANNEL_MODEL_MAPPING = {
     "gpt-5.3-codex-spark": "gpt-5.3-spark",
 }
@@ -457,6 +462,54 @@ def sync_public_openai_text_pricing() -> None:
     upsert_json_option("CacheRatio", cache_ratios)
     upsert_json_option("CreateCacheRatio", create_cache_ratios)
     upsert_json_option("ModelPrice", model_prices)
+
+
+def ensure_codex_text_channel_models() -> dict[str, int]:
+    rows = mysql(
+        "SELECT COALESCE(models, ''), COALESCE(model_mapping, '') FROM channels WHERE id = "
+        + CODEX_TEXT_CHANNEL_ID
+        + " LIMIT 1;"
+    )
+    if not rows:
+        return {"channel_found": 0, "models_updated": 0, "mapping_updated": 0}
+
+    raw_models = rows[0][0].strip()
+    models = [item.strip() for item in raw_models.split(",") if item.strip()]
+    models_changed = False
+    for model in CODEX_TEXT_CHANNEL_REQUIRED_MODELS:
+        if model not in models:
+            models.append(model)
+            models_changed = True
+
+    raw_mapping = rows[0][1].strip()
+    mapping: dict[str, str] = {}
+    if raw_mapping:
+        try:
+            parsed = json.loads(raw_mapping)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid JSON model_mapping for channel {CODEX_TEXT_CHANNEL_ID}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError(f"model_mapping for channel {CODEX_TEXT_CHANNEL_ID} must be a JSON object")
+        mapping = {str(key): str(value) for key, value in parsed.items() if str(key).strip()}
+
+    mapping_changed = False
+    for public_model, upstream_model in CODEX_TEXT_CHANNEL_MODEL_MAPPING.items():
+        if mapping.get(public_model) != upstream_model:
+            mapping[public_model] = upstream_model
+            mapping_changed = True
+
+    if models_changed or mapping_changed:
+        payload = json.dumps(mapping, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        mysql_exec(
+            "UPDATE channels SET models = "
+            + sql_quote(",".join(models))
+            + ", model_mapping = "
+            + sql_quote(payload)
+            + " WHERE id = "
+            + CODEX_TEXT_CHANNEL_ID
+            + ";"
+        )
+    return {"channel_found": 1, "models_updated": int(models_changed), "mapping_updated": int(mapping_changed)}
 
 
 def sync_supplier_safe_public_metadata() -> dict[str, int]:
@@ -909,6 +962,7 @@ def main() -> int:
     ensure_public_openai_text_models()
     sync_public_seedance_pricing()
     sync_public_openai_text_pricing()
+    codex_text_channel_result = ensure_codex_text_channel_models()
     metadata_result = sync_supplier_safe_public_metadata()
     profiles = model_lists()
     missing = [name for name, values in profiles.items() if not values]
@@ -926,7 +980,7 @@ def main() -> int:
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
         + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, gpt_image2_guard={guard_result}"
-        + f", supplier_safe_metadata={metadata_result}"
+        + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
     )
     return 0
 

@@ -301,6 +301,33 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("image,openai,ecommerce,1.5k", sql)
         self.assertNotIn("dragtokens", sql)
 
+    def test_ensure_codex_text_channel_models_adds_openai_models_and_spark_alias(self) -> None:
+        captured: list[str] = []
+        self.module.mysql = lambda query: [["gpt-5.5,gpt-5.4", ""]]
+        self.module.mysql_exec = captured.append
+
+        result = self.module.ensure_codex_text_channel_models()
+
+        self.assertEqual(result, {"channel_found": 1, "models_updated": 1, "mapping_updated": 1})
+        sql = "\n".join(captured)
+        self.assertIn("UPDATE channels SET models", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol", sql)
+        self.assertIn('"gpt-5.3-codex-spark":"gpt-5.3-spark"', sql)
+        self.assertIn("WHERE id = 21", sql)
+
+    def test_ensure_codex_text_channel_models_preserves_existing_models_and_mapping(self) -> None:
+        captured: list[str] = []
+        self.module.mysql = lambda query: [[
+            "gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol",
+            '{"custom":"target","gpt-5.3-codex-spark":"gpt-5.3-spark"}'
+        ]]
+        self.module.mysql_exec = captured.append
+
+        result = self.module.ensure_codex_text_channel_models()
+
+        self.assertEqual(result, {"channel_found": 1, "models_updated": 0, "mapping_updated": 0})
+        self.assertEqual(captured, [])
+
 
 if __name__ == "__main__":
     unittest.main()
