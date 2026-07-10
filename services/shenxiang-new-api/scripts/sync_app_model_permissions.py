@@ -22,7 +22,7 @@ TOKEN_PROFILES = {
     "video": ("星人视频生成令牌",),
 }
 USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
-MONTHLY_CARD_TOKEN_NAMES = ("月卡专用 Key",)
+MONTHLY_CARD_TOKEN_NAMES = ("月卡专用 Key", "¥500 月卡专用")
 
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"

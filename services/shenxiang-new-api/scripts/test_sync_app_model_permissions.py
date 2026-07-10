@@ -215,6 +215,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn("user_id <> 1", query)
             self.assertIn("name LIKE '星人Codex %'", query)
             self.assertIn("'月卡专用 Key'", query)
+            self.assertIn("'¥500 月卡专用'", query)
             self.assertIn("COALESCE(`key`, '')", query)
             self.assertNotIn("model_limits_enabled = 1", query)
             full_limits = (
@@ -227,6 +228,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 ["103", "key-103", "gpt-5.5,image 2电商商品图快速通道(1.5K)", "1"],
                 ["104", "key-104", "", "0"],
                 ["105", "key-105", full_limits, "1"],
+                ["106", "key-106", "gpt-image-2-4K,gpt-5.5,gpt-5.4-mini,gpt-5.4,gpt-5.5-openai-compact", "1"],
             ]
 
         self.module.mysql = fake_mysql
@@ -236,13 +238,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         result = self.module.sync_user_codex_tokens()
 
         sql = "\n".join(captured)
-        self.assertEqual(result, {"tokens_rewritten": 5, "token_caches_deleted": 5})
+        self.assertEqual(result, {"tokens_rewritten": 6, "token_caches_deleted": 6})
         self.assertIn("WHERE id = '101'", sql)
         self.assertIn("WHERE id = '102'", sql)
         self.assertIn("WHERE id = '103'", sql)
         self.assertIn("WHERE id = '104'", sql)
         self.assertIn("WHERE id = '105'", sql)
-        self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105", sql)
+        self.assertIn("WHERE id = '106'", sql)
+        self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105,key-106", sql)
         self.assertIn("model_limits_enabled = 1", sql)
         self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
         self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
