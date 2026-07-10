@@ -63,7 +63,7 @@ CODEX_ALLOWED_MODELS = [
     "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
-    "gpt-5.3-codex-spark",
+    "gpt-5.4-openai-compact",
     "gpt-5.5-openai-compact",
     "codex-auto-review",
     CODEX_IMAGE_15K_MODEL,
@@ -92,10 +92,9 @@ CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
     "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
+    "gpt-5.4-openai-compact",
 ]
-CODEX_TEXT_CHANNEL_MODEL_MAPPING = {
-    "gpt-5.3-codex-spark": "gpt-5.3-spark",
-}
+RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark")
 PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
     # Customer price = official RMB token price * 1.08.
     # New API ratio formula: input CNY per 1M = model_ratio * 2 * USDExchangeRate.
@@ -105,6 +104,14 @@ PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
     }
 }
 PUBLIC_OPENAI_TEXT_MODELS = {
+    "gpt-5.4-openai-compact": {
+        "description": "OpenAI GPT-5.4 Compact 文本模型，适合低延迟对话、写作和代码任务。",
+        "input_usd": Decimal("0.32548"),
+        "output_usd": Decimal("1.99726375472"),
+        "cache_read_usd": Decimal("0.032548"),
+        "cache_create_usd": Decimal("0.40685"),
+        "endpoints": '{"chat-completion":"/v1/chat/completions","responses":"/v1/responses"}',
+    },
     "gpt-5.6-luna": {
         "description": "OpenAI GPT-5.6 Luna 文本模型，适合日常对话、写作和轻量推理。",
         "input_usd": Decimal("1.0000"),
@@ -218,6 +225,10 @@ def sql_quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
 
 
+def is_retired_codex_text_model(model: str) -> bool:
+    return model.strip() in RETIRED_CODEX_TEXT_MODELS
+
+
 def sanitize_token_models(models: list[str]) -> list[str]:
     sanitized: list[str] = []
     seen: set[str] = set()
@@ -226,6 +237,8 @@ def sanitize_token_models(models: list[str]) -> list[str]:
         if not model:
             continue
         model = TOKEN_MODEL_REPLACEMENTS.get(model, model)
+        if is_retired_codex_text_model(model):
+            continue
         if is_supplier_exposed_model(model):
             continue
         if model in seen:
@@ -282,11 +295,17 @@ def is_public_alias_backing_model(model: str) -> bool:
 
 
 def should_sync_ability_model(model: str) -> bool:
+    if is_retired_codex_text_model(model):
+        return False
     return is_public_alias_backing_model(model) or not is_supplier_exposed_model(model)
 
 
 def is_hidden_pricing_model(model: str) -> bool:
-    return model.strip() == RAW_GPT_IMAGE2_MODEL or is_supplier_exposed_model(model)
+    return (
+        model.strip() == RAW_GPT_IMAGE2_MODEL
+        or is_retired_codex_text_model(model)
+        or is_supplier_exposed_model(model)
+    )
 
 
 def supplier_exposed_model_limit_predicate() -> str:
@@ -294,6 +313,14 @@ def supplier_exposed_model_limit_predicate() -> str:
     clauses = [
         "COALESCE(model_limits, '') LIKE " + sql_quote(f"%{term}%")
         for term in terms
+    ]
+    return " OR ".join(clauses)
+
+
+def retired_codex_text_model_limit_predicate() -> str:
+    clauses = [
+        "FIND_IN_SET(" + sql_quote(model) + ", COALESCE(model_limits, '')) > 0"
+        for model in RETIRED_CODEX_TEXT_MODELS
     ]
     return " OR ".join(clauses)
 
@@ -414,7 +441,7 @@ def ensure_public_openai_text_models() -> None:
                     sql_quote("OpenAI"),
                     sql_quote("text,openai,codex"),
                     "1",
-                    sql_quote('{"openai":"/v1/chat/completions"}'),
+                    sql_quote(str(config.get("endpoints", '{"openai":"/v1/chat/completions"}'))),
                     "1",
                     "0",
                     "@now",
@@ -432,7 +459,7 @@ def ensure_public_openai_text_models() -> None:
             + ", tags = "
             + sql_quote("text,openai,codex")
             + ", vendor_id = 1, endpoints = "
-            + sql_quote('{"openai":"/v1/chat/completions"}')
+            + sql_quote(str(config.get("endpoints", '{"openai":"/v1/chat/completions"}')))
             + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
             "WHERE id = @keep_model_id;"
             "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
@@ -471,11 +498,15 @@ def ensure_codex_text_channel_models() -> dict[str, int]:
         + " LIMIT 1;"
     )
     if not rows:
-        return {"channel_found": 0, "models_updated": 0, "mapping_updated": 0}
+        return {"channel_found": 0, "models_updated": 0, "mapping_updated": 0, "models_retired": 0, "mapping_retired": 0}
 
     raw_models = rows[0][0].strip()
     models = [item.strip() for item in raw_models.split(",") if item.strip()]
     models_changed = False
+    retired_models = [model for model in models if is_retired_codex_text_model(model)]
+    if retired_models:
+        models = [model for model in models if not is_retired_codex_text_model(model)]
+        models_changed = True
     for model in CODEX_TEXT_CHANNEL_REQUIRED_MODELS:
         if model not in models:
             models.append(model)
@@ -493,10 +524,15 @@ def ensure_codex_text_channel_models() -> dict[str, int]:
         mapping = {str(key): str(value) for key, value in parsed.items() if str(key).strip()}
 
     mapping_changed = False
-    for public_model, upstream_model in CODEX_TEXT_CHANNEL_MODEL_MAPPING.items():
-        if mapping.get(public_model) != upstream_model:
-            mapping[public_model] = upstream_model
-            mapping_changed = True
+    retired_mapping_keys = [
+        key
+        for key, value in mapping.items()
+        if is_retired_codex_text_model(key) or is_retired_codex_text_model(value)
+    ]
+    if retired_mapping_keys:
+        for key in retired_mapping_keys:
+            mapping.pop(key, None)
+        mapping_changed = True
 
     if models_changed or mapping_changed:
         payload = json.dumps(mapping, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -509,7 +545,82 @@ def ensure_codex_text_channel_models() -> dict[str, int]:
             + CODEX_TEXT_CHANNEL_ID
             + ";"
         )
-    return {"channel_found": 1, "models_updated": int(models_changed), "mapping_updated": int(mapping_changed)}
+    return {
+        "channel_found": 1,
+        "models_updated": int(models_changed),
+        "mapping_updated": int(mapping_changed),
+        "models_retired": len(retired_models),
+        "mapping_retired": len(retired_mapping_keys),
+    }
+
+
+def retire_codex_text_models() -> dict[str, int]:
+    retired_models = ", ".join(sql_quote(model) for model in RETIRED_CODEX_TEXT_MODELS)
+    active_model_rows = mysql(
+        "SELECT COUNT(*) FROM models WHERE deleted_at IS NULL AND status = 1 AND model_name IN ("
+        + retired_models
+        + ");"
+    )
+    ability_rows = mysql(
+        "SELECT COUNT(*) FROM abilities WHERE enabled = 1 AND model IN ("
+        + retired_models
+        + ");"
+    )
+    token_rows = mysql(
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
+        "AND ("
+        + retired_codex_text_model_limit_predicate()
+        + ");"
+    )
+    token_updates: list[tuple[str, str, str]] = []
+    for token_id, token_key, raw_limits in token_rows:
+        next_limits = sanitize_model_limits(raw_limits)
+        if next_limits != raw_limits:
+            token_updates.append((token_id, next_limits, token_key))
+
+    pricing_options_sanitized = 0
+    for key in ("ModelRatio", "CompletionRatio", "CacheRatio", "CreateCacheRatio", "ModelPrice"):
+        values = parse_json_option(key)
+        sanitized = {
+            model: value
+            for model, value in values.items()
+            if not is_retired_codex_text_model(model)
+        }
+        if sanitized != values:
+            upsert_json_option(key, sanitized)
+            pricing_options_sanitized += 1
+
+    statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
+    statements.append(
+        "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+        "WHERE model_name IN ("
+        + retired_models
+        + ");"
+    )
+    statements.append(
+        "UPDATE abilities SET enabled = 0 WHERE model IN ("
+        + retired_models
+        + ");"
+    )
+    for token_id, next_limits, _token_key in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits = "
+            + sql_quote(next_limits)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    caches_deleted = delete_token_caches([token_key for _token_id, _next_limits, token_key in token_updates])
+    return {
+        "active_models_retired": int(active_model_rows[0][0]) if active_model_rows else 0,
+        "abilities_disabled": int(ability_rows[0][0]) if ability_rows else 0,
+        "pricing_options_sanitized": pricing_options_sanitized,
+        "tokens_rewritten": len(token_updates),
+        "token_caches_deleted": caches_deleted,
+    }
 
 
 def sync_supplier_safe_public_metadata() -> dict[str, int]:
@@ -548,6 +659,8 @@ def model_lists() -> dict[str, list[str]]:
     profiles = {"codex": [], "claude": [], "image": [], "video": []}
 
     def append_model(profile: str, model: str) -> None:
+        if is_retired_codex_text_model(model):
+            return
         if model in TOKEN_MODEL_REPLACEMENTS:
             return
         if model not in profiles[profile]:
@@ -963,6 +1076,7 @@ def main() -> int:
     sync_public_seedance_pricing()
     sync_public_openai_text_pricing()
     codex_text_channel_result = ensure_codex_text_channel_models()
+    retired_codex_text_result = retire_codex_text_models()
     metadata_result = sync_supplier_safe_public_metadata()
     profiles = model_lists()
     missing = [name for name, values in profiles.items() if not values]
@@ -981,6 +1095,7 @@ def main() -> int:
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
         + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, gpt_image2_guard={guard_result}"
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
+        + f", retired_codex_text={retired_codex_text_result}"
     )
     return 0
 

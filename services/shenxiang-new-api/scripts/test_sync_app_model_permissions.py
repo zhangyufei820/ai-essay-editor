@@ -24,7 +24,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module = load_sync_module()
 
     def test_sanitize_model_limits_replaces_raw_gpt_image2(self) -> None:
-        raw = "gpt-5.5,gpt-image-2,gpt-image-2-4K,gpt-image-2,geek2api-image-2"
+        raw = "gpt-5.5,gpt-image-2,gpt-image-2-4K,gpt-image-2,geek2api-image-2,gpt-5.3-codex-spark,gpt-5.3-spark"
 
         self.assertEqual(
             self.module.sanitize_model_limits(raw),
@@ -36,9 +36,11 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("gpt-5.6-luna", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.6-terra", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.6-sol", self.module.CODEX_ALLOWED_MODELS)
-        self.assertIn("gpt-5.3-codex-spark", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("gpt-5.4-openai-compact", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.5-openai-compact", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("codex-auto-review", self.module.CODEX_ALLOWED_MODELS)
+        self.assertNotIn("gpt-5.3-codex-spark", self.module.CODEX_ALLOWED_MODELS)
+        self.assertNotIn("gpt-5.3-spark", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("geek2api-image-2", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("gpt-image-2-4K", self.module.CODEX_ALLOWED_MODELS)
 
@@ -47,7 +49,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.4-openai-compact,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -55,7 +57,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.4-openai-compact,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_token_cache_key_uses_crypto_secret_hmac(self) -> None:
@@ -103,11 +105,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 ["5", "gpt-5.6-terra", "text,openai,codex"],
                 ["6", "gpt-5.6-sol", "text,openai,codex"],
                 ["7", "gpt-5.3-codex-spark", "text,codex"],
-                ["8", "gpt-5.5-openai-compact", "text,codex"],
-                ["9", "codex-auto-review", "text,codex"],
-                ["10", "image 2电商商品图快速通道(1.5K)", "image,openai,ecommerce,1.5k,dragtokens"],
-                ["11", "gpt-image-2-4K", "image,openai"],
-                ["12", "geek2api-image-2", "image,openai,geek2api"],
+                ["8", "gpt-5.3-spark", "text,codex"],
+                ["9", "gpt-5.4-openai-compact", "text,openai,codex"],
+                ["10", "gpt-5.5-openai-compact", "text,codex"],
+                ["11", "codex-auto-review", "text,codex"],
+                ["12", "image 2电商商品图快速通道(1.5K)", "image,openai,ecommerce,1.5k,dragtokens"],
+                ["13", "gpt-image-2-4K", "image,openai"],
+                ["14", "geek2api-image-2", "image,openai,geek2api"],
             ]
 
         self.module.mysql = fake_mysql
@@ -123,12 +127,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 "gpt-5.6-luna",
                 "gpt-5.6-terra",
                 "gpt-5.6-sol",
-                "gpt-5.3-codex-spark",
+                "gpt-5.4-openai-compact",
                 "gpt-5.5-openai-compact",
                 "codex-auto-review",
                 "image 2电商商品图快速通道(1.5K)",
             ],
         )
+        self.assertNotIn("gpt-5.3-codex-spark", profiles["codex"])
+        self.assertNotIn("gpt-5.3-spark", profiles["codex"])
         self.assertNotIn("gpt-image-2-4K", profiles["codex"])
         self.assertIn("特价 image-2", profiles["image"])
         self.assertNotIn("geek2api-image-2", profiles["image"])
@@ -184,6 +190,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     "gpt-5.6-luna",
                     "gpt-5.6-terra",
                     "gpt-5.6-sol",
+                    "gpt-5.4-openai-compact",
                     "image 2电商商品图快速通道(1.5K)",
                 ],
                 "claude": ["claude-opus-4-8"],
@@ -198,6 +205,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("gpt-5.6-luna", sql)
         self.assertIn("gpt-5.6-terra", sql)
         self.assertIn("gpt-5.6-sol", sql)
+        self.assertIn("gpt-5.4-openai-compact", sql)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertIn("CACHE:admin-key-1,admin-key-2", sql)
@@ -212,7 +220,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn("COALESCE(`key`, '')", query)
             self.assertNotIn("model_limits_enabled = 1", query)
             full_limits = (
-                "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,"
+                "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,gpt-5.3-spark,gpt-5.4-openai-compact,"
                 "gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)"
             )
             return [
@@ -230,16 +238,18 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         result = self.module.sync_user_codex_tokens()
 
         sql = "\n".join(captured)
-        self.assertEqual(result, {"tokens_rewritten": 4, "token_caches_deleted": 5})
+        self.assertEqual(result, {"tokens_rewritten": 5, "token_caches_deleted": 5})
         self.assertIn("WHERE id = '101'", sql)
         self.assertIn("WHERE id = '102'", sql)
         self.assertIn("WHERE id = '103'", sql)
         self.assertIn("WHERE id = '104'", sql)
-        self.assertNotIn("WHERE id = '105'", sql)
+        self.assertIn("WHERE id = '105'", sql)
         self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105", sql)
         self.assertIn("model_limits_enabled = 1", sql)
-        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
-        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.4-openai-compact,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.4-openai-compact,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertNotIn("gpt-5.3-codex-spark", sql)
+        self.assertNotIn("gpt-5.3-spark", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertNotIn("gpt-image-2-4K", sql)
         self.assertNotIn("claude-opus-4-8", sql)
@@ -252,10 +262,11 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.ensure_public_openai_text_models()
 
         sql = "\n".join(captured)
-        for model in ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
+        for model in ["gpt-5.4-openai-compact", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
             self.assertIn(model, sql)
         self.assertIn("text,openai,codex", sql)
         self.assertIn('{"openai":"/v1/chat/completions"}', sql)
+        self.assertIn('{"chat-completion":"/v1/chat/completions","responses":"/v1/responses"}', sql)
         self.assertIn("vendor_id = 1", sql)
 
     def test_sync_public_openai_text_pricing_sets_ratio_prices(self) -> None:
@@ -265,9 +276,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.module.sync_public_openai_text_pricing()
 
+        self.assertEqual(captured_options["ModelRatio"]["gpt-5.4-openai-compact"], 0.16274)
         self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-luna"], 0.5)
         self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-terra"], 1.25)
         self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-sol"], 2.5)
+        self.assertEqual(captured_options["CompletionRatio"]["gpt-5.4-openai-compact"], 6.136364)
+        self.assertEqual(captured_options["CacheRatio"]["gpt-5.4-openai-compact"], 0.1)
+        self.assertEqual(captured_options["CreateCacheRatio"]["gpt-5.4-openai-compact"], 1.25)
+        self.assertNotIn("gpt-5.4-openai-compact", captured_options["ModelPrice"])
         for model in ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
             self.assertEqual(captured_options["CompletionRatio"][model], 6.0)
             self.assertEqual(captured_options["CacheRatio"][model], 0.1)
@@ -301,31 +317,95 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("image,openai,ecommerce,1.5k", sql)
         self.assertNotIn("dragtokens", sql)
 
-    def test_ensure_codex_text_channel_models_adds_openai_models_and_spark_alias(self) -> None:
-        captured: list[str] = []
-        self.module.mysql = lambda query: [["gpt-5.5,gpt-5.4", ""]]
-        self.module.mysql_exec = captured.append
+    def test_retire_codex_text_models_disables_db_rows_and_token_limits(self) -> None:
+        captured_sql: list[str] = []
+        captured_options: dict[str, dict[str, float]] = {}
+        captured_caches: list[str] = []
 
-        result = self.module.ensure_codex_text_channel_models()
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "COUNT(*) FROM models" in query:
+                return [["2"]]
+            if "COUNT(*) FROM abilities" in query:
+                return [["7"]]
+            if "FROM tokens" in query:
+                self.assertIn("FIND_IN_SET('gpt-5.3-codex-spark'", query)
+                self.assertIn("FIND_IN_SET('gpt-5.3-spark'", query)
+                return [
+                    ["201", "key-201", "gpt-5.5,gpt-5.3-codex-spark"],
+                    ["202", "key-202", "gpt-5.3-spark,gpt-5.4"],
+                ]
+            return []
 
-        self.assertEqual(result, {"channel_found": 1, "models_updated": 1, "mapping_updated": 1})
-        sql = "\n".join(captured)
-        self.assertIn("UPDATE channels SET models", sql)
-        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol", sql)
-        self.assertIn('"gpt-5.3-codex-spark":"gpt-5.3-spark"', sql)
-        self.assertIn("WHERE id = 21", sql)
+        def fake_parse_json_option(_key: str) -> dict[str, float]:
+            return {
+                "gpt-5.5": 1.0,
+                "gpt-5.3-codex-spark": 2.0,
+                "gpt-5.3-spark": 3.0,
+            }
 
-    def test_ensure_codex_text_channel_models_preserves_existing_models_and_mapping(self) -> None:
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured_sql.append
+        self.module.parse_json_option = fake_parse_json_option
+        self.module.upsert_json_option = lambda key, values: captured_options.update({key: values})
+        self.module.delete_token_caches = lambda keys: captured_caches.extend(keys) or len(keys)
+
+        result = self.module.retire_codex_text_models()
+
+        self.assertEqual(
+            result,
+            {
+                "active_models_retired": 2,
+                "abilities_disabled": 7,
+                "pricing_options_sanitized": 5,
+                "tokens_rewritten": 2,
+                "token_caches_deleted": 2,
+            },
+        )
+        for values in captured_options.values():
+            self.assertEqual(values, {"gpt-5.5": 1.0})
+        sql = "\n".join(captured_sql)
+        self.assertIn("UPDATE models SET status = 0", sql)
+        self.assertIn("UPDATE abilities SET enabled = 0", sql)
+        self.assertIn("UPDATE tokens SET model_limits = 'gpt-5.5' WHERE id = '201'", sql)
+        self.assertIn("UPDATE tokens SET model_limits = 'gpt-5.4' WHERE id = '202'", sql)
+        self.assertEqual(captured_caches, ["key-201", "key-202"])
+
+    def test_ensure_codex_text_channel_models_adds_openai_models_and_retires_spark_mapping(self) -> None:
         captured: list[str] = []
         self.module.mysql = lambda query: [[
-            "gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol",
-            '{"custom":"target","gpt-5.3-codex-spark":"gpt-5.3-spark"}'
+            "gpt-5.5,gpt-5.4,gpt-5.3-codex-spark",
+            '{"custom":"target","gpt-5.3-codex-spark":"gpt-5.3-spark"}',
         ]]
         self.module.mysql_exec = captured.append
 
         result = self.module.ensure_codex_text_channel_models()
 
-        self.assertEqual(result, {"channel_found": 1, "models_updated": 0, "mapping_updated": 0})
+        self.assertEqual(
+            result,
+            {"channel_found": 1, "models_updated": 1, "mapping_updated": 1, "models_retired": 1, "mapping_retired": 1},
+        )
+        sql = "\n".join(captured)
+        self.assertIn("UPDATE channels SET models", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.4-openai-compact", sql)
+        self.assertNotIn("gpt-5.3-codex-spark", sql)
+        self.assertNotIn("gpt-5.3-spark", sql)
+        self.assertIn('"custom":"target"', sql)
+        self.assertIn("WHERE id = 21", sql)
+
+    def test_ensure_codex_text_channel_models_preserves_existing_models_and_mapping(self) -> None:
+        captured: list[str] = []
+        self.module.mysql = lambda query: [[
+            "gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.4-openai-compact",
+            '{"custom":"target"}'
+        ]]
+        self.module.mysql_exec = captured.append
+
+        result = self.module.ensure_codex_text_channel_models()
+
+        self.assertEqual(
+            result,
+            {"channel_found": 1, "models_updated": 0, "mapping_updated": 0, "models_retired": 0, "mapping_retired": 0},
+        )
         self.assertEqual(captured, [])
 
 
