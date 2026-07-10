@@ -366,6 +366,64 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("UPDATE tokens SET model_limits = 'gpt-5.4' WHERE id = '202'", sql)
         self.assertEqual(captured_caches, ["key-201", "key-202"])
 
+    def test_retire_claude_models_keeps_only_allowed_models(self) -> None:
+        captured_sql: list[str] = []
+        captured_options: dict[str, dict[str, float]] = {}
+        captured_caches: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "COUNT(*) FROM models" in query:
+                return [["4"]]
+            if "COUNT(*) FROM abilities" in query:
+                return [["12"]]
+            if "FROM tokens" in query:
+                return [
+                    ["301", "key-301", "claude-sonnet-5,claude-fable-5,claude-opus-4-8-fast"],
+                    ["302", "key-302", "claude-opus-4-6,claude-sonnet-4-5-20250929"],
+                ]
+            if "FROM channels" in query:
+                return [
+                    [
+                        "9",
+                        "claude-sonnet-5,claude-fable-5,claude-opus-4-8-fast,claude-opus-4-8",
+                        '{"claude-opus-4-8-fast":"claude-opus-4-8","custom":"target"}',
+                    ],
+                ]
+            return []
+
+        def fake_parse_json_option(_key: str) -> dict[str, float]:
+            return {
+                "claude-sonnet-5": 1.0,
+                "claude-fable-5": 2.0,
+                "claude-opus-4-8-fast": 3.0,
+            }
+
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured_sql.append
+        self.module.parse_json_option = fake_parse_json_option
+        self.module.upsert_json_option = lambda key, values: captured_options.update({key: values})
+        self.module.delete_token_caches = lambda keys: captured_caches.extend(keys) or len(keys)
+
+        result = self.module.retire_claude_models()
+
+        self.assertEqual(result["active_models_retired"], 4)
+        self.assertEqual(result["abilities_disabled"], 12)
+        self.assertEqual(result["channel_models_removed"], 2)
+        self.assertEqual(result["channel_mapping_removed"], 1)
+        self.assertEqual(result["pricing_options_sanitized"], 5)
+        self.assertEqual(result["tokens_rewritten"], 2)
+        self.assertEqual(result["token_caches_deleted"], 2)
+        for values in captured_options.values():
+            self.assertEqual(values, {"claude-sonnet-5": 1.0})
+        sql = "\n".join(captured_sql)
+        self.assertIn("UPDATE models SET status = 0", sql)
+        self.assertIn("UPDATE abilities SET enabled = 0", sql)
+        self.assertIn("UPDATE channels SET models = 'claude-sonnet-5,claude-opus-4-8'", sql)
+        self.assertIn("model_mapping = '{\"custom\":\"target\"}'", sql)
+        self.assertIn("UPDATE tokens SET model_limits = 'claude-sonnet-5' WHERE id = '301'", sql)
+        self.assertIn("UPDATE tokens SET model_limits = 'claude-opus-4-6' WHERE id = '302'", sql)
+        self.assertEqual(captured_caches, ["key-301", "key-302"])
+
     def test_ensure_codex_text_channel_models_adds_openai_models_and_retires_spark_mapping(self) -> None:
         captured: list[str] = []
         self.module.mysql = lambda query: [[

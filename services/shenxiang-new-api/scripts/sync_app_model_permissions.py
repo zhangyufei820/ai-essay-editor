@@ -68,6 +68,13 @@ CODEX_ALLOWED_MODELS = [
 ]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
+CLAUDE_ALLOWED_MODELS = [
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+    "claude-sonnet-5",
+]
 PUBLIC_SEEDANCE_VIDEO_MODELS = [
     "seedance-2.0-cl-mini",
 ]
@@ -218,6 +225,15 @@ def is_retired_codex_text_model(model: str) -> bool:
     return model.strip() in RETIRED_CODEX_TEXT_MODELS
 
 
+def is_claude_model(model: str) -> bool:
+    return model.strip().lower().startswith("claude-")
+
+
+def is_retired_claude_model(model: str) -> bool:
+    model = model.strip()
+    return is_claude_model(model) and model not in CLAUDE_ALLOWED_MODELS
+
+
 def sanitize_token_models(models: list[str]) -> list[str]:
     sanitized: list[str] = []
     seen: set[str] = set()
@@ -227,6 +243,8 @@ def sanitize_token_models(models: list[str]) -> list[str]:
             continue
         model = TOKEN_MODEL_REPLACEMENTS.get(model, model)
         if is_retired_codex_text_model(model):
+            continue
+        if is_retired_claude_model(model):
             continue
         if is_supplier_exposed_model(model):
             continue
@@ -286,6 +304,8 @@ def is_public_alias_backing_model(model: str) -> bool:
 def should_sync_ability_model(model: str) -> bool:
     if is_retired_codex_text_model(model):
         return False
+    if is_retired_claude_model(model):
+        return False
     return is_public_alias_backing_model(model) or not is_supplier_exposed_model(model)
 
 
@@ -293,6 +313,7 @@ def is_hidden_pricing_model(model: str) -> bool:
     return (
         model.strip() == RAW_GPT_IMAGE2_MODEL
         or is_retired_codex_text_model(model)
+        or is_retired_claude_model(model)
         or is_supplier_exposed_model(model)
     )
 
@@ -312,6 +333,18 @@ def retired_codex_text_model_limit_predicate() -> str:
         for model in RETIRED_CODEX_TEXT_MODELS
     ]
     return " OR ".join(clauses)
+
+
+def retired_claude_model_limit_predicate() -> str:
+    return (
+        "LOWER(COALESCE(model_limits, '')) LIKE '%claude%' "
+        + "AND NOT ("
+        + " AND ".join(
+            "COALESCE(model_limits, '') NOT LIKE " + sql_quote(f"%{model}%")
+            for model in CLAUDE_ALLOWED_MODELS
+        )
+        + ")"
+    )
 
 
 def supplier_exposed_model_name_predicate(column: str = "model", *, exclude_public_alias_backing: bool = False) -> str:
@@ -612,6 +645,124 @@ def retire_codex_text_models() -> dict[str, int]:
     }
 
 
+def retire_claude_models() -> dict[str, int]:
+    allowed_models = ", ".join(sql_quote(model) for model in CLAUDE_ALLOWED_MODELS)
+    active_model_rows = mysql(
+        "SELECT COUNT(*) FROM models WHERE deleted_at IS NULL AND status = 1 "
+        "AND LOWER(model_name) LIKE 'claude-%' AND model_name NOT IN ("
+        + allowed_models
+        + ");"
+    )
+    ability_rows = mysql(
+        "SELECT COUNT(*) FROM abilities WHERE enabled = 1 "
+        "AND LOWER(model) LIKE 'claude-%' AND model NOT IN ("
+        + allowed_models
+        + ");"
+    )
+    token_rows = mysql(
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
+        "AND LOWER(COALESCE(model_limits, '')) LIKE '%claude%';"
+    )
+    token_updates: list[tuple[str, str, str]] = []
+    for token_id, token_key, raw_limits in token_rows:
+        next_limits = sanitize_model_limits(raw_limits)
+        if next_limits != raw_limits:
+            token_updates.append((token_id, next_limits, token_key))
+
+    channel_rows = mysql(
+        "SELECT id, COALESCE(models, ''), COALESCE(model_mapping, '') FROM channels "
+        "WHERE LOWER(COALESCE(models, '')) LIKE '%claude%' OR LOWER(COALESCE(model_mapping, '')) LIKE '%claude%';"
+    )
+    channel_updates: list[tuple[str, str, str]] = []
+    channel_models_removed = 0
+    channel_mapping_removed = 0
+    for channel_id, raw_models, raw_mapping in channel_rows:
+        models = [model.strip() for model in raw_models.split(",") if model.strip()]
+        next_models = [model for model in models if not is_retired_claude_model(model)]
+        channel_models_removed += len(models) - len(next_models)
+
+        mapping: dict[str, str] = {}
+        if raw_mapping.strip():
+            try:
+                parsed = json.loads(raw_mapping)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"invalid JSON model_mapping for channel {channel_id}") from exc
+            if not isinstance(parsed, dict):
+                raise ValueError(f"model_mapping for channel {channel_id} must be a JSON object")
+            mapping = {str(key): str(value) for key, value in parsed.items() if str(key).strip()}
+        next_mapping = {
+            key: value
+            for key, value in mapping.items()
+            if not is_retired_claude_model(key) and not is_retired_claude_model(value)
+        }
+        channel_mapping_removed += len(mapping) - len(next_mapping)
+
+        if next_models != models or next_mapping != mapping:
+            channel_updates.append(
+                (
+                    channel_id,
+                    ",".join(next_models),
+                    json.dumps(next_mapping, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                )
+            )
+
+    pricing_options_sanitized = 0
+    for key in ("ModelRatio", "CompletionRatio", "CacheRatio", "CreateCacheRatio", "ModelPrice"):
+        values = parse_json_option(key)
+        sanitized = {
+            model: value
+            for model, value in values.items()
+            if not is_retired_claude_model(model)
+        }
+        if sanitized != values:
+            upsert_json_option(key, sanitized)
+            pricing_options_sanitized += 1
+
+    statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
+    statements.append(
+        "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+        "WHERE LOWER(model_name) LIKE 'claude-%' AND model_name NOT IN ("
+        + allowed_models
+        + ");"
+    )
+    statements.append(
+        "UPDATE abilities SET enabled = 0 WHERE LOWER(model) LIKE 'claude-%' AND model NOT IN ("
+        + allowed_models
+        + ");"
+    )
+    for channel_id, next_models, next_mapping in channel_updates:
+        statements.append(
+            "UPDATE channels SET models = "
+            + sql_quote(next_models)
+            + ", model_mapping = "
+            + sql_quote(next_mapping)
+            + " WHERE id = "
+            + sql_quote(channel_id)
+            + ";"
+        )
+    for token_id, next_limits, _token_key in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits = "
+            + sql_quote(next_limits)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    caches_deleted = delete_token_caches([token_key for _token_id, _next_limits, token_key in token_updates])
+    return {
+        "active_models_retired": int(active_model_rows[0][0]) if active_model_rows else 0,
+        "abilities_disabled": int(ability_rows[0][0]) if ability_rows else 0,
+        "channel_models_removed": channel_models_removed,
+        "channel_mapping_removed": channel_mapping_removed,
+        "pricing_options_sanitized": pricing_options_sanitized,
+        "tokens_rewritten": len(token_updates),
+        "token_caches_deleted": caches_deleted,
+    }
+
+
 def sync_supplier_safe_public_metadata() -> dict[str, int]:
     sanitized_options = 0
     for key in ("ModelRatio", "CompletionRatio", "ModelPrice"):
@@ -649,6 +800,8 @@ def model_lists() -> dict[str, list[str]]:
 
     def append_model(profile: str, model: str) -> None:
         if is_retired_codex_text_model(model):
+            return
+        if is_retired_claude_model(model):
             return
         if model in TOKEN_MODEL_REPLACEMENTS:
             return
@@ -1066,6 +1219,7 @@ def main() -> int:
     sync_public_openai_text_pricing()
     codex_text_channel_result = ensure_codex_text_channel_models()
     retired_codex_text_result = retire_codex_text_models()
+    retired_claude_result = retire_claude_models()
     metadata_result = sync_supplier_safe_public_metadata()
     profiles = model_lists()
     missing = [name for name, values in profiles.items() if not values]
@@ -1085,6 +1239,7 @@ def main() -> int:
         + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, gpt_image2_guard={guard_result}"
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
+        + f", retired_claude={retired_claude_result}"
     )
     return 0
 
