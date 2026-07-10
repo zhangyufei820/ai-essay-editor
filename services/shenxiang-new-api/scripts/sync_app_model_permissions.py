@@ -63,9 +63,7 @@ CODEX_ALLOWED_MODELS = [
     "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
-    "gpt-5.4-openai-compact",
     "gpt-5.5-openai-compact",
-    "codex-auto-review",
     CODEX_IMAGE_15K_MODEL,
 ]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
@@ -92,9 +90,8 @@ CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
     "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
-    "gpt-5.4-openai-compact",
 ]
-RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark")
+RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact", "codex-auto-review")
 PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
     # Customer price = official RMB token price * 1.08.
     # New API ratio formula: input CNY per 1M = model_ratio * 2 * USDExchangeRate.
@@ -104,14 +101,6 @@ PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
     }
 }
 PUBLIC_OPENAI_TEXT_MODELS = {
-    "gpt-5.4-openai-compact": {
-        "description": "OpenAI GPT-5.4 Compact 文本模型，适合低延迟对话、写作和代码任务。",
-        "input_usd": Decimal("0.32548"),
-        "output_usd": Decimal("1.99726375472"),
-        "cache_read_usd": Decimal("0.032548"),
-        "cache_create_usd": Decimal("0.40685"),
-        "endpoints": '{"chat-completion":"/v1/chat/completions","responses":"/v1/responses"}',
-    },
     "gpt-5.6-luna": {
         "description": "OpenAI GPT-5.6 Luna 文本模型，适合日常对话、写作和轻量推理。",
         "input_usd": Decimal("1.0000"),
