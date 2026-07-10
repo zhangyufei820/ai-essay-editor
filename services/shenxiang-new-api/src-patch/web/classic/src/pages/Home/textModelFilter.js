@@ -1,14 +1,13 @@
 const MEDIA_MODEL_PATTERN =
   /(image|gpt-image|banana|midjourney|flux|seedance|sora|kling|veo|video|audio|tts|whisper|speech|voice|embedding|rerank|realtime)/i;
 
-const DEFAULT_TEXT_MODEL = 'gpt-5.3-codex-spark';
+const DEFAULT_TEXT_MODEL = 'gpt-5.4-mini';
 const HIDDEN_TEXT_MODELS = new Set(['gpt-5.3-spark']);
 
 const FALLBACK_TEXT_MODELS = [
   DEFAULT_TEXT_MODEL,
   'gpt-5.5',
   'gpt-5.4',
-  'gpt-5.4-mini',
   'claude-sonnet-4-5',
   'gemini-3-pro',
   'deepseek-v3.2',

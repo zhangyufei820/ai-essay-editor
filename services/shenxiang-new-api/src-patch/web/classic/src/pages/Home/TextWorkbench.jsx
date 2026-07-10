@@ -1424,94 +1424,94 @@ const TextWorkbench = ({ isMobile }) => {
               </div>
             </div>
           )}
+        </div>
 
-          <div
-            className={isDragging ? 'sx-gpt-composer-area is-dragging' : 'sx-gpt-composer-area'}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setIsDragging(false);
-              addFiles(event.dataTransfer.files);
-            }}
-          >
-            <AttachmentChips files={attachments} onRemove={removeAttachment} />
+        <div
+          className={isDragging ? 'sx-gpt-composer-area is-dragging' : 'sx-gpt-composer-area'}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setIsDragging(false);
+            addFiles(event.dataTransfer.files);
+          }}
+        >
+          <AttachmentChips files={attachments} onRemove={removeAttachment} />
 
-            <div className='sx-gpt-composer'>
-              <input
-                ref={fileInputRef}
-                className='sx-gpt-file-input'
-                type='file'
-                multiple
-                accept={WORKBENCH_FILE_ACCEPT}
-                onChange={(event) => {
-                  addFiles(event.target.files);
-                  event.target.value = '';
-                }}
-              />
-              <Tooltip content='上传文件'>
-                <button
-                  type='button'
-                  className='sx-gpt-upload'
-                  onClick={openFilePicker}
-                  aria-label='上传文件'
-                >
-                  <Upload size={16} />
-                </button>
-              </Tooltip>
+          <div className='sx-gpt-composer'>
+            <input
+              ref={fileInputRef}
+              className='sx-gpt-file-input'
+              type='file'
+              multiple
+              accept={WORKBENCH_FILE_ACCEPT}
+              onChange={(event) => {
+                addFiles(event.target.files);
+                event.target.value = '';
+              }}
+            />
+            <Tooltip content='上传文件'>
+              <button
+                type='button'
+                className='sx-gpt-upload'
+                onClick={openFilePicker}
+                aria-label='上传文件'
+              >
+                <Upload size={16} />
+              </button>
+            </Tooltip>
 
-              <textarea
-                ref={composerInputRef}
-                value={input}
-                rows={1}
-                placeholder='有问题，尽管问'
-                disabled={isSubmitting}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    organizeMessage();
-                  }
-                }}
-              />
+            <textarea
+              ref={composerInputRef}
+              value={input}
+              rows={1}
+              placeholder='有问题，尽管问'
+              disabled={isSubmitting}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  organizeMessage();
+                }
+              }}
+            />
 
-              <Select
-                className='sx-gpt-model-select'
-                value={selectedModel}
-                loading={modelsLoading}
-                disabled={!isLoggedIn || modelsLoading || isSubmitting}
-                optionList={modelOptions}
-                placeholder={modelsLoading ? '模型' : '选择模型'}
-                onChange={(value) => setSelectedModel(value)}
-                style={{ width: isMobile ? 116 : 178 }}
-              />
+            <Select
+              className='sx-gpt-model-select'
+              value={selectedModel}
+              loading={modelsLoading}
+              disabled={!isLoggedIn || modelsLoading || isSubmitting}
+              optionList={modelOptions}
+              placeholder={modelsLoading ? '模型' : '选择模型'}
+              onChange={(value) => setSelectedModel(value)}
+              style={{ width: isMobile ? 116 : 178 }}
+            />
 
-              <Button
-                className={isSubmitting ? 'sx-gpt-send is-stop' : 'sx-gpt-send'}
-                theme='solid'
-                type='primary'
-                icon={isSubmitting ? <Square size={18} strokeWidth={2.7} /> : <ArrowUp size={18} strokeWidth={2.7} />}
-                onClick={isSubmitting ? abortActiveRequest : organizeMessage}
-                loading={false}
-                disabled={!isSubmitting && isLoggedIn && !canOrganize}
-                aria-label={isSubmitting ? '停止生成' : isLoggedIn ? '发送消息' : '登录后使用'}
-              />
-            </div>
+            <Button
+              className={isSubmitting ? 'sx-gpt-send is-stop' : 'sx-gpt-send'}
+              theme='solid'
+              type='primary'
+              icon={isSubmitting ? <Square size={18} strokeWidth={2.7} /> : <ArrowUp size={18} strokeWidth={2.7} />}
+              onClick={isSubmitting ? abortActiveRequest : organizeMessage}
+              loading={false}
+              disabled={!isSubmitting && isLoggedIn && !canOrganize}
+              aria-label={isSubmitting ? '停止生成' : isLoggedIn ? '发送消息' : '登录后使用'}
+            />
+          </div>
 
-            <div className='sx-gpt-quick-actions'>
-              {starterPrompts.map((prompt) => (
-                <button
-                  type='button'
-                  key={prompt}
-                  onClick={() => applyStarter(prompt)}
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
+          <div className='sx-gpt-quick-actions'>
+            {starterPrompts.map((prompt) => (
+              <button
+                type='button'
+                key={prompt}
+                onClick={() => applyStarter(prompt)}
+              >
+                {prompt}
+              </button>
+            ))}
           </div>
         </div>
       </main>
