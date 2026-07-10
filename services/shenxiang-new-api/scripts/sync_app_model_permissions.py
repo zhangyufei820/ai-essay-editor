@@ -20,6 +20,7 @@ TOKEN_PROFILES = {
     "video": ("星人视频生成令牌",),
 }
 USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
+MONTHLY_CARD_TOKEN_NAMES = ("月卡专用 Key",)
 
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
@@ -53,7 +54,15 @@ TOKEN_MODEL_REPLACEMENTS = {
     RAW_GPT_IMAGE2_MODEL: GPT_IMAGE2_PRODUCT_MODEL,
 }
 
-CODEX_ALLOWED_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", CODEX_IMAGE_15K_MODEL]
+CODEX_ALLOWED_MODELS = [
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.3-codex-spark",
+    "gpt-5.5-openai-compact",
+    "codex-auto-review",
+    CODEX_IMAGE_15K_MODEL,
+]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
 PUBLIC_SEEDANCE_VIDEO_MODELS = [
@@ -175,12 +184,14 @@ def sanitize_codex_token_models(models: list[str]) -> list[str]:
     return [model for model in sanitize_token_models(models) if model in allowed]
 
 
-def ensure_codex_image_model_limits(raw: str) -> str:
+def ensure_codex_image_model_limits(raw: str, required_models: list[str] | None = None) -> str:
     models = sanitize_codex_token_models(raw.split(","))
-    if not models:
-        models.append(CODEX_DEFAULT_MODEL)
-    if CODEX_IMAGE_15K_MODEL not in models:
-        models.append(CODEX_IMAGE_15K_MODEL)
+    required = sanitize_codex_token_models(required_models or CODEX_ALLOWED_MODELS)
+    if not required:
+        required = [CODEX_DEFAULT_MODEL, CODEX_IMAGE_15K_MODEL]
+    for model in required:
+        if model not in models:
+            models.append(model)
     return ",".join(models)
 
 
@@ -526,10 +537,11 @@ def sync_tokens(profiles: dict[str, list[str]]) -> None:
     mysql_exec("\n".join(statements))
 
 
-def sync_user_codex_tokens() -> dict[str, int]:
+def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict[str, int]:
     names = TOKEN_PROFILES["codex"]
+    required_models = profiles["codex"] if profiles and profiles.get("codex") else CODEX_ALLOWED_MODELS
     name_predicates = [
-        "name IN (" + ", ".join(sql_quote(name) for name in names) + ")",
+        "name IN (" + ", ".join(sql_quote(name) for name in (*names, *MONTHLY_CARD_TOKEN_NAMES)) + ")",
         *[
             "name LIKE " + sql_quote(prefix + "%")
             for prefix in USER_CODEX_TOKEN_NAME_PREFIXES
@@ -545,7 +557,7 @@ def sync_user_codex_tokens() -> dict[str, int]:
     )
     token_updates: list[tuple[str, str]] = []
     for token_id, raw_limits, raw_enabled in token_rows:
-        next_limits = ensure_codex_image_model_limits(raw_limits)
+        next_limits = ensure_codex_image_model_limits(raw_limits, required_models)
         if next_limits != raw_limits or raw_enabled != "1":
             token_updates.append((token_id, next_limits))
 
@@ -749,7 +761,7 @@ def main() -> int:
         return 2
     sync_abilities()
     sync_tokens(profiles)
-    codex_token_result = sync_user_codex_tokens()
+    codex_token_result = sync_user_codex_tokens(profiles)
     guard_result = enforce_gpt_image2_db_guard()
     env_changed = sync_codex_env(profiles)
     if env_changed or os.environ.get("SYNC_FORCE_CODEX_REFRESH") == "1":

@@ -32,6 +32,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
     def test_codex_allowed_models_include_only_public_15k_image_model(self) -> None:
         self.assertIn("image 2电商商品图快速通道(1.5K)", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("gpt-5.3-codex-spark", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("gpt-5.5-openai-compact", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("codex-auto-review", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("geek2api-image-2", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("gpt-image-2-4K", self.module.CODEX_ALLOWED_MODELS)
 
@@ -40,7 +43,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -48,7 +51,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_supplier_exposed_model_limit_predicate_covers_known_markers(self) -> None:
@@ -78,9 +81,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 ["1", "gpt-5.5", "text,openai,codex"],
                 ["2", "gpt-5.4", "text,openai,codex"],
                 ["3", "gpt-5.4-mini", "text,openai,codex"],
-                ["4", "image 2电商商品图快速通道(1.5K)", "image,openai,ecommerce,1.5k,dragtokens"],
-                ["5", "gpt-image-2-4K", "image,openai"],
-                ["6", "geek2api-image-2", "image,openai,geek2api"],
+                ["4", "gpt-5.3-codex-spark", "text,codex"],
+                ["5", "gpt-5.5-openai-compact", "text,codex"],
+                ["6", "codex-auto-review", "text,codex"],
+                ["7", "image 2电商商品图快速通道(1.5K)", "image,openai,ecommerce,1.5k,dragtokens"],
+                ["8", "gpt-image-2-4K", "image,openai"],
+                ["9", "geek2api-image-2", "image,openai,geek2api"],
             ]
 
         self.module.mysql = fake_mysql
@@ -89,7 +95,15 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             profiles["codex"],
-            ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "image 2电商商品图快速通道(1.5K)"],
+            [
+                "gpt-5.5",
+                "gpt-5.4",
+                "gpt-5.4-mini",
+                "gpt-5.3-codex-spark",
+                "gpt-5.5-openai-compact",
+                "codex-auto-review",
+                "image 2电商商品图快速通道(1.5K)",
+            ],
         )
         self.assertNotIn("gpt-image-2-4K", profiles["codex"])
         self.assertIn("特价 image-2", profiles["image"])
@@ -158,12 +172,18 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         def fake_mysql(query: str) -> list[list[str]]:
             self.assertIn("user_id <> 1", query)
             self.assertIn("name LIKE '星人Codex %'", query)
+            self.assertIn("'月卡专用 Key'", query)
             self.assertNotIn("model_limits_enabled = 1", query)
+            full_limits = (
+                "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark,"
+                "gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)"
+            )
             return [
                 ["101", "gpt-5.5", "1"],
                 ["102", "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,claude-opus-4-8,seedance-2.0-cl-mini", "1"],
                 ["103", "gpt-5.5,image 2电商商品图快速通道(1.5K)", "1"],
                 ["104", "", "0"],
+                ["105", full_limits, "1"],
             ]
 
         self.module.mysql = fake_mysql
@@ -172,14 +192,15 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         result = self.module.sync_user_codex_tokens()
 
         sql = "\n".join(captured)
-        self.assertEqual(result, {"tokens_rewritten": 3})
+        self.assertEqual(result, {"tokens_rewritten": 4})
         self.assertIn("WHERE id = '101'", sql)
         self.assertIn("WHERE id = '102'", sql)
-        self.assertNotIn("WHERE id = '103'", sql)
+        self.assertIn("WHERE id = '103'", sql)
         self.assertIn("WHERE id = '104'", sql)
+        self.assertNotIn("WHERE id = '105'", sql)
         self.assertIn("model_limits_enabled = 1", sql)
-        self.assertIn("gpt-5.5,image 2电商商品图快速通道(1.5K)", sql)
-        self.assertIn("gpt-5.4-mini,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertNotIn("gpt-image-2-4K", sql)
         self.assertNotIn("claude-opus-4-8", sql)
