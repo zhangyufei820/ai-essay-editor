@@ -30,6 +30,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+var (
+	errUserPasswordUnset    = errors.New("user password is not set")
+	errOriginalPasswordFail = errors.New("original password is incorrect")
+)
+
 const (
 	seedancePrivateVideoModel         = "seedance-nsfw"
 	seedancePrivateVideoAllowedUserID = 1

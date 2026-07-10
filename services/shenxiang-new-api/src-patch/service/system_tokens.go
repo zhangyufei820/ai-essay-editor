@@ -49,7 +49,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "codex",
 			Name:   "星人 Codex 文本令牌",
-			Models: []string{"gpt-5.5", "gpt-5.4", "gpt-5.4-mini", codexImage15KModelName},
+			Models: []string{"gpt-5.5", "gpt-5.4", "gpt-5.4-mini", PublicDiscountImage2ModelName, codexImage15KModelName},
 		},
 		{
 			Mode:   "claude",

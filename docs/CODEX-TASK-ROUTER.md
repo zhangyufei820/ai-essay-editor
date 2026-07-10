@@ -96,6 +96,12 @@ Runtime and business questions must start from evidence, not a repo tour.
 - UI rendering defects: target route/component, browser verification, production bundle/cache proof
 - third-party model support or current version: live version/model probe, then minimal smoke test
 
+## User-Facing Provider Privacy
+
+User-facing model names, token model lists, UI labels, receipts, logs visible to non-admin users, onboarding copy, and support text must not expose upstream provider or relay names. This includes names such as Geek2API, Moonapix, CCAPI, DragTokens, RelayDance, raw upstream model IDs, upstream account hints, channel IDs, base URLs, API keys, and supplier-specific failure text.
+
+When an upstream-backed model needs to be exposed to users, use a product/public alias instead. For example, the internal New API model `geek2api-image-2` must be shown as `特价 image-2`, not with the supplier name.
+
 ## Done Cards
 
 ### Main Site Done

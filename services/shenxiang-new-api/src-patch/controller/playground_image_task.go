@@ -1407,7 +1407,7 @@ func capturePlaygroundImageTaskBilling(taskID string, actualQuota int, info *rel
 			ModelPrice:      info.PriceData.ModelPrice,
 			GroupRatio:      info.PriceData.GroupRatioInfo.GroupRatio,
 			ModelRatio:      info.PriceData.ModelRatio,
-			OtherRatios:     info.PriceData.OtherRatios,
+			OtherRatios:     info.PriceData.OtherRatios(),
 			OriginModelName: info.OriginModelName,
 			PerCallBilling:  info.PriceData.UsePrice,
 		}

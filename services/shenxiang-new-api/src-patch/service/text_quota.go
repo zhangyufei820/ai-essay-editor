@@ -54,6 +54,17 @@ func HasTextOutputSent(ctx *gin.Context) bool {
 	return ctx.GetBool("response_stream_output_sent") || ctx.GetBool("response_completed_seen")
 }
 
+// noteQuotaClamp records the first quota saturation event onto relayInfo so it
+// can later be attached to the consume/task log for admin auditing.
+func noteQuotaClamp(relayInfo *relaycommon.RelayInfo, clamp *common.QuotaClamp) {
+	if clamp == nil || relayInfo == nil {
+		return
+	}
+	if relayInfo.QuotaClamp == nil {
+		relayInfo.QuotaClamp = clamp
+	}
+}
+
 func ShouldRetryTextEmptyOutput(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage) bool {
 	if ctx == nil || relayInfo == nil || !isZeroUsageForRetry(usage) || HasTextOutputSent(ctx) {
 		return false
@@ -331,8 +342,8 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
 
-		if len(relayInfo.PriceData.OtherRatios) > 0 {
-			for _, otherRatio := range relayInfo.PriceData.OtherRatios {
+		if otherRatios := relayInfo.PriceData.OtherRatios(); len(otherRatios) > 0 {
+			for _, otherRatio := range otherRatios {
 				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
 			}
 		}
@@ -345,8 +356,8 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		quotaCalculateDecimal := dModelPrice.Mul(dQuotaPerUnit).Mul(dGroupRatio)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
-		if len(relayInfo.PriceData.OtherRatios) > 0 {
-			for _, otherRatio := range relayInfo.PriceData.OtherRatios {
+		if otherRatios := relayInfo.PriceData.OtherRatios(); len(otherRatios) > 0 {
+			for _, otherRatio := range otherRatios {
 				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
 			}
 		}
