@@ -93,6 +93,28 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("NOT IN", predicate)
         self.assertIn("geek2api-image-2", predicate)
 
+    def test_parse_json_string_option_preserves_escaped_quotes(self) -> None:
+        self.module.option_value = lambda _key: '{"geek2api-image-2":"param(\\"resolution\\") == \\"4K\\" ? tier(\\"4K\\", 1) : tier(\\"1K\\", 0)"}'
+
+        parsed = self.module.parse_json_string_option("billing_setting.billing_expr")
+
+        self.assertEqual(
+            parsed["geek2api-image-2"],
+            'param("resolution") == "4K" ? tier("4K", 1) : tier("1K", 0)',
+        )
+
+    def test_option_value_reads_raw_mysql_output(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql_raw(query: str) -> list[list[str]]:
+            captured.append(query)
+            return [['{"model":"tier(\\"base\\", 1)"}']]
+
+        self.module.mysql_raw = fake_mysql_raw
+
+        self.assertEqual(self.module.option_value("billing_setting.billing_expr"), '{"model":"tier(\\"base\\", 1)"}')
+        self.assertIn("billing_setting.billing_expr", captured[0])
+
     def test_model_lists_allows_codex_to_use_public_15k_image_model(self) -> None:
         def fake_mysql(query: str) -> list[list[str]]:
             if "FROM models" not in query:
@@ -271,11 +293,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn('{"openai":"/v1/chat/completions"}', sql)
         self.assertIn("vendor_id = 1", sql)
 
-    def test_sync_public_openai_text_pricing_sets_ratio_prices(self) -> None:
-        captured_options: dict[str, dict[str, float]] = {}
+    def test_sync_public_openai_text_pricing_sets_ratio_and_tiered_prices(self) -> None:
+        captured_options: dict[str, dict[str, float] | dict[str, str]] = {}
         self.module.parse_json_option = lambda _key: {}
+        self.module.parse_json_string_option = lambda _key: {}
         self.module.option_value = lambda key: "7.3" if key == "USDExchangeRate" else ""
         self.module.upsert_json_option = lambda key, values: captured_options.update({key: values})
+        self.module.upsert_json_string_option = lambda key, values: captured_options.update({key: values})
 
         self.module.sync_public_openai_text_pricing()
 
@@ -287,6 +311,35 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertEqual(captured_options["CacheRatio"][model], 0.1)
             self.assertEqual(captured_options["CreateCacheRatio"][model], 1.25)
             self.assertNotIn(model, captured_options["ModelPrice"])
+            self.assertEqual(captured_options["billing_setting.billing_mode"][model], "tiered_expr")
+
+        luna_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-luna"]
+        terra_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-terra"]
+        sol_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-sol"]
+
+        self.assertIn("len <= 272000", luna_expr)
+        self.assertIn('tier("base"', luna_expr)
+        self.assertIn('tier("longcontext"', luna_expr)
+        self.assertIn("p * 0.13698630137", luna_expr)
+        self.assertIn("c * 0.821917808219", luna_expr)
+        self.assertIn("cr * 0.013698630137", luna_expr)
+        self.assertIn("cc * 0.171232876712", luna_expr)
+        self.assertIn("p * 0.27397260274", luna_expr)
+        self.assertIn("c * 1.232876712329", luna_expr)
+
+        self.assertIn("p * 0.342465753425", terra_expr)
+        self.assertIn("c * 2.054794520548", terra_expr)
+        self.assertIn("p * 0.684931506849", terra_expr)
+        self.assertIn("c * 3.082191780822", terra_expr)
+
+        self.assertIn("p * 0.684931506849", sol_expr)
+        self.assertIn("c * 4.109589041096", sol_expr)
+        self.assertIn("cr * 0.068493150685", sol_expr)
+        self.assertIn("cc * 0.856164383562", sol_expr)
+        self.assertIn("p * 1.369863013699", sol_expr)
+        self.assertIn("c * 6.164383561644", sol_expr)
+        self.assertIn("cr * 0.13698630137", sol_expr)
+        self.assertIn("cc * 1.712328767123", sol_expr)
 
     def test_sync_supplier_safe_public_metadata_removes_supplier_price_keys(self) -> None:
         captured_options: dict[str, dict[str, float]] = {}

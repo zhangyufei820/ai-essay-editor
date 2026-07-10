@@ -107,6 +107,7 @@ PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
         "output": Decimal("19.55") * Decimal("1.08"),
     }
 }
+OPENAI_TEXT_LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
 PUBLIC_OPENAI_TEXT_MODELS = {
     "gpt-5.6-luna": {
         "description": "OpenAI GPT-5.6 Luna 文本模型，适合日常对话、写作和轻量推理。",
@@ -114,6 +115,10 @@ PUBLIC_OPENAI_TEXT_MODELS = {
         "output_cny": Decimal("6.0000"),
         "cache_read_cny": Decimal("0.1000"),
         "cache_create_cny": Decimal("1.2500"),
+        "longcontext_input_cny": Decimal("2.0000"),
+        "longcontext_output_cny": Decimal("9.0000"),
+        "longcontext_cache_read_cny": Decimal("0.2000"),
+        "longcontext_cache_create_cny": Decimal("2.5000"),
     },
     "gpt-5.6-terra": {
         "description": "OpenAI GPT-5.6 Terra 文本模型，适合更高质量的写作、分析和代码任务。",
@@ -121,6 +126,10 @@ PUBLIC_OPENAI_TEXT_MODELS = {
         "output_cny": Decimal("15.0000"),
         "cache_read_cny": Decimal("0.2500"),
         "cache_create_cny": Decimal("3.1250"),
+        "longcontext_input_cny": Decimal("5.0000"),
+        "longcontext_output_cny": Decimal("22.5000"),
+        "longcontext_cache_read_cny": Decimal("0.5000"),
+        "longcontext_cache_create_cny": Decimal("6.2500"),
     },
     "gpt-5.6-sol": {
         "description": "OpenAI GPT-5.6 Sol 文本模型，适合复杂推理、长文分析和高质量代码任务。",
@@ -128,6 +137,10 @@ PUBLIC_OPENAI_TEXT_MODELS = {
         "output_cny": Decimal("30.0000"),
         "cache_read_cny": Decimal("0.5000"),
         "cache_create_cny": Decimal("6.2500"),
+        "longcontext_input_cny": Decimal("10.0000"),
+        "longcontext_output_cny": Decimal("45.0000"),
+        "longcontext_cache_read_cny": Decimal("1.0000"),
+        "longcontext_cache_create_cny": Decimal("12.5000"),
     },
 }
 
@@ -145,6 +158,34 @@ def mysql(query: str) -> list[list[str]]:
         "shenxiang-new-api-mysql",
         "mysql",
         "--default-character-set=utf8mb4",
+        "-uroot",
+        "-N",
+        "-B",
+        database,
+        "-e",
+        query,
+    ]
+    output = subprocess.check_output(cmd, env=env, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace")
+    rows: list[list[str]] = []
+    for line in output.splitlines():
+        rows.append(line.split("\t"))
+    return rows
+
+
+def mysql_raw(query: str) -> list[list[str]]:
+    password = os.environ["MYSQL_ROOT_PASSWORD"]
+    database = os.environ["MYSQL_DATABASE"]
+    env = os.environ.copy()
+    env["MYSQL_PWD"] = password
+    cmd = [
+        "docker",
+        "exec",
+        "-e",
+        "MYSQL_PWD",
+        "shenxiang-new-api-mysql",
+        "mysql",
+        "--default-character-set=utf8mb4",
+        "--raw",
         "-uroot",
         "-N",
         "-B",
@@ -371,7 +412,7 @@ def is_disabled_ability_pair(channel_id: str, model: str) -> bool:
 
 
 def option_value(key: str) -> str | None:
-    rows = mysql(f"SELECT `value` FROM options WHERE `key` = {sql_quote(key)} LIMIT 1")
+    rows = mysql_raw(f"SELECT `value` FROM options WHERE `key` = {sql_quote(key)} LIMIT 1")
     if not rows:
         return None
     return rows[0][0]
@@ -394,7 +435,35 @@ def parse_json_option(key: str) -> dict[str, float]:
     return result
 
 
+def parse_json_string_option(key: str) -> dict[str, str]:
+    raw = option_value(key)
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON in option {key}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"option {key} must be a JSON object")
+    result: dict[str, str] = {}
+    for name, value in parsed.items():
+        if isinstance(name, str) and isinstance(value, str):
+            result[name] = value
+    return result
+
+
 def upsert_json_option(key: str, values: dict[str, float]) -> None:
+    payload = json.dumps(values, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    mysql_exec(
+        "INSERT INTO options (`key`, `value`) VALUES ("
+        + sql_quote(key)
+        + ", "
+        + sql_quote(payload)
+        + ") ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);"
+    )
+
+
+def upsert_json_string_option(key: str, values: dict[str, str]) -> None:
     payload = json.dumps(values, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     mysql_exec(
         "INSERT INTO options (`key`, `value`) VALUES ("
@@ -407,6 +476,11 @@ def upsert_json_option(key: str, values: dict[str, float]) -> None:
 
 def decimal_to_float(value: Decimal, places: str = "0.000000000001") -> float:
     return float(value.quantize(Decimal(places), rounding=ROUND_HALF_UP))
+
+
+def decimal_to_expr_literal(value: Decimal) -> str:
+    quantized = value.quantize(Decimal("0.000000000001"), rounding=ROUND_HALF_UP)
+    return format(quantized.normalize(), "f")
 
 
 def usd_exchange_rate() -> Decimal:
@@ -438,6 +512,41 @@ def sync_public_seedance_pricing() -> None:
     upsert_json_option("ModelRatio", model_ratios)
     upsert_json_option("CompletionRatio", completion_ratios)
     upsert_json_option("ModelPrice", model_prices)
+
+
+def openai_text_price_usd_literal(prices: dict[str, object], key: str, exchange_rate: Decimal) -> str:
+    value = prices[key]
+    if not isinstance(value, Decimal):
+        raise TypeError(f"{key} must be Decimal")
+    return decimal_to_expr_literal(value / exchange_rate)
+
+
+def openai_text_tier_expr(prices: dict[str, object], exchange_rate: Decimal, prefix: str = "") -> str:
+    tier_name = prefix.rstrip("_") or "base"
+    return (
+        "tier("
+        + json.dumps(tier_name)
+        + ", p * "
+        + openai_text_price_usd_literal(prices, f"{prefix}input_cny", exchange_rate)
+        + " + c * "
+        + openai_text_price_usd_literal(prices, f"{prefix}output_cny", exchange_rate)
+        + " + cr * "
+        + openai_text_price_usd_literal(prices, f"{prefix}cache_read_cny", exchange_rate)
+        + " + cc * "
+        + openai_text_price_usd_literal(prices, f"{prefix}cache_create_cny", exchange_rate)
+        + ")"
+    )
+
+
+def openai_text_billing_expr(prices: dict[str, object], exchange_rate: Decimal) -> str:
+    base_expr = openai_text_tier_expr(prices, exchange_rate)
+    longcontext_expr = openai_text_tier_expr(prices, exchange_rate, "longcontext_")
+    return (
+        f"len <= {OPENAI_TEXT_LONG_CONTEXT_THRESHOLD_TOKENS} ? "
+        + base_expr
+        + " : "
+        + longcontext_expr
+    )
 
 
 def ensure_public_openai_text_models() -> None:
@@ -497,6 +606,8 @@ def sync_public_openai_text_pricing() -> None:
     cache_ratios = parse_json_option("CacheRatio")
     create_cache_ratios = parse_json_option("CreateCacheRatio")
     model_prices = parse_json_option("ModelPrice")
+    billing_modes = parse_json_string_option("billing_setting.billing_mode")
+    billing_exprs = parse_json_string_option("billing_setting.billing_expr")
     exchange_rate = usd_exchange_rate()
 
     for model, prices in PUBLIC_OPENAI_TEXT_MODELS.items():
@@ -508,12 +619,16 @@ def sync_public_openai_text_pricing() -> None:
         cache_ratios[model] = decimal_to_float(prices["cache_read_cny"] / input_cny)
         create_cache_ratios[model] = decimal_to_float(prices["cache_create_cny"] / input_cny)
         model_prices.pop(model, None)
+        billing_modes[model] = "tiered_expr"
+        billing_exprs[model] = openai_text_billing_expr(prices, exchange_rate)
 
     upsert_json_option("ModelRatio", model_ratios)
     upsert_json_option("CompletionRatio", completion_ratios)
     upsert_json_option("CacheRatio", cache_ratios)
     upsert_json_option("CreateCacheRatio", create_cache_ratios)
     upsert_json_option("ModelPrice", model_prices)
+    upsert_json_string_option("billing_setting.billing_mode", billing_modes)
+    upsert_json_string_option("billing_setting.billing_expr", billing_exprs)
 
 
 def ensure_codex_text_channel_models() -> dict[str, int]:
