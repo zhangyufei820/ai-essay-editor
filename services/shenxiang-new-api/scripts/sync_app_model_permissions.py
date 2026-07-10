@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 import os
 import subprocess
 import sys
@@ -137,6 +139,44 @@ def mysql_exec(query: str) -> None:
         database,
     ]
     subprocess.run(cmd, input=query.encode("utf-8"), env=env, check=True, stderr=subprocess.DEVNULL)
+
+
+def token_cache_key(token_key: str) -> str:
+    secret = os.environ.get("CRYPTO_SECRET", "")
+    if not secret:
+        raise RuntimeError("CRYPTO_SECRET is required to invalidate token cache")
+    digest = hmac.new(secret.encode("utf-8"), token_key.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"token:{digest}"
+
+
+def delete_token_caches(token_keys: list[str]) -> int:
+    unique_keys = []
+    seen: set[str] = set()
+    for token_key in token_keys:
+        token_key = token_key.strip()
+        if not token_key or token_key in seen:
+            continue
+        seen.add(token_key)
+        unique_keys.append(token_key)
+    if not unique_keys:
+        return 0
+
+    password = os.environ.get("REDIS_PASSWORD", "")
+    if not password:
+        raise RuntimeError("REDIS_PASSWORD is required to invalidate token cache")
+    redis_container = os.environ.get("REDIS_CONTAINER", "shenxiang-new-api-redis")
+    env = os.environ.copy()
+    env["REDISCLI_AUTH"] = password
+    payload = "".join(f"DEL {token_cache_key(token_key)}\n" for token_key in unique_keys)
+    subprocess.run(
+        ["docker", "exec", "-i", "-e", "REDISCLI_AUTH", redis_container, "redis-cli", "--pipe"],
+        input=payload.encode("utf-8"),
+        env=env,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return len(unique_keys)
 
 
 def sql_quote(value: str) -> str:
@@ -535,6 +575,15 @@ def sync_tokens(profiles: dict[str, list[str]]) -> None:
             )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
+    managed_names = [name for names in TOKEN_PROFILES.values() for name in names]
+    token_rows = mysql(
+        "SELECT COALESCE(`key`, '') FROM tokens WHERE user_id = "
+        + str(ADMIN_SYSTEM_TOKEN_USER_ID)
+        + " AND name IN ("
+        + ", ".join(sql_quote(name) for name in managed_names)
+        + ");"
+    )
+    delete_token_caches([row[0] for row in token_rows])
 
 
 def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict[str, int]:
@@ -548,21 +597,22 @@ def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict
         ],
     ]
     token_rows = mysql(
-        "SELECT id, COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0) FROM tokens "
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0) FROM tokens "
         "WHERE deleted_at IS NULL "
         "AND (" + " OR ".join(name_predicates) + ") "
         "AND user_id <> "
         + str(ADMIN_SYSTEM_TOKEN_USER_ID)
         + ";"
     )
-    token_updates: list[tuple[str, str]] = []
-    for token_id, raw_limits, raw_enabled in token_rows:
+    all_token_keys = [row[1] for row in token_rows]
+    token_updates: list[tuple[str, str, str]] = []
+    for token_id, token_key, raw_limits, raw_enabled in token_rows:
         next_limits = ensure_codex_image_model_limits(raw_limits, required_models)
         if next_limits != raw_limits or raw_enabled != "1":
-            token_updates.append((token_id, next_limits))
+            token_updates.append((token_id, next_limits, token_key))
 
     statements = ["START TRANSACTION;"]
-    for token_id, next_limits in token_updates:
+    for token_id, next_limits, _token_key in token_updates:
         statements.append(
             "UPDATE tokens SET model_limits_enabled = 1, model_limits = "
             + sql_quote(next_limits)
@@ -572,7 +622,8 @@ def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict
         )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
-    return {"tokens_rewritten": len(token_updates)}
+    caches_deleted = delete_token_caches(all_token_keys)
+    return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
 def sync_abilities() -> None:

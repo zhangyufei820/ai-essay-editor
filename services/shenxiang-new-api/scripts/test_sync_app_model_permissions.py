@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import unittest
 from pathlib import Path
 
@@ -53,6 +54,20 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.module.ensure_codex_image_model_limits(raw),
             "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
         )
+
+    def test_token_cache_key_uses_crypto_secret_hmac(self) -> None:
+        old_secret = os.environ.get("CRYPTO_SECRET")
+        os.environ["CRYPTO_SECRET"] = "test-secret"
+        try:
+            self.assertEqual(
+                self.module.token_cache_key("token-value"),
+                "token:aa900acb34c6e64089ce061bb6e53053ecc0af1e03fd3a9aa63540d874843147",
+            )
+        finally:
+            if old_secret is None:
+                os.environ.pop("CRYPTO_SECRET", None)
+            else:
+                os.environ["CRYPTO_SECRET"] = old_secret
 
     def test_supplier_exposed_model_limit_predicate_covers_known_markers(self) -> None:
         predicate = self.module.supplier_exposed_model_limit_predicate()
@@ -150,6 +165,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
     def test_sync_tokens_updates_admin_system_tokens_only(self) -> None:
         captured: list[str] = []
         self.module.mysql_exec = captured.append
+        self.module.mysql = lambda query: [["admin-key-1"], ["admin-key-2"]]
+        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
 
         self.module.sync_tokens(
             {
@@ -165,6 +182,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(sql.count("AND user_id = 1"), 5)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("geek2api-image-2", sql)
+        self.assertIn("CACHE:admin-key-1,admin-key-2", sql)
 
     def test_sync_user_codex_tokens_updates_non_admin_codex_tokens(self) -> None:
         captured: list[str] = []
@@ -173,31 +191,34 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn("user_id <> 1", query)
             self.assertIn("name LIKE '星人Codex %'", query)
             self.assertIn("'月卡专用 Key'", query)
+            self.assertIn("COALESCE(`key`, '')", query)
             self.assertNotIn("model_limits_enabled = 1", query)
             full_limits = (
                 "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark,"
                 "gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)"
             )
             return [
-                ["101", "gpt-5.5", "1"],
-                ["102", "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,claude-opus-4-8,seedance-2.0-cl-mini", "1"],
-                ["103", "gpt-5.5,image 2电商商品图快速通道(1.5K)", "1"],
-                ["104", "", "0"],
-                ["105", full_limits, "1"],
+                ["101", "key-101", "gpt-5.5", "1"],
+                ["102", "key-102", "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,claude-opus-4-8,seedance-2.0-cl-mini", "1"],
+                ["103", "key-103", "gpt-5.5,image 2电商商品图快速通道(1.5K)", "1"],
+                ["104", "key-104", "", "0"],
+                ["105", "key-105", full_limits, "1"],
             ]
 
         self.module.mysql = fake_mysql
         self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
 
         result = self.module.sync_user_codex_tokens()
 
         sql = "\n".join(captured)
-        self.assertEqual(result, {"tokens_rewritten": 4})
+        self.assertEqual(result, {"tokens_rewritten": 4, "token_caches_deleted": 5})
         self.assertIn("WHERE id = '101'", sql)
         self.assertIn("WHERE id = '102'", sql)
         self.assertIn("WHERE id = '103'", sql)
         self.assertIn("WHERE id = '104'", sql)
         self.assertNotIn("WHERE id = '105'", sql)
+        self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105", sql)
         self.assertIn("model_limits_enabled = 1", sql)
         self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
         self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.3-codex-spark,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
