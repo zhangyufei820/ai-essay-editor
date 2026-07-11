@@ -27,11 +27,6 @@ type SystemTokenEnsureResult struct {
 
 const AdminSystemTokenUserID = 1
 
-var MoonApiXSeedanceVideoModels = []string{
-	"seedance-2.0",
-	"seedance-2.0-cl-mini",
-}
-
 const (
 	rawGPTImage2ModelName     = "gpt-image-2"
 	productGPTImage2ModelName = "gpt-image-2-4K"
@@ -39,9 +34,7 @@ const (
 )
 
 func videoTokenModels() []string {
-	models := []string{"seedance-2.0-dj-fast", "seedance-2.0-ld-17", "grok-video-super-720p"}
-	models = append(models, MoonApiXSeedanceVideoModels...)
-	return models
+	return []string{"seedance-2.0-dj-fast", "seedance-2.0-cl-mini"}
 }
 
 func SystemTokenProfiles() []SystemTokenProfile {
