@@ -446,9 +446,7 @@ const VIDEO_REFERENCE_ACCEPT = [
   ...VIDEO_VIDEO_TYPES,
   ...VIDEO_AUDIO_TYPES,
 ].join(',');
-const SEEDANCE_2_0_PRICE_PER_SECOND = 0.4;
 const SEEDANCE_DJ_FAST_PRICE_PER_SECOND = 0.162;
-const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
 const SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M = 12.852;
 const SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M = 21.114;
 const SEEDANCE_EXTENDED_VIDEO_DURATIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
@@ -709,36 +707,6 @@ function googleImageEditSizeFor(aspectRatio, imageSize, modelValue) {
 
 const VIDEO_MODELS = [
   {
-    value: 'grok-video-super-720p',
-    label: 'Grok Video',
-    badge: '720P',
-    vendor: '星人视频',
-    sizes: ['1280x720', '720x1280'],
-    durations: [15],
-    defaultSize: '1280x720',
-    defaultDuration: 15,
-    defaultFps: 24,
-    billingLabel: '按次计费',
-    priceLabel: '¥6.5/次',
-    hint: '6.5 元/次，按次计费；官方 Grok 1.5 固定 15 秒，单图/多图参考会自动按官方字段提交。',
-  },
-  {
-    value: 'seedance-2.0',
-    label: 'Seedance 2.0',
-    badge: 'Seedance',
-    vendor: '星人视频',
-    sizes: ['1280x720', '720x1280', '1024x1024'],
-    durations: [5, 10, 15],
-    defaultSize: '1280x720',
-    defaultDuration: 15,
-    defaultFps: 24,
-    referenceLimits: { image: 9, video: 3, audio: 3 },
-    officialSeedanceReferences: true,
-    billingLabel: '按秒计费',
-    priceLabel: `¥${SEEDANCE_2_0_PRICE_PER_SECOND.toFixed(1)}/秒`,
-    hint: '0.4 元/秒；支持文生视频、图生视频、首尾帧，15 秒约 6 元，最多 9 图 / 3 视频 / 3 音频。',
-  },
-  {
     value: 'seedance-2.0-dj-fast',
     label: 'Seedance 2.0 DJ Fast',
     badge: '豆包',
@@ -771,22 +739,6 @@ const VIDEO_MODELS = [
     billingLabel: '按 token 计费',
     priceLabel: `输入含视频 ¥${SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M.toFixed(3)}/1M｜输出 ¥${SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M.toFixed(3)}/1M`,
     hint: `支持图片参考，也可传 1 个视频参考；输入含视频 ¥${SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M.toFixed(3)}/1M tokens，输出 ¥${SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M.toFixed(3)}/1M tokens。`,
-  },
-  {
-    value: 'seedance-2.0-ld-17',
-    label: 'Seedance 2.0 LD-17',
-    badge: '豆包',
-    vendor: '豆包视频',
-    sizes: ['1280x720', '720x1280', '1024x1024'],
-    durations: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    defaultSize: '1280x720',
-    defaultDuration: 8,
-    defaultFps: 24,
-    referenceLimits: { image: 9, video: 3, audio: 3 },
-    supportsFace: true,
-    billingLabel: '按次计费',
-    priceLabel: `¥${SEEDANCE_LD17_PRICE_PER_CALL.toFixed(2)}/次`,
-    hint: '¥6.48/次；支持 5-15 秒，可以过人脸，支持 9 图 / 3 视频 / 3 音频。',
   },
   {
     value: 'seedance-nsfw',
@@ -4044,12 +3996,6 @@ const MediaPlayground = () => {
       }
       if (videoModel === 'seedance-2.0-dj-fast' && counts.image === 0) {
         return Toast.error('DJ Fast 只支持图片参考，请先上传图片素材。');
-      }
-      if ((videoModel === 'seedance-2.0' || videoModel === 'seedance-2.0-ld-17') &&
-        counts.audio > 0 &&
-        counts.image + counts.video === 0
-      ) {
-        return Toast.error('音频参考必须搭配图片或视频参考。');
       }
       if (activeVideoModel.extendedSeedance && counts.audio > 0) {
         return Toast.error('该视频模型暂不接收音频参考，请移除音频素材。');

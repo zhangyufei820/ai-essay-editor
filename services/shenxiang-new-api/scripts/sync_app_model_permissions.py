@@ -78,8 +78,10 @@ CLAUDE_ALLOWED_MODELS = [
 PUBLIC_SEEDANCE_VIDEO_MODELS = [
     "seedance-2.0-cl-mini",
 ]
-DEPRECATED_PUBLIC_SEEDANCE_MODELS = [
+DISABLED_PUBLIC_VIDEO_MODELS = [
+    "grok-video-super-720p",
     "seedance-2.0",
+    "seedance-2.0-ld-17",
     "seedance-2.0-kz-fast",
     "seedance-2.0-cl-fast",
     "seedance-2.0-cl",
@@ -990,16 +992,14 @@ def active_groups() -> list[str]:
 
 def ensure_public_seedance_models() -> None:
     statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
-    if DEPRECATED_PUBLIC_SEEDANCE_MODELS:
-        deprecated_models = ", ".join(sql_quote(model) for model in DEPRECATED_PUBLIC_SEEDANCE_MODELS)
+    if DISABLED_PUBLIC_VIDEO_MODELS:
+        disabled_models = ", ".join(sql_quote(model) for model in DISABLED_PUBLIC_VIDEO_MODELS)
         statements.append(
             "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
-            f"WHERE model_name IN ({deprecated_models});"
+            f"WHERE model_name IN ({disabled_models});"
         )
         statements.append(
-            "UPDATE abilities SET enabled = 0 WHERE channel_id = "
-            + PUBLIC_SEEDANCE_CHANNEL_ID
-            + f" AND model IN ({deprecated_models});"
+            f"UPDATE abilities SET enabled = 0 WHERE model IN ({disabled_models});"
         )
     for model in PUBLIC_SEEDANCE_VIDEO_MODELS:
         description = PUBLIC_SEEDANCE_MODEL_DESCRIPTIONS[model]

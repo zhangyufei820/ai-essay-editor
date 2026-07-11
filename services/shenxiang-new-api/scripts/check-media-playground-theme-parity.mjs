@@ -13,8 +13,13 @@ const requiredImageModels = [
 ]
 
 const requiredVideoModels = [
-  'grok-video-super-720p',
   'seedance-nsfw',
+]
+
+const retiredVideoModels = [
+  'grok-video-super-720p',
+  'seedance-2.0',
+  'seedance-2.0-ld-17',
 ]
 
 const requiredMarkers = {
@@ -115,6 +120,10 @@ function main() {
   for (const model of requiredModels) {
     if (!classicModels.has(model)) errors.push(`classic model missing: ${model}`)
     if (!defaultModels.has(model)) errors.push(`default model missing: ${model}`)
+  }
+  for (const model of retiredVideoModels) {
+    if (classicModels.has(model)) errors.push(`classic retired model still exposed: ${model}`)
+    if (defaultModels.has(model)) errors.push(`default retired model still exposed: ${model}`)
   }
 
   for (const [label, marker] of Object.entries(requiredMarkers)) {
