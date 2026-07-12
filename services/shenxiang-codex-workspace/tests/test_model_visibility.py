@@ -213,6 +213,85 @@ def test_create_grok_token_uses_exact_model_and_dedicated_group() -> None:
     assert captured["cross_group_retry"] is False
 
 
+def test_create_general_token_normalizes_nonpublic_user_group() -> None:
+    client = NewApiClient(Settings())
+    captured: dict[str, object] = {}
+
+    async def run() -> int:
+        async def fake_post_json(_client, path, _headers, payload):
+            assert path == "/api/token/"
+            captured.update(payload)
+            return {"success": True}
+
+        async def fake_list_tokens(*_args, **_kwargs):
+            return [
+                {
+                    "id": 46,
+                    "name": "星人 Codex 文本令牌",
+                    "status": 1,
+                    "model_limits_enabled": True,
+                    "model_limits": "gpt-5.5",
+                }
+            ]
+
+        client._post_json = fake_post_json  # type: ignore[method-assign]
+        client._list_tokens = fake_list_tokens  # type: ignore[method-assign]
+        return await client._create_codex_token(
+            object(),  # type: ignore[arg-type]
+            {},
+            {"group": "monthly"},
+            "星人 Codex 文本令牌",
+            ("gpt-5.5",),
+        )
+
+    assert asyncio.run(run()) == 46
+    assert captured["group"] == "default"
+    assert captured["cross_group_retry"] is True
+
+
+def test_general_token_keeps_discount_group() -> None:
+    client = NewApiClient(Settings())
+
+    assert client._token_group_for_profile({"group": "discount"}, None) == "discount"
+    assert client._token_group_for_profile({"group": "monthly"}, None) == "default"
+    assert client._token_group_for_profile({"group": "discount"}, GROK_TOKEN_GROUP) == GROK_TOKEN_GROUP
+
+
+def test_existing_general_token_moves_nonpublic_group_to_default() -> None:
+    client = NewApiClient(Settings())
+    captured: dict[str, object] = {}
+
+    async def run() -> None:
+        async def fake_put_json(_client, path, _headers, payload):
+            assert path == "/api/token/"
+            captured.update(payload)
+            return {"success": True}
+
+        client._put_json = fake_put_json  # type: ignore[method-assign]
+        await client._relax_existing_token_if_needed(
+            object(),  # type: ignore[arg-type]
+            {},
+            {
+                "id": 46,
+                "name": "星人 Codex 文本令牌",
+                "status": 1,
+                "unlimited_quota": True,
+                "model_limits_enabled": True,
+                "model_limits": "gpt-5.5",
+                "group": "monthly",
+                "cross_group_retry": True,
+            },
+            {"id": "user-1", "group": "monthly"},
+            "星人 Codex 文本令牌",
+            ("gpt-5.5",),
+        )
+
+    asyncio.run(run())
+
+    assert captured["group"] == "default"
+    assert captured["cross_group_retry"] is True
+
+
 def test_existing_grok_token_is_moved_to_dedicated_group() -> None:
     client = NewApiClient(Settings())
     captured: dict[str, object] = {}
@@ -235,6 +314,8 @@ def test_existing_grok_token_is_moved_to_dedicated_group() -> None:
                 "model_limits_enabled": True,
                 "model_limits": GROK_MODEL,
                 "group": "default",
+                "expired_time": 123,
+                "allow_ips": "127.0.0.1",
             },
             {"id": "user-1", "group": "default"},
             GROK_TOKEN_NAME,
@@ -247,6 +328,8 @@ def test_existing_grok_token_is_moved_to_dedicated_group() -> None:
     assert captured["model_limits"] == GROK_MODEL
     assert captured["group"] == GROK_TOKEN_GROUP
     assert captured["cross_group_retry"] is False
+    assert captured["expired_time"] == -1
+    assert captured["allow_ips"] == ""
 
 
 def test_existing_grok_token_disables_cross_group_retry() -> None:

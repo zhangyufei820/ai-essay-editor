@@ -24,6 +24,10 @@ from app.security import public_error_message, redact
 
 logger = logging.getLogger(__name__)
 
+PUBLIC_TOKEN_GROUPS = frozenset({"default", "discount"})
+DEFAULT_PUBLIC_TOKEN_GROUP = "default"
+
+
 class NewApiAuthError(RuntimeError):
     pass
 
@@ -250,7 +254,7 @@ class NewApiClient:
         token_group: str | None = None,
     ) -> str:
         expected_models = ",".join(models)
-        expected_group = token_group if token_group is not None else str(user.get("group") or "")
+        expected_group = self._token_group_for_profile(user, token_group)
         models_digest = hashlib.sha256(f"{expected_models}\n{expected_group}".encode("utf-8")).hexdigest()[:24]
         cache_key = f"codex:auto-token:{user_id}:{token_name}:{models_digest}"
         cached = self._cache_get(cache_key)
@@ -327,7 +331,7 @@ class NewApiClient:
         *,
         token_group: str | None = None,
     ) -> int:
-        resolved_group = token_group if token_group is not None else str(user.get("group") or "")
+        resolved_group = self._token_group_for_profile(user, token_group)
         cross_group_retry = token_group is None
         payload = {
             "name": token_name,
@@ -360,30 +364,30 @@ class NewApiClient:
         token_group: str | None = None,
     ) -> None:
         expected_models = ",".join(models)
-        expected_group = (
-            token_group
-            if token_group is not None
-            else str(user.get("group") or token.get("group") or "")
-        )
+        expected_group = self._token_group_for_profile(user, token_group)
         expected_cross_group_retry = token_group is None
-        group_matches = token_group is None or str(token.get("group") or "") == expected_group
+        expected_expired_time = -1 if token_group == GROK_TOKEN_GROUP else int(token.get("expired_time") or -1)
+        expected_allow_ips = "" if token_group == GROK_TOKEN_GROUP else str(token.get("allow_ips") or "")
+        group_matches = str(token.get("group") or "") == expected_group
         if (
             token.get("model_limits_enabled")
             and str(token.get("model_limits") or "") == expected_models
             and token.get("unlimited_quota")
             and group_matches
             and bool(token.get("cross_group_retry")) == expected_cross_group_retry
+            and int(token.get("expired_time") or -1) == expected_expired_time
+            and str(token.get("allow_ips") or "") == expected_allow_ips
         ):
             return
         payload = {
             "id": int(token["id"]),
             "name": token_name,
             "remain_quota": 0,
-            "expired_time": int(token.get("expired_time") or -1),
+            "expired_time": expected_expired_time,
             "unlimited_quota": True,
             "model_limits_enabled": True,
             "model_limits": expected_models,
-            "allow_ips": token.get("allow_ips") or "",
+            "allow_ips": expected_allow_ips,
             "group": expected_group,
             "cross_group_retry": expected_cross_group_retry,
         }
@@ -397,6 +401,15 @@ class NewApiClient:
                     )
                 )
             logger.warning("failed to relax codex auto token user=%s message=%s", user.get("id"), result.get("message", ""))
+
+    @staticmethod
+    def _token_group_for_profile(user: dict[str, Any], token_group: str | None) -> str:
+        if token_group is not None:
+            return str(token_group).strip()
+        user_group = str(user.get("group") or "").strip()
+        if user_group in PUBLIC_TOKEN_GROUPS:
+            return user_group
+        return DEFAULT_PUBLIC_TOKEN_GROUP
 
     async def _fetch_token_key(self, client: httpx.AsyncClient, headers: dict[str, str], token_id: Any) -> str:
         result = await self._post_json(client, f"/api/token/{int(token_id)}/key", headers, {})
