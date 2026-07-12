@@ -1,0 +1,108 @@
+name: New API provenance
+
+on:
+  pull_request:
+    paths:
+      - "services/shenxiang-new-api/**"
+      - ".github/workflows/new-api.yml"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "services/shenxiang-new-api/**"
+      - ".github/workflows/new-api.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: new-api-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up Go
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32
+        with:
+          go-version: "1.26.1"
+          cache: false
+
+      - name: Validate shell syntax
+        run: bash -n services/shenxiang-new-api/scripts/prepare-local-source.sh
+
+      - name: Run New API script tests
+        run: python3 -m unittest discover -s services/shenxiang-new-api/scripts -p 'test_*.py'
+
+      - name: Prepare locked source and verify embedded provenance
+        run: >-
+          services/shenxiang-new-api/scripts/prepare-local-source.sh --
+          go test ./common -run TestBuildInfo -count=1
+
+      - name: Validate Compose provenance
+        env:
+          TZ: UTC
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: new_api
+          MYSQL_USER: new_api
+          MYSQL_PASSWORD: ci-database-password
+          REDIS_PASSWORD: ci-redis-password
+          SESSION_SECRET: ci-session-secret-not-for-production
+          CRYPTO_SECRET: ci-crypto-secret-not-for-production
+        run: >-
+          docker compose
+          --env-file services/shenxiang-new-api/.local-source/build.env
+          -f services/shenxiang-new-api/docker-compose.yml
+          config --quiet
+
+      - name: Build traceable New API image
+        env:
+          TZ: UTC
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: new_api
+          MYSQL_USER: new_api
+          MYSQL_PASSWORD: ci-database-password
+          REDIS_PASSWORD: ci-redis-password
+          SESSION_SECRET: ci-session-secret-not-for-production
+          CRYPTO_SECRET: ci-crypto-secret-not-for-production
+        run: >-
+          docker compose
+          --env-file services/shenxiang-new-api/.local-source/build.env
+          -f services/shenxiang-new-api/docker-compose.yml
+          build shenxiang-new-api
+
+      - name: Verify built image provenance labels
+        run: |
+          image_tag="$(sed -n 's/^NEW_API_IMAGE_TAG=//p' services/shenxiang-new-api/.local-source/build.env)"
+          case "$image_tag" in
+            ''|*[!0-9a-f]*) echo "invalid generated image tag" >&2; exit 1 ;;
+          esac
+          docker image inspect "shenxiang-new-api-codex:${image_tag}" --format '{{json .Config.Labels}}' > /tmp/new-api-labels.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          values = {}
+          for line in Path("services/shenxiang-new-api/.local-source/build.env").read_text(encoding="utf-8").splitlines():
+              key, value = line.split("=", 1)
+              values[key] = value
+          labels = json.loads(Path("/tmp/new-api-labels.json").read_text(encoding="utf-8"))
+          expected = {
+              "org.opencontainers.image.source": values["NEW_API_SOURCE_REPOSITORY"],
+              "org.opencontainers.image.revision": values["NEW_API_REPOSITORY_COMMIT"],
+              "org.opencontainers.image.version": values["NEW_API_SOURCE_DIGEST"],
+              "io.shenxiang.new-api.upstream-repository": values["NEW_API_UPSTREAM_REPOSITORY"],
+              "io.shenxiang.new-api.upstream-revision": values["NEW_API_UPSTREAM_COMMIT"],
+              "io.shenxiang.new-api.patch-sha256": values["NEW_API_PATCH_SHA256"],
+              "io.shenxiang.new-api.source-digest": values["NEW_API_SOURCE_DIGEST"],
+          }
+          if any(labels.get(key) != value for key, value in expected.items()):
+              raise SystemExit("built image provenance labels do not match BUILD-MANIFEST.json")
+          PY

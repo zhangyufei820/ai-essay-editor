@@ -45,6 +45,12 @@ var playgroundMediaExtensions = map[string]string{
 	"video/x-m4v":     ".m4v",
 }
 
+var playgroundMediaSSRFProtection = &common.SSRFProtection{
+	AllowPrivateIp:   false,
+	DomainFilterMode: false,
+	IpFilterMode:     false,
+}
+
 type playgroundMediaItem struct {
 	ID            string                 `json:"id"`
 	Kind          string                 `json:"kind"`
@@ -146,6 +152,9 @@ func cachePlaygroundDataMedia(c *gin.Context, req playgroundMediaCacheRequest, r
 }
 
 func writePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest, reader io.Reader, ext string, maxBytes int64) (*playgroundMediaItem, error) {
+	common.PlaygroundMediaCacheMu.Lock()
+	defer common.PlaygroundMediaCacheMu.Unlock()
+
 	root := playgroundMediaUserDir(c)
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, errors.New("failed to create media cache directory")
@@ -156,20 +165,45 @@ func writePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest, reade
 	name := fmt.Sprintf("%x%s", sum[:16], ext)
 	fullPath := filepath.Join(root, name)
 
-	out, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+	tempFile, err := os.CreateTemp(playgroundMediaCacheRoot(), ".playground-media-*.tmp")
 	if err != nil {
-		return nil, errors.New("failed to create cached media file")
+		return nil, errors.New("failed to create temporary media file")
 	}
-	defer out.Close()
+	tempPath := tempFile.Name()
+	defer os.Remove(tempPath)
 
-	written, err := io.Copy(out, io.LimitReader(reader, maxBytes+1))
+	written, err := io.Copy(tempFile, io.LimitReader(reader, maxBytes+1))
 	if err != nil {
-		_ = os.Remove(fullPath)
+		_ = tempFile.Close()
 		return nil, errors.New("failed to save generated media")
 	}
 	if written > maxBytes {
-		_ = os.Remove(fullPath)
+		_ = tempFile.Close()
 		return nil, errors.New("generated media exceeds cache size limit")
+	}
+	if err := tempFile.Close(); err != nil {
+		return nil, errors.New("failed to finalize temporary media file")
+	}
+
+	userBytes, userFiles, err := playgroundMediaCacheUsage(root, true)
+	if err != nil {
+		return nil, errors.New("failed to inspect user media cache quota")
+	}
+	if userFiles >= playgroundMediaMaxFilesPerUser() {
+		return nil, errors.New("user media cache file count quota exceeded")
+	}
+	if userBytes+written > playgroundMediaUserMaxBytes() {
+		return nil, errors.New("user media cache quota exceeded")
+	}
+	totalBytes, _, err := playgroundMediaCacheUsage(playgroundMediaCacheRoot(), false)
+	if err != nil {
+		return nil, errors.New("failed to inspect total media cache quota")
+	}
+	if totalBytes+written+(64<<10) > playgroundMediaTotalMaxBytes() {
+		return nil, errors.New("total media cache quota exceeded")
+	}
+	if err := os.Rename(tempPath, fullPath); err != nil {
+		return nil, errors.New("failed to publish cached media file")
 	}
 
 	metadata := normalizePlaygroundMetadata(req.Metadata)
@@ -204,6 +238,22 @@ func writePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest, reade
 	}
 
 	return item, nil
+}
+
+func playgroundMediaCacheUsage(root string, countMediaFiles bool) (int64, int, error) {
+	return common.PlaygroundMediaCacheUsage(root, countMediaFiles)
+}
+
+func playgroundMediaUserMaxBytes() int64 {
+	return common.PlaygroundMediaUserMaxBytes()
+}
+
+func playgroundMediaTotalMaxBytes() int64 {
+	return common.PlaygroundMediaTotalMaxBytes()
+}
+
+func playgroundMediaMaxFilesPerUser() int {
+	return common.PlaygroundMediaMaxFilesPerUser()
 }
 
 func annotatePlaygroundMediaActualSize(mediaPath string, kind string, bytesWritten int64, metadata map[string]interface{}) {
@@ -359,7 +409,7 @@ func isPrivateHost(host string) bool {
 	if ip == nil {
 		return false
 	}
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+	return !playgroundMediaSSRFProtection.IsIPAccessAllowed(ip)
 }
 
 func hostResolvesPrivate(host string) bool {
@@ -374,7 +424,7 @@ func hostResolvesPrivate(host string) bool {
 		return true
 	}
 	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		if !playgroundMediaSSRFProtection.IsIPAccessAllowed(ip) {
 			return true
 		}
 	}
@@ -382,27 +432,56 @@ func hostResolvesPrivate(host string) bool {
 }
 
 func safePlaygroundMediaDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: 30 * time.Second}
+	return dialValidatedPlaygroundMediaAddress(
+		ctx,
+		network,
+		address,
+		net.DefaultResolver.LookupIPAddr,
+		dialer.DialContext,
+	)
+}
+
+func dialValidatedPlaygroundMediaAddress(
+	ctx context.Context,
+	network string,
+	address string,
+	lookupIPAddr func(context.Context, string) ([]net.IPAddr, error),
+	dialContext func(context.Context, string, string) (net.Conn, error),
+) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
-	if isPrivateHost(host) {
-		return nil, errors.New("private media address cannot be reached")
+	if ip := net.ParseIP(host); ip != nil {
+		if !playgroundMediaSSRFProtection.IsIPAccessAllowed(ip) {
+			return nil, errors.New("private media address cannot be reached")
+		}
+		return dialContext(ctx, network, net.JoinHostPort(ip.String(), port))
 	}
 
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	ips, err := lookupIPAddr(ctx, host)
 	if err != nil {
 		return nil, err
 	}
+	if len(ips) == 0 {
+		return nil, errors.New("media address did not resolve")
+	}
 	for _, ipAddr := range ips {
-		ip := ipAddr.IP
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		if !playgroundMediaSSRFProtection.IsIPAccessAllowed(ipAddr.IP) {
 			return nil, errors.New("private media address cannot be reached")
 		}
 	}
 
-	dialer := &net.Dialer{Timeout: 30 * time.Second}
-	return dialer.DialContext(ctx, network, net.JoinHostPort(host, port))
+	var lastErr error
+	for _, ipAddr := range ips {
+		conn, dialErr := dialContext(ctx, network, net.JoinHostPort(ipAddr.IP.String(), port))
+		if dialErr == nil {
+			return conn, nil
+		}
+		lastErr = dialErr
+	}
+	return nil, lastErr
 }
 
 func extFromRemotePath(path string) string {
@@ -612,6 +691,12 @@ func playgroundMediaCreatedAtBefore(a playgroundMediaItem, b playgroundMediaItem
 }
 
 func CleanupPlaygroundMediaCache(maxAge time.Duration) (int, error) {
+	common.PlaygroundMediaCacheMu.Lock()
+	defer common.PlaygroundMediaCacheMu.Unlock()
+	return cleanupPlaygroundMediaCache(maxAge)
+}
+
+func cleanupPlaygroundMediaCache(maxAge time.Duration) (int, error) {
 	if maxAge <= 0 {
 		maxAge = playgroundMediaRetentionDuration()
 	}
@@ -691,4 +776,28 @@ func CleanupPlaygroundMediaCache(maxAge time.Duration) (int, error) {
 		}
 	}
 	return removed, nil
+}
+
+func StartPlaygroundMediaCacheCleanupTask() {
+	intervalMinutes := common.GetEnvOrDefault("PLAYGROUND_MEDIA_CLEANUP_INTERVAL_MINUTES", 30)
+	if intervalMinutes < 1 {
+		intervalMinutes = 30
+	}
+	interval := time.Duration(intervalMinutes) * time.Minute
+	go func() {
+		if removed, err := CleanupPlaygroundMediaCache(0); err != nil {
+			common.SysError("playground media cache cleanup failed: " + err.Error())
+		} else if removed > 0 {
+			common.SysLog(fmt.Sprintf("playground media cache cleanup removed %d expired files", removed))
+		}
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for range ticker.C {
+			if removed, err := CleanupPlaygroundMediaCache(0); err != nil {
+				common.SysError("playground media cache cleanup failed: " + err.Error())
+			} else if removed > 0 {
+				common.SysLog(fmt.Sprintf("playground media cache cleanup removed %d expired files", removed))
+			}
+		}
+	}()
 }

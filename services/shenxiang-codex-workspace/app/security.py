@@ -162,7 +162,7 @@ def safe_error(code: str, message: str) -> dict[str, str]:
 
 
 def normalize_sandbox(sandbox: str, settings: Settings) -> str:
-    allowed = {"read-only", "workspace-write", "danger-full-access"}
+    allowed = {"read-only", "workspace-write"}
     if sandbox in allowed:
         return sandbox
     return "workspace-write"

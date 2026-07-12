@@ -21,6 +21,7 @@ import { Toast, Pagination } from '@douyinfe/semi-ui';
 import { toastConstants, BILLING_PRICING_VARS, BILLING_VAR_REGEX } from '../constants';
 import React from 'react';
 import { toast } from 'react-toastify';
+import DOMPurify from 'dompurify';
 import {
   THINK_TAG_REGEX,
   MESSAGE_ROLES,
@@ -191,7 +192,13 @@ export function isModelInVisibleGroup(model, group) {
 }
 
 const HTMLToastContent = ({ htmlContent }) => {
-  return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
+  return (
+    <div
+      dangerouslySetInnerHTML={{
+        __html: DOMPurify.sanitize(String(htmlContent || '')),
+      }}
+    />
+  );
 };
 export default HTMLToastContent;
 export function isAdmin() {
@@ -432,12 +439,18 @@ export function isDataCrossYear(timestamps) {
 }
 
 export function downloadTextAsFile(text, filename) {
-  let blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  let url = URL.createObjectURL(blob);
-  let a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 export const verifyJSON = (str) => {

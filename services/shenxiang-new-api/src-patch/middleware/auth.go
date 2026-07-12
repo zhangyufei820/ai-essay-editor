@@ -39,6 +39,7 @@ func authHelper(c *gin.Context, minRole int) {
 	role := session.Get("role")
 	id := session.Get("id")
 	status := session.Get("status")
+	group := session.Get("group")
 	useAccessToken := false
 	if username == nil {
 		// Check access token
@@ -80,9 +81,10 @@ func authHelper(c *gin.Context, minRole int) {
 			// Token is valid
 			username = user.Username
 			role = user.Role
-			id = user.Id
-			status = user.Status
-			useAccessToken = true
+				id = user.Id
+				status = user.Status
+				group = user.Group
+				useAccessToken = true
 		} else {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
@@ -120,6 +122,29 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
+	if !useAccessToken {
+		currentUser, authErr := model.GetUserById(apiUserId, false)
+		if authErr != nil {
+			if errors.Is(authErr, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"success": false,
+					"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+				})
+			} else {
+				common.SysLog(fmt.Sprintf("session auth failed to refresh user %d: %v", apiUserId, authErr))
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"message": common.TranslateMessage(c, i18n.MsgDatabaseError),
+				})
+			}
+			c.Abort()
+			return
+		}
+		username = currentUser.Username
+		role = currentUser.Role
+		status = currentUser.Status
+		group = currentUser.Group
+	}
 	statusVal, ok := status.(int)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -129,7 +154,7 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if statusVal == common.UserStatusDisabled {
+	if statusVal != common.UserStatusEnabled {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserBanned),
@@ -137,7 +162,16 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if role.(int) < minRole {
+	roleVal, ok := role.(int)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+		})
+		c.Abort()
+		return
+	}
+	if roleVal < minRole {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege),
@@ -145,7 +179,8 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if !validUserInfo(username.(string), role.(int)) {
+	usernameVal, ok := username.(string)
+	if !ok || !validUserInfo(usernameVal, roleVal) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid),
@@ -155,14 +190,19 @@ func authHelper(c *gin.Context, minRole int) {
 	}
 	// 防止不同newapi版本冲突，导致数据不通用
 	c.Header("Auth-Version", "864b7076dbcd0a3c01b5520316720ebf")
-	c.Set("username", username)
-	c.Set("role", role)
+	c.Set("username", usernameVal)
+	c.Set("role", roleVal)
 	c.Set("id", id)
-	c.Set("group", session.Get("group"))
-	c.Set("user_group", session.Get("group"))
+	c.Set("group", group)
+	c.Set("user_group", group)
 	c.Set("use_access_token", useAccessToken)
 
+	var auditWriter *auditResponseWriter
+	if minRole >= common.RoleAdminUser {
+		auditWriter = beginAdminAudit(c)
+	}
 	c.Next()
+	finishAdminAudit(c, auditWriter)
 }
 
 func TryUserAuth() func(c *gin.Context) {
@@ -204,9 +244,22 @@ func TokenOrUserAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		// Try session auth first (dashboard users)
 		session := sessions.Default(c)
-		if id := session.Get("id"); id != nil {
-			if status, ok := session.Get("status").(int); ok && status == common.UserStatusEnabled {
-				c.Set("id", id)
+		if id, ok := session.Get("id").(int); ok && id > 0 {
+			currentUser, err := model.GetUserById(id, false)
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				common.SysLog(fmt.Sprintf("TokenOrUserAuth failed to refresh user %d: %v", id, err))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"message": common.TranslateMessage(c, i18n.MsgDatabaseError),
+				})
+				return
+			}
+			if err == nil && currentUser.Status == common.UserStatusEnabled {
+				c.Set("id", currentUser.Id)
+				c.Set("username", currentUser.Username)
+				c.Set("role", currentUser.Role)
+				c.Set("group", currentUser.Group)
+				c.Set("user_group", currentUser.Group)
 				c.Next()
 				return
 			}

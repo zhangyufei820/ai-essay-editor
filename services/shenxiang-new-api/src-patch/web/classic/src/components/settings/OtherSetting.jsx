@@ -35,6 +35,7 @@ import {
   timestamp2string,
 } from '../../helpers';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { useTranslation } from 'react-i18next';
 import { StatusContext } from '../../context/Status';
 import Text from '@douyinfe/semi-ui/lib/es/typography/text';
@@ -270,7 +271,7 @@ const OtherSetting = () => {
       } else {
         setUpdateData({
           tag_name: tag_name,
-          content: marked.parse(body),
+          content: DOMPurify.sanitize(marked.parse(String(body || ''))),
         });
         setShowUpdateModal(true);
       }
@@ -310,8 +311,9 @@ const OtherSetting = () => {
   // Function to open GitHub release page
   const openGitHubRelease = () => {
     window.open(
-      `https://github.com/Calcium-Ion/new-api/releases/tag/${updateData.tag_name}`,
+      `https://github.com/Calcium-Ion/new-api/releases/tag/${encodeURIComponent(updateData.tag_name)}`,
       '_blank',
+      'noopener,noreferrer',
     );
   };
 
@@ -522,7 +524,11 @@ const OtherSetting = () => {
           </Button>,
         ]}
       >
-        <div dangerouslySetInnerHTML={{ __html: updateData.content }}></div>
+        <div
+          dangerouslySetInnerHTML={{
+            __html: DOMPurify.sanitize(updateData.content),
+          }}
+        />
       </Modal>
     </Row>
   );

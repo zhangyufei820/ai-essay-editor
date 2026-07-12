@@ -3,6 +3,7 @@ import test from "node:test"
 import {
   anthropicToOpenAI,
   flushStreamFinalEvents,
+  openAIStreamToAnthropicMessage,
   openAIToAnthropic,
   toAnthropicSse,
 } from "../src/anthropic-openai.mjs"
@@ -99,4 +100,59 @@ test("flushes collected streaming tool calls as Anthropic tool_use events", () =
   assert.match(done, /input_json_delta/)
   assert.match(done, /package\.json/)
   assert.match(done, /message_stop/)
+})
+
+test("bounds buffered non-stream responses from an upstream SSE stream", async () => {
+  const encoder = new TextEncoder()
+  const upstream = new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${"x".repeat(2_048)}`))
+        controller.close()
+      },
+    }),
+    { headers: { "Content-Type": "text/event-stream" } },
+  )
+
+  await assert.rejects(
+    openAIStreamToAnthropicMessage(upstream, route, {
+      maxBufferBytes: 1_024,
+      maxResponseBytes: 4_096,
+    }),
+    (error) => error.code === "UPSTREAM_SSE_EVENT_TOO_LARGE",
+  )
+})
+
+test("preserves UTF-8 characters split across upstream SSE chunks", async () => {
+  const encoded = new TextEncoder().encode(
+    'data: {"id":"utf8","choices":[{"delta":{"content":"中文"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+  )
+  const splitAt = encoded.indexOf(0xe4) + 1
+  const upstream = new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoded.slice(0, splitAt))
+        setTimeout(() => {
+          controller.enqueue(encoded.slice(splitAt))
+          controller.close()
+        }, 5)
+      },
+    }),
+    { headers: { "Content-Type": "text/event-stream" } },
+  )
+
+  const result = await openAIStreamToAnthropicMessage(upstream, route)
+
+  assert.equal(result.content[0].text, "中文")
+})
+
+test("rejects an upstream SSE response that ends before completion", async () => {
+  const upstream = new Response('data: {"id":"cutoff","choices":[{"delta":{"content":"partial"}}]}\n\n', {
+    headers: { "Content-Type": "text/event-stream" },
+  })
+
+  await assert.rejects(
+    openAIStreamToAnthropicMessage(upstream, route),
+    (error) => error.code === "UPSTREAM_STREAM_INCOMPLETE",
+  )
 })

@@ -4,6 +4,8 @@ import (
 	"embed"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/controller"
@@ -112,4 +114,23 @@ func TestPlaygroundMediaCacheRouteDoesNotUseRelayPerformanceGate(t *testing.T) {
 	videoResp := httptest.NewRecorder()
 	server.ServeHTTP(videoResp, videoReq)
 	require.Equal(t, http.StatusServiceUnavailable, videoResp.Code)
+}
+
+func TestPlaygroundImageMutationRoutesUseModelRequestRateLimit(t *testing.T) {
+	source, err := os.ReadFile("relay-router.go")
+	require.NoError(t, err)
+	text := string(source)
+
+	require.Contains(t, text, `playgroundImageMutationRouter := playgroundRouter.Group("")`)
+	require.Contains(t, text, `playgroundImageMutationRouter.Use(middleware.ModelRequestRateLimit())`)
+	for _, route := range []string{
+		`playgroundImageMutationRouter.POST("/images/tasks", controller.PlaygroundCreateImageTask)`,
+		`playgroundImageMutationRouter.POST("/images/tasks/generations", controller.PlaygroundCreateImageTask)`,
+		`playgroundImageMutationRouter.POST("/images/tasks/edits", controller.PlaygroundCreateImageTask)`,
+		`playgroundImageMutationRouter.POST("/media/recovery", controller.PlaygroundCreateImageRecoveryTask)`,
+		`playgroundImageMutationRouter.POST("/media/recovery/:task_id/recover", controller.PlaygroundRecoverImageTask)`,
+	} {
+		require.Contains(t, text, route)
+	}
+	require.Equal(t, 1, strings.Count(text, `relayV1Router.Use(middleware.ModelRequestRateLimit())`))
 }

@@ -103,11 +103,12 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 		return currentQuota, result
 	}
 
-	quota, billedCostUSD, ok := quotaFromUpstreamCost(cost, currency, markupRate)
+	quota, billedCostUSD, clamp, ok := quotaFromUpstreamCost(cost, currency, markupRate)
 	if !ok {
 		result.FallbackReason = "unsupported_currency"
 		return currentQuota, result
 	}
+	noteQuotaClamp(relayInfo, clamp)
 
 	result.Applied = true
 	result.Source = source
@@ -373,7 +374,7 @@ func InjectUpstreamCostBillingInfo(other map[string]interface{}, result *Upstrea
 	other["quota_after_upstream_cost"] = result.FinalQuota
 }
 
-func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (quota int, billedCostUSD float64, ok bool) {
+func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (quota int, billedCostUSD float64, clamp *common.QuotaClamp, ok bool) {
 	currency = normalizeCostCurrency(currency)
 	if currency == "" {
 		currency = "USD"
@@ -386,28 +387,25 @@ func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (q
 		exchangeRate := operation_setting.USDExchangeRate
 		if exchangeRate <= 0 {
 			common.SysError("USDExchangeRate is not configured; upstream CNY cost billing is disabled to avoid profit distortion")
-			return 0, 0, false
+			return 0, 0, nil, false
 		}
 		billedCostUSD = costDecimal.
 			Div(decimal.NewFromFloat(exchangeRate)).
 			Mul(decimal.NewFromFloat(1 + markupRate)).
 			InexactFloat64()
 	default:
-		return 0, 0, false
+		return 0, 0, nil, false
 	}
 	quotaDecimal := decimal.NewFromFloat(billedCostUSD).Mul(decimal.NewFromFloat(common.QuotaPerUnit))
-	// 防御异常上游成本（如恶意/错误的 cost header）导致 IntPart 溢出回绕成负数或垃圾值：
-	// 超出安全范围或为负时不信任该成本，跳过上游成本计费，回退到标准计费。
-	maxSafeQuota := decimal.New(1, 18) // 1e18，远超任何合理单请求成本，且安全位于 int64 范围内
-	if quotaDecimal.IsNegative() || quotaDecimal.GreaterThan(maxSafeQuota) {
+	if quotaDecimal.IsNegative() {
 		common.SysError(fmt.Sprintf("upstream cost billing produced out-of-range quota (cost=%v %s, billedUSD=%v); skipping upstream cost billing", cost, currency, billedCostUSD))
-		return 0, 0, false
+		return 0, 0, nil, false
 	}
-	quota = int(quotaDecimal.Round(0).IntPart())
+	quota, clamp = common.QuotaFromDecimalChecked(quotaDecimal)
 	if quota == 0 && cost > 0 {
 		quota = 1
 	}
-	return quota, billedCostUSD, true
+	return quota, billedCostUSD, clamp, true
 }
 
 func parsePositiveCost(value any) (float64, bool) {

@@ -35,15 +35,32 @@ const (
 	playgroundImageAsyncBillingCaptureKey = "playground_image_billing_capture"
 	playgroundImageTaskResultCaptureKey   = "playground_image_task_result_capture"
 
-	playgroundImageTaskDefaultRetryTimes = 2
-	playgroundImageTaskMaxRetryTimes     = 5
-	playgroundImageTaskRetryBaseSeconds  = 20
-	playgroundImageTaskRetryMaxSeconds   = 120
+	playgroundImageTaskDefaultRetryTimes  = 2
+	playgroundImageTaskMaxRetryTimes      = 5
+	playgroundImageTaskRetryBaseSeconds   = 20
+	playgroundImageTaskRetryMaxSeconds    = 120
+	playgroundImageTaskDefaultWorkerLimit = 32
+	playgroundImageTaskMaxWorkerLimit     = 256
 )
 
 // playgroundImageWorkerSem caps the number of concurrent async image workers
 // to prevent goroutine exhaustion under high load.
-var playgroundImageWorkerSem = make(chan struct{}, 500)
+var playgroundImageWorkerSem = newPlaygroundImageWorkerSemaphore()
+
+func playgroundImageTaskWorkerLimit() int {
+	limit := common.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_MAX_WORKERS", playgroundImageTaskDefaultWorkerLimit)
+	if limit < 1 {
+		limit = playgroundImageTaskDefaultWorkerLimit
+	}
+	if limit > playgroundImageTaskMaxWorkerLimit {
+		limit = playgroundImageTaskMaxWorkerLimit
+	}
+	return limit
+}
+
+func newPlaygroundImageWorkerSemaphore() chan struct{} {
+	return make(chan struct{}, playgroundImageTaskWorkerLimit())
+}
 
 func FailInterruptedPlaygroundImageTasksOnStartup() {
 	if model.DB == nil {
@@ -199,7 +216,33 @@ func V1CreateImageTask(c *gin.Context) {
 	createImageTask(c, true)
 }
 
+func replacePlaygroundImageTaskBodyStorage(c *gin.Context, replacement common.BodyStorage) error {
+	if c == nil || replacement == nil {
+		return errors.New("invalid image task body storage")
+	}
+	currentValue, exists := c.Get(common.KeyBodyStorage)
+	if !exists || currentValue == nil {
+		c.Set(common.KeyBodyStorage, replacement)
+		return nil
+	}
+	current, ok := currentValue.(common.BodyStorage)
+	if !ok {
+		c.Set(common.KeyBodyStorage, replacement)
+		return errors.New("invalid existing image task body storage")
+	}
+	if err := current.Close(); err != nil {
+		c.Set(common.KeyBodyStorage, replacement)
+		return fmt.Errorf("failed to close existing image task body storage: %w", err)
+	}
+	c.Set(common.KeyBodyStorage, replacement)
+	return nil
+}
+
 func createImageTask(c *gin.Context, openAICompat bool) {
+	createImageTaskWithBodyStorageFactory(c, openAICompat, common.CreateBodyStorage)
+}
+
+func createImageTaskWithBodyStorageFactory(c *gin.Context, openAICompat bool, storageFactory func([]byte) (common.BodyStorage, error)) {
 	path := resolvePlaygroundImageTaskRequestPath(c)
 	if path != "/pg/images/generations" && path != "/pg/images/edits" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid image task endpoint"})
@@ -218,6 +261,10 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 	}
 	if len(bodyBytes) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "empty image request"})
+		return
+	}
+	if int64(len(bodyBytes)) > common.PlaygroundImageTaskRequestMaxBytes() {
+		respondPlaygroundImageTaskPersistError(c, common.ErrPlaygroundImageTaskRequestTooLarge)
 		return
 	}
 
@@ -251,8 +298,23 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 	}
 	if normalizedBody, ok := normalizePlaygroundImageTaskPayload(bodyBytes, &imageReq); ok {
 		bodyBytes = normalizedBody
-		if storage, err := common.CreateBodyStorage(bodyBytes); err == nil {
-			c.Set(common.KeyBodyStorage, storage)
+		if storageFactory == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to prepare image request"})
+			return
+		}
+		storage, err := storageFactory(bodyBytes)
+		if err != nil {
+			if storage != nil {
+				_ = storage.Close()
+			}
+			logger.LogError(c, "failed to create normalized image task body storage: "+err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to prepare image request"})
+			return
+		}
+		if err := replacePlaygroundImageTaskBodyStorage(c, storage); err != nil {
+			logger.LogError(c, "failed to replace normalized image task body storage: "+err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to prepare image request"})
+			return
 		}
 	}
 	usingGroup, userGroup, err := resolvePlaygroundImageTaskGroup(c, &imageReq)
@@ -283,8 +345,10 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 	contentType := c.Request.Header.Get("Content-Type")
 	requestFile, err := persistPlaygroundImageTaskRequest(c.GetInt("id"), taskID, bodyBytes)
 	if err != nil {
-		logger.LogError(c, "failed to persist playground image task request: "+err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to persist image task"})
+		if playgroundImageTaskPersistHTTPStatus(err) == http.StatusInternalServerError {
+			logger.LogError(c, "failed to persist playground image task request: "+err.Error())
+		}
+		respondPlaygroundImageTaskPersistError(c, err)
 		return
 	}
 
@@ -978,9 +1042,16 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		return
 	}
 
-	task, exists, err := model.GetByTaskId(userID, taskID)
-	if err != nil || !exists || task == nil {
+	task, claimed, err := claimPlaygroundImageTask(taskID, userID)
+	if err != nil {
+		logger.LogError(nil, fmt.Sprintf("failed to claim playground image task %s: %s", taskID, err.Error()))
+		return
+	}
+	if task == nil {
 		common.SysLog(fmt.Sprintf("playground image task %s not found for user %d", taskID, userID))
+		return
+	}
+	if !claimed {
 		return
 	}
 	var payload playgroundImageTaskPayload
@@ -992,17 +1063,6 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	bodyBytes, err := os.ReadFile(payload.RequestFile)
 	if err != nil {
 		markPlaygroundImageTaskFailure(task, "image task request payload unavailable")
-		return
-	}
-
-	fromStatus := task.Status
-	task.Status = model.TaskStatusInProgress
-	task.Progress = "15%"
-	task.StartTime = time.Now().Unix()
-	if won, err := task.UpdateWithStatus(fromStatus); err != nil {
-		logger.LogError(nil, fmt.Sprintf("failed to mark playground image task %s in progress: %s", task.TaskID, err.Error()))
-		return
-	} else if !won {
 		return
 	}
 
@@ -1066,11 +1126,12 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		return
 	}
 
-	task, exists, err = model.GetByTaskId(userID, taskID)
-	if err != nil || !exists || task == nil {
+	refreshedTask, exists, refreshErr := model.GetByTaskId(userID, taskID)
+	if refreshErr != nil || !exists || refreshedTask == nil {
 		cleanupPlaygroundImageTaskRequest(payload.RequestFile)
 		return
 	}
+	task = refreshedTask
 	var response dto.ImageResponse
 	responseBody := recorder.Body.Bytes()
 	if err := common.Unmarshal(responseBody, &response); err != nil || len(response.Data) == 0 {
@@ -1094,7 +1155,30 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		task = refreshedTask
 		_ = task.GetData(&payload)
 	}
-	markPlaygroundImageTaskSuccess(task, item, &payload, recorder.Code, capture.Quota)
+	markPlaygroundImageTaskSuccess(task, item, &payload, recorder.Code, capture.Quota, true)
+}
+
+func claimPlaygroundImageTask(taskID string, userID int) (*model.Task, bool, error) {
+	task, exists, err := model.GetByTaskId(userID, taskID)
+	if err != nil || !exists || task == nil {
+		return task, false, err
+	}
+	if task.Platform != constant.TaskPlatformPlaygroundImage || !isPlaygroundImageTaskAction(task.Action) {
+		return task, false, nil
+	}
+	if task.Status != model.TaskStatusSubmitted {
+		return task, false, nil
+	}
+	var payload playgroundImageTaskPayload
+	_ = task.GetData(&payload)
+	if !playgroundImageTaskRecoveryReady(&payload, time.Now()) {
+		return task, false, nil
+	}
+	task.Status = model.TaskStatusInProgress
+	task.Progress = "15%"
+	task.StartTime = time.Now().Unix()
+	won, err := task.UpdateWithStatus(model.TaskStatusSubmitted)
+	return task, won, err
 }
 
 func retryOrFailPlaygroundImageTask(task *model.Task, reason string, status int, userID int, username string, role int, userGroup string, usingGroup string, tokenName string) {
@@ -1110,6 +1194,9 @@ func requeuePlaygroundImageTask(task *model.Task, reason string, status int, use
 	}
 	if latest, exists, err := model.GetByOnlyTaskId(task.TaskID); err == nil && exists && latest != nil {
 		task = latest
+	}
+	if !canFinalizePlaygroundImageTask(task.Status) {
+		return false
 	}
 	var payload playgroundImageTaskPayload
 	_ = task.GetData(&payload)
@@ -1457,8 +1544,17 @@ func cacheFirstPlaygroundImageTaskResult(c *gin.Context, task *model.Task, paylo
 	return item, nil
 }
 
-func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem, payload *playgroundImageTaskPayload, status int, actualQuota int) {
+func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem, payload *playgroundImageTaskPayload, status int, actualQuota int, ownsCachedMedia bool) {
 	if task == nil || item == nil || payload == nil {
+		if task != nil && ownsCachedMedia {
+			cleanupOwnedPlaygroundImageTaskMedia(task.UserId, item)
+		}
+		return
+	}
+	if !canFinalizePlaygroundImageTask(task.Status) {
+		if ownsCachedMedia {
+			cleanupOwnedPlaygroundImageTaskMedia(task.UserId, item)
+		}
 		return
 	}
 	now := time.Now().Unix()
@@ -1481,6 +1577,16 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	won, err := task.UpdateWithStatus(fromStatus)
 	if err != nil {
 		logger.LogError(nil, fmt.Sprintf("failed to complete playground image task %s: %s", task.TaskID, err.Error()))
+		if ownsCachedMedia {
+			cleanupOwnedPlaygroundImageTaskMedia(task.UserId, item)
+		}
+		return
+	}
+	if !won {
+		if ownsCachedMedia {
+			cleanupOwnedPlaygroundImageTaskMedia(task.UserId, item)
+		}
+		return
 	}
 	extra := map[string]interface{}{}
 	if actualQuota > 0 {
@@ -1499,9 +1605,27 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	if logErr != nil {
 		common.SysError("failed to update playground image task result log: " + logErr.Error())
 	}
-	if won {
-		cleanupPlaygroundImageTaskRequest(requestFile)
+	cleanupPlaygroundImageTaskRequest(requestFile)
+}
+
+func canFinalizePlaygroundImageTask(status model.TaskStatus) bool {
+	return status == model.TaskStatusSubmitted || status == model.TaskStatusInProgress
+}
+
+func cleanupOwnedPlaygroundImageTaskMedia(userID int, item *playgroundMediaItem) {
+	if userID <= 0 || item == nil {
+		return
 	}
+	filename := strings.TrimSpace(item.Filename)
+	if !isValidPlaygroundMediaFilename(filename) {
+		return
+	}
+	userDir := playgroundMediaUserDirName(userID)
+	if !isValidPlaygroundMediaUserDir(userDir) {
+		return
+	}
+	mediaPath := filepath.Join(filepath.Clean(playgroundMediaCacheRoot()), userDir, filename)
+	removePlaygroundMediaWithMetadata(mediaPath)
 }
 
 func updatePlaygroundImageRecoveryTaskReady(task *model.Task, url string, item *playgroundMediaItem) {
@@ -1540,7 +1664,7 @@ func updatePlaygroundImageRecoveryTaskReady(task *model.Task, url string, item *
 	if item.CachedURL == "" {
 		item.CachedURL = item.URL
 	}
-	markPlaygroundImageTaskSuccess(task, item, &payload, http.StatusOK, task.Quota)
+	markPlaygroundImageTaskSuccess(task, item, &payload, http.StatusOK, task.Quota, false)
 }
 
 func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
@@ -1553,6 +1677,9 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 			latest.ChannelId = capturedChannelID
 		}
 		task = latest
+	}
+	if !canFinalizePlaygroundImageTask(task.Status) {
+		return
 	}
 	reason = truncatePlaygroundText(strings.TrimSpace(sanitizePlaygroundImageTaskFailure(reason)), 1000)
 	if reason == "" {
@@ -1924,24 +2051,119 @@ func resolvePlaygroundImageTaskRequestPath(c *gin.Context) string {
 }
 
 func persistPlaygroundImageTaskRequest(userID int, taskID string, body []byte) (string, error) {
-	root := filepath.Join(playgroundMediaCacheRoot(), "tasks", playgroundMediaUserDirName(userID))
-	if err := os.MkdirAll(root, 0o700); err != nil {
+	bodyBytes := int64(len(body))
+	if bodyBytes > common.PlaygroundImageTaskRequestMaxBytes() {
+		return "", common.ErrPlaygroundImageTaskRequestTooLarge
+	}
+
+	common.PlaygroundMediaCacheMu.Lock()
+	defer common.PlaygroundMediaCacheMu.Unlock()
+
+	cacheRoot := filepath.Clean(playgroundMediaCacheRoot())
+	userDirName := playgroundMediaUserDirName(userID)
+	requestRoot := filepath.Join(cacheRoot, "tasks", userDirName)
+	if err := os.MkdirAll(requestRoot, 0o700); err != nil {
 		return "", err
 	}
 	name := filepath.Base(taskID) + ".body"
 	if name == ".body" || strings.Contains(name, "..") {
 		return "", errors.New("invalid task id")
 	}
-	fullPath := filepath.Join(root, name)
-	cleanRoot := filepath.Clean(root) + string(os.PathSeparator)
+	fullPath := filepath.Join(requestRoot, name)
+	cleanRoot := filepath.Clean(requestRoot) + string(os.PathSeparator)
 	cleanPath := filepath.Clean(fullPath)
 	if !strings.HasPrefix(cleanPath, cleanRoot) {
 		return "", errors.New("invalid task request path")
 	}
-	if err := os.WriteFile(cleanPath, body, 0o600); err != nil {
+	if _, err := os.Lstat(cleanPath); err == nil {
+		return "", errors.New("image task request already exists")
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+
+	mediaBytes, mediaFiles, err := common.PlaygroundMediaCacheUsage(filepath.Join(cacheRoot, userDirName), true)
+	if err != nil {
+		return "", err
+	}
+	requestBytes, pendingFiles, err := common.PlaygroundImageTaskRequestUsage(requestRoot)
+	if err != nil {
+		return "", err
+	}
+	if pendingFiles >= common.PlaygroundImageTaskMaxPendingPerUser() {
+		return "", common.ErrPlaygroundImageTaskPendingLimitExceeded
+	}
+	if mediaFiles+pendingFiles >= common.PlaygroundMediaMaxFilesPerUser() {
+		return "", common.ErrPlaygroundImageTaskUserQuotaExceeded
+	}
+	if mediaBytes+requestBytes+bodyBytes > common.PlaygroundMediaUserMaxBytes() {
+		return "", common.ErrPlaygroundImageTaskUserQuotaExceeded
+	}
+	totalBytes, _, err := common.PlaygroundMediaCacheUsage(cacheRoot, false)
+	if err != nil {
+		return "", err
+	}
+	if totalBytes+bodyBytes > common.PlaygroundMediaTotalMaxBytes() {
+		return "", common.ErrPlaygroundImageTaskTotalQuotaExceeded
+	}
+
+	if err := writePlaygroundImageTaskRequestAtomically(requestRoot, cleanPath, body); err != nil {
 		return "", err
 	}
 	return cleanPath, nil
+}
+
+func writePlaygroundImageTaskRequestAtomically(requestRoot string, targetPath string, body []byte) error {
+	tempFile, err := os.CreateTemp(requestRoot, ".playground-image-task-*.tmp")
+	if err != nil {
+		return err
+	}
+	tempPath := tempFile.Name()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = tempFile.Close()
+		}
+		_ = os.Remove(tempPath)
+	}()
+	if _, err := tempFile.Write(body); err != nil {
+		return err
+	}
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
+	closed = true
+	if err := os.Rename(tempPath, targetPath); err != nil {
+		return err
+	}
+	return nil
+}
+
+func playgroundImageTaskPersistHTTPStatus(err error) int {
+	switch {
+	case errors.Is(err, common.ErrPlaygroundImageTaskRequestTooLarge):
+		return http.StatusRequestEntityTooLarge
+	case errors.Is(err, common.ErrPlaygroundImageTaskPendingLimitExceeded),
+		errors.Is(err, common.ErrPlaygroundImageTaskUserQuotaExceeded):
+		return http.StatusTooManyRequests
+	case errors.Is(err, common.ErrPlaygroundImageTaskTotalQuotaExceeded):
+		return http.StatusInsufficientStorage
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
+func respondPlaygroundImageTaskPersistError(c *gin.Context, err error) {
+	status := playgroundImageTaskPersistHTTPStatus(err)
+	message := "failed to persist image task"
+	switch status {
+	case http.StatusRequestEntityTooLarge:
+		message = "image task request is too large"
+	case http.StatusTooManyRequests:
+		message = "image task storage quota exceeded"
+	case http.StatusInsufficientStorage:
+		message = "image task storage is full"
+	}
+	c.JSON(status, gin.H{"success": false, "message": message})
 }
 
 func cleanupPlaygroundImageTaskRequest(path string) {
@@ -1954,6 +2176,8 @@ func cleanupPlaygroundImageTaskRequest(path string) {
 	if !strings.HasPrefix(cleanPath, root) {
 		return
 	}
+	common.PlaygroundMediaCacheMu.Lock()
+	defer common.PlaygroundMediaCacheMu.Unlock()
 	_ = os.Remove(cleanPath)
 }
 

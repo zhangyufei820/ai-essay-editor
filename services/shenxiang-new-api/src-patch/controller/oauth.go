@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -12,6 +13,11 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+)
+
+var (
+	errOAuthBindSessionInvalid = errors.New("oauth bind session is invalid")
+	errOAuthBindUserDisabled   = errors.New("oauth bind user is disabled")
 )
 
 // providerParams returns map with Provider key for i18n templates
@@ -56,8 +62,7 @@ func HandleOAuth(c *gin.Context) {
 
 	// 1. Validate state (CSRF protection)
 	state := c.Query("state")
-	oauthState, ok := session.Get("oauth_state").(string)
-	if state == "" || !ok || state != oauthState {
+	if err := consumeOAuthState(session, state); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": i18n.T(c, i18n.MsgOAuthStateInvalid),
@@ -68,7 +73,12 @@ func HandleOAuth(c *gin.Context) {
 	// 2. Check if user is already logged in (bind flow)
 	username := session.Get("username")
 	if username != nil {
-		handleOAuthBind(c, provider)
+		user, err := getEnabledOAuthBindUser(c)
+		if err != nil {
+			writeOAuthBindAuthenticationError(c, err)
+			return
+		}
+		handleOAuthBind(c, provider, user)
 		return
 	}
 
@@ -128,7 +138,7 @@ func HandleOAuth(c *gin.Context) {
 }
 
 // handleOAuthBind handles binding OAuth account to existing user
-func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
+func handleOAuthBind(c *gin.Context, provider oauth.Provider, user *model.User) {
 	if !provider.IsEnabled() {
 		common.ApiErrorI18n(c, i18n.MsgOAuthNotEnabled, providerParams(provider.GetName()))
 		return
@@ -162,16 +172,6 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 		}
 	}
 
-	// Get current user from session
-	session := sessions.Default(c)
-	id := session.Get("id")
-	user := model.User{Id: id.(int)}
-	err = user.FillUserById()
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
 	// Handle binding based on provider type
 	if genericProvider, ok := provider.(*oauth.GenericOAuthProvider); ok {
 		// Custom provider: use user_oauth_bindings table
@@ -182,7 +182,7 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 		}
 	} else {
 		// Built-in provider: update user record directly
-		provider.SetProviderUserID(&user, oauthUser.ProviderUserID)
+		provider.SetProviderUserID(user, oauthUser.ProviderUserID)
 		err = user.Update(false)
 		if err != nil {
 			common.ApiError(c, err)
@@ -192,6 +192,51 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 
 	common.ApiSuccessI18n(c, i18n.MsgOAuthBindSuccess, gin.H{
 		"action": "bind",
+	})
+}
+
+func consumeOAuthState(session sessions.Session, state string) error {
+	expected, ok := session.Get("oauth_state").(string)
+	if state == "" || !ok || expected == "" || state != expected {
+		return errOAuthBindSessionInvalid
+	}
+	session.Delete("oauth_state")
+	if err := session.Save(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func getEnabledOAuthBindUser(c *gin.Context) (*model.User, error) {
+	session := sessions.Default(c)
+	id, ok := session.Get("id").(int)
+	if !ok || id <= 0 {
+		return nil, errOAuthBindSessionInvalid
+	}
+	user, err := model.GetUserById(id, false)
+	if err != nil {
+		return nil, err
+	}
+	if user.Status != common.UserStatusEnabled {
+		return nil, errOAuthBindUserDisabled
+	}
+	return user, nil
+}
+
+func writeOAuthBindAuthenticationError(c *gin.Context, err error) {
+	if errors.Is(err, errOAuthBindUserDisabled) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthUserBanned),
+		})
+		return
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) && !errors.Is(err, errOAuthBindSessionInvalid) {
+		common.SysLog(fmt.Sprintf("oauth bind user refresh failed: %v", err))
+	}
+	c.JSON(http.StatusUnauthorized, gin.H{
+		"success": false,
+		"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
 	})
 }
 

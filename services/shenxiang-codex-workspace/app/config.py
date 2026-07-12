@@ -77,7 +77,7 @@ class Settings:
     fast_path_first_delta_timeout_seconds: int = 6
     fast_path_chat_first_delta_timeout_seconds: int = 6
     fast_path_max_output_tokens: int = 1200
-    codex_exec_sandbox: str = "danger-full-access"
+    codex_exec_sandbox: str = "workspace-write"
     log_level: str = "INFO"
 
 
@@ -142,7 +142,7 @@ def get_settings() -> Settings:
         fast_path_first_delta_timeout_seconds=_env_int("FAST_PATH_FIRST_DELTA_TIMEOUT_SECONDS", 6),
         fast_path_chat_first_delta_timeout_seconds=_env_int("FAST_PATH_CHAT_FIRST_DELTA_TIMEOUT_SECONDS", 6),
         fast_path_max_output_tokens=_env_int("FAST_PATH_MAX_OUTPUT_TOKENS", 1200),
-        codex_exec_sandbox=os.getenv("CODEX_EXEC_SANDBOX", "danger-full-access"),
+        codex_exec_sandbox=os.getenv("CODEX_EXEC_SANDBOX", "workspace-write"),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
     )
 

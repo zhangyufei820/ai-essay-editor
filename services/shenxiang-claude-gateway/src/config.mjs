@@ -26,11 +26,25 @@ export function loadConfig() {
 
   return {
     host: process.env.CLAUDE_GATEWAY_HOST || "0.0.0.0",
-    port: Number.parseInt(process.env.CLAUDE_GATEWAY_PORT || "3130", 10),
+    port: parseInteger("CLAUDE_GATEWAY_PORT", 3130, { min: 0, max: 65535 }),
     newApiBaseUrl: stripTrailingSlash(process.env.NEW_API_BASE_URL || "http://shenxiang-new-api:3000/v1"),
     publicBaseUrl: stripTrailingSlash(process.env.PUBLIC_BASE_URL || ""),
     defaultModel: process.env.DEFAULT_MODEL || "cc-gpt-sonnet",
-    requestTimeoutMs: Number.parseInt(process.env.REQUEST_TIMEOUT_MS || "180000", 10),
+    requestTimeoutMs: parseInteger("REQUEST_TIMEOUT_MS", 180000, { min: 1, max: 3600000 }),
+    headersTimeoutMs: parseInteger("HEADERS_TIMEOUT_MS", 15000, { min: 1000, max: 120000 }),
+    requestBodyTimeoutMs: parseInteger("REQUEST_BODY_TIMEOUT_MS", 60000, { min: 1000, max: 600000 }),
+    maxRequestBodyBytes: parseInteger("MAX_REQUEST_BODY_BYTES", 32 * 1024 * 1024, {
+      min: 1,
+      max: 64 * 1024 * 1024,
+    }),
+    maxSseBufferBytes: parseInteger("MAX_SSE_BUFFER_BYTES", 1024 * 1024, {
+      min: 1024,
+      max: 16 * 1024 * 1024,
+    }),
+    maxNonStreamResponseBytes: parseInteger("MAX_NON_STREAM_RESPONSE_BYTES", 16 * 1024 * 1024, {
+      min: 1024,
+      max: 64 * 1024 * 1024,
+    }),
     logLevel: process.env.LOG_LEVEL || "info",
     modelMap,
   }
@@ -38,4 +52,14 @@ export function loadConfig() {
 
 export function stripTrailingSlash(value) {
   return String(value || "").replace(/\/+$/, "")
+}
+
+function parseInteger(name, fallback, range) {
+  const raw = process.env[name]
+  if (raw === undefined || raw === "") return fallback
+  const parsed = Number(raw)
+  if (!Number.isSafeInteger(parsed) || parsed < range.min || parsed > range.max) {
+    throw new Error(`${name} must be an integer between ${range.min} and ${range.max}`)
+  }
+  return parsed
 }

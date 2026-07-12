@@ -43,7 +43,7 @@ import {
   IconUpload,
 } from '@douyinfe/semi-icons';
 import { useNavigate } from 'react-router-dom';
-import { API, copy } from '../../helpers';
+import { API, copy, getSafeMediaUrl, openMediaPage } from '../../helpers';
 import './MediaPlayground.css';
 import '../../styles/media-tokens.css';
 import {
@@ -120,11 +120,6 @@ const XAI_GROK_IMAGE_ASPECT_RATIOS = [
   '1:2',
   '2:1',
 ];
-
-const openMediaUrl = (url) => {
-  if (!url) return;
-  window.open(url, '_blank', 'noopener,noreferrer');
-};
 
 const agentSelectorValue = (value) =>
   String(value || '')
@@ -460,6 +455,7 @@ const VIDEO_BACKGROUND_WAIT_MS = 10 * 60 * 1000;
 const VIDEO_MAX_PAGE_POLL_MS = 45 * 60 * 1000;
 const VIDEO_POLL_INTERVAL_MS = 5000;
 const VIDEO_BACKGROUND_POLL_INTERVAL_MS = 15000;
+const VIDEO_POLL_REQUEST_TIMEOUT_MS = 30000;
 
 function isGrokImageModel(model) {
   return model === 'grok-imagine-image';
@@ -1218,19 +1214,6 @@ function fileToDataURL(file) {
   });
 }
 
-function dataURLToBlobURL(dataURL) {
-  try {
-    const [meta, base64] = dataURL.split(',');
-    const mime = meta.match(/data:(.*?);base64/)?.[1] || 'image/png';
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return URL.createObjectURL(new Blob([bytes], { type: mime }));
-  } catch (error) {
-    return dataURL;
-  }
-}
-
 function validateReversePromptImage(file) {
   if (!file) return '请先上传一张参考图。';
   const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
@@ -1390,7 +1373,10 @@ function toAbsoluteMediaURL(url) {
 }
 
 function toDownloadMediaURL(url) {
-  const absoluteUrl = toAbsoluteMediaURL(normalizeURL(url));
+  const absoluteUrl = getSafeMediaUrl(
+    toAbsoluteMediaURL(normalizeURL(url)),
+    typeof window !== 'undefined' ? window.location.href : '',
+  );
   if (!absoluteUrl || typeof window === 'undefined' || !window.location?.origin) {
     return absoluteUrl;
   }
@@ -1402,7 +1388,7 @@ function toDownloadMediaURL(url) {
     }
     return parsed.href;
   } catch {
-    return absoluteUrl;
+    return '';
   }
 }
 
@@ -1587,12 +1573,13 @@ function filterReferenceItemsByPolicy(items, policy) {
 }
 
 function isBrowserPreviewableURL(url) {
-  if (!url) return false;
-  return (
-    url.startsWith('data:') ||
-    url.startsWith('blob:') ||
-    url.startsWith('/') ||
-    /^https?:\/\//i.test(url)
+  return Boolean(
+    getSafeMediaUrl(
+      url,
+      typeof window !== 'undefined'
+        ? window.location.href
+        : 'https://localhost/',
+    ),
   );
 }
 
@@ -1614,10 +1601,10 @@ function getPreviewURLs(result) {
 }
 
 async function resultMediaFile(result, purpose = 'reference') {
-  const sourceUrl = getPreviewURLs(result)[0] || normalizeURL(result?.url || '');
+  const sourceUrl = getPreviewURLs(result)[0] || '';
   if (!sourceUrl) throw new Error('这个结果没有可复用的媒体链接。');
   const absoluteUrl = toAbsoluteMediaURL(sourceUrl);
-  const response = await fetch(absoluteUrl, { credentials: 'include' });
+  const response = await fetch(absoluteUrl, { credentials: 'same-origin' });
   if (!response.ok) {
     throw new Error('结果文件暂时无法读取，请下载后手动上传。');
   }
@@ -1663,7 +1650,7 @@ function extractImageResults(
         id: `image-${Date.now()}-${index}`,
         kind: 'image',
         url,
-        displayUrl: url.startsWith('data:') ? dataURLToBlobURL(url) : url,
+        displayUrl: url,
         model: modelValue,
         modelLabel: firstPromptText(
           item.modelLabel,
@@ -1942,8 +1929,6 @@ function pickVideoURL(value, depth = 0) {
     'uri',
     'link',
     'href',
-    'fail_reason',
-    'failReason',
   ];
   for (const key of directKeys) {
     if (Object.prototype.hasOwnProperty.call(value, key)) {
@@ -2016,13 +2001,16 @@ function createVideoResult(
 }
 
 function downloadURL(url, filename) {
+  const safeUrl = toDownloadMediaURL(url);
+  if (!safeUrl) return false;
   const link = document.createElement('a');
-  link.href = toDownloadMediaURL(url);
+  link.href = safeUrl;
   link.download = filename;
   link.rel = 'noopener noreferrer';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  return true;
 }
 
 function formatResultTime(createdAt) {
@@ -2040,6 +2028,21 @@ function parseProgressPercent(message) {
   const match = String(message || '').match(/进度\s*(\d{1,3})%/);
   if (!match) return undefined;
   return Math.min(100, Math.max(0, Number(match[1])));
+}
+
+function waitForPollingDelay(delayMs, signal) {
+  if (signal?.aborted) return Promise.resolve(false);
+
+  return new Promise((resolve) => {
+    const finish = (completed) => {
+      window.clearTimeout(timer);
+      signal?.removeEventListener('abort', handleAbort);
+      resolve(completed);
+    };
+    const handleAbort = () => finish(false);
+    const timer = window.setTimeout(() => finish(true), delayMs);
+    signal?.addEventListener('abort', handleAbort, { once: true });
+  });
 }
 
 function SectionTitle({ children, meta }) {
@@ -2471,7 +2474,7 @@ function ResultCard({
           <button
             type='button'
             className='mp-result-open-media'
-            onClick={() => openMediaUrl(openUrl)}
+            onClick={() => openMediaPage(openUrl)}
             aria-label='查看原图'
           >
             <img
@@ -2507,7 +2510,7 @@ function ResultCard({
                 <Button
                   size='small'
                   icon={<IconExternalOpen />}
-                  onClick={() => openMediaUrl(originalUrl)}
+                  onClick={() => openMediaPage(originalUrl)}
                 >
                   打开原始链接
                 </Button>
@@ -2622,6 +2625,9 @@ const MediaPlayground = () => {
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const promptTextareaRef = useRef(null);
   const pollingCancelledRef = useRef(false);
+  const pollingAbortControllerRef = useRef(null);
+  const submitInFlightRef = useRef(false);
+  const reversePromptInFlightRef = useRef(false);
   const imageEditModelLockRef = useRef('');
   const [mentionState, setMentionState] = useState({
     visible: false,
@@ -3017,8 +3023,19 @@ const MediaPlayground = () => {
 
   useEffect(() => {
     pollingCancelledRef.current = false;
-    return () => { pollingCancelledRef.current = true; };
+    pollingAbortControllerRef.current = new AbortController();
+    return () => {
+      pollingCancelledRef.current = true;
+      pollingAbortControllerRef.current?.abort();
+      pollingAbortControllerRef.current = null;
+      submitInFlightRef.current = false;
+      reversePromptInFlightRef.current = false;
+    };
   }, []);
+
+  function pollingAbortSignal() {
+    return pollingAbortControllerRef.current?.signal;
+  }
 
   useEffect(() => {
     if (!resultsLoaded) return;
@@ -3272,7 +3289,7 @@ const MediaPlayground = () => {
       const res = await API.post(
         '/pg/media/cache',
         { url: result.url, kind: result.kind },
-        { skipErrorHandler: true },
+        { skipErrorHandler: true, signal: pollingAbortSignal() },
       );
       if (res.data?.success && res.data?.data?.url) {
         return {
@@ -3320,7 +3337,7 @@ const MediaPlayground = () => {
           workflow: videoWorkflow,
         },
       },
-      { skipErrorHandler: true },
+      { skipErrorHandler: true, signal: pollingAbortSignal() },
     );
     if (!res.data?.success || !res.data?.data?.url) {
       throw new Error(res.data?.message || '参考素材缓存失败。');
@@ -3348,7 +3365,7 @@ const MediaPlayground = () => {
           target_model: imageModel,
         },
       },
-      { skipErrorHandler: true },
+      { skipErrorHandler: true, signal: pollingAbortSignal() },
     );
     if (!res.data?.success || !res.data?.data?.url) {
       throw new Error(res.data?.message || '参考图缓存失败。');
@@ -3364,20 +3381,24 @@ const MediaPlayground = () => {
       Toast.error(validationError);
       return;
     }
+    if (reversePromptInFlightRef.current) return;
+    reversePromptInFlightRef.current = true;
 
-    let useReferenceImage = await askReversePromptReferenceMode();
-    if (useReferenceImage && !activeImageModel.edit) {
-      Toast.warning('当前模型不支持参考图输入，已按文生图提示词处理。');
-      useReferenceImage = false;
-    }
-
-    setMode('image');
-    setImageWorkflow(useReferenceImage ? 'edit' : 'generate');
-    if (useReferenceImage) addReversePromptFileAsReference(reversePromptFile);
-    setReversePromptRunning(true);
-    setReversePromptMessage('正在上传图片并调用图像识别模型...');
     try {
+      let useReferenceImage = await askReversePromptReferenceMode();
+      if (pollingCancelledRef.current) return;
+      if (useReferenceImage && !activeImageModel.edit) {
+        Toast.warning('当前模型不支持参考图输入，已按文生图提示词处理。');
+        useReferenceImage = false;
+      }
+
+      setMode('image');
+      setImageWorkflow(useReferenceImage ? 'edit' : 'generate');
+      if (useReferenceImage) addReversePromptFileAsReference(reversePromptFile);
+      setReversePromptRunning(true);
+      setReversePromptMessage('正在上传图片并调用图像识别模型...');
       const imageUrl = await cacheReversePromptImage(reversePromptFile);
+      if (pollingCancelledRef.current) return;
       setReversePromptMessage('图片已上传，正在反推两套可生成提示词...');
       const res = await API.post(
         '/pg/chat/completions',
@@ -3402,8 +3423,13 @@ const MediaPlayground = () => {
             },
           ],
         },
-        { skipErrorHandler: true, timeout: 180000 },
+        {
+          skipErrorHandler: true,
+          timeout: 180000,
+          signal: pollingAbortSignal(),
+        },
       );
+      if (pollingCancelledRef.current) return;
       if (res.data?.error?.message) throw new Error(res.data.error.message);
       const parsedPrompt = parseReversePromptResult(res.data);
       const nextPrompt = useReferenceImage
@@ -3419,11 +3445,13 @@ const MediaPlayground = () => {
       );
       Toast.success('图像提示词已反推');
     } catch (error) {
+      if (pollingCancelledRef.current) return;
       const message = userFacingReversePromptError(error);
       setReversePromptMessage(message);
       Toast.error(message);
     } finally {
-      setReversePromptRunning(false);
+      reversePromptInFlightRef.current = false;
+      if (!pollingCancelledRef.current) setReversePromptRunning(false);
     }
   }
 
@@ -3576,13 +3604,16 @@ const MediaPlayground = () => {
         skipErrorHandler: true,
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: IMAGE_REQUEST_TIMEOUT_MS,
+        signal: pollingAbortSignal(),
       });
     } else {
       response = await API.post('/pg/images/tasks/generations', effectiveRequestPayload, {
         skipErrorHandler: true,
         timeout: IMAGE_REQUEST_TIMEOUT_MS,
+        signal: pollingAbortSignal(),
       });
     }
+    if (pollingCancelledRef.current) return;
     const payload = response.data;
     if (payload?.error?.message) throw new Error(payload.error.message);
     if (!payload?.success) throw new Error(payload?.message || '图像任务提交失败。');
@@ -3610,6 +3641,7 @@ const MediaPlayground = () => {
         submittedModelLabel,
       );
     } catch (error) {
+      if (pollingCancelledRef.current) return;
       upsertLiveQueueTask({
         id: taskId,
         title: '图片生成失败',
@@ -3649,7 +3681,9 @@ const MediaPlayground = () => {
           skipErrorHandler: true,
           disableDuplicate: true,
           timeout: IMAGE_POLL_REQUEST_TIMEOUT_MS,
+          signal: pollingAbortSignal(),
         });
+        if (pollingCancelledRef.current) return null;
         if (res.data?.error?.message) throw new Error(res.data.error.message);
         if (!res.data?.success || !res.data?.data) {
           throw new Error(res.data?.message || '图像任务查询失败。');
@@ -3711,6 +3745,7 @@ const MediaPlayground = () => {
           );
         }
       } catch (error) {
+        if (pollingCancelledRef.current) return null;
         if (error?.imageTaskTerminal) throw error;
         if (!isTransientImagePollError(error)) throw error;
         let waitSuffix = '，页面会继续查询，不会中断后台生成任务';
@@ -3737,7 +3772,7 @@ const MediaPlayground = () => {
           message: nextMessage,
         });
       }
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      if (!(await waitForPollingDelay(5000, pollingAbortSignal()))) return null;
     }
     throw new Error('图像生成等待超时，请稍后用任务 ID 查询结果。');
   }
@@ -3754,7 +3789,9 @@ const MediaPlayground = () => {
       const res = await API.get(`/pg/images/tasks/${encodeURIComponent(taskId)}`, {
         skipErrorHandler: true,
         disableDuplicate: true,
+        signal: pollingAbortSignal(),
       });
+      if (pollingCancelledRef.current) return;
       if (res.data?.error?.message) throw new Error(res.data.error.message);
       if (!res.data?.success || !res.data?.data) {
         throw new Error(res.data?.message || '图像任务查询失败。');
@@ -3779,14 +3816,18 @@ const MediaPlayground = () => {
       }
       Toast.info(`图像任务仍在处理中：${status}`);
     } catch (error) {
+      if (pollingCancelledRef.current) return;
       Toast.error(userFacingGenerationError(generationErrorMessage(error)));
     } finally {
-      setSubmitting(false);
-      setTaskMessage('');
+      if (!pollingCancelledRef.current) {
+        setSubmitting(false);
+        setTaskMessage('');
+      }
     }
   }
 
   async function pollVideo(taskId) {
+    if (pollingCancelledRef.current) return null;
     const startedAt = Date.now();
     const deadline = startedAt + VIDEO_MAX_PAGE_POLL_MS;
     let longWaitNotified = false;
@@ -3798,9 +3839,25 @@ const MediaPlayground = () => {
         const res = await API.get(`/pg/videos/${encodeURIComponent(taskId)}`, {
           skipErrorHandler: true,
           disableDuplicate: true,
+          timeout: VIDEO_POLL_REQUEST_TIMEOUT_MS,
+          signal: pollingAbortSignal(),
         });
+        if (pollingCancelledRef.current) return null;
         const status = getVideoStatus(res.data);
         const progress = getVideoProgress(res.data);
+        if (status === 'failed') {
+          upsertLiveQueueTask({
+            id: taskId,
+            title: '视频生成失败',
+            kind: 'video',
+            model: activeVideoModel.label,
+            status: 'failed',
+            statusText: '失败',
+            progress: 100,
+            message: extractVideoFailureReason(res.data) || '视频任务失败。',
+          });
+          throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
+        }
         const url = extractVideoURL(res.data);
         const elapsedMs = Date.now() - startedAt;
         let waitSuffix = '';
@@ -3834,23 +3891,11 @@ const MediaPlayground = () => {
           videoModel,
           activeVideoModel.label,
         );
-        if (status === 'failed') {
-          upsertLiveQueueTask({
-            id: taskId,
-            title: '视频生成失败',
-            kind: 'video',
-            model: activeVideoModel.label,
-            status: 'failed',
-            statusText: '失败',
-            progress: 100,
-            message: extractVideoFailureReason(res.data) || '视频任务失败。',
-          });
-          throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
-        }
         if (status === 'completed') {
           throw new Error('视频完成但没有返回视频地址。');
         }
       } catch (error) {
+        if (pollingCancelledRef.current) return null;
         if (!isTransientVideoPollError(error)) throw error;
         const elapsedMs = Date.now() - startedAt;
         let waitSuffix = '，页面会继续轮询，不会中断上游生成任务';
@@ -3879,14 +3924,16 @@ const MediaPlayground = () => {
         });
       }
       const elapsedMs = Date.now() - startedAt;
-      await new Promise((resolve) =>
-        setTimeout(
-          resolve,
+      if (
+        !(await waitForPollingDelay(
           elapsedMs >= VIDEO_BACKGROUND_WAIT_MS
             ? VIDEO_BACKGROUND_POLL_INTERVAL_MS
             : VIDEO_POLL_INTERVAL_MS,
-        ),
-      );
+          pollingAbortSignal(),
+        ))
+      ) {
+        return null;
+      }
     }
     return null;
   }
@@ -3895,8 +3942,13 @@ const MediaPlayground = () => {
     const payload = await applyVideoReferences({ ...requestPayload });
     const res = await API.post('/pg/videos', payload, {
       skipErrorHandler: true,
+      signal: pollingAbortSignal(),
     });
+    if (pollingCancelledRef.current) return;
     if (res.data?.error?.message) throw new Error(res.data.error.message);
+    if (getVideoStatus(res.data) === 'failed') {
+      throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
+    }
     const directUrl = extractVideoURL(res.data);
     if (directUrl) {
       const result = createVideoResult(
@@ -3907,6 +3959,7 @@ const MediaPlayground = () => {
         activeVideoModel.label,
       );
       const cached = await cacheMedia(result);
+      if (pollingCancelledRef.current) return;
       setResults((prev) => [cached, ...prev]);
       setSelectedResultIds((prev) =>
         prev.includes(cached.id) ? prev : [cached.id, ...prev],
@@ -3936,10 +3989,11 @@ const MediaPlayground = () => {
       message: `视频任务已提交：${taskId}`,
     });
     Toast.info('视频任务已进入后台轮询，可以继续修改提示词或参数。');
-    window.setTimeout(async () => {
+    void (async () => {
       let keepTaskMessage = false;
       try {
         const result = await pollVideo(taskId);
+        if (pollingCancelledRef.current) return;
         if (!result) {
           Toast.info('页面轮询已暂停，任务仍在后台继续生成，完成后会写入日志和媒体工坊。');
           setTaskMessage(`视频任务 ${taskId} 已转入后台生成，完成后可在任务日志和媒体工坊查看。`);
@@ -3947,6 +4001,7 @@ const MediaPlayground = () => {
           return;
         }
         const cached = await cacheMedia(result);
+        if (pollingCancelledRef.current) return;
         removeLiveQueueTask(taskId);
         setResults((prev) => [cached, ...prev]);
         setSelectedResultIds((prev) =>
@@ -3954,6 +4009,7 @@ const MediaPlayground = () => {
         );
         Toast.success('视频已生成，请立即下载保存。');
       } catch (error) {
+        if (pollingCancelledRef.current) return;
         upsertLiveQueueTask({
           id: taskId,
           title: '视频生成失败',
@@ -3968,17 +4024,20 @@ const MediaPlayground = () => {
         setTaskMessage(`视频任务 ${taskId} 后台轮询结束：${generationErrorMessage(error)}`);
         keepTaskMessage = true;
       } finally {
-        setVideoPolling(false);
-        setActiveVideoTask(null);
-        if (!keepTaskMessage) {
-          setTaskMessage('');
+        if (!pollingCancelledRef.current) {
+          setVideoPolling(false);
+          setActiveVideoTask(null);
+          if (!keepTaskMessage) {
+            setTaskMessage('');
+          }
+          setSubmitStartedAt(null);
         }
-        setSubmitStartedAt(null);
       }
-    }, 0);
+    })();
   }
 
   async function handleSubmit() {
+    if (submitInFlightRef.current || (mode === 'video' && videoPolling)) return;
     if (!modelAllowed) return Toast.error('当前用户分组暂未开放这个模型。');
     if (!prompt.trim()) return Toast.error('请先写一句你想生成什么。');
     if (mode === 'image' && isGptImage2Model(imageModel) && resolution === 'custom') {
@@ -4007,6 +4066,7 @@ const MediaPlayground = () => {
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile)
       return Toast.error('首尾帧视频需要同时上传首帧和尾帧。');
 
+    submitInFlightRef.current = true;
     setSubmitting(true);
     setSubmitStartedAt(Date.now());
     setTaskMessage(
@@ -4016,12 +4076,17 @@ const MediaPlayground = () => {
       if (mode === 'image') await submitImage();
       else await submitVideo();
     } catch (error) {
-      Toast.error(userFacingGenerationError(generationErrorMessage(error)));
+      if (!pollingCancelledRef.current) {
+        Toast.error(userFacingGenerationError(generationErrorMessage(error)));
+      }
     } finally {
-      setSubmitting(false);
-      if (mode === 'image') {
-        setTaskMessage('');
-        setSubmitStartedAt(null);
+      submitInFlightRef.current = false;
+      if (!pollingCancelledRef.current) {
+        setSubmitting(false);
+        if (mode === 'image') {
+          setTaskMessage('');
+          setSubmitStartedAt(null);
+        }
       }
     }
   }
@@ -4961,7 +5026,7 @@ const MediaPlayground = () => {
                     disabled={
                       creativeTask === 'reverse'
                         ? reversePromptRunning || !reversePromptFile
-                        : !modelAllowed
+                        : submitting || (mode === 'video' && videoPolling) || !modelAllowed
                     }
                     className='mp-generate-main-button mp-btn-primary'
                     onClick={creativeTask === 'reverse' ? reverseImagePrompt : handleSubmit}

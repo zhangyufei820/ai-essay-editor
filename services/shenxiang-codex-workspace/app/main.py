@@ -295,6 +295,13 @@ async def require_codex_user(
     new_api_user: str = Header(default="", alias="X-New-Api-User"),
 ) -> UserContext:
     if credentials is not None:
+        try:
+            await NewApiClient(settings, redis_client()).validate_bearer_token(credentials.api_key)
+        except NewApiAuthError as exc:
+            raise HTTPException(
+                status_code=401,
+                detail=public_error_message(str(exc), "用户令牌无效或不可用。"),
+            ) from exc
         return credentials
     user_id = new_api_user or request.headers.get("New-Api-User", "")
     cookie_header = request.headers.get("cookie", "")

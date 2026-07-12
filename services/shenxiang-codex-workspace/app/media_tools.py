@@ -6,11 +6,12 @@ import asyncio
 import ipaddress
 import json
 import re
+import socket
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlsplit, urlunsplit
 from uuid import uuid4
 
 import httpx
@@ -76,6 +77,8 @@ MOONAPIX_SEEDANCE_VIDEO_MODELS = {
 }
 MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_REMOTE_VIDEO_BYTES = 120 * 1024 * 1024
+MAX_REMOTE_MEDIA_REDIRECTS = 3
+REMOTE_MEDIA_DNS_TIMEOUT_SECONDS = 5.0
 
 
 @dataclass
@@ -166,6 +169,9 @@ async def generate_media(
         result = await generate_video(settings, request, user, model)
     result.duration_ms = int((time.monotonic() - started) * 1000)
     result.local_urls = await persist_remote_media(settings, user, task, output_dir, result)
+    result.urls = list(result.local_urls)
+    if not result.urls:
+        raise MediaGenerationError("媒体结果未通过安全下载校验，请稍后重试。")
     return result
 
 
@@ -579,33 +585,33 @@ async def persist_remote_media(
 ) -> list[str]:
     local_urls: list[str] = []
     timeout = httpx.Timeout(90.0, connect=10.0, read=90.0, write=20.0)
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False) as client:
         for index, url in enumerate(result.urls[:4], start=1):
             if url.startswith("data:image/"):
-                target = output_dir / f"{result.media_type}-{index}-{uuid4().hex[:8]}.png"
                 try:
                     header, encoded = url.split(",", 1)
-                    target.write_bytes(base64.b64decode(encoded))
+                    if len(encoded) > ((MAX_REMOTE_IMAGE_BYTES + 2) // 3) * 4:
+                        raise MediaGenerationError("远程媒体大小超过安全上限。")
+                    content = base64.b64decode(encoded, validate=True)
+                    media_format = validate_media_content(
+                        content,
+                        "image",
+                        header.removeprefix("data:").split(";", 1)[0],
+                    )
+                    target = output_dir / f"{result.media_type}-{index}-{uuid4().hex[:8]}.{media_format}"
+                    target.write_bytes(content)
                     local_urls.append(
                         f"{settings.public_base_url}/api/tasks/{task['task_id']}/files/outputs/{target.name}"
                     )
                     continue
                 except Exception:
-                    local_urls.append(url)
                     continue
-            if not is_public_http_url(url):
-                local_urls.append(url)
-                continue
-            suffix = suffix_for_url(url, result.media_type)
-            target = output_dir / f"{result.media_type}-{index}-{uuid4().hex[:8]}{suffix}"
             try:
                 content = await fetch_limited_media(client, url, result.media_type)
             except Exception:
-                local_urls.append(url)
                 continue
-            if not content:
-                local_urls.append(url)
-                continue
+            media_format = detect_media_format(content, result.media_type)
+            target = output_dir / f"{result.media_type}-{index}-{uuid4().hex[:8]}.{media_format}"
             target.write_bytes(content)
             local_urls.append(
                 f"{settings.public_base_url}/api/tasks/{task['task_id']}/files/outputs/{target.name}"
@@ -725,52 +731,259 @@ def extract_text_response(payload: dict[str, Any]) -> str:
     return str(choice.get("text") or "")
 
 
-def suffix_for_url(url: str, media_type: str) -> str:
-    parsed = urlparse(url)
-    suffix = Path(parsed.path).suffix.lower()
-    allowed = {".png", ".jpg", ".jpeg", ".webp", ".gif"} if media_type == "image" else {".mp4", ".webm", ".mov", ".m4v"}
-    if suffix in allowed:
-        return suffix
-    return ".png" if media_type == "image" else ".mp4"
-
-
 def is_public_http_url(url: str) -> bool:
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    try:
+        parsed = urlsplit(str(url or "").strip())
+        port = parsed.port
+    except ValueError:
         return False
-    host = (parsed.hostname or "").strip().lower()
-    if not host or host in {"localhost", "0.0.0.0"} or host.endswith(".local"):
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return False
+    if parsed.username is not None or parsed.password is not None:
+        return False
+    host = (parsed.hostname or "").strip().rstrip(".").lower()
+    if not host or port == 0 or host == "localhost" or host.endswith(".local"):
         return False
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
         return True
-    return not (
-        address.is_private
-        or address.is_loopback
-        or address.is_link_local
-        or address.is_multicast
-        or address.is_reserved
-        or address.is_unspecified
-    )
+    return is_public_address(address)
 
 
 async def fetch_limited_media(client: httpx.AsyncClient, url: str, media_type: str) -> bytes:
+    current_url = str(url or "").strip()
+    visited: set[str] = set()
+
+    for redirect_count in range(MAX_REMOTE_MEDIA_REDIRECTS + 1):
+        target = await resolve_public_media_target(current_url)
+        if target.original_url in visited:
+            raise MediaGenerationError("远程媒体重定向循环，已停止安全下载。")
+        visited.add(target.original_url)
+        redirect_location = ""
+        last_request_error: Exception | None = None
+
+        for address in target.addresses:
+            try:
+                async with client.stream(
+                    "GET",
+                    target.pinned_url(address),
+                    headers={
+                        "Host": target.host_header,
+                        "Accept": "image/*" if media_type == "image" else "video/*",
+                        "Accept-Encoding": "identity",
+                    },
+                    extensions={"sni_hostname": target.hostname} if target.scheme == "https" else {},
+                ) as response:
+                    if response.status_code in {301, 302, 303, 307, 308}:
+                        redirect_location = str(response.headers.get("location") or "").strip()
+                        if not redirect_location:
+                            raise MediaGenerationError("远程媒体重定向缺少目标地址。")
+                        break
+                    if response.status_code < 200 or response.status_code >= 300:
+                        raise MediaGenerationError("远程媒体下载失败。")
+                    return await read_validated_media_response(response, media_type)
+            except httpx.RequestError as exc:
+                last_request_error = exc
+
+        if redirect_location:
+            if redirect_count >= MAX_REMOTE_MEDIA_REDIRECTS:
+                raise MediaGenerationError("远程媒体重定向次数超过安全上限。")
+            current_url = urljoin(target.original_url, redirect_location)
+            continue
+        raise MediaGenerationError("远程媒体连接失败。") from last_request_error
+
+    raise MediaGenerationError("远程媒体重定向次数超过安全上限。")
+
+
+@dataclass(frozen=True)
+class ResolvedMediaTarget:
+    original_url: str
+    scheme: str
+    hostname: str
+    port: int
+    explicit_port: bool
+    path: str
+    query: str
+    addresses: tuple[str, ...]
+
+    @property
+    def host_header(self) -> str:
+        host = f"[{self.hostname}]" if ":" in self.hostname else self.hostname
+        default_port = 443 if self.scheme == "https" else 80
+        if self.explicit_port or self.port != default_port:
+            return f"{host}:{self.port}"
+        return host
+
+    def pinned_url(self, address: str) -> str:
+        parsed_address = ipaddress.ip_address(address)
+        host = f"[{parsed_address.compressed}]" if parsed_address.version == 6 else parsed_address.compressed
+        default_port = 443 if self.scheme == "https" else 80
+        if self.explicit_port or self.port != default_port:
+            host = f"{host}:{self.port}"
+        return urlunsplit((self.scheme, host, self.path, self.query, ""))
+
+
+async def resolve_public_media_target(url: str) -> ResolvedMediaTarget:
+    try:
+        parsed = urlsplit(str(url or "").strip())
+        parsed_port = parsed.port
+    except ValueError as exc:
+        raise MediaGenerationError("远程媒体地址格式不安全。") from exc
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"} or not parsed.netloc:
+        raise MediaGenerationError("远程媒体必须使用 HTTP 或 HTTPS 公网地址。")
+    if parsed.username is not None or parsed.password is not None:
+        raise MediaGenerationError("远程媒体地址不得包含凭据。")
+    raw_hostname = (parsed.hostname or "").strip().rstrip(".")
+    if not raw_hostname or raw_hostname.lower() == "localhost" or raw_hostname.lower().endswith(".local"):
+        raise MediaGenerationError("远程媒体必须使用安全的公网地址。")
+    try:
+        hostname = raw_hostname.encode("idna").decode("ascii").lower()
+    except UnicodeError as exc:
+        raise MediaGenerationError("远程媒体域名格式不安全。") from exc
+    port = parsed_port or (443 if scheme == "https" else 80)
+    if port < 1 or port > 65535:
+        raise MediaGenerationError("远程媒体端口无效。")
+
+    try:
+        literal_address = ipaddress.ip_address(hostname)
+    except ValueError:
+        addresses = await _resolve_host_addresses(hostname, port)
+    else:
+        addresses = (literal_address.compressed,)
+    validated_addresses = validate_public_addresses(addresses)
+    host_header = f"[{hostname}]" if ":" in hostname else hostname
+    if parsed_port is not None:
+        host_header = f"{host_header}:{port}"
+    original_url = urlunsplit((scheme, host_header, parsed.path or "/", parsed.query, ""))
+    return ResolvedMediaTarget(
+        original_url=original_url,
+        scheme=scheme,
+        hostname=hostname,
+        port=port,
+        explicit_port=parsed_port is not None,
+        path=parsed.path or "/",
+        query=parsed.query,
+        addresses=validated_addresses,
+    )
+
+
+async def _resolve_host_addresses(hostname: str, port: int) -> tuple[str, ...]:
+    loop = asyncio.get_running_loop()
+    try:
+        records = await asyncio.wait_for(
+            loop.getaddrinfo(
+                hostname,
+                port,
+                family=socket.AF_UNSPEC,
+                type=socket.SOCK_STREAM,
+                proto=socket.IPPROTO_TCP,
+            ),
+            timeout=REMOTE_MEDIA_DNS_TIMEOUT_SECONDS,
+        )
+    except (TimeoutError, OSError, socket.gaierror) as exc:
+        raise MediaGenerationError("远程媒体域名解析失败。") from exc
+    return tuple(str(record[4][0]) for record in records if record[0] in {socket.AF_INET, socket.AF_INET6})
+
+
+def validate_public_addresses(addresses: tuple[str, ...]) -> tuple[str, ...]:
+    validated: list[str] = []
+    for value in addresses:
+        try:
+            address = ipaddress.ip_address(str(value).split("%", 1)[0])
+        except ValueError as exc:
+            raise MediaGenerationError("远程媒体域名解析结果不安全。") from exc
+        if not is_public_address(address):
+            raise MediaGenerationError("远程媒体域名包含非公网地址，已停止安全下载。")
+        normalized = address.compressed
+        if normalized not in validated:
+            validated.append(normalized)
+    if not validated:
+        raise MediaGenerationError("远程媒体域名没有可用的公网地址。")
+    return tuple(validated)
+
+
+def is_public_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    mapped = getattr(address, "ipv4_mapped", None)
+    if mapped is not None:
+        address = mapped
+    return bool(
+        address.is_global
+        and not address.is_private
+        and not address.is_loopback
+        and not address.is_link_local
+        and not address.is_multicast
+        and not address.is_reserved
+        and not address.is_unspecified
+    )
+
+
+async def read_validated_media_response(response: httpx.Response, media_type: str) -> bytes:
     limit = MAX_REMOTE_IMAGE_BYTES if media_type == "image" else MAX_REMOTE_VIDEO_BYTES
+    content_encoding = str(response.headers.get("content-encoding") or "").strip().lower()
+    if content_encoding and content_encoding != "identity":
+        raise MediaGenerationError("远程媒体使用了不支持的内容编码。")
+    declared = str(response.headers.get("content-length") or "").strip()
+    if declared:
+        try:
+            declared_bytes = int(declared)
+        except ValueError as exc:
+            raise MediaGenerationError("远程媒体大小声明无效。") from exc
+        if declared_bytes < 0 or declared_bytes > limit:
+            raise MediaGenerationError("远程媒体大小超过安全上限。")
+
     chunks: list[bytes] = []
     total = 0
-    async with client.stream("GET", url) as response:
-        if response.status_code >= 400:
-            return b""
-        declared = response.headers.get("content-length")
-        if declared and declared.isdigit() and int(declared) > limit:
-            return b""
-        async for chunk in response.aiter_bytes():
-            total += len(chunk)
-            if total > limit:
-                return b""
-            chunks.append(chunk)
-    return b"".join(chunks)
+    async for chunk in response.aiter_bytes():
+        total += len(chunk)
+        if total > limit:
+            raise MediaGenerationError("远程媒体大小超过安全上限。")
+        chunks.append(chunk)
+    content = b"".join(chunks)
+    validate_media_content(content, media_type, str(response.headers.get("content-type") or ""))
+    return content
+
+
+def validate_media_content(content: bytes, media_type: str, content_type: str) -> str:
+    media_format = detect_media_format(content, media_type)
+    normalized_type = str(content_type or "").split(";", 1)[0].strip().lower()
+    generic_types = {"", "application/octet-stream", "binary/octet-stream"}
+    allowed_types = {
+        "image": {
+            "png": {"image/png"},
+            "jpg": {"image/jpeg", "image/jpg"},
+            "gif": {"image/gif"},
+            "webp": {"image/webp"},
+        },
+        "video": {
+            "mp4": {"video/mp4", "video/quicktime", "video/x-m4v"},
+            "webm": {"video/webm"},
+        },
+    }
+    if normalized_type not in generic_types and normalized_type not in allowed_types[media_type][media_format]:
+        raise MediaGenerationError("远程媒体声明类型与文件格式不一致。")
+    return media_format
+
+
+def detect_media_format(content: bytes, media_type: str) -> str:
+    if media_type == "image":
+        if content.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "png"
+        if content.startswith(b"\xff\xd8\xff"):
+            return "jpg"
+        if content.startswith((b"GIF87a", b"GIF89a")):
+            return "gif"
+        if len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+            return "webp"
+    elif media_type == "video":
+        if len(content) >= 12 and content[4:8] == b"ftyp":
+            return "mp4"
+        if content.startswith(b"\x1a\x45\xdf\xa3"):
+            return "webm"
+    else:
+        raise MediaGenerationError("远程媒体类型无效。")
+    raise MediaGenerationError("远程媒体文件格式无效。")
 
 
 def dedupe(values: list[str]) -> list[str]:

@@ -516,9 +516,23 @@ func playgroundMediaRetentionDuration() time.Duration {
 	return time.Duration(keepMinutes) * time.Minute
 }
 
+func playgroundMediaCacheRequestMaxBytes() int64 {
+	maxMB := common.GetEnvOrDefault("PLAYGROUND_MEDIA_CACHE_REQUEST_MAX_MB", 32)
+	if maxMB < 1 {
+		maxMB = 32
+	}
+	return int64(maxMB) * 1024 * 1024
+}
+
 func PlaygroundCacheMedia(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, playgroundMediaCacheRequestMaxBytes())
 	var req playgroundMediaCacheRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"success": false, "message": "cache request body is too large"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid cache request"})
 		return
 	}

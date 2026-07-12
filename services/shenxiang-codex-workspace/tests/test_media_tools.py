@@ -3,7 +3,16 @@ import asyncio
 import pytest
 
 from app.config import Settings
-from app.media_tools import MediaGenerationError, MediaResult, detect_media_kind, generate_image, generate_video
+from app import media_tools
+from app.media_tools import (
+    MediaGenerationError,
+    MediaResult,
+    detect_media_kind,
+    fetch_limited_media,
+    generate_image,
+    generate_video,
+    persist_remote_media,
+)
 from app.models import WorkspaceFile, WorkspaceRunRequest
 from app.security import UserContext
 
@@ -93,6 +102,39 @@ class FakeVideoAsyncClient:
 
 async def no_sleep(*_args, **_kwargs):
     return None
+
+
+class FakeMediaStreamResponse:
+    def __init__(self, status_code=200, *, headers=None, chunks=None):
+        self.status_code = status_code
+        self.headers = headers or {}
+        self._chunks = list(chunks or [])
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def aiter_bytes(self):
+        for chunk in self._chunks:
+            yield chunk
+
+
+class FakeMediaStreamClient:
+    def __init__(self, *responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def stream(self, method, url, **kwargs):
+        self.calls.append({"method": method, "url": url, "kwargs": kwargs})
+        if not self.responses:
+            raise AssertionError("unexpected media request")
+        return self.responses.pop(0)
+
+
+VALID_PNG = b"\x89PNG\r\n\x1a\n" + b"safe-image"
+VALID_MP4 = b"\x00\x00\x00\x18ftypisom" + b"safe-video"
 
 
 def test_prompt_design_request_in_text_mode_does_not_trigger_video_generation():
@@ -504,3 +546,201 @@ def test_moonapix_rejects_local_data_url_reference(monkeypatch):
         )
 
     assert FakeVideoAsyncClient.calls == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1/private.png",
+        "http://10.0.0.8/private.png",
+        "http://169.254.169.254/latest/meta-data.png",
+        "http://[::1]/private.png",
+        "http://[fe80::1]/private.png",
+    ],
+)
+def test_remote_media_fetch_rejects_literal_private_link_local_and_metadata_addresses(url):
+    client = FakeMediaStreamClient(
+        FakeMediaStreamResponse(
+            headers={"content-type": "image/png"},
+            chunks=[VALID_PNG],
+        )
+    )
+
+    with pytest.raises(MediaGenerationError, match="公网|安全"):
+        asyncio.run(fetch_limited_media(client, url, "image"))
+
+    assert client.calls == []
+
+
+def test_remote_media_fetch_rejects_mixed_public_and_private_dns(monkeypatch):
+    async def mixed_dns(_host, _port):
+        return ("93.184.216.34", "10.0.0.8")
+
+    monkeypatch.setattr(media_tools, "_resolve_host_addresses", mixed_dns, raising=False)
+    client = FakeMediaStreamClient(
+        FakeMediaStreamResponse(headers={"content-type": "image/png"}, chunks=[VALID_PNG])
+    )
+
+    with pytest.raises(MediaGenerationError, match="公网|安全"):
+        asyncio.run(fetch_limited_media(client, "https://mixed.test/image.png", "image"))
+
+    assert client.calls == []
+
+
+def test_remote_media_fetch_pins_validated_dns_and_preserves_host_and_sni(monkeypatch):
+    resolutions = []
+
+    async def rebinding_dns(host, port):
+        resolutions.append((host, port))
+        if len(resolutions) == 1:
+            return ("93.184.216.34",)
+        return ("127.0.0.1",)
+
+    monkeypatch.setattr(media_tools, "_resolve_host_addresses", rebinding_dns, raising=False)
+    client = FakeMediaStreamClient(
+        FakeMediaStreamResponse(headers={"content-type": "image/png"}, chunks=[VALID_PNG])
+    )
+
+    content = asyncio.run(fetch_limited_media(client, "https://cdn.test/image.png", "image"))
+
+    assert content == VALID_PNG
+    assert resolutions == [("cdn.test", 443)]
+    assert client.calls[0]["url"] == "https://93.184.216.34/image.png"
+    assert client.calls[0]["kwargs"]["headers"]["Host"] == "cdn.test"
+    assert client.calls[0]["kwargs"]["extensions"]["sni_hostname"] == "cdn.test"
+
+
+def test_remote_media_fetch_revalidates_redirect_targets(monkeypatch):
+    async def redirect_dns(host, _port):
+        if host == "cdn.test":
+            return ("93.184.216.34",)
+        if host == "redirect.test":
+            return ("169.254.169.254",)
+        raise AssertionError(f"unexpected DNS lookup: {host}")
+
+    monkeypatch.setattr(media_tools, "_resolve_host_addresses", redirect_dns, raising=False)
+    client = FakeMediaStreamClient(
+        FakeMediaStreamResponse(
+            status_code=302,
+            headers={"location": "http://redirect.test/latest/meta-data.png"},
+        )
+    )
+
+    with pytest.raises(MediaGenerationError, match="公网|安全"):
+        asyncio.run(fetch_limited_media(client, "https://cdn.test/image.png", "image"))
+
+    assert len(client.calls) == 1
+    assert client.calls[0]["url"] == "https://93.184.216.34/image.png"
+
+
+def test_remote_media_fetch_revalidates_and_pins_each_safe_redirect(monkeypatch):
+    async def redirect_dns(host, _port):
+        return {
+            "cdn.test": ("93.184.216.34",),
+            "assets.test": ("1.1.1.1",),
+        }[host]
+
+    monkeypatch.setattr(media_tools, "_resolve_host_addresses", redirect_dns, raising=False)
+    client = FakeMediaStreamClient(
+        FakeMediaStreamResponse(status_code=302, headers={"location": "https://assets.test/final.png"}),
+        FakeMediaStreamResponse(headers={"content-type": "image/png"}, chunks=[VALID_PNG]),
+    )
+
+    content = asyncio.run(fetch_limited_media(client, "https://cdn.test/image.png", "image"))
+
+    assert content == VALID_PNG
+    assert [call["url"] for call in client.calls] == [
+        "https://93.184.216.34/image.png",
+        "https://1.1.1.1/final.png",
+    ]
+    assert [call["kwargs"]["headers"]["Host"] for call in client.calls] == ["cdn.test", "assets.test"]
+    assert [call["kwargs"]["extensions"]["sni_hostname"] for call in client.calls] == ["cdn.test", "assets.test"]
+
+
+def test_remote_media_client_disables_environment_proxies_and_automatic_redirects(monkeypatch, tmp_path):
+    constructor_kwargs = {}
+
+    class RecordingAsyncClient:
+        def __init__(self, **kwargs):
+            constructor_kwargs.update(kwargs)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def stream(self, *_args, **_kwargs):
+            raise AssertionError("private URLs must be rejected before a request")
+
+    monkeypatch.setattr(media_tools.httpx, "AsyncClient", RecordingAsyncClient)
+    result = MediaResult(media_type="image", model="test", prompt="test", urls=["http://127.0.0.1/private.png"])
+
+    urls = asyncio.run(
+        persist_remote_media(
+            Settings(public_base_url="https://api.example.test/codex"),
+            UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+            {"task_id": "task_test"},
+            tmp_path,
+            result,
+        )
+    )
+
+    assert constructor_kwargs["trust_env"] is False
+    assert constructor_kwargs["follow_redirects"] is False
+    assert urls == []
+
+
+@pytest.mark.parametrize(
+    ("content_type", "content"),
+    [
+        ("text/html", b"<html>not media</html>"),
+        ("image/png", b"not-a-png"),
+        ("image/jpeg", VALID_PNG),
+    ],
+)
+def test_remote_media_fetch_rejects_invalid_mime_or_magic(monkeypatch, content_type, content):
+    async def public_dns(_host, _port):
+        return ("93.184.216.34",)
+
+    monkeypatch.setattr(media_tools, "_resolve_host_addresses", public_dns, raising=False)
+    client = FakeMediaStreamClient(
+        FakeMediaStreamResponse(headers={"content-type": content_type}, chunks=[content])
+    )
+
+    with pytest.raises(MediaGenerationError, match="媒体|格式|类型"):
+        asyncio.run(fetch_limited_media(client, "https://cdn.test/image.png", "image"))
+
+
+def test_remote_media_fetch_enforces_streamed_byte_limit(monkeypatch):
+    async def public_dns(_host, _port):
+        return ("93.184.216.34",)
+
+    monkeypatch.setattr(media_tools, "_resolve_host_addresses", public_dns, raising=False)
+    monkeypatch.setattr(media_tools, "MAX_REMOTE_IMAGE_BYTES", len(VALID_PNG))
+    client = FakeMediaStreamClient(
+        FakeMediaStreamResponse(
+            headers={"content-type": "image/png"},
+            chunks=[VALID_PNG, b"overflow"],
+        )
+    )
+
+    with pytest.raises(MediaGenerationError, match="大小|上限"):
+        asyncio.run(fetch_limited_media(client, "https://cdn.test/image.png", "image"))
+
+
+def test_remote_video_fetch_requires_video_mime_and_magic(monkeypatch):
+    async def public_dns(_host, _port):
+        return ("93.184.216.34",)
+
+    monkeypatch.setattr(media_tools, "_resolve_host_addresses", public_dns, raising=False)
+    valid_client = FakeMediaStreamClient(
+        FakeMediaStreamResponse(headers={"content-type": "video/mp4"}, chunks=[VALID_MP4])
+    )
+    invalid_client = FakeMediaStreamClient(
+        FakeMediaStreamResponse(headers={"content-type": "video/mp4"}, chunks=[VALID_PNG])
+    )
+
+    assert asyncio.run(fetch_limited_media(valid_client, "https://cdn.test/video.mp4", "video")) == VALID_MP4
+    with pytest.raises(MediaGenerationError, match="媒体|格式|类型"):
+        asyncio.run(fetch_limited_media(invalid_client, "https://cdn.test/video.mp4", "video"))

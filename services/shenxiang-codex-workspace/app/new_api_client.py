@@ -34,6 +34,44 @@ class NewApiClient:
         self.redis = redis_client
         self.dashboard_base = settings.new_api_base_url.removesuffix("/v1")
 
+    async def validate_bearer_token(
+        self,
+        token: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
+        token = str(token or "").strip()
+        if not token:
+            raise NewApiAuthError("用户令牌无效或不可用。")
+
+        owns_client = client is None
+        active_client = client or httpx.AsyncClient(
+            timeout=httpx.Timeout(10.0, connect=3.0),
+            follow_redirects=False,
+        )
+        try:
+            response = await active_client.get(
+                f"{self.settings.new_api_base_url}/models",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        except httpx.RequestError as exc:
+            raise NewApiAuthError("用户令牌验证服务暂时不可用。") from exc
+        finally:
+            if owns_client:
+                await active_client.aclose()
+
+        if response.status_code in {401, 403}:
+            raise NewApiAuthError("用户令牌无效或不可用。")
+        if response.status_code != 200:
+            raise NewApiAuthError("用户令牌验证服务暂时不可用。")
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise NewApiAuthError("用户令牌验证服务暂时不可用。") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+            raise NewApiAuthError("用户令牌验证服务暂时不可用。")
+
     async def bootstrap_user(
         self,
         user_id: str,

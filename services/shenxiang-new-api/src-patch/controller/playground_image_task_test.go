@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -319,7 +323,7 @@ func TestMarkPlaygroundImageTaskSuccessKeepsFailReasonEmpty(t *testing.T) {
 		CacheStatus: "cached",
 	}
 
-	markPlaygroundImageTaskSuccess(task, item, payload, http.StatusOK, 3767)
+	markPlaygroundImageTaskSuccess(task, item, payload, http.StatusOK, 3767, false)
 
 	var reloaded model.Task
 	require.NoError(t, model.DB.Where("task_id = ?", task.TaskID).First(&reloaded).Error)
@@ -644,4 +648,696 @@ func TestMarkPlaygroundImageTaskLogFailureFallsBackToSubmittedChannelLog(t *test
 	require.NoError(t, err)
 	require.Equal(t, float64(24), other["channel_id"])
 	require.Equal(t, "Application not found", other["fail_reason"])
+}
+
+type playgroundImageTaskTestBodyStorage struct {
+	reader     *bytes.Reader
+	data       []byte
+	filePath   string
+	closeErr   error
+	closeCount int
+}
+
+func newPlaygroundImageTaskTestBodyStorage(t *testing.T, data []byte) *playgroundImageTaskTestBodyStorage {
+	t.Helper()
+	filePath := filepath.Join(t.TempDir(), "request.body")
+	require.NoError(t, os.WriteFile(filePath, data, 0o600))
+	return &playgroundImageTaskTestBodyStorage{
+		reader:   bytes.NewReader(data),
+		data:     data,
+		filePath: filePath,
+	}
+}
+
+func (storage *playgroundImageTaskTestBodyStorage) Read(buffer []byte) (int, error) {
+	return storage.reader.Read(buffer)
+}
+
+func (storage *playgroundImageTaskTestBodyStorage) Seek(offset int64, whence int) (int64, error) {
+	return storage.reader.Seek(offset, whence)
+}
+
+func (storage *playgroundImageTaskTestBodyStorage) Close() error {
+	storage.closeCount++
+	_ = os.Remove(storage.filePath)
+	return storage.closeErr
+}
+
+func (storage *playgroundImageTaskTestBodyStorage) Bytes() ([]byte, error) {
+	return append([]byte(nil), storage.data...), nil
+}
+
+func (storage *playgroundImageTaskTestBodyStorage) Size() int64 {
+	return int64(len(storage.data))
+}
+
+func (storage *playgroundImageTaskTestBodyStorage) IsDisk() bool {
+	return true
+}
+
+func setupPlaygroundImageTaskStateTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Task{}, &model.Log{}))
+
+	oldDB := model.DB
+	oldLogDB := model.LOG_DB
+	model.DB = db
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		model.DB = oldDB
+		model.LOG_DB = oldLogDB
+		require.NoError(t, sqlDB.Close())
+	})
+	return db
+}
+
+func createPlaygroundImageTaskSubmittedTestLog(t *testing.T, db *gorm.DB, task *model.Task, requestID string) model.Log {
+	t.Helper()
+	logEntry := model.Log{
+		UserId:    task.UserId,
+		Username:  "image-task-test-user",
+		CreatedAt: common.GetTimestamp(),
+		Type:      model.LogTypeConsume,
+		Content:   "媒体工坊图片任务生成中",
+		ModelName: "gpt-image-2-4K",
+		Quota:     task.Quota,
+		RequestId: requestID,
+		Other: common.MapToJsonStr(map[string]interface{}{
+			"task_id":               task.TaskID,
+			"request_id":            requestID,
+			"request_phase":         "submitted",
+			"task_status":           string(task.Status),
+			"playground_image_task": true,
+		}),
+	}
+	require.NoError(t, db.Create(&logEntry).Error)
+	return logEntry
+}
+
+func createPlaygroundImageTaskOwnedTestMedia(t *testing.T, root string, userID int, filename string) (*playgroundMediaItem, string) {
+	t.Helper()
+	userDir := filepath.Join(root, playgroundMediaUserDirName(userID))
+	require.NoError(t, os.MkdirAll(userDir, 0o700))
+	mediaPath := filepath.Join(userDir, filename)
+	require.NoError(t, os.WriteFile(mediaPath, []byte("image"), 0o600))
+	require.NoError(t, os.WriteFile(mediaPath+".json", []byte("{}"), 0o600))
+	mediaURL := playgroundMediaURLPrefix() + "/" + playgroundMediaUserDirName(userID) + "/" + filename
+	return &playgroundMediaItem{
+		ID:          strings.TrimSuffix(filename, filepath.Ext(filename)),
+		Kind:        "image",
+		URL:         mediaURL,
+		DisplayURL:  mediaURL,
+		CachedURL:   mediaURL,
+		Filename:    filename,
+		Status:      "ready",
+		CacheStatus: "cached",
+	}, mediaPath
+}
+
+func TestReplacePlaygroundImageTaskBodyStorageClosesOldStorageOnce(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	oldStorage := newPlaygroundImageTaskTestBodyStorage(t, []byte("old"))
+	newStorage := newPlaygroundImageTaskTestBodyStorage(t, []byte("new"))
+	ctx.Set(common.KeyBodyStorage, oldStorage)
+
+	require.NoError(t, replacePlaygroundImageTaskBodyStorage(ctx, newStorage))
+	require.Equal(t, 1, oldStorage.closeCount)
+	require.NoFileExists(t, oldStorage.filePath)
+	stored, exists := ctx.Get(common.KeyBodyStorage)
+	require.True(t, exists)
+	require.Same(t, newStorage, stored)
+
+	common.CleanupBodyStorage(ctx)
+	require.Equal(t, 1, oldStorage.closeCount)
+	require.Equal(t, 1, newStorage.closeCount)
+	require.NoFileExists(t, newStorage.filePath)
+}
+
+func TestReplacePlaygroundImageTaskBodyStorageUsesReplacementOnCloseFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	oldStorage := newPlaygroundImageTaskTestBodyStorage(t, []byte("old"))
+	oldStorage.closeErr = errors.New("close failed")
+	newStorage := newPlaygroundImageTaskTestBodyStorage(t, []byte("new"))
+	ctx.Set(common.KeyBodyStorage, oldStorage)
+
+	require.Error(t, replacePlaygroundImageTaskBodyStorage(ctx, newStorage))
+	require.Equal(t, 1, oldStorage.closeCount)
+	require.Equal(t, 0, newStorage.closeCount)
+	stored, exists := ctx.Get(common.KeyBodyStorage)
+	require.True(t, exists)
+	require.Same(t, newStorage, stored)
+	common.CleanupBodyStorage(ctx)
+	require.Equal(t, 1, newStorage.closeCount)
+	require.NoFileExists(t, newStorage.filePath)
+}
+
+func TestCreateImageTaskFailsClosedWhenNormalizedBodyStorageCreationFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{
+		"model":"banana-2",
+		"prompt":"test image",
+		"responseFormat":{"image":{"aspectRatio":"9:16","imageSize":"2K"}}
+	}`)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/images/tasks/generations", bytes.NewReader(body))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	oldStorage := newPlaygroundImageTaskTestBodyStorage(t, body)
+	failedStorage := newPlaygroundImageTaskTestBodyStorage(t, []byte("failed replacement"))
+	ctx.Set(common.KeyBodyStorage, oldStorage)
+	factoryCalled := false
+
+	createImageTaskWithBodyStorageFactory(ctx, false, func([]byte) (common.BodyStorage, error) {
+		factoryCalled = true
+		return failedStorage, errors.New("storage unavailable")
+	})
+
+	require.True(t, factoryCalled)
+	require.Equal(t, http.StatusInternalServerError, recorder.Code)
+	stored, exists := ctx.Get(common.KeyBodyStorage)
+	require.True(t, exists)
+	require.Same(t, oldStorage, stored)
+	require.Equal(t, 1, failedStorage.closeCount)
+	require.NoFileExists(t, failedStorage.filePath)
+	common.CleanupBodyStorage(ctx)
+	require.Equal(t, 1, oldStorage.closeCount)
+	require.NoFileExists(t, oldStorage.filePath)
+}
+
+func TestClaimPlaygroundImageTaskAllowsOnlyOneWorker(t *testing.T) {
+	db := setupPlaygroundImageTaskStateTestDB(t)
+	task := &model.Task{
+		TaskID:   "task-image-single-claim",
+		Platform: constant.TaskPlatformPlaygroundImage,
+		UserId:   1001,
+		Action:   constant.TaskActionImageGenerate,
+		Status:   model.TaskStatusSubmitted,
+		Progress: "10%",
+	}
+	task.SetData(playgroundImageTaskPayload{RequestFile: "/tmp/request.body"})
+	require.NoError(t, db.Create(task).Error)
+
+	start := make(chan struct{})
+	type claimResult struct {
+		claimed bool
+		err     error
+	}
+	results := make(chan claimResult, 2)
+	for workerIndex := 0; workerIndex < 2; workerIndex++ {
+		go func() {
+			<-start
+			_, claimed, err := claimPlaygroundImageTask(task.TaskID, task.UserId)
+			results <- claimResult{claimed: claimed, err: err}
+		}()
+	}
+	close(start)
+
+	claimCount := 0
+	for workerIndex := 0; workerIndex < 2; workerIndex++ {
+		result := <-results
+		require.NoError(t, result.err)
+		if result.claimed {
+			claimCount++
+		}
+	}
+	require.Equal(t, 1, claimCount)
+
+	var reloaded model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&reloaded).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusInProgress), reloaded.Status)
+}
+
+func TestClaimPlaygroundImageTaskRejectsTerminalTask(t *testing.T) {
+	db := setupPlaygroundImageTaskStateTestDB(t)
+	task := &model.Task{
+		TaskID:   "task-image-terminal-claim",
+		Platform: constant.TaskPlatformPlaygroundImage,
+		UserId:   1001,
+		Action:   constant.TaskActionImageGenerate,
+		Status:   model.TaskStatusSuccess,
+		Progress: "100%",
+	}
+	require.NoError(t, db.Create(task).Error)
+
+	_, claimed, err := claimPlaygroundImageTask(task.TaskID, task.UserId)
+	require.NoError(t, err)
+	require.False(t, claimed)
+}
+
+func TestPlaygroundImageTaskRecoveryWaitsUntilRetryDeadline(t *testing.T) {
+	now := time.Unix(2_000_000_000, 0)
+	payload := &playgroundImageTaskPayload{NextRetryAt: now.Add(time.Minute).Unix()}
+	started := make(chan struct{}, 1)
+	runner := func() {
+		started <- struct{}{}
+	}
+
+	require.False(t, playgroundImageTaskRecoveryReady(payload, now))
+	require.False(t, schedulePlaygroundImageTaskRecovery(payload, now, runner))
+	select {
+	case <-started:
+		require.Fail(t, "future retry deadline started recovery worker")
+	default:
+	}
+	payload.NextRetryAt = now.Unix()
+	require.True(t, playgroundImageTaskRecoveryReady(payload, now))
+	require.True(t, schedulePlaygroundImageTaskRecovery(payload, now, runner))
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		require.Fail(t, "due recovery worker did not start")
+	}
+	payload.NextRetryAt = 0
+	require.True(t, playgroundImageTaskRecoveryReady(payload, now))
+}
+
+func TestMarkPlaygroundImageTaskFailureCannotRegressSuccessOrRefund(t *testing.T) {
+	db := setupPlaygroundImageTaskStateTestDB(t)
+	mediaRoot := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", mediaRoot)
+	require.NoError(t, db.Create(&model.User{
+		Id:       1001,
+		Username: "image-task-test-user",
+		Password: "test-password",
+		Status:   common.UserStatusEnabled,
+		Quota:    100,
+	}).Error)
+	requestFile := filepath.Join(mediaRoot, "tasks", playgroundMediaUserDirName(1001), "task.body")
+	require.NoError(t, os.MkdirAll(filepath.Dir(requestFile), 0o700))
+	require.NoError(t, os.WriteFile(requestFile, []byte("request"), 0o600))
+	payload := playgroundImageTaskPayload{RequestID: "req-terminal-failure", RequestFile: requestFile}
+	task := &model.Task{
+		TaskID:     "task-terminal-failure",
+		Platform:   constant.TaskPlatformPlaygroundImage,
+		UserId:     1001,
+		Quota:      20,
+		Action:     constant.TaskActionImageGenerate,
+		Status:     model.TaskStatusSuccess,
+		Progress:   "100%",
+		FinishTime: time.Now().Unix(),
+		PrivateData: model.TaskPrivateData{
+			ResultURL: "/pg/media/files/u-1001/winner.png",
+		},
+	}
+	task.SetData(payload)
+	require.NoError(t, db.Create(task).Error)
+	submittedLog := createPlaygroundImageTaskSubmittedTestLog(t, db, task, payload.RequestID)
+
+	staleTask := *task
+	staleTask.Status = model.TaskStatusInProgress
+	staleTask.Progress = "50%"
+	markPlaygroundImageTaskFailure(&staleTask, "stale worker failed")
+
+	var reloadedTask model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&reloadedTask).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusSuccess), reloadedTask.Status)
+	require.Equal(t, "/pg/media/files/u-1001/winner.png", reloadedTask.GetResultURL())
+	require.FileExists(t, requestFile)
+	var reloadedUser model.User
+	require.NoError(t, db.Where("id = ?", task.UserId).First(&reloadedUser).Error)
+	require.Equal(t, 100, reloadedUser.Quota)
+	var refundCount int64
+	require.NoError(t, db.Model(&model.Log{}).Where("type = ?", model.LogTypeRefund).Count(&refundCount).Error)
+	require.Zero(t, refundCount)
+	var reloadedLog model.Log
+	require.NoError(t, db.First(&reloadedLog, submittedLog.Id).Error)
+	require.Equal(t, model.LogTypeConsume, reloadedLog.Type)
+}
+
+func TestMarkPlaygroundImageTaskSuccessLoserCleansOwnedMediaOnly(t *testing.T) {
+	db := setupPlaygroundImageTaskStateTestDB(t)
+	mediaRoot := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", mediaRoot)
+	requestFile := filepath.Join(mediaRoot, "tasks", playgroundMediaUserDirName(1001), "task.body")
+	require.NoError(t, os.MkdirAll(filepath.Dir(requestFile), 0o700))
+	require.NoError(t, os.WriteFile(requestFile, []byte("request"), 0o600))
+	payload := playgroundImageTaskPayload{RequestID: "req-success-loser", RequestFile: requestFile}
+	task := &model.Task{
+		TaskID:   "task-success-loser",
+		Platform: constant.TaskPlatformPlaygroundImage,
+		UserId:   1001,
+		Action:   constant.TaskActionImageGenerate,
+		Status:   model.TaskStatusSuccess,
+		Progress: "100%",
+		PrivateData: model.TaskPrivateData{
+			ResultURL: "/pg/media/files/u-1001/winner.png",
+		},
+	}
+	task.SetData(payload)
+	require.NoError(t, db.Create(task).Error)
+	submittedLog := createPlaygroundImageTaskSubmittedTestLog(t, db, task, payload.RequestID)
+	loserItem, loserPath := createPlaygroundImageTaskOwnedTestMedia(t, mediaRoot, task.UserId, "11111111111111111111111111111111.png")
+
+	staleTask := *task
+	staleTask.Status = model.TaskStatusInProgress
+	staleTask.Progress = "50%"
+	stalePayload := payload
+	markPlaygroundImageTaskSuccess(&staleTask, loserItem, &stalePayload, http.StatusOK, 25, true)
+
+	require.NoFileExists(t, loserPath)
+	require.NoFileExists(t, loserPath+".json")
+	recoveryItem, recoveryPath := createPlaygroundImageTaskOwnedTestMedia(t, mediaRoot, task.UserId, "22222222222222222222222222222222.png")
+	recoveryPayload := payload
+	markPlaygroundImageTaskSuccess(&staleTask, recoveryItem, &recoveryPayload, http.StatusOK, 25, false)
+	require.FileExists(t, recoveryPath)
+	require.FileExists(t, recoveryPath+".json")
+	require.FileExists(t, requestFile)
+	var reloadedTask model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&reloadedTask).Error)
+	require.Equal(t, "/pg/media/files/u-1001/winner.png", reloadedTask.GetResultURL())
+	var reloadedLog model.Log
+	require.NoError(t, db.First(&reloadedLog, submittedLog.Id).Error)
+	other, err := common.StrToMap(reloadedLog.Other)
+	require.NoError(t, err)
+	require.Equal(t, "submitted", other["request_phase"])
+	require.NotEqual(t, true, other["playground_image_completion_log"])
+}
+
+func TestConcurrentPlaygroundImageTaskSuccessKeepsOneMediaAndCompletionLog(t *testing.T) {
+	db := setupPlaygroundImageTaskStateTestDB(t)
+	mediaRoot := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", mediaRoot)
+	requestFile := filepath.Join(mediaRoot, "tasks", playgroundMediaUserDirName(1001), "task.body")
+	require.NoError(t, os.MkdirAll(filepath.Dir(requestFile), 0o700))
+	require.NoError(t, os.WriteFile(requestFile, []byte("request"), 0o600))
+	payload := playgroundImageTaskPayload{RequestID: "req-concurrent-success", RequestFile: requestFile}
+	task := &model.Task{
+		TaskID:     "task-concurrent-success",
+		Platform:   constant.TaskPlatformPlaygroundImage,
+		UserId:     1001,
+		Action:     constant.TaskActionImageGenerate,
+		Status:     model.TaskStatusInProgress,
+		Progress:   "50%",
+		StartTime:  time.Now().Add(-time.Second).Unix(),
+		SubmitTime: time.Now().Add(-2 * time.Second).Unix(),
+	}
+	task.SetData(payload)
+	require.NoError(t, db.Create(task).Error)
+	createPlaygroundImageTaskSubmittedTestLog(t, db, task, payload.RequestID)
+	firstItem, firstPath := createPlaygroundImageTaskOwnedTestMedia(t, mediaRoot, task.UserId, "11111111111111111111111111111111.png")
+	secondItem, secondPath := createPlaygroundImageTaskOwnedTestMedia(t, mediaRoot, task.UserId, "22222222222222222222222222222222.png")
+
+	var firstTask model.Task
+	var secondTask model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&firstTask).Error)
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&secondTask).Error)
+	firstPayload := payload
+	secondPayload := payload
+	start := make(chan struct{})
+	done := make(chan struct{}, 2)
+	go func() {
+		<-start
+		markPlaygroundImageTaskSuccess(&firstTask, firstItem, &firstPayload, http.StatusOK, 30, true)
+		done <- struct{}{}
+	}()
+	go func() {
+		<-start
+		markPlaygroundImageTaskSuccess(&secondTask, secondItem, &secondPayload, http.StatusOK, 30, true)
+		done <- struct{}{}
+	}()
+	close(start)
+	<-done
+	<-done
+
+	var reloadedTask model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&reloadedTask).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusSuccess), reloadedTask.Status)
+	require.Contains(t, []string{firstItem.URL, secondItem.URL}, reloadedTask.GetResultURL())
+	firstExists := fileExistsForPlaygroundImageTaskTest(firstPath)
+	secondExists := fileExistsForPlaygroundImageTaskTest(secondPath)
+	require.NotEqual(t, firstExists, secondExists)
+	if reloadedTask.GetResultURL() == firstItem.URL {
+		require.True(t, firstExists)
+		require.False(t, secondExists)
+	} else {
+		require.False(t, firstExists)
+		require.True(t, secondExists)
+	}
+	require.NoFileExists(t, requestFile)
+
+	var logs []model.Log
+	require.NoError(t, db.Where("request_id = ?", payload.RequestID).Find(&logs).Error)
+	completionLogs := 0
+	for _, logEntry := range logs {
+		other, err := common.StrToMap(logEntry.Other)
+		require.NoError(t, err)
+		if completed, _ := other["playground_image_completion_log"].(bool); completed {
+			completionLogs++
+		}
+	}
+	require.Equal(t, 1, completionLogs)
+}
+
+func fileExistsForPlaygroundImageTaskTest(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func configurePlaygroundImageTaskPersistenceTest(t *testing.T, root string) {
+	t.Helper()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", root)
+	t.Setenv("PLAYGROUND_IMAGE_TASK_REQUEST_MAX_MB", "1")
+	t.Setenv("PLAYGROUND_IMAGE_TASK_MAX_PENDING_PER_USER", "100")
+	t.Setenv("PLAYGROUND_MEDIA_USER_MAX_MB", "10")
+	t.Setenv("PLAYGROUND_MEDIA_TOTAL_MAX_MB", "20")
+	t.Setenv("PLAYGROUND_MEDIA_MAX_FILES_PER_USER", "100")
+}
+
+func requireNoPlaygroundImageTaskTempFiles(t *testing.T, root string) {
+	t.Helper()
+	err := filepath.WalkDir(root, func(_ string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if strings.HasPrefix(entry.Name(), ".playground-image-task-") {
+			t.Errorf("unexpected image task temp file: %s", entry.Name())
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		require.NoError(t, err)
+	}
+}
+
+func requirePlaygroundImageTaskPersistHTTPStatus(t *testing.T, err error, expectedStatus int) string {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	respondPlaygroundImageTaskPersistError(ctx, err)
+	require.Equal(t, expectedStatus, recorder.Code)
+	return recorder.Body.String()
+}
+
+func TestPersistPlaygroundImageTaskRequestRejectsOversizedBodyWith413(t *testing.T) {
+	root := t.TempDir()
+	configurePlaygroundImageTaskPersistenceTest(t, root)
+	body := bytes.Repeat([]byte("x"), (1<<20)+1)
+
+	requestFile, err := persistPlaygroundImageTaskRequest(7, "task-too-large", body)
+
+	require.Empty(t, requestFile)
+	require.ErrorIs(t, err, common.ErrPlaygroundImageTaskRequestTooLarge)
+	requirePlaygroundImageTaskPersistHTTPStatus(t, err, http.StatusRequestEntityTooLarge)
+	requireNoPlaygroundImageTaskTempFiles(t, root)
+	_, statErr := os.Stat(filepath.Join(root, "tasks", playgroundMediaUserDirName(7), "task-too-large.body"))
+	require.True(t, os.IsNotExist(statErr))
+}
+
+func TestPersistPlaygroundImageTaskRequestPublishesAtomically(t *testing.T) {
+	root := t.TempDir()
+	configurePlaygroundImageTaskPersistenceTest(t, root)
+	body := []byte("complete request body")
+
+	requestFile, err := persistPlaygroundImageTaskRequest(7, "task-atomic", body)
+
+	require.NoError(t, err)
+	require.FileExists(t, requestFile)
+	stored, err := os.ReadFile(requestFile)
+	require.NoError(t, err)
+	require.Equal(t, body, stored)
+	requireNoPlaygroundImageTaskTempFiles(t, root)
+}
+
+func TestWritePlaygroundImageTaskRequestAtomicallyCleansTempAfterPublishFailure(t *testing.T) {
+	requestRoot := t.TempDir()
+	targetPath := filepath.Join(requestRoot, "task.body")
+	require.NoError(t, os.Mkdir(targetPath, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(targetPath, "block-rename"), []byte("x"), 0o600))
+
+	err := writePlaygroundImageTaskRequestAtomically(requestRoot, targetPath, []byte("request"))
+
+	require.Error(t, err)
+	require.DirExists(t, targetPath)
+	requireNoPlaygroundImageTaskTempFiles(t, requestRoot)
+}
+
+func TestPersistPlaygroundImageTaskRequestEnforcesConcurrentPendingLimit(t *testing.T) {
+	root := t.TempDir()
+	configurePlaygroundImageTaskPersistenceTest(t, root)
+	t.Setenv("PLAYGROUND_IMAGE_TASK_MAX_PENDING_PER_USER", "1")
+
+	start := make(chan struct{})
+	results := make(chan error, 8)
+	for requestIndex := 0; requestIndex < 8; requestIndex++ {
+		go func(index int) {
+			<-start
+			_, err := persistPlaygroundImageTaskRequest(7, fmt.Sprintf("task-pending-%d", index), []byte("request"))
+			results <- err
+		}(requestIndex)
+	}
+	close(start)
+
+	successes := 0
+	pendingRejections := 0
+	var pendingErr error
+	for requestIndex := 0; requestIndex < 8; requestIndex++ {
+		err := <-results
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, common.ErrPlaygroundImageTaskPendingLimitExceeded):
+			pendingRejections++
+			pendingErr = err
+		default:
+			require.NoError(t, err)
+		}
+	}
+	require.Equal(t, 1, successes)
+	require.Equal(t, 7, pendingRejections)
+	requirePlaygroundImageTaskPersistHTTPStatus(t, pendingErr, http.StatusTooManyRequests)
+	_, pendingFiles, err := common.PlaygroundImageTaskRequestUsage(filepath.Join(root, "tasks", playgroundMediaUserDirName(7)))
+	require.NoError(t, err)
+	require.Equal(t, 1, pendingFiles)
+	requireNoPlaygroundImageTaskTempFiles(t, root)
+}
+
+func TestPersistPlaygroundImageTaskRequestEnforcesConcurrentUserByteQuota(t *testing.T) {
+	root := t.TempDir()
+	configurePlaygroundImageTaskPersistenceTest(t, root)
+	t.Setenv("PLAYGROUND_MEDIA_USER_MAX_MB", "1")
+	body := bytes.Repeat([]byte("x"), 400*1024)
+
+	start := make(chan struct{})
+	results := make(chan error, 4)
+	for requestIndex := 0; requestIndex < 4; requestIndex++ {
+		go func(index int) {
+			<-start
+			_, err := persistPlaygroundImageTaskRequest(7, fmt.Sprintf("task-quota-%d", index), body)
+			results <- err
+		}(requestIndex)
+	}
+	close(start)
+
+	successes := 0
+	quotaRejections := 0
+	for requestIndex := 0; requestIndex < 4; requestIndex++ {
+		err := <-results
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, common.ErrPlaygroundImageTaskUserQuotaExceeded):
+			quotaRejections++
+		default:
+			require.NoError(t, err)
+		}
+	}
+	require.Equal(t, 2, successes)
+	require.Equal(t, 2, quotaRejections)
+	requestBytes, pendingFiles, err := common.PlaygroundImageTaskRequestUsage(filepath.Join(root, "tasks", playgroundMediaUserDirName(7)))
+	require.NoError(t, err)
+	require.Equal(t, int64(800*1024), requestBytes)
+	require.Equal(t, 2, pendingFiles)
+	requireNoPlaygroundImageTaskTempFiles(t, root)
+}
+
+func TestPersistPlaygroundImageTaskRequestIncludesMediaInUserFileQuota(t *testing.T) {
+	root := t.TempDir()
+	configurePlaygroundImageTaskPersistenceTest(t, root)
+	t.Setenv("PLAYGROUND_MEDIA_MAX_FILES_PER_USER", "1")
+	userDir := filepath.Join(root, playgroundMediaUserDirName(7))
+	require.NoError(t, os.MkdirAll(userDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(userDir, "existing.png"), []byte("image"), 0o600))
+
+	requestFile, err := persistPlaygroundImageTaskRequest(7, "task-file-quota", []byte("request"))
+
+	require.Empty(t, requestFile)
+	require.ErrorIs(t, err, common.ErrPlaygroundImageTaskUserQuotaExceeded)
+	requirePlaygroundImageTaskPersistHTTPStatus(t, err, http.StatusTooManyRequests)
+	requireNoPlaygroundImageTaskTempFiles(t, root)
+}
+
+func TestPersistPlaygroundImageTaskRequestIncludesMediaInUserByteQuota(t *testing.T) {
+	root := t.TempDir()
+	configurePlaygroundImageTaskPersistenceTest(t, root)
+	t.Setenv("PLAYGROUND_MEDIA_USER_MAX_MB", "1")
+	userDir := filepath.Join(root, playgroundMediaUserDirName(7))
+	require.NoError(t, os.MkdirAll(userDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(userDir, "existing.png"), bytes.Repeat([]byte("x"), 900*1024), 0o600))
+
+	requestFile, err := persistPlaygroundImageTaskRequest(7, "task-user-quota", bytes.Repeat([]byte("y"), 200*1024))
+
+	require.Empty(t, requestFile)
+	require.ErrorIs(t, err, common.ErrPlaygroundImageTaskUserQuotaExceeded)
+	requirePlaygroundImageTaskPersistHTTPStatus(t, err, http.StatusTooManyRequests)
+	requireNoPlaygroundImageTaskTempFiles(t, root)
+}
+
+func TestPersistPlaygroundImageTaskRequestEnforcesGlobalByteQuota(t *testing.T) {
+	root := t.TempDir()
+	configurePlaygroundImageTaskPersistenceTest(t, root)
+	t.Setenv("PLAYGROUND_MEDIA_TOTAL_MAX_MB", "1")
+	otherUserDir := filepath.Join(root, playgroundMediaUserDirName(8))
+	require.NoError(t, os.MkdirAll(otherUserDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(otherUserDir, "existing.png"), bytes.Repeat([]byte("x"), 900*1024), 0o600))
+
+	requestFile, err := persistPlaygroundImageTaskRequest(7, "task-global-quota", bytes.Repeat([]byte("y"), 200*1024))
+
+	require.Empty(t, requestFile)
+	require.ErrorIs(t, err, common.ErrPlaygroundImageTaskTotalQuotaExceeded)
+	body := requirePlaygroundImageTaskPersistHTTPStatus(t, err, http.StatusInsufficientStorage)
+	require.NotContains(t, body, root)
+	requireNoPlaygroundImageTaskTempFiles(t, root)
+}
+
+func TestPlaygroundImageTaskPersistenceIOErrorReturnsSanitized500(t *testing.T) {
+	parent := t.TempDir()
+	blockedRoot := filepath.Join(parent, "cache-file")
+	require.NoError(t, os.WriteFile(blockedRoot, []byte("not a directory"), 0o600))
+	configurePlaygroundImageTaskPersistenceTest(t, blockedRoot)
+
+	requestFile, err := persistPlaygroundImageTaskRequest(7, "task-io-error", []byte("request"))
+
+	require.Empty(t, requestFile)
+	require.Error(t, err)
+	body := requirePlaygroundImageTaskPersistHTTPStatus(t, err, http.StatusInternalServerError)
+	require.NotContains(t, body, blockedRoot)
+}
+
+func TestPlaygroundImageTaskWorkerLimitIsConfigurableAndClamped(t *testing.T) {
+	t.Setenv("PLAYGROUND_IMAGE_TASK_MAX_WORKERS", "64")
+	require.Equal(t, 64, playgroundImageTaskWorkerLimit())
+	require.Equal(t, 64, cap(newPlaygroundImageWorkerSemaphore()))
+
+	t.Setenv("PLAYGROUND_IMAGE_TASK_MAX_WORKERS", "0")
+	require.Equal(t, playgroundImageTaskDefaultWorkerLimit, playgroundImageTaskWorkerLimit())
+
+	t.Setenv("PLAYGROUND_IMAGE_TASK_MAX_WORKERS", "9999")
+	require.Equal(t, playgroundImageTaskMaxWorkerLimit, playgroundImageTaskWorkerLimit())
+}
+
+func TestPlaygroundMediaQuotaConfigurationIsClampedBeforeByteConversion(t *testing.T) {
+	t.Setenv("PLAYGROUND_MEDIA_USER_MAX_MB", "999999999")
+	t.Setenv("PLAYGROUND_MEDIA_TOTAL_MAX_MB", "999999999")
+	t.Setenv("PLAYGROUND_MEDIA_MAX_FILES_PER_USER", "999999999")
+
+	require.Equal(t, int64(10*1024)*1024*1024, common.PlaygroundMediaUserMaxBytes())
+	require.Equal(t, int64(100*1024)*1024*1024, common.PlaygroundMediaTotalMaxBytes())
+	require.Equal(t, 10_000, common.PlaygroundMediaMaxFilesPerUser())
 }

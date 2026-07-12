@@ -30,6 +30,13 @@ func (a *playgroundVideoTestAdaptor) FetchTask(baseURL string, key string, body 
 	}, nil
 }
 
+func (a *playgroundVideoTestAdaptor) FetchTaskWithContext(context.Context, string, string, map[string]any, string) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioNopCloser{strings.NewReader(string(a.body))},
+	}, nil
+}
+
 func (a *playgroundVideoTestAdaptor) ParseTaskResult(body []byte) (*relaycommon.TaskInfo, error) {
 	var payload struct {
 		Status string `json:"status"`

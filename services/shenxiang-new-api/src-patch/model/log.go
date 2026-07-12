@@ -23,11 +23,11 @@ func applyExplicitLogTextFilter(tx *gorm.DB, column string, value string) (*gorm
 		return tx, nil
 	}
 	if strings.Contains(value, "%") {
-		pattern, err := sanitizeLikePattern(value)
+		condition, pattern, err := buildLogLikeCondition(column, value)
 		if err != nil {
 			return nil, err
 		}
-		return tx.Where(column+" LIKE ? ESCAPE '!'", pattern), nil
+		return tx.Where(condition, pattern), nil
 	}
 	return tx.Where(column+" = ?", value), nil
 }
@@ -65,7 +65,13 @@ const (
 	LogTypeSystem  = 4
 	LogTypeError   = 5
 	LogTypeRefund  = 6
+	LogTypeLogin   = 7
 )
+
+func createLog(log *Log) error {
+	ensureLogRequestId(log)
+	return LOG_DB.Create(log).Error
+}
 
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
@@ -75,16 +81,22 @@ func formatUserLogs(logs []*Log, startIdx int) {
 		if otherMap != nil {
 			// Remove admin-only debug fields.
 			delete(otherMap, "admin_info")
+			// Remove operation-audit details (operator/route info), admin-only.
+			delete(otherMap, "audit_info")
 			// delete(otherMap, "reject_reason")
 			delete(otherMap, "stream_status")
 		}
 		logs[i].Other = common.MapToJsonStr(otherMap)
-		logs[i].Id = startIdx + i + 1
 	}
+	assignDisplayLogIds(logs, startIdx)
 }
 
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
-	err = LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId).Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
+	order := "id desc"
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		order = clickHouseLogOrder("")
+	}
+	err = LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs, 0)
 	return logs, err
 }
@@ -101,7 +113,7 @@ func RecordLog(userId int, logType int, content string) {
 		Type:      logType,
 		Content:   content,
 	}
-	err := LOG_DB.Create(log).Error
+	err := createLog(log)
 	if err != nil {
 		common.SysLog("failed to record log: " + err.Error())
 	}
@@ -126,8 +138,45 @@ func RecordLogWithAdminInfo(userId int, logType int, content string, adminInfo m
 		}
 		log.Other = common.MapToJsonStr(other)
 	}
-	if err := LOG_DB.Create(log).Error; err != nil {
+	if err := createLog(log); err != nil {
 		common.SysLog("failed to record log: " + err.Error())
+	}
+}
+
+// buildOpField 构建语言无关的操作描述（写入 Other.op）。
+// 前端依据 action(稳定操作标识) + params(结构化参数) 在渲染期用 i18n 本地化展示，
+// 因此不在数据库中存储自然语言句子。
+func buildOpField(action string, params map[string]interface{}) map[string]interface{} {
+	op := map[string]interface{}{
+		"action": action,
+	}
+	if len(params) > 0 {
+		op["params"] = params
+	}
+	return op
+}
+
+// RecordLoginLog 记录用户登录成功的审计日志（type=LogTypeLogin）。
+// username 由调用方传入（登录流程已持有用户对象），避免额外的数据库查询。
+// content 为英文兜底文本（用于导出/经典前端）；action+params 供前端本地化渲染。
+// extra 可携带 login_method、user_agent 等附加信息（普通用户可见）。
+func RecordLoginLog(userId int, username string, content string, ip string, action string, params map[string]interface{}, extra map[string]interface{}) {
+	other := map[string]interface{}{}
+	for key, value := range extra {
+		other[key] = value
+	}
+	other["op"] = buildOpField(action, params)
+	log := &Log{
+		UserId:    userId,
+		Username:  username,
+		CreatedAt: common.GetTimestamp(),
+		Type:      LogTypeLogin,
+		Content:   content,
+		Ip:        ip,
+		Other:     common.MapToJsonStr(other),
+	}
+	if err := createLog(log); err != nil {
+		common.SysLog("failed to record login log: " + err.Error())
 	}
 }
 
@@ -153,7 +202,7 @@ func RecordTopupLog(userId int, content string, callerIp string, paymentMethod s
 		Ip:        callerIp,
 		Other:     common.MapToJsonStr(other),
 	}
-	err := LOG_DB.Create(log).Error
+	err := createLog(log)
 	if err != nil {
 		common.SysLog("failed to record topup log: " + err.Error())
 	}
@@ -188,7 +237,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		UpstreamRequestId: upstreamRequestId,
 		Other:             otherStr,
 	}
-	err := LOG_DB.Create(log).Error
+	err := createLog(log)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
@@ -204,11 +253,23 @@ type RecordTaskBillingLogParams struct {
 	TokenId   int                    `json:"token_id"`
 	Group     string                 `json:"group"`
 	Other     map[string]interface{} `json:"other"`
+	NodeName  string                 `json:"node_name"`
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	if params.LogType == LogTypeConsume && !common.LogConsumeEnabled {
 		return
+	}
+	if nodeName := strings.TrimSpace(params.NodeName); nodeName != "" {
+		if params.Other == nil {
+			params.Other = map[string]interface{}{}
+		}
+		adminInfo, ok := params.Other["admin_info"].(map[string]interface{})
+		if !ok || adminInfo == nil {
+			adminInfo = map[string]interface{}{}
+			params.Other["admin_info"] = adminInfo
+		}
+		adminInfo["node_name"] = nodeName
 	}
 	username, _ := GetUsernameById(params.UserId, false)
 	log := &Log{
@@ -228,7 +289,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		RequestId: "",
 		Other:     common.MapToJsonStr(params.Other),
 	}
-	if err := LOG_DB.Create(log).Error; err != nil {
+	if err := createLog(log); err != nil {
 		common.SysLog("failed to record task billing log: " + err.Error())
 	}
 }
@@ -625,7 +686,7 @@ func createPlaygroundImageResultLog(userId int, source *Log, requestID string, t
 	if log.TokenName == "" {
 		log.TokenName = "playground"
 	}
-	return LOG_DB.Create(log).Error
+	return createLog(log)
 }
 
 func intFromLogOther(value interface{}) int {
@@ -889,7 +950,7 @@ func createPlaygroundVideoCompletionReceiptLog(userId int, source *Log, taskID s
 		UpstreamRequestId: source.UpstreamRequestId,
 		Other:             common.MapToJsonStr(other),
 	}
-	return LOG_DB.Create(log).Error
+	return createLog(log)
 }
 
 func createPlaygroundVideoTaskResultLog(userId int, taskID string, upstreamTaskID string, resultURL string, finishTime int64, status string, extra map[string]interface{}) error {
@@ -981,7 +1042,7 @@ func createPlaygroundVideoTaskResultLog(userId int, taskID string, upstreamTaskI
 	if log.TokenName == "" {
 		log.TokenName = "playground"
 	}
-	if err := LOG_DB.Create(log).Error; err != nil {
+	if err := createLog(log); err != nil {
 		return err
 	}
 	return nil
@@ -1018,7 +1079,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		afterConsumeLogRecorded(userId, log.Username, params)
 		return
 	}
-	err := LOG_DB.Create(log).Error
+	err := createLog(log)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 		return
@@ -1044,6 +1105,7 @@ func RecordConsumeLogAndUsageStats(c *gin.Context, userId int, params RecordCons
 	}
 	logger.LogInfo(logContextFromGin(c), fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.GetJsonString(params)))
 	log := newConsumeLog(c, userId, params)
+	ensureLogRequestId(log)
 	if LOG_DB == DB {
 		err := DB.Transaction(func(tx *gorm.DB) error {
 			updated, err := updatePendingPlaygroundImageConsumeLog(tx, c, userId, log, params)
@@ -1085,7 +1147,7 @@ func RecordConsumeLogAndUsageStats(c *gin.Context, userId int, params RecordCons
 		afterConsumeLogRecorded(userId, log.Username, params)
 		return
 	}
-	if err := LOG_DB.Create(log).Error; err != nil {
+	if err := createLog(log); err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 		return
 	}
@@ -1131,9 +1193,16 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	if err != nil {
 		return nil, 0, err
 	}
-	err = tx.Order("logs.created_at desc, logs.id desc").Limit(num).Offset(startIdx).Find(&logs).Error
+	order := "logs.created_at desc, logs.id desc"
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		order = clickHouseLogOrder("logs.")
+	}
+	err = tx.Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
 	if err != nil {
 		return nil, 0, err
+	}
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		assignDisplayLogIds(logs, startIdx)
 	}
 
 	channelIds := types.NewSet[int]()
@@ -1215,7 +1284,11 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 		common.SysError("failed to count user logs: " + err.Error())
 		return nil, 0, errors.New("查询日志失败")
 	}
-	err = tx.Order("logs.id desc").Limit(num).Offset(startIdx).Find(&logs).Error
+	order := "logs.id desc"
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		order = clickHouseLogOrder("logs.")
+	}
+	err = tx.Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
 	if err != nil {
 		common.SysError("failed to search user logs: " + err.Error())
 		return nil, 0, errors.New("查询日志失败")

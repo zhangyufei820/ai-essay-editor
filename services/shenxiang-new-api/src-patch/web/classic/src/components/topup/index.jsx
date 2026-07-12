@@ -28,35 +28,20 @@ import {
   renderQuotaWithAmount,
   copy,
   getQuotaPerUnit,
+  navigateToPaymentPage,
+  openPaymentPage,
+  submitPaymentForm,
 } from '../../helpers';
 import { Modal, Toast } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
-
 import RechargeCard from './RechargeCard';
 import ImageBenefitCard from './ImageBenefitCard';
 import InvitationCard from './InvitationCard';
 import TransferModal from './modals/TransferModal';
 import PaymentConfirmModal from './modals/PaymentConfirmModal';
 import TopupHistoryModal from './modals/TopupHistoryModal';
-
-// Reject non-navigable schemes (e.g. javascript:, data:) and relative URLs.
-// Only http / https are allowed for backend-provided redirect targets.
-// Mirrors isSafeHttpCheckoutUrl in the default frontend's
-// features/wallet/hooks/use-waffo-pancake-payment.ts.
-function isSafeHttpCheckoutUrl(value) {
-  const trimmed = (value || '').trim();
-  if (!trimmed) {
-    return false;
-  }
-  try {
-    const u = new URL(trimmed);
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 const TopUp = () => {
   const { t } = useTranslation();
@@ -235,7 +220,9 @@ const TopUp = () => {
       showError(t('超级管理员未设置充值链接！'));
       return;
     }
-    window.open(topUpLink, '_blank');
+    if (!openPaymentPage(topUpLink)) {
+      showError(t('充值链接不安全'));
+    }
   };
 
   const preTopUp = async (payment) => {
@@ -341,30 +328,14 @@ const TopUp = () => {
         if (message === 'success') {
           if (payWay === 'stripe') {
             // Stripe 支付回调处理
-            window.open(data.pay_link, '_blank');
+            if (!openPaymentPage(data.pay_link)) {
+              showError(t('支付跳转地址不安全'));
+            }
           } else {
             // 普通支付表单提交
-            let params = data;
-            let url = res.data.url;
-            let form = document.createElement('form');
-            form.action = url;
-            form.method = 'POST';
-            let isSafari =
-              navigator.userAgent.indexOf('Safari') > -1 &&
-              navigator.userAgent.indexOf('Chrome') < 1;
-            if (!isSafari) {
-              form.target = '_blank';
+            if (!submitPaymentForm({ url: res.data.url, params: data })) {
+              showError(t('支付跳转地址不安全'));
             }
-            for (let key in params) {
-              let input = document.createElement('input');
-              input.type = 'hidden';
-              input.name = key;
-              input.value = params[key];
-              form.appendChild(input);
-            }
-            document.body.appendChild(form);
-            form.submit();
-            document.body.removeChild(form);
           }
         } else {
           const errorMsg =
@@ -444,7 +415,9 @@ const TopUp = () => {
       if (res !== undefined) {
         const { message, data } = res.data;
         if (message === 'success' && data?.payment_url) {
-          window.open(data.payment_url, '_blank');
+          if (!openPaymentPage(data.payment_url)) {
+            showError(t('支付跳转地址不安全'));
+          }
         } else {
           showError(data || t('支付请求失败'));
         }
@@ -501,10 +474,9 @@ const TopUp = () => {
         const { message, data } = res.data;
         if (message === 'success') {
           const checkoutUrl = data?.checkout_url || '';
-          if (checkoutUrl && isSafeHttpCheckoutUrl(checkoutUrl)) {
+          if (checkoutUrl && navigateToPaymentPage(checkoutUrl)) {
             // In-tab redirect (not window.open) — popup blocker fires after
             // the await loses user-gesture context.
-            window.location.href = checkoutUrl;
           } else if (checkoutUrl) {
             showError(t('支付跳转地址不安全'));
           } else {
@@ -554,7 +526,9 @@ const TopUp = () => {
 
   const processCreemCallback = (data) => {
     // 与 Stripe 保持一致的实现方式
-    window.open(data.checkout_url, '_blank');
+    if (!openPaymentPage(data?.checkout_url)) {
+      showError(t('支付跳转地址不安全'));
+    }
   };
 
   const getUserQuota = async () => {

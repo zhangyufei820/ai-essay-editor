@@ -59,3 +59,106 @@ export function setStatusData(data) {
 export function setUserData(data) {
   localStorage.setItem('user', JSON.stringify(data));
 }
+
+const SAFE_PAYMENT_PROTOCOLS = new Set(['http:', 'https:']);
+const SAFE_MEDIA_PROTOCOLS = new Set(['http:', 'https:']);
+const SAFE_MEDIA_DATA_URL =
+  /^data:(?:image\/(?:gif|jpeg|png|webp)|video\/(?:mp4|quicktime|webm|x-m4v)|audio\/(?:aac|mp4|mpeg|wav|x-wav));base64,/i;
+
+export function getSafePaymentUrl(value, baseUrl = '') {
+  const candidate = String(value || '').trim();
+  if (!candidate) return '';
+
+  try {
+    const parsed = baseUrl ? new URL(candidate, baseUrl) : new URL(candidate);
+    return SAFE_PAYMENT_PROTOCOLS.has(parsed.protocol) ? parsed.href : '';
+  } catch {
+    return '';
+  }
+}
+
+export function openPaymentPage(value, runtime = globalThis.window) {
+  const safeUrl = getSafePaymentUrl(value, runtime?.location?.href || '');
+  if (!safeUrl || typeof runtime?.open !== 'function') return false;
+
+  const opened = runtime.open(safeUrl, '_blank', 'noopener,noreferrer');
+  if (opened && typeof opened === 'object') opened.opener = null;
+  return true;
+}
+
+export function getSafeMediaUrl(value, baseUrl = '') {
+  const candidate = String(value || '').trim();
+  if (!candidate) return '';
+  if (SAFE_MEDIA_DATA_URL.test(candidate)) return candidate;
+
+  try {
+    const parsed = baseUrl ? new URL(candidate, baseUrl) : new URL(candidate);
+    if (SAFE_MEDIA_PROTOCOLS.has(parsed.protocol)) return parsed.href;
+    if (parsed.protocol !== 'blob:' || !baseUrl) return '';
+    const base = new URL(baseUrl);
+    return parsed.origin === base.origin ? parsed.href : '';
+  } catch {
+    return '';
+  }
+}
+
+export function openMediaPage(value, runtime = globalThis.window) {
+  const safeUrl = getSafeMediaUrl(value, runtime?.location?.href || '');
+  if (!safeUrl || typeof runtime?.open !== 'function') return false;
+
+  const opened = runtime.open(safeUrl, '_blank', 'noopener,noreferrer');
+  if (opened && typeof opened === 'object') opened.opener = null;
+  return true;
+}
+
+export function navigateToPaymentPage(value, runtime = globalThis.window) {
+  const safeUrl = getSafePaymentUrl(value, runtime?.location?.href || '');
+  if (!safeUrl || !runtime?.location) return false;
+
+  if (typeof runtime.location.assign === 'function') {
+    runtime.location.assign(safeUrl);
+  } else {
+    runtime.location.href = safeUrl;
+  }
+  return true;
+}
+
+export function submitPaymentForm(
+  { url, params },
+  runtime = {
+    window: globalThis.window,
+    document: globalThis.document,
+    navigator: globalThis.navigator,
+  },
+) {
+  const browserWindow = runtime?.window;
+  const documentValue = runtime?.document;
+  const safeUrl = getSafePaymentUrl(url, browserWindow?.location?.href || '');
+  if (!safeUrl || typeof documentValue?.createElement !== 'function')
+    return false;
+
+  const form = documentValue.createElement('form');
+  form.action = safeUrl;
+  form.method = 'POST';
+  form.rel = 'noopener noreferrer';
+  const userAgent = String(runtime?.navigator?.userAgent || '');
+  const isSafari =
+    userAgent.includes('Safari') && !userAgent.includes('Chrome');
+  if (!isSafari) form.target = '_blank';
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    const input = documentValue.createElement('input');
+    input.type = 'hidden';
+    input.name = key;
+    input.value = String(value ?? '');
+    form.appendChild(input);
+  });
+
+  try {
+    documentValue.body.appendChild(form);
+    form.submit();
+    return true;
+  } finally {
+    form.remove();
+  }
+}

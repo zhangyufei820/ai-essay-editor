@@ -6,7 +6,6 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 
-	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/gin-gonic/gin"
 )
 
@@ -58,12 +57,8 @@ func RecordOperationAuditLog(userId int, content string, ip string, action strin
 	if LOG_DB == nil {
 		return
 	}
-	if params == nil {
-		params = map[string]interface{}{}
-	}
 	other := map[string]interface{}{
-		"operation_action": action,
-		"operation_params": params,
+		"op": buildOpField(action, params),
 	}
 	if len(adminInfo) > 0 {
 		other["admin_info"] = adminInfo
@@ -72,21 +67,19 @@ func RecordOperationAuditLog(userId int, content string, ip string, action strin
 		other["audit_info"] = auditInfo
 	}
 
-	gopool.Go(func() {
-		username, _ := GetUsernameById(userId, false)
-		log := &Log{
-			UserId:    userId,
-			Username:  username,
-			CreatedAt: common.GetTimestamp(),
-			Type:      LogTypeManage,
-			Content:   content,
-			Ip:        ip,
-			Other:     common.MapToJsonStr(other),
-		}
-		if err := LOG_DB.Create(log).Error; err != nil {
-			common.SysLog("failed to record operation audit log: " + err.Error())
-		}
-	})
+	username, _ := GetUsernameById(userId, false)
+	log := &Log{
+		UserId:    userId,
+		Username:  username,
+		CreatedAt: common.GetTimestamp(),
+		Type:      LogTypeManage,
+		Content:   content,
+		Ip:        ip,
+		Other:     common.MapToJsonStr(other),
+	}
+	if err := createLog(log); err != nil {
+		common.SysLog("failed to record operation audit log: " + err.Error())
+	}
 }
 
 func contextRequestValue(c *gin.Context, key string) string {

@@ -163,6 +163,9 @@ func TestRechargeWaffo_AwardsConfiguredInviterRebateOnce(t *testing.T) {
 	affQuota, affHistory := getUserAffiliateQuotaForPaymentGuardTest(t, 14)
 	assert.Equal(t, 300, affQuota)
 	assert.Equal(t, 300, affHistory)
+	var rebateLog Log
+	require.NoError(t, DB.Where("user_id = ? AND type = ?", 14, LogTypeSystem).First(&rebateLog).Error)
+	assert.NotEmpty(t, rebateLog.RequestId)
 }
 
 func TestUpdatePendingTopUpStatus_RejectsMismatchedPaymentProvider(t *testing.T) {

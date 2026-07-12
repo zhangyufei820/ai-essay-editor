@@ -2,8 +2,27 @@ name: shenxiang-new-api
 
 services:
   shenxiang-new-api:
-    image: shenxiang-new-api-codex-media-fix:20260613-2153
+    build:
+      context: ${NEW_API_BUILD_CONTEXT:-.local-source/worktree}
+      dockerfile: Dockerfile
+      labels:
+        org.opencontainers.image.source: ${NEW_API_SOURCE_REPOSITORY:?run prepare-local-source.sh and load .local-source/build.env}
+        org.opencontainers.image.revision: ${NEW_API_REPOSITORY_COMMIT:?run prepare-local-source.sh and load .local-source/build.env}
+        org.opencontainers.image.version: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/build.env}
+        io.shenxiang.new-api.upstream-repository: ${NEW_API_UPSTREAM_REPOSITORY:?run prepare-local-source.sh and load .local-source/build.env}
+        io.shenxiang.new-api.upstream-revision: ${NEW_API_UPSTREAM_COMMIT:?run prepare-local-source.sh and load .local-source/build.env}
+        io.shenxiang.new-api.patch-sha256: ${NEW_API_PATCH_SHA256:?run prepare-local-source.sh and load .local-source/build.env}
+        io.shenxiang.new-api.source-digest: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/build.env}
+    image: ${NEW_API_IMAGE_REPOSITORY:-shenxiang-new-api-codex}:${NEW_API_IMAGE_TAG:?run prepare-local-source.sh and load .local-source/build.env}
     container_name: shenxiang-new-api
+    labels:
+      org.opencontainers.image.source: ${NEW_API_SOURCE_REPOSITORY:?run prepare-local-source.sh and load .local-source/build.env}
+      org.opencontainers.image.revision: ${NEW_API_REPOSITORY_COMMIT:?run prepare-local-source.sh and load .local-source/build.env}
+      org.opencontainers.image.version: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/build.env}
+      io.shenxiang.new-api.upstream-repository: ${NEW_API_UPSTREAM_REPOSITORY:?run prepare-local-source.sh and load .local-source/build.env}
+      io.shenxiang.new-api.upstream-revision: ${NEW_API_UPSTREAM_COMMIT:?run prepare-local-source.sh and load .local-source/build.env}
+      io.shenxiang.new-api.patch-sha256: ${NEW_API_PATCH_SHA256:?run prepare-local-source.sh and load .local-source/build.env}
+      io.shenxiang.new-api.source-digest: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/build.env}
     restart: unless-stopped
     depends_on:
       shenxiang-new-api-mysql:
@@ -21,6 +40,14 @@ services:
       PLAYGROUND_MEDIA_CACHE_DIR: /data/media-cache
       PLAYGROUND_MEDIA_URL_PREFIX: /pg/media/files
       PLAYGROUND_MEDIA_MAX_MB: 256
+      PLAYGROUND_MEDIA_USER_MAX_MB: ${PLAYGROUND_MEDIA_USER_MAX_MB:-2048}
+      PLAYGROUND_MEDIA_TOTAL_MAX_MB: ${PLAYGROUND_MEDIA_TOTAL_MAX_MB:-20480}
+      PLAYGROUND_MEDIA_MAX_FILES_PER_USER: ${PLAYGROUND_MEDIA_MAX_FILES_PER_USER:-200}
+      PLAYGROUND_MEDIA_CLEANUP_INTERVAL_MINUTES: ${PLAYGROUND_MEDIA_CLEANUP_INTERVAL_MINUTES:-30}
+      PLAYGROUND_MEDIA_CACHE_REQUEST_MAX_MB: ${PLAYGROUND_MEDIA_CACHE_REQUEST_MAX_MB:-32}
+      PLAYGROUND_IMAGE_TASK_REQUEST_MAX_MB: ${PLAYGROUND_IMAGE_TASK_REQUEST_MAX_MB:-32}
+      PLAYGROUND_IMAGE_TASK_MAX_PENDING_PER_USER: ${PLAYGROUND_IMAGE_TASK_MAX_PENDING_PER_USER:-32}
+      PLAYGROUND_IMAGE_TASK_MAX_WORKERS: ${PLAYGROUND_IMAGE_TASK_MAX_WORKERS:-32}
       CODEX_WORKSPACE_UPSTREAM: ${CODEX_WORKSPACE_UPSTREAM:-http://shenxiang-codex-workspace:8000}
       TASK_PRICE_PATCH: grok-video-super-720p
       UPSTREAM_COST_MARKUP_RATE: ${UPSTREAM_COST_MARKUP_RATE:-0.08}

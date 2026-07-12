@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -204,5 +205,40 @@ func TestDistributeRejectsSupplierExposedModelWithoutEchoingName(t *testing.T) {
 	}
 	if payload["error"] == nil {
 		t.Fatalf("response missing error: %s", body)
+	}
+}
+
+func TestDistributorUnavailableMessageNeverEchoesSelectionDetails(t *testing.T) {
+	message := distributorUnavailablePublicMessage(
+		"geek2api-image-2",
+		"internal-premium-group",
+		errors.New("selector failed with bearer sk-secret"),
+	)
+
+	for _, secret := range []string{"geek2api", "internal-premium-group", "sk-secret", "selector failed"} {
+		if strings.Contains(message, secret) {
+			t.Fatalf("public message %q leaks %q", message, secret)
+		}
+	}
+}
+
+func TestChannelSupportsRequestPathRejectsUnconfiguredAdvancedCustomPath(t *testing.T) {
+	channel := &model.Channel{
+		Type:          constant.ChannelTypeAdvancedCustom,
+		OtherSettings: `{"advanced_custom":{"advanced_routes":[{"incoming_path":"/v1/messages"}]}}`,
+	}
+
+	if !channelSupportsRequestPath(channel, "/v1/messages") {
+		t.Fatal("configured advanced custom path should be supported")
+	}
+	if channelSupportsRequestPath(channel, "/v1/chat/completions") {
+		t.Fatal("unconfigured advanced custom path must be rejected")
+	}
+}
+
+func TestChannelSupportsRequestPathAllowsStandardChannels(t *testing.T) {
+	channel := &model.Channel{Type: constant.ChannelTypeOpenAI}
+	if !channelSupportsRequestPath(channel, "/v1/chat/completions") {
+		t.Fatal("standard channels should not be path-filtered")
 	}
 }

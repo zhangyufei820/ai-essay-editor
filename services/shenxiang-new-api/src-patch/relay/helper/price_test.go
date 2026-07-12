@@ -2,6 +2,7 @@ package helper
 
 import (
 	"encoding/json"
+	"math"
 	"net/http/httptest"
 	"testing"
 
@@ -163,4 +164,157 @@ func TestTieredRealtimeBillingUsesFrozenModelRatio(t *testing.T) {
 	require.NoError(t, service.PreWssConsumeQuota(ctx, relayInfo, usage))
 	require.NoError(t, service.PreWssConsumeQuota(ctx, relayInfo, usage))
 	require.Equal(t, []int{10, 20}, billing.reserveTargets)
+}
+
+func TestModelPriceHelperSaturatesAndAuditsFixedPriceQuota(t *testing.T) {
+	const modelName = "quota-safety-text-fixed-price"
+
+	oldModelPrice := ratio_setting.ModelPrice2JSONString()
+	oldQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(oldModelPrice))
+		common.QuotaPerUnit = oldQuotaPerUnit
+	})
+
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"`+modelName+`":1}`))
+	common.QuotaPerUnit = math.MaxFloat64
+
+	c, _ := gin.CreateTestContext(nil)
+	info := &relaycommon.RelayInfo{OriginModelName: modelName, UsingGroup: "default"}
+	priceData, err := ModelPriceHelper(c, info, 1, &types.TokenCountMeta{})
+
+	require.NoError(t, err)
+	require.Equal(t, common.MaxQuota, priceData.QuotaToPreConsume)
+	require.NotNil(t, info.QuotaClamp)
+	require.Equal(t, common.QuotaClampOverflow, info.QuotaClamp.Kind)
+	require.Equal(t, common.MaxQuota, info.QuotaClamp.Clamped)
+}
+
+func TestModelPriceHelperSaturatesAndAuditsRatioQuota(t *testing.T) {
+	const modelName = "quota-safety-text-ratio"
+
+	oldModelPrice := ratio_setting.ModelPrice2JSONString()
+	oldModelRatio := ratio_setting.ModelRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(oldModelPrice))
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(oldModelRatio))
+	})
+
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{}`))
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"`+modelName+`":-1e308}`))
+
+	c, _ := gin.CreateTestContext(nil)
+	info := &relaycommon.RelayInfo{OriginModelName: modelName, UsingGroup: "default"}
+	priceData, err := ModelPriceHelper(c, info, 1, &types.TokenCountMeta{})
+
+	require.NoError(t, err)
+	require.Equal(t, common.MinQuota, priceData.QuotaToPreConsume)
+	require.NotNil(t, info.QuotaClamp)
+	require.Equal(t, common.QuotaClampUnderflow, info.QuotaClamp.Kind)
+	require.Equal(t, common.MinQuota, info.QuotaClamp.Clamped)
+}
+
+func TestNotePriceQuotaClampPreservesFirstClamp(t *testing.T) {
+	first := &common.QuotaClamp{Op: "first", Kind: common.QuotaClampOverflow, Clamped: common.MaxQuota}
+	info := &relaycommon.RelayInfo{QuotaClamp: first}
+
+	notePriceQuotaClamp(info, &common.QuotaClamp{Op: "second", Kind: common.QuotaClampNaN})
+
+	require.Same(t, first, info.QuotaClamp)
+}
+
+func TestModelPriceHelperPerCallSaturatesAndAuditsFixedPriceQuota(t *testing.T) {
+	const modelName = "quota-safety-fixed-price"
+
+	oldModelPrice := ratio_setting.ModelPrice2JSONString()
+	oldQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(oldModelPrice))
+		common.QuotaPerUnit = oldQuotaPerUnit
+	})
+
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"`+modelName+`":1}`))
+	common.QuotaPerUnit = math.MaxFloat64
+
+	c, _ := gin.CreateTestContext(nil)
+	info := &relaycommon.RelayInfo{OriginModelName: modelName, UsingGroup: "default"}
+	priceData, err := ModelPriceHelperPerCall(c, info)
+
+	require.NoError(t, err)
+	require.Equal(t, common.MaxQuota, priceData.Quota)
+	require.NotNil(t, info.QuotaClamp)
+	require.Equal(t, common.QuotaClampOverflow, info.QuotaClamp.Kind)
+	require.Equal(t, common.MaxQuota, info.QuotaClamp.Clamped)
+}
+
+func TestModelPriceHelperPerCallSaturatesAndAuditsRatioQuota(t *testing.T) {
+	const modelName = "quota-safety-ratio"
+
+	oldModelPrice := ratio_setting.ModelPrice2JSONString()
+	oldModelRatio := ratio_setting.ModelRatio2JSONString()
+	oldQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(oldModelPrice))
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(oldModelRatio))
+		common.QuotaPerUnit = oldQuotaPerUnit
+	})
+
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{}`))
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"`+modelName+`":2}`))
+
+	tests := []struct {
+		name         string
+		quotaPerUnit float64
+		wantQuota    int
+		wantKind     string
+	}{
+		{name: "nan", quotaPerUnit: math.NaN(), wantQuota: 0, wantKind: common.QuotaClampNaN},
+		{name: "negative underflow", quotaPerUnit: -math.MaxFloat64, wantQuota: common.MinQuota, wantKind: common.QuotaClampUnderflow},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			common.QuotaPerUnit = test.quotaPerUnit
+			c, _ := gin.CreateTestContext(nil)
+			info := &relaycommon.RelayInfo{OriginModelName: modelName, UsingGroup: "default"}
+
+			priceData, err := ModelPriceHelperPerCall(c, info)
+
+			require.NoError(t, err)
+			require.Equal(t, test.wantQuota, priceData.Quota)
+			require.NotNil(t, info.QuotaClamp)
+			require.Equal(t, test.wantKind, info.QuotaClamp.Kind)
+			require.Equal(t, test.wantQuota, info.QuotaClamp.Clamped)
+		})
+	}
+}
+
+func TestModelPriceHelperTieredSaturatesAndAuditsQuota(t *testing.T) {
+	const modelName = "quota-safety-tiered"
+
+	billingConfig, ok := settingconfig.GlobalConfig.Get("billing_setting").(*billing_setting.BillingSetting)
+	require.True(t, ok)
+	oldBillingModes := billingConfig.BillingMode
+	oldBillingExpressions := billingConfig.BillingExpr
+	oldQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() {
+		billingConfig.BillingMode = oldBillingModes
+		billingConfig.BillingExpr = oldBillingExpressions
+		common.QuotaPerUnit = oldQuotaPerUnit
+	})
+
+	billingConfig.BillingMode = map[string]string{modelName: billing_setting.BillingModeTieredExpr}
+	billingConfig.BillingExpr = map[string]string{modelName: "1e308"}
+	common.QuotaPerUnit = 500_000
+
+	c, _ := gin.CreateTestContext(nil)
+	info := &relaycommon.RelayInfo{OriginModelName: modelName, UsingGroup: "default"}
+	priceData, err := ModelPriceHelper(c, info, 1, &types.TokenCountMeta{})
+
+	require.NoError(t, err)
+	require.Equal(t, common.MaxQuota, priceData.QuotaToPreConsume)
+	require.NotNil(t, info.QuotaClamp)
+	require.Equal(t, common.QuotaClampOverflow, info.QuotaClamp.Kind)
+	require.Equal(t, "QuotaRound", info.QuotaClamp.Op)
+	require.Equal(t, common.MaxQuota, info.QuotaClamp.Clamped)
 }

@@ -49,7 +49,7 @@ func hasCustomModelRatio(modelName string, currentRatio float64) bool {
 	return currentRatio != defaultRatio
 }
 
-func calculateAudioQuota(info QuotaInfo) int {
+func calculateAudioQuota(info QuotaInfo) (int, *common.QuotaClamp) {
 	if info.UsePrice {
 		modelPrice := decimal.NewFromFloat(info.ModelPrice)
 		quotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
@@ -60,7 +60,7 @@ func calculateAudioQuota(info QuotaInfo) int {
 		if !modelPrice.IsZero() && !groupRatio.IsZero() && quota.LessThanOrEqual(decimal.Zero) {
 			quota = decimal.NewFromInt(1)
 		}
-		return int(quota.Round(0).IntPart())
+		return common.QuotaFromDecimalChecked(quota)
 	}
 
 	completionRatio := decimal.NewFromFloat(ratio_setting.GetCompletionRatio(info.ModelName))
@@ -89,7 +89,7 @@ func calculateAudioQuota(info QuotaInfo) int {
 		quota = decimal.NewFromInt(1)
 	}
 
-	return int(quota.Round(0).IntPart())
+	return common.QuotaFromDecimalChecked(quota)
 }
 
 func resolveRealtimeGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) float64 {
@@ -132,9 +132,14 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 		GroupRatio: actualGroupRatio,
 	}
 
-	quota := calculateAudioQuota(quotaInfo)
+	quota, clamp := calculateAudioQuota(quotaInfo)
+	noteQuotaClamp(relayInfo, clamp)
 	if relayInfo.Billing != nil {
-		targetQuota := ctx.GetInt(realtimeBillingTargetQuotaKey) + quota
+		targetQuota, totalClamp := common.QuotaFromDecimalChecked(
+			decimal.NewFromInt(int64(ctx.GetInt(realtimeBillingTargetQuotaKey))).
+				Add(decimal.NewFromInt(int64(quota))),
+		)
+		noteQuotaClamp(relayInfo, totalClamp)
 		if err := relayInfo.Billing.Reserve(targetQuota); err != nil {
 			return err
 		}
@@ -214,7 +219,8 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		GroupRatio: groupRatio,
 	}
 
-	quota := calculateAudioQuota(quotaInfo)
+	quota, clamp := calculateAudioQuota(quotaInfo)
+	noteQuotaClamp(relayInfo, clamp)
 	if tieredOk {
 		quota = tieredQuota
 	}
@@ -261,6 +267,7 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	InjectUpstreamCostBillingInfo(other, upstreamCostBilling)
+	attachQuotaSaturation(ctx, relayInfo, other)
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     usage.InputTokens,
@@ -343,7 +350,8 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		GroupRatio: groupRatio,
 	}
 
-	quota := calculateAudioQuota(quotaInfo)
+	quota, clamp := calculateAudioQuota(quotaInfo)
+	noteQuotaClamp(relayInfo, clamp)
 	if tieredOk {
 		quota = tieredQuota
 	}
@@ -390,6 +398,7 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	InjectUpstreamCostBillingInfo(other, upstreamCostBilling)
+	attachQuotaSaturation(ctx, relayInfo, other)
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     usage.PromptTokens,
@@ -450,7 +459,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 	} else {
 		// Wallet
 		if quota > 0 {
-			err = model.DecreaseUserQuota(relayInfo.UserId, quota, false)
+			err = model.TryDecreaseUserQuota(relayInfo.UserId, quota)
 		} else {
 			err = model.IncreaseUserQuota(relayInfo.UserId, -quota, false)
 		}
@@ -478,7 +487,7 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				if quota > 0 {
 					rbErr = model.IncreaseUserQuota(relayInfo.UserId, quota, false)
 				} else {
-					rbErr = model.DecreaseUserQuota(relayInfo.UserId, -quota, false)
+					rbErr = model.TryDecreaseUserQuota(relayInfo.UserId, -quota)
 				}
 				if rbErr != nil {
 					common.SysError(fmt.Sprintf("PostConsumeQuota: failed to roll back wallet quota for user %d (quota %d): %v", relayInfo.UserId, quota, rbErr))

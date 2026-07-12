@@ -97,14 +97,18 @@ func SetRelayRouter(router *gin.Engine) {
 			playgroundRelayRouter.POST("/video/generations", controller.PlaygroundVideo)
 			playgroundRelayRouter.GET("/video/generations/:task_id", controller.PlaygroundVideoFetch)
 		}
-		playgroundRouter.POST("/images/tasks", controller.PlaygroundCreateImageTask)
-		playgroundRouter.POST("/images/tasks/generations", controller.PlaygroundCreateImageTask)
-		playgroundRouter.POST("/images/tasks/edits", controller.PlaygroundCreateImageTask)
+		playgroundImageMutationRouter := playgroundRouter.Group("")
+		playgroundImageMutationRouter.Use(middleware.ModelRequestRateLimit())
+		{
+			playgroundImageMutationRouter.POST("/images/tasks", controller.PlaygroundCreateImageTask)
+			playgroundImageMutationRouter.POST("/images/tasks/generations", controller.PlaygroundCreateImageTask)
+			playgroundImageMutationRouter.POST("/images/tasks/edits", controller.PlaygroundCreateImageTask)
+			playgroundImageMutationRouter.POST("/media/recovery", controller.PlaygroundCreateImageRecoveryTask)
+			playgroundImageMutationRouter.POST("/media/recovery/:task_id/recover", controller.PlaygroundRecoverImageTask)
+		}
 		playgroundRouter.GET("/images/tasks", controller.PlaygroundListImageTasks)
 		playgroundRouter.GET("/images/tasks/:task_id", controller.PlaygroundGetImageTask)
-		playgroundRouter.POST("/media/recovery", controller.PlaygroundCreateImageRecoveryTask)
 		playgroundRouter.GET("/media/recovery", controller.PlaygroundListImageRecoveryTasks)
-		playgroundRouter.POST("/media/recovery/:task_id/recover", controller.PlaygroundRecoverImageTask)
 	}
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))

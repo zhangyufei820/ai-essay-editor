@@ -50,6 +50,8 @@ func TestMain(m *testing.M) {
 		&model.SubscriptionPlan{},
 		&model.UserSubscription{},
 		&model.SubscriptionPreConsumeRecord{},
+		&model.SystemTask{},
+		&model.SystemTaskLock{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -73,6 +75,8 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM subscription_pre_consume_records")
 		model.DB.Exec("DELETE FROM user_subscriptions")
 		model.DB.Exec("DELETE FROM subscription_plans")
+		model.DB.Exec("DELETE FROM system_task_locks")
+		model.DB.Exec("DELETE FROM system_tasks")
 	})
 }
 
@@ -241,6 +245,24 @@ func TestRefundTaskQuota_Wallet(t *testing.T) {
 	assert.Equal(t, model.LogTypeRefund, log.Type)
 	assert.Equal(t, preConsumed, log.Quota)
 	assert.Equal(t, "test-model", log.ModelName)
+}
+
+func TestRefundTaskQuotaRecordsOriginNodeUnderAdminInfo(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, channelID = 112, 112
+	seedUser(t, userID, 10000)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, 1200, 0, BillingSourceWallet, 0)
+	task.PrivateData.NodeName = "origin-node-a"
+
+	RefundTaskQuota(ctx, task, "upstream task failed")
+
+	other := getLastLogOther(t)
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, "origin-node-a", adminInfo["node_name"])
 }
 
 func TestRefundTaskQuota_Subscription(t *testing.T) {
@@ -572,6 +594,60 @@ func TestRecalculate_PositiveDelta(t *testing.T) {
 	assert.Equal(t, actualQuota-preConsumed, log.Quota)
 }
 
+func TestRecalculate_PersistsQuotaBeforeFollowUpAccounting(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 110, 110, 110
+	const initQuota, preConsumed, actualQuota = 10000, 2000, 3000
+	const tokenRemain = 5000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-recalc-persist", tokenRemain)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	require.NoError(t, model.DB.Create(task).Error)
+
+	RecalculateTaskQuota(ctx, task, actualQuota, "persist adjustment")
+
+	var persisted model.Task
+	require.NoError(t, model.DB.First(&persisted, task.ID).Error)
+	require.Equal(t, actualQuota, persisted.Quota)
+	require.Equal(t, initQuota-(actualQuota-preConsumed), getUserQuota(t, userID))
+	require.Equal(t, tokenRemain-(actualQuota-preConsumed), getTokenRemainQuota(t, tokenID))
+
+	RecalculateTaskQuota(ctx, &persisted, actualQuota, "idempotent replay")
+	require.Equal(t, initQuota-(actualQuota-preConsumed), getUserQuota(t, userID))
+	require.Equal(t, tokenRemain-(actualQuota-preConsumed), getTokenRemainQuota(t, tokenID))
+}
+
+func TestRecalculate_RecordsQuotaClampUnderAdminInfo(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, channelID = 111, 111
+	seedUser(t, userID, common.MaxQuota)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, 1, 0, BillingSourceImageBenefit, 0)
+	task.PrivateData.NodeName = "origin-node-b"
+	clamp := &common.QuotaClamp{
+		Op:       "QuotaFromFloat",
+		Kind:     common.QuotaClampOverflow,
+		Original: 1e30,
+		Clamped:  common.MaxQuota,
+	}
+
+	RecalculateTaskQuota(ctx, task, common.MaxQuota, "saturated", clamp)
+
+	other := getLastLogOther(t)
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, "origin-node-b", adminInfo["node_name"])
+	saturation, ok := adminInfo["quota_saturation"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, common.QuotaClampOverflow, saturation["kind"])
+}
+
 func TestRecalculate_NegativeDelta(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
@@ -865,6 +941,9 @@ type mockAdaptor struct {
 
 func (m *mockAdaptor) Init(_ *relaycommon.RelayInfo) {}
 func (m *mockAdaptor) FetchTask(string, string, map[string]any, string) (*http.Response, error) {
+	return nil, nil
+}
+func (m *mockAdaptor) FetchTaskWithContext(context.Context, string, string, map[string]any, string) (*http.Response, error) {
 	return nil, nil
 }
 func (m *mockAdaptor) ParseTaskResult([]byte) (*relaycommon.TaskInfo, error) { return nil, nil }

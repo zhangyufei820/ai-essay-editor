@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shenxiang.school/schemas/new-api-build-manifest-v1.json",
+  "title": "Shenxiang New API build manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository",
+    "repository_commit",
+    "repository_dirty",
+    "upstream_repository",
+    "upstream_commit",
+    "patch_base",
+    "patch_file_count",
+    "patch_sha256",
+    "source_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "repository": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repository_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "repository_dirty": {
+      "type": "boolean"
+    },
+    "upstream_repository": {
+      "type": "string",
+      "minLength": 1
+    },
+    "upstream_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "patch_base": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "patch_file_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "patch_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

@@ -30,7 +30,14 @@ import {
   Tooltip,
   Typography,
 } from '@douyinfe/semi-ui';
-import { API, showError, showSuccess, renderQuota } from '../../helpers';
+import {
+  API,
+  showError,
+  showSuccess,
+  renderQuota,
+  openPaymentPage,
+  submitPaymentForm,
+} from '../../helpers';
 import { RefreshCw, Sparkles } from 'lucide-react';
 import SubscriptionPurchaseModal from './modals/SubscriptionPurchaseModal';
 import {
@@ -54,27 +61,6 @@ function getEpayMethods(payMethods = []) {
   return (payMethods || []).filter(
     (m) => m?.type && m.type !== 'stripe' && m.type !== 'creem',
   );
-}
-
-// 提交易支付表单
-function submitEpayForm({ url, params }) {
-  const form = document.createElement('form');
-  form.action = url;
-  form.method = 'POST';
-  const isSafari =
-    navigator.userAgent.indexOf('Safari') > -1 &&
-    navigator.userAgent.indexOf('Chrome') < 1;
-  if (!isSafari) form.target = '_blank';
-  Object.keys(params || {}).forEach((key) => {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = key;
-    input.value = params[key];
-    form.appendChild(input);
-  });
-  document.body.appendChild(form);
-  form.submit();
-  document.body.removeChild(form);
 }
 
 function formatCnyAmount(value) {
@@ -288,7 +274,10 @@ const SubscriptionPlansCard = ({
         plan_id: selectedPlan.plan.id,
       });
       if (res.data?.message === 'success') {
-        window.open(res.data.data?.pay_link, '_blank');
+        if (!openPaymentPage(res.data.data?.pay_link)) {
+          showError(t('支付跳转地址不安全'));
+          return;
+        }
         showSuccess(t('已打开支付页面'));
         closeBuy();
       } else {
@@ -316,7 +305,10 @@ const SubscriptionPlansCard = ({
         plan_id: selectedPlan.plan.id,
       });
       if (res.data?.message === 'success') {
-        window.open(res.data.data?.checkout_url, '_blank');
+        if (!openPaymentPage(res.data.data?.checkout_url)) {
+          showError(t('支付跳转地址不安全'));
+          return;
+        }
         showSuccess(t('已打开支付页面'));
         closeBuy();
       } else {
@@ -345,7 +337,10 @@ const SubscriptionPlansCard = ({
         payment_method: selectedEpayMethod,
       });
       if (res.data?.message === 'success') {
-        submitEpayForm({ url: res.data.url, params: res.data.data });
+        if (!submitPaymentForm({ url: res.data.url, params: res.data.data })) {
+          showError(t('支付跳转地址不安全'));
+          return;
+        }
         showSuccess(t('已发起支付'));
         closeBuy();
       } else {

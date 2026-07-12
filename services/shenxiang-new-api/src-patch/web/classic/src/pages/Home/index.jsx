@@ -32,6 +32,7 @@ const Home = () => {
   const actualTheme = useActualTheme();
   const isMobile = useIsMobile();
   const iframeRef = useRef(null);
+  const [loadedIframeUrl, setLoadedIframeUrl] = useState('');
   const [homePageContentLoaded, setHomePageContentLoaded] = useState(false);
   const [homePageContent, setHomePageContent] = useState('');
 
@@ -51,21 +52,32 @@ const Home = () => {
       setHomePageContent('加载首页内容失败...');
     }
     setHomePageContentLoaded(true);
-  }, [actualTheme, i18n.language]);
+  }, []);
 
   useEffect(() => {
     displayHomePageContent().then();
   }, [displayHomePageContent]);
 
   useEffect(() => {
-    if (!homePageContent.startsWith('https://')) return;
+    if (
+      !homePageContent.startsWith('https://') ||
+      loadedIframeUrl !== homePageContent
+    ) {
+      return;
+    }
 
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
 
-    iframe.contentWindow.postMessage({ themeMode: actualTheme }, '*');
-    iframe.contentWindow.postMessage({ lang: i18n.language }, '*');
-  }, [homePageContent, actualTheme, i18n.language]);
+    let targetOrigin;
+    try {
+      targetOrigin = new URL(homePageContent).origin;
+    } catch {
+      return;
+    }
+    iframe.contentWindow.postMessage({ themeMode: actualTheme }, targetOrigin);
+    iframe.contentWindow.postMessage({ lang: i18n.language }, targetOrigin);
+  }, [homePageContent, loadedIframeUrl, actualTheme, i18n.language]);
 
   useEffect(() => {
     document.body.classList.add('sx-home-active');
@@ -92,14 +104,18 @@ const Home = () => {
         <div className='classic-page-fill overflow-x-hidden w-full'>
           {homePageContent.startsWith('https://') ? (
             <iframe
+              key={homePageContent}
               ref={iframeRef}
               src={homePageContent}
               className='w-full h-full border-none'
+              onLoad={() => setLoadedIframeUrl(homePageContent)}
             />
           ) : (
             <div
               className='mt-[60px]'
-              dangerouslySetInnerHTML={{ __html: homePageContent }}
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(homePageContent),
+              }}
             />
           )}
         </div>

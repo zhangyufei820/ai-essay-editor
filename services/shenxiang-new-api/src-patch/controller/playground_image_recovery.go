@@ -98,6 +98,10 @@ func PlaygroundRecoverImageTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "image task request payload unavailable"})
 		return
 	}
+	if !playgroundImageTaskRecoveryReady(&payload, time.Now()) {
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": taskToPlaygroundImageTask(task)})
+		return
+	}
 
 	userID := c.GetInt("id")
 	username := c.GetString("username")
@@ -108,8 +112,20 @@ func PlaygroundRecoverImageTask(c *gin.Context) {
 	}
 	usingGroup := task.Group
 	tokenName := payload.TokenName
-	gopool.Go(func() {
+	schedulePlaygroundImageTaskRecovery(&payload, time.Now(), func() {
 		runPlaygroundImageTask(task.TaskID, userID, username, role, userGroup, usingGroup, tokenName)
 	})
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": taskToPlaygroundImageTask(task)})
+}
+
+func playgroundImageTaskRecoveryReady(payload *playgroundImageTaskPayload, now time.Time) bool {
+	return payload == nil || payload.NextRetryAt <= 0 || payload.NextRetryAt <= now.Unix()
+}
+
+func schedulePlaygroundImageTaskRecovery(payload *playgroundImageTaskPayload, now time.Time, runner func()) bool {
+	if runner == nil || !playgroundImageTaskRecoveryReady(payload, now) {
+		return false
+	}
+	gopool.Go(runner)
+	return true
 }

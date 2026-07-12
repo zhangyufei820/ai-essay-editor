@@ -78,13 +78,15 @@ func applyAffiliateRebateForPaidOrderTx(tx *gorm.DB, buyerID int, baseQuota int,
 	if strings.TrimSpace(orderRef) != "" {
 		content = fmt.Sprintf("%s，订单: %s", content, orderRef)
 	}
-	if err := tx.Create(&Log{
+	rebateLog := &Log{
 		UserId:    buyer.InviterId,
 		CreatedAt: common.GetTimestamp(),
 		Type:      LogTypeSystem,
 		Content:   content,
 		Quota:     int(rebateQuota),
-	}).Error; err != nil {
+	}
+	ensureLogRequestId(rebateLog)
+	if err := tx.Create(rebateLog).Error; err != nil {
 		return buyer.InviterId, 0, err
 	}
 

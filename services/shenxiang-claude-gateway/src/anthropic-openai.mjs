@@ -1,6 +1,9 @@
 import crypto from "node:crypto"
+import { StringDecoder } from "node:string_decoder"
 
 const DEFAULT_MAX_TOKENS = 4096
+const DEFAULT_MAX_SSE_BUFFER_BYTES = 1024 * 1024
+const DEFAULT_MAX_NON_STREAM_RESPONSE_BYTES = 16 * 1024 * 1024
 
 export function resolveModel(config, requestedModel) {
   const id = requestedModel || config.defaultModel
@@ -80,42 +83,62 @@ export function openAIToAnthropic(openaiJson, route) {
   }
 }
 
-export async function openAIStreamToAnthropicMessage(upstream, route) {
+export async function openAIStreamToAnthropicMessage(upstream, route, options = {}) {
   const nodeStream = await import("node:stream").then(({ Readable }) => Readable.fromWeb(upstream.body))
+  const maxBufferBytes = positiveLimit(options.maxBufferBytes, DEFAULT_MAX_SSE_BUFFER_BYTES)
+  const maxResponseBytes = positiveLimit(options.maxResponseBytes, DEFAULT_MAX_NON_STREAM_RESPONSE_BYTES)
+  const decoder = new StringDecoder("utf8")
   let buffer = ""
+  let responseBytes = 0
   let text = ""
   let finishReason = "end_turn"
   let promptTokens = 0
   let completionTokens = 0
+  let completed = false
   const toolCalls = new Map()
 
+  const consumeLine = (line) => {
+    if (Buffer.byteLength(line) > maxBufferBytes) throw upstreamLimitError("UPSTREAM_SSE_EVENT_TOO_LARGE")
+    if (!line.startsWith("data:")) return
+    const jsonText = line.replace(/^data:\s*/, "").trim()
+    if (!jsonText) return
+    if (jsonText === "[DONE]") {
+      completed = true
+      return
+    }
+    let parsed
+    try {
+      parsed = JSON.parse(jsonText)
+    } catch {
+      throw upstreamStreamError("INVALID_UPSTREAM_SSE")
+    }
+    const choice = parsed.choices?.[0] || {}
+    const delta = choice.delta || {}
+    const message = choice.message || {}
+
+    if (typeof delta.content === "string") text += delta.content
+    if (typeof message.content === "string") text += message.content
+    accumulateToolCalls(toolCalls, delta.tool_calls || message.tool_calls || [])
+    if (choice.finish_reason) {
+      finishReason = mapFinishReason(choice.finish_reason)
+      completed = true
+    }
+    if (parsed.usage?.prompt_tokens) promptTokens = parsed.usage.prompt_tokens
+    if (parsed.usage?.completion_tokens) completionTokens = parsed.usage.completion_tokens
+  }
+
   for await (const chunk of nodeStream) {
-    buffer += chunk.toString("utf8")
+    responseBytes += chunk.byteLength
+    if (responseBytes > maxResponseBytes) throw upstreamLimitError("UPSTREAM_RESPONSE_TOO_LARGE")
+    buffer += decoder.write(chunk)
     const lines = buffer.split(/\r?\n/)
     buffer = lines.pop() || ""
-
-    for (const line of lines) {
-      if (!line.startsWith("data:")) continue
-      const jsonText = line.replace(/^data:\s*/, "").trim()
-      if (!jsonText || jsonText === "[DONE]") continue
-      let parsed
-      try {
-        parsed = JSON.parse(jsonText)
-      } catch {
-        continue
-      }
-      const choice = parsed.choices?.[0] || {}
-      const delta = choice.delta || {}
-      const message = choice.message || {}
-
-      if (typeof delta.content === "string") text += delta.content
-      if (typeof message.content === "string") text += message.content
-      accumulateToolCalls(toolCalls, delta.tool_calls || message.tool_calls || [])
-      if (choice.finish_reason) finishReason = mapFinishReason(choice.finish_reason)
-      if (parsed.usage?.prompt_tokens) promptTokens = parsed.usage.prompt_tokens
-      if (parsed.usage?.completion_tokens) completionTokens = parsed.usage.completion_tokens
-    }
+    if (Buffer.byteLength(buffer) > maxBufferBytes) throw upstreamLimitError("UPSTREAM_SSE_EVENT_TOO_LARGE")
+    for (const line of lines) consumeLine(line)
   }
+  buffer += decoder.end()
+  if (buffer) consumeLine(buffer)
+  if (!completed) throw upstreamStreamError("UPSTREAM_STREAM_INCOMPLETE")
 
   const content = []
   if (text) content.push({ type: "text", text })
@@ -419,4 +442,20 @@ function eventLine(event, data) {
 
 function cryptoRandomId() {
   return crypto.randomUUID().replaceAll("-", "").slice(0, 16)
+}
+
+function positiveLimit(value, fallback) {
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback
+}
+
+function upstreamLimitError(code) {
+  const error = new Error("Upstream response exceeded the configured safety limit")
+  error.code = code
+  return error
+}
+
+function upstreamStreamError(code) {
+  const error = new Error("Upstream stream ended without a valid completion event")
+  error.code = code
+  return error
 }

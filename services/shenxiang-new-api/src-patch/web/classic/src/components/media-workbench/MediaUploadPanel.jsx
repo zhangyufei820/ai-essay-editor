@@ -1,7 +1,50 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button, Upload, Spin, Progress } from '@douyinfe/semi-ui';
 import { IconDelete, IconUpload, IconImage, IconVideo } from '@douyinfe/semi-icons';
 import './MediaUploadPanel.css';
+
+function MediaPreview({ file, type, index }) {
+  const [source, setSource] = useState('');
+
+  useEffect(() => {
+    if (typeof file === 'string') {
+      setSource(file);
+      return undefined;
+    }
+    if (file?.preview) {
+      setSource(file.preview);
+      return undefined;
+    }
+    if (typeof File === 'undefined' || !(file instanceof File)) {
+      setSource('');
+      return undefined;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setSource(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [file]);
+
+  if (type === 'video') {
+    return (
+      <video
+        src={source}
+        className='mp-upload-video'
+        preload='metadata'
+      />
+    );
+  }
+  return (
+    <img
+      src={source}
+      alt={`预览 ${index + 1}`}
+      className='mp-upload-image'
+      onError={(event) => {
+        event.currentTarget.style.display = 'none';
+      }}
+    />
+  );
+}
 
 /**
  * 统一的媒体上传面板
@@ -38,19 +81,6 @@ export function MediaUploadPanel({
     onRemove(index);
   };
 
-  const getFilePreview = (file) => {
-    if (typeof file === 'string') {
-      return file;
-    }
-    if (file.preview) {
-      return file.preview;
-    }
-    if (file instanceof File) {
-      return URL.createObjectURL(file);
-    }
-    return null;
-  };
-
   const isImage = type === 'image';
   const isVideo = type === 'video';
   const isMixed = type === 'mixed';
@@ -66,22 +96,10 @@ export function MediaUploadPanel({
           <div key={index} className="mp-upload-item">
             <div className="mp-upload-preview">
               {(isImage || isMixed) && (
-                <img
-                  src={getFilePreview(file)}
-                  alt={`预览 ${index + 1}`}
-                  className="mp-upload-image"
-                  onError={(e) => {
-                    // 如果不是图片，显示占位符
-                    e.target.style.display = 'none';
-                  }}
-                />
+                <MediaPreview file={file} type='image' index={index} />
               )}
               {isVideo && (
-                <video
-                  src={getFilePreview(file)}
-                  className="mp-upload-video"
-                  preload="metadata"
-                />
+                <MediaPreview file={file} type='video' index={index} />
               )}
               {!isImage && !isVideo && !isMixed && (
                 <div className="mp-upload-audio">

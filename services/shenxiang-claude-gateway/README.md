@@ -66,8 +66,21 @@ export ANTHROPIC_SMALL_FAST_MODEL="cc-native-haiku"
 ```bash
 cd /opt/shenxiang-claude-gateway
 ./scripts/smoke_test.sh
-./scripts/smoke_test.sh YOUR_NEW_API_KEY
+printf '%s\n' "${NEW_API_KEY}" | ./scripts/smoke_test.sh
 ```
+
+交互终端会静默询问 Key；自动化场景通过标准输入传入，避免 Key 出现在进程参数中。
+
+## 安全边界
+
+| 环境变量 | 默认值 | 用途 |
+|---|---:|---|
+| `REQUEST_TIMEOUT_MS` | `180000` | 上游请求完整生命周期超时 |
+| `HEADERS_TIMEOUT_MS` | `15000` | 客户端请求头超时 |
+| `REQUEST_BODY_TIMEOUT_MS` | `60000` | 客户端请求体超时 |
+| `MAX_REQUEST_BODY_BYTES` | `33554432` | 两个 Messages POST 入口的请求体上限 |
+| `MAX_SSE_BUFFER_BYTES` | `1048576` | 单个上游 SSE 事件缓冲上限 |
+| `MAX_NON_STREAM_RESPONSE_BYTES` | `16777216` | 非流式响应聚合上限 |
 
 ## 回滚
 
