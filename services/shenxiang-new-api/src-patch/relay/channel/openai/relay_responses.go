@@ -21,7 +21,7 @@ func markResponsesStreamOutputSent(c *gin.Context, streamResponse dto.ResponsesS
 		return
 	}
 	switch streamResponse.Type {
-	case "response.output_text.delta", "response.reasoning_summary_text.delta", "response.function_call_arguments.delta":
+	case "response.output_text.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta", "response.function_call_arguments.delta":
 		if streamResponse.Delta != "" {
 			c.Set("response_stream_output_sent", true)
 		}
@@ -93,6 +93,8 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 
 	var usage = &dto.Usage{}
 	var responseTextBuilder strings.Builder
+	c.Set("responses_stream_output_tracking", true)
+	c.Set(helper.ResponsesStreamDrainUsageAfterClientGoneContextKey, true)
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 
@@ -103,8 +105,9 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			sr.Error(err)
 			return
 		}
-		sendResponsesStreamData(c, streamResponse, data)
-		markResponsesStreamOutputSent(c, streamResponse)
+		if err := helper.ResponseChunkData(c, streamResponse, data); err == nil {
+			markResponsesStreamOutputSent(c, streamResponse)
+		}
 		switch streamResponse.Type {
 		case "response.completed":
 			c.Set("response_completed_seen", true)
@@ -131,8 +134,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 					c.Set("image_generation_call_size", streamResponse.Response.GetSize())
 				}
 			}
-		case "response.output_text.delta":
-			// 处理输出文本
+		case "response.output_text.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta", "response.function_call_arguments.delta":
 			responseTextBuilder.WriteString(streamResponse.Delta)
 		case dto.ResponsesOutputTypeItemDone:
 			// 函数调用处理
