@@ -540,6 +540,140 @@ func TestBillingSessionReserveAtomicallyRejectsConcurrentWalletOverdraft(t *test
 	assert.Equal(t, initialQuota-reserveTarget, getUserQuota(t, userID))
 }
 
+func TestBillingSessionReserveAtomicallyRejectsConcurrentSubscriptionOverdraft(t *testing.T) {
+	truncate(t)
+
+	const userID = 36
+	const planID = 36
+	const subscriptionID = 36
+	const totalQuota = 100
+	const reserveTarget = 80
+	seedUser(t, userID, 0)
+	require.NoError(t, model.DB.Create(&model.SubscriptionPlan{
+		Id:                 planID,
+		Title:              "¥300 月卡",
+		Currency:           "CNY",
+		Enabled:            true,
+		TotalAmount:        totalQuota,
+		MonthlyAmountTotal: totalQuota,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.UserSubscription{
+		Id:                 subscriptionID,
+		UserId:             userID,
+		PlanId:             planID,
+		AmountTotal:        totalQuota,
+		MonthlyAmountTotal: totalQuota,
+		Status:             "active",
+		StartTime:          time.Now().Unix(),
+		EndTime:            time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}).Error)
+
+	newSession := func() *BillingSession {
+		return &BillingSession{
+			relayInfo: &relaycommon.RelayInfo{
+				UserId:          userID,
+				IsPlayground:    true,
+				OriginModelName: "gpt-5.5",
+				UsingGroup:      DiscountPricingGroupName,
+				BillingSource:   BillingSourceSubscription,
+			},
+			funding: &SubscriptionFunding{subscriptionId: subscriptionID},
+		}
+	}
+
+	results := make(chan error, 2)
+	var waitGroup sync.WaitGroup
+	for _, session := range []*BillingSession{newSession(), newSession()} {
+		waitGroup.Add(1)
+		go func(current *BillingSession) {
+			defer waitGroup.Done()
+			results <- current.Reserve(reserveTarget)
+		}(session)
+	}
+	waitGroup.Wait()
+	close(results)
+
+	successes := 0
+	insufficient := 0
+	for err := range results {
+		if err == nil {
+			successes++
+			continue
+		}
+		var apiErr *types.NewAPIError
+		require.True(t, errors.As(err, &apiErr), "reserve error should preserve NewAPIError")
+		assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
+		assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+		insufficient++
+	}
+
+	assert.Equal(t, 1, successes)
+	assert.Equal(t, 1, insufficient)
+	var subscription model.UserSubscription
+	require.NoError(t, model.DB.First(&subscription, subscriptionID).Error)
+	assert.Equal(t, int64(reserveTarget), subscription.AmountUsed)
+	assert.Equal(t, int64(reserveTarget), subscription.MonthlyAmountUsed)
+}
+
+func TestRefundSubscriptionPreConsumeRollsBackQuotaWhenRecordUpdateFails(t *testing.T) {
+	isolationDB, err := gorm.Open(
+		sqlite.Open("file:refund_subscription_atomicity?mode=memory&cache=shared"),
+		&gorm.Config{},
+	)
+	require.NoError(t, err)
+	sqlDB, err := isolationDB.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(2)
+
+	originalDB := model.DB
+	model.DB = isolationDB
+	t.Cleanup(func() {
+		model.DB = originalDB
+		require.NoError(t, sqlDB.Close())
+	})
+
+	require.NoError(t, isolationDB.AutoMigrate(
+		&model.UserSubscription{},
+		&model.SubscriptionPreConsumeRecord{},
+	))
+	require.NoError(t, isolationDB.Create(&model.UserSubscription{
+		Id:                 37,
+		UserId:             37,
+		AmountTotal:        100,
+		AmountUsed:         80,
+		MonthlyAmountTotal: 100,
+		MonthlyAmountUsed:  80,
+		Status:             "active",
+		StartTime:          time.Now().Unix(),
+		EndTime:            time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}).Error)
+	require.NoError(t, isolationDB.Create(&model.SubscriptionPreConsumeRecord{
+		RequestId:          "refund-atomicity",
+		UserId:             37,
+		UserSubscriptionId: 37,
+		PreConsumed:        40,
+		Status:             "consumed",
+	}).Error)
+	require.NoError(t, isolationDB.Exec(`
+		CREATE TRIGGER fail_subscription_refund_record_update
+		BEFORE UPDATE OF status ON subscription_pre_consume_records
+		WHEN NEW.status = 'refunded'
+		BEGIN
+			SELECT RAISE(ABORT, 'forced refund record update failure');
+		END;
+	`).Error)
+
+	require.Error(t, model.RefundSubscriptionPreConsume("refund-atomicity"))
+
+	var subscription model.UserSubscription
+	require.NoError(t, isolationDB.First(&subscription, 37).Error)
+	assert.Equal(t, int64(80), subscription.AmountUsed)
+	assert.Equal(t, int64(80), subscription.MonthlyAmountUsed)
+	var record model.SubscriptionPreConsumeRecord
+	require.NoError(t, isolationDB.Where("request_id = ?", "refund-atomicity").First(&record).Error)
+	assert.Equal(t, "consumed", record.Status)
+}
+
 func TestBillingSessionSettleExpiresSubscriptionWhenPreConsumeExactlyExhaustsQuota(t *testing.T) {
 	truncate(t)
 
