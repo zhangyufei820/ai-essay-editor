@@ -755,25 +755,22 @@ def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple
     if mode_models:
         pseudo_user = UserContext(api_key="", user_id="", key_hint="sk-****", allowed_models_by_mode=mode_models)
     modes = model_modes(pseudo_user)
-    modes["grok"] = {
-        "label": "Grok 4.5 专用",
-        "description": "Grok 4.5 文本模型独立令牌。",
-        "models": list(settings.grok_allowed_models),
-        "token_name": settings.grok_token_name,
-        "billing": "按文本 Token 计费，仅限 Grok 4.5。",
-    }
+    visible_grok_models = set((mode_models or {}).get("grok", ()))
+    grok_models = tuple(model for model in settings.grok_allowed_models if model in visible_grok_models)
+    if grok_models:
+        modes["grok"] = {
+            "label": "Grok 4.5 专用",
+            "description": "Grok 4.5 文本模型独立令牌。",
+            "models": list(grok_models),
+            "token_name": settings.grok_token_name,
+            "billing": "按文本 Token 计费，仅限 Grok 4.5。",
+        }
     public_root = settings.public_base_url.removesuffix("/codex").rstrip("/")
     claude_base_url = f"{public_root}/claude"
     profiles = [
         {
             "mode": "codex",
             "usage": "对话、代码、普通 OpenAI-compatible 客户端",
-            "base_url": f"{settings.new_api_base_url}",
-            "endpoint": "/v1/chat/completions",
-        },
-        {
-            "mode": "grok",
-            "usage": "Grok 4.5 文本对话和代码任务",
             "base_url": f"{settings.new_api_base_url}",
             "endpoint": "/v1/chat/completions",
         },
@@ -796,6 +793,16 @@ def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple
             "endpoint": "按模型文档使用视频生成接口",
         },
     ]
+    if grok_models:
+        profiles.insert(
+            1,
+            {
+                "mode": "grok",
+                "usage": "Grok 4.5 文本对话和代码任务",
+                "base_url": f"{settings.new_api_base_url}",
+                "endpoint": "/v1/chat/completions",
+            },
+        )
     result: list[dict[str, Any]] = []
     for profile in profiles:
         mode = profile["mode"]

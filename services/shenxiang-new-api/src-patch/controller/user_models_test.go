@@ -101,9 +101,24 @@ func TestPublicPricingGroupsDoesNotPromoteAllToDiscount(t *testing.T) {
 	groups := publicPricingGroups([]string{"all"}, map[string]string{
 		"default":  "原价",
 		"discount": "特价",
+		"grok45":   "Grok 4.5 专用通道",
 	})
 
 	require.Equal(t, []string{"default"}, groups)
+}
+
+func TestFilterPricingByUsableGroupsExposesDedicatedGrokPricing(t *testing.T) {
+	pricing := filterPricingByUsableGroups([]model.Pricing{
+		{ModelName: "grok-4.5", EnableGroup: []string{"grok45"}},
+		{ModelName: "internal-only", EnableGroup: []string{"internal"}},
+	}, map[string]string{
+		"default": "原价",
+		"grok45":  "Grok 4.5 专用通道",
+	})
+
+	require.Equal(t, []model.Pricing{
+		{ModelName: "grok-4.5", EnableGroup: []string{"grok45"}},
+	}, pricing)
 }
 
 func TestFilterPricingVendorsHidesSupplierExposedVendors(t *testing.T) {

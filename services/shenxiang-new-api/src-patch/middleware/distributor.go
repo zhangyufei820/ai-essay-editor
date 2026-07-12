@@ -109,7 +109,7 @@ func Distribute() func(c *gin.Context) {
 						return
 					}
 					if playgroundRequest.Group != "" {
-						if !service.GroupInUserUsableGroups(usingGroup, playgroundRequest.Group) && playgroundRequest.Group != usingGroup {
+						if !canUsePlaygroundGroup(usingGroup, playgroundRequest.Group, modelRequest.Model) {
 							abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupAccessDenied))
 							return
 						}
@@ -184,6 +184,18 @@ func Distribute() func(c *gin.Context) {
 			service.RecordChannelAffinity(c, channel.Id)
 		}
 	}
+}
+
+func canUsePlaygroundGroup(usingGroup, requestedGroup, modelName string) bool {
+	if service.GroupInUserUsableGroups(usingGroup, requestedGroup) || requestedGroup == usingGroup {
+		return true
+	}
+	if strings.TrimSpace(requestedGroup) != service.Grok45PricingGroupName ||
+		strings.TrimSpace(modelName) != service.Grok45ModelName {
+		return false
+	}
+	_, entitled := service.GetUserUsableGroups(usingGroup)[service.Grok45PricingGroupName]
+	return entitled
 }
 
 func logDistributorNoAvailableChannel(c *gin.Context, modelName, groupName, reason string) {

@@ -71,6 +71,15 @@ func GetPublicUserUsableGroups(userGroup string) map[string]string {
 	return publicGroups
 }
 
+func GetPublicPricingGroups(userGroup string) map[string]string {
+	usableGroups := GetUserUsableGroups(userGroup)
+	pricingGroups := GetPublicUserUsableGroups(userGroup)
+	if description, ok := usableGroups[Grok45PricingGroupName]; ok {
+		pricingGroups[Grok45PricingGroupName] = description
+	}
+	return pricingGroups
+}
+
 func GroupInUserUsableGroups(userGroup, groupName string) bool {
 	_, ok := GetPublicUserUsableGroups(userGroup)[groupName]
 	return ok

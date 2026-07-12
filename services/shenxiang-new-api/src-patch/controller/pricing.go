@@ -35,8 +35,8 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 
 func publicPricingGroups(enableGroups []string, usableGroups map[string]string) []string {
 	allGroups := common.StringsContains(enableGroups, "all")
-	visibleGroups := make([]string, 0, 2)
-	for _, group := range []string{"default", service.DiscountPricingGroupName} {
+	visibleGroups := make([]string, 0, 3)
+	for _, group := range []string{"default", service.DiscountPricingGroupName, service.Grok45PricingGroupName} {
 		if _, ok := usableGroups[group]; !ok {
 			continue
 		}
@@ -138,7 +138,7 @@ func GetPricing(c *gin.Context) {
 		groupRatio[service.Grok45PricingGroupName] = service.Grok45PricingGroupRatio
 	}
 
-	usableGroup = service.GetPublicUserUsableGroups(group)
+	usableGroup = service.GetPublicPricingGroups(group)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
 	for group := range ratio_setting.GetGroupRatioCopy() {
 		if _, ok := usableGroup[group]; !ok {

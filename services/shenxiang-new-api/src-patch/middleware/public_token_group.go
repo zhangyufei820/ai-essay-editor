@@ -62,10 +62,13 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 			group = "default"
 			request["group"] = json.RawMessage(`"default"`)
 		}
-		if !service.IsPublicTokenGroup(group) {
+		managedGrokProfile := service.Grok45UserTokenProfile{}
+		managedGrokProfileAllowed := json.Unmarshal(body, &managedGrokProfile) == nil &&
+			service.IsManagedGrok45UserTokenProfile(managedGrokProfile)
+		if !service.IsPublicTokenGroup(group) && !managedGrokProfileAllowed {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"message": "令牌只可选择原价或特价分组",
+				"message": "令牌分组或专用令牌配置无效",
 			})
 			return
 		}

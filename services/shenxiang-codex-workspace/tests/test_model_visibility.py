@@ -343,8 +343,23 @@ def test_unentitled_grok_request_uses_resolved_codex_fallback_key() -> None:
     assert request.metadata["server_allowed_models_by_mode"]["codex"] == ["gpt-5.5"]
 
 
-def test_provision_profiles_expose_dedicated_grok_key_without_provider_metadata() -> None:
+def test_provision_profiles_hide_grok_without_visible_entitlement() -> None:
     profiles = provision_key_profiles({"codex": "sk-codex", "grok": "sk-grok"})
+
+    assert all(profile["mode"] != "grok" for profile in profiles)
+
+
+def test_provision_profiles_expose_dedicated_grok_key_when_entitled() -> None:
+    profiles = provision_key_profiles(
+        {"codex": "sk-codex", "grok": "sk-grok"},
+        {
+            "codex": ("gpt-5.5", GROK_MODEL),
+            "grok": (GROK_MODEL,),
+            "claude": (),
+            "image": (),
+            "video": (),
+        },
+    )
 
     grok = next(profile for profile in profiles if profile["mode"] == "grok")
     assert grok["name"] == GROK_TOKEN_NAME
