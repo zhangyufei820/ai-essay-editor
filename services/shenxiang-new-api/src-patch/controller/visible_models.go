@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -17,6 +18,35 @@ import (
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
+
+const managedGrok45EntitlementLookupTimeout = 2 * time.Second
+
+var (
+	ensureManagedGrok45UserToken  = service.EnsureManagedGrok45UserTokenForUserID
+	userHasManagedGrok45Token     = service.UserHasManagedGrok45Entitlement
+	managedGrok45CapabilityActive = service.ManagedGrok45CapabilityActive
+)
+
+func ensureManagedGrok45EntitlementForUser(parent context.Context, userID int) (bool, error) {
+	if userID <= 0 {
+		return false, nil
+	}
+	ctx, cancel := context.WithTimeout(parent, managedGrok45EntitlementLookupTimeout)
+	defer cancel()
+	if _, err := ensureManagedGrok45UserToken(ctx, userID); err != nil {
+		return false, err
+	}
+	return userHasManagedGrok45Token(ctx, userID)
+}
+
+func managedGrok45PricingVisible(parent context.Context, userID int) (bool, error) {
+	if userID > 0 {
+		return ensureManagedGrok45EntitlementForUser(parent, userID)
+	}
+	ctx, cancel := context.WithTimeout(parent, managedGrok45EntitlementLookupTimeout)
+	defer cancel()
+	return managedGrok45CapabilityActive(ctx)
+}
 
 func isHiddenUserVisibleModel(modelName string) bool {
 	name := strings.ToLower(strings.TrimSpace(modelName))
@@ -47,6 +77,18 @@ func isHiddenUserVisibleModelForUser(userID int, modelName string) bool {
 }
 
 func filterUserVisibleModelNames(userID int, modelNames []string) []string {
+	managedGrok45Entitled := false
+	for _, modelName := range modelNames {
+		if strings.EqualFold(strings.TrimSpace(modelName), service.Grok45ModelName) {
+			entitled, err := ensureManagedGrok45EntitlementForUser(context.Background(), userID)
+			if err != nil {
+				common.SysLog("failed to resolve managed Grok model entitlement: " + err.Error())
+			} else {
+				managedGrok45Entitled = entitled
+			}
+			break
+		}
+	}
 	visible := make([]string, 0, len(modelNames))
 	for _, modelName := range modelNames {
 		trimmed := strings.TrimSpace(modelName)
@@ -54,6 +96,9 @@ func filterUserVisibleModelNames(userID int, modelNames []string) []string {
 			continue
 		}
 		displayName := service.PublicImageModelDisplayName(trimmed, "")
+		if strings.EqualFold(displayName, service.Grok45ModelName) && !managedGrok45Entitled {
+			continue
+		}
 		if isHiddenUserVisibleModelForUser(userID, displayName) {
 			continue
 		}

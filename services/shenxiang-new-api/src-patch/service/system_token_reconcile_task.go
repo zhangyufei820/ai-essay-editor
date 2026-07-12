@@ -27,7 +27,7 @@ func StartSystemTokenReconcileTask() {
 			return
 		}
 		gopool.Go(func() {
-			logger.LogInfo(context.Background(), fmt.Sprintf("admin system token reconcile task started: user_id=%d tick=%s", AdminSystemTokenUserID, systemTokenReconcileTickInterval))
+			logger.LogInfo(context.Background(), fmt.Sprintf("system token reconcile task started: admin_user_id=%d tick=%s", AdminSystemTokenUserID, systemTokenReconcileTickInterval))
 			runSystemTokenReconcileOnce()
 			ticker := time.NewTicker(systemTokenReconcileTickInterval)
 			defer ticker.Stop()
@@ -47,12 +47,19 @@ func runSystemTokenReconcileOnce() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	result, err := EnsureSystemTokensForUserID(ctx, AdminSystemTokenUserID)
+	adminResult, err := EnsureSystemTokensForUserID(ctx, AdminSystemTokenUserID)
 	if err != nil {
 		logger.LogWarn(ctx, fmt.Sprintf("admin system token reconcile failed: user_id=%d error=%v", AdminSystemTokenUserID, err))
+	} else if adminResult.Created > 0 || adminResult.Updated > 0 {
+		logger.LogInfo(ctx, fmt.Sprintf("admin system token reconcile completed: user_id=%d created=%d updated=%d skipped=%d", AdminSystemTokenUserID, adminResult.Created, adminResult.Updated, adminResult.Skipped))
+	}
+
+	grokResult, grokErr := ReconcileManagedGrok45UserTokens(ctx)
+	if grokErr != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("managed Grok token reconcile failed: scanned=%d created=%d updated=%d failed=%d error=%v", grokResult.UsersScanned, grokResult.Created, grokResult.Updated, grokResult.Failed, grokErr))
 		return
 	}
-	if result.Created > 0 || result.Updated > 0 {
-		logger.LogInfo(ctx, fmt.Sprintf("admin system token reconcile completed: user_id=%d created=%d updated=%d skipped=%d", AdminSystemTokenUserID, result.Created, result.Updated, result.Skipped))
+	if grokResult.Created > 0 || grokResult.Updated > 0 {
+		logger.LogInfo(ctx, fmt.Sprintf("managed Grok token reconcile completed: scanned=%d created=%d updated=%d skipped=%d", grokResult.UsersScanned, grokResult.Created, grokResult.Updated, grokResult.Skipped))
 	}
 }

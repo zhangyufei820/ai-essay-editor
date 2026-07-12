@@ -49,6 +49,59 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         with self.assertRaisesRegex(self.module.ConfigurationError, "required Grok model"):
             self.module.require_exact_model({"grok-4.5-preview"})
 
+    def test_real_inference_is_required(self) -> None:
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = json.dumps(
+            {
+                "id": "chatcmpl-test",
+                "choices": [{"message": {"role": "assistant", "content": "OK"}}],
+            }
+        ).encode("utf-8")
+        opener = mock.MagicMock()
+        opener.open.return_value = response
+        with mock.patch.object(self.module.urllib.request, "build_opener", return_value=opener):
+            self.module.require_upstream_inference(
+                self.module.EXPECTED_UPSTREAM_BASE_URL,
+                "fake-grok-key-for-unit-tests",
+            )
+
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.full_url, self.module.EXPECTED_UPSTREAM_BASE_URL + "/v1/chat/completions")
+        self.assertEqual(json.loads(request.data)["model"], self.module.MODEL_NAME)
+
+    def test_inference_probe_error_is_generic_and_secret_free(self) -> None:
+        secret = "fake-grok-secret-for-inference-test"
+        opener = mock.MagicMock()
+        opener.open.side_effect = self.module.urllib.error.HTTPError(
+            self.module.EXPECTED_UPSTREAM_BASE_URL + "/v1/chat/completions",
+            502,
+            "upstream error containing " + secret,
+            {},
+            None,
+        )
+        with mock.patch.object(self.module.urllib.request, "build_opener", return_value=opener):
+            with self.assertRaises(self.module.ConfigurationError) as raised:
+                self.module.require_upstream_inference(self.module.EXPECTED_UPSTREAM_BASE_URL, secret)
+
+        self.assertEqual(str(raised.exception), "Grok inference probe returned HTTP 502")
+        self.assertNotIn(secret, str(raised.exception))
+
+    def test_inference_probe_rejects_empty_assistant_content(self) -> None:
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = json.dumps(
+            {"choices": [{"message": {"role": "assistant", "content": ""}}]}
+        ).encode("utf-8")
+        opener = mock.MagicMock()
+        opener.open.return_value = response
+        with mock.patch.object(self.module.urllib.request, "build_opener", return_value=opener):
+            with self.assertRaisesRegex(self.module.ConfigurationError, "verification prompt"):
+                self.module.require_upstream_inference(
+                    self.module.EXPECTED_UPSTREAM_BASE_URL,
+                    "fake-grok-key-for-unit-tests",
+                )
+
     def test_only_expected_https_origin_is_allowed(self) -> None:
         self.assertEqual(
             self.module.normalize_base_url(self.module.EXPECTED_UPSTREAM_BASE_URL + "/"),
@@ -103,6 +156,8 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         self.assertIn("'XAI'", sql)
         self.assertIn('openai-response', sql)
         self.assertNotIn("'default', 'grok-4.5'", sql)
+        self.assertNotIn("INSERT INTO tokens", sql)
+        self.assertNotIn("UPDATE tokens", sql)
 
     def test_reconcile_without_channel_needs_no_upstream_key(self) -> None:
         stdout = io.StringIO()
@@ -119,7 +174,9 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         stdout = io.StringIO()
         with mock.patch.dict(self.module.os.environ, {self.module.UPSTREAM_KEY_ENV: secret}), mock.patch.object(
             self.module, "fetch_upstream_models", return_value={self.module.MODEL_NAME}
-        ), mock.patch.object(self.module, "apply_grok45"), mock.patch.object(
+        ), mock.patch.object(self.module, "require_upstream_inference"), mock.patch.object(
+            self.module, "apply_grok45"
+        ), mock.patch.object(
             sys, "argv", [str(MODULE_PATH), "--apply"]
         ), contextlib.redirect_stdout(stdout):
             result = self.module.main()

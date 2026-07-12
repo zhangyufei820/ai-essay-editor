@@ -62,7 +62,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		},
 		{
 			Mode:   "grok",
-			Name:   "星人 Grok 4.5 测试令牌",
+			Name:   Grok45AdminTokenName,
 			Models: []string{Grok45ModelName},
 			Group:  Grok45PricingGroupName,
 		},
@@ -100,11 +100,15 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 				}
 			} else {
 				nextLimits := systemTokenModelLimits(token.ModelLimits, profile)
-				if !token.ModelLimitsEnabled || nextLimits != token.ModelLimits || token.Group != tokenGroup {
+				grokRetryEnabled := profile.Mode == "grok" && token.CrossGroupRetry
+				if !token.ModelLimitsEnabled || nextLimits != token.ModelLimits || token.Group != tokenGroup || grokRetryEnabled {
 					updates := map[string]interface{}{
 						"model_limits_enabled": true,
 						"model_limits":         nextLimits,
 						"group":                tokenGroup,
+					}
+					if profile.Mode == "grok" {
+						updates["cross_group_retry"] = false
 					}
 					if err := tx.Model(&model.Token{}).Where("id = ?", token.Id).Updates(updates).Error; err != nil {
 						return err
@@ -142,7 +146,7 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 				ModelLimitsEnabled: true,
 				ModelLimits:        strings.Join(profile.Models, ","),
 				Group:              tokenGroup,
-				CrossGroupRetry:    true,
+				CrossGroupRetry:    profile.Mode != "grok",
 			}
 			if err := tx.Create(&newToken).Error; err != nil {
 				return err
@@ -154,9 +158,9 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 	if err != nil {
 		return result, err
 	}
-	if result.Updated > 0 {
+	if result.Created > 0 || result.Updated > 0 {
 		if err := model.InvalidateUserTokensCache(userID); err != nil {
-			common.SysLog(fmt.Sprintf("failed to invalidate system token cache for user %d: %v", userID, err))
+			return result, fmt.Errorf("failed to invalidate system token cache for user %d: %w", userID, err)
 		}
 	}
 	return result, nil

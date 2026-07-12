@@ -29,6 +29,7 @@ CHANNEL_NAME = "星人 Grok 4.5 独立通道"
 EXPECTED_UPSTREAM_BASE_URL = "https://www.geek2api.com"
 UPSTREAM_KEY_ENV = "GROK45_UPSTREAM_API_KEY"
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
+MAX_INFERENCE_RESPONSE_BYTES = 1 * 1024 * 1024
 MYSQL_QUERY_TIMEOUT_SECONDS = 15
 MYSQL_UPDATE_TIMEOUT_SECONDS = 30
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
@@ -158,6 +159,49 @@ def fetch_upstream_models(base_url: str, api_key: str) -> set[str]:
 def require_exact_model(upstream_models: set[str]) -> None:
     if MODEL_NAME not in upstream_models:
         raise ConfigurationError("the required Grok model is not available")
+
+
+def require_upstream_inference(base_url: str, api_key: str) -> None:
+    request = urllib.request.Request(
+        normalize_base_url(base_url) + "/v1/chat/completions",
+        data=json.dumps(
+            {
+                "model": MODEL_NAME,
+                "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
+                "max_tokens": 8,
+                "stream": False,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8"),
+        headers={
+            "Authorization": "Bearer " + validate_upstream_key(api_key),
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "shenxiang-new-api-grok-inference-probe/1.0",
+        },
+        method="POST",
+    )
+    try:
+        opener = urllib.request.build_opener(NoRedirectHandler())
+        with opener.open(request, timeout=30) as response:
+            body = response.read(MAX_INFERENCE_RESPONSE_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        raise ConfigurationError(f"Grok inference probe returned HTTP {exc.code}") from None
+    except (urllib.error.URLError, TimeoutError):
+        raise ConfigurationError("Grok inference probe failed or timed out") from None
+    if len(body) > MAX_INFERENCE_RESPONSE_BYTES:
+        raise ConfigurationError("Grok inference response exceeded the size limit")
+    try:
+        payload = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise ConfigurationError("Grok inference response was not valid JSON") from None
+    if not isinstance(payload, dict) or not isinstance(payload.get("choices"), list) or not payload["choices"]:
+        raise ConfigurationError("Grok inference response did not use the OpenAI chat schema")
+    first_choice = payload["choices"][0]
+    if not isinstance(first_choice, dict) or not isinstance(first_choice.get("message"), dict):
+        raise ConfigurationError("Grok inference response did not contain an assistant message")
+    if str(first_choice["message"].get("content") or "").strip() != "OK":
+        raise ConfigurationError("Grok inference response did not complete the verification prompt")
 
 
 def mysql(query: str) -> list[list[str]]:
@@ -522,16 +566,21 @@ def main() -> int:
                 return 0
             api_key, base_url = configured
             require_exact_model(fetch_upstream_models(base_url, api_key))
+            require_upstream_inference(base_url, api_key)
             apply_grok45(api_key, base_url)
         emit_result("reconciled")
         return 0
 
     api_key = require_upstream_key()
     base_url = normalize_base_url(EXPECTED_UPSTREAM_BASE_URL)
-    require_exact_model(fetch_upstream_models(base_url, api_key))
     if args.apply:
         with model_sync_lock():
+            require_exact_model(fetch_upstream_models(base_url, api_key))
+            require_upstream_inference(base_url, api_key)
             apply_grok45(api_key, base_url)
+    else:
+        require_exact_model(fetch_upstream_models(base_url, api_key))
+        require_upstream_inference(base_url, api_key)
     emit_result("applied" if args.apply else "probe")
     return 0
 

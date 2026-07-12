@@ -109,7 +109,17 @@ func Distribute() func(c *gin.Context) {
 						return
 					}
 					if playgroundRequest.Group != "" {
-						if !canUsePlaygroundGroup(usingGroup, playgroundRequest.Group, modelRequest.Model) {
+						managedGrok45Entitled := false
+						if strings.TrimSpace(usingGroup) == service.Grok45PricingGroupName ||
+							strings.TrimSpace(playgroundRequest.Group) == service.Grok45PricingGroupName {
+							entitled, entitlementErr := service.UserHasManagedGrok45Entitlement(c.Request.Context(), c.GetInt("id"))
+							if entitlementErr != nil {
+								common.SysLog(fmt.Sprintf("managed Grok playground entitlement lookup failed: user_id=%d error=%v", c.GetInt("id"), entitlementErr))
+							} else {
+								managedGrok45Entitled = entitled
+							}
+						}
+						if !canUsePlaygroundGroup(usingGroup, playgroundRequest.Group, modelRequest.Model, managedGrok45Entitled) {
 							abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupAccessDenied))
 							return
 						}
@@ -186,16 +196,16 @@ func Distribute() func(c *gin.Context) {
 	}
 }
 
-func canUsePlaygroundGroup(usingGroup, requestedGroup, modelName string) bool {
-	if service.GroupInUserUsableGroups(usingGroup, requestedGroup) || requestedGroup == usingGroup {
-		return true
+func canUsePlaygroundGroup(usingGroup, requestedGroup, modelName string, managedGrok45Entitled bool) bool {
+	usingGroup = strings.TrimSpace(usingGroup)
+	requestedGroup = strings.TrimSpace(requestedGroup)
+	modelName = strings.TrimSpace(modelName)
+	if usingGroup == service.Grok45PricingGroupName || requestedGroup == service.Grok45PricingGroupName {
+		return managedGrok45Entitled &&
+			modelName == service.Grok45ModelName &&
+			requestedGroup == service.Grok45PricingGroupName
 	}
-	if strings.TrimSpace(requestedGroup) != service.Grok45PricingGroupName ||
-		strings.TrimSpace(modelName) != service.Grok45ModelName {
-		return false
-	}
-	_, entitled := service.GetUserUsableGroups(usingGroup)[service.Grok45PricingGroupName]
-	return entitled
+	return service.GroupInUserUsableGroups(usingGroup, requestedGroup) || requestedGroup == usingGroup
 }
 
 func logDistributorNoAvailableChannel(c *gin.Context, modelName, groupName, reason string) {

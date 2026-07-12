@@ -328,6 +328,7 @@ class NewApiClient:
         token_group: str | None = None,
     ) -> int:
         resolved_group = token_group if token_group is not None else str(user.get("group") or "")
+        cross_group_retry = token_group is None
         payload = {
             "name": token_name,
             "remain_quota": 0,
@@ -337,7 +338,7 @@ class NewApiClient:
             "model_limits": ",".join(models),
             "allow_ips": "",
             "group": resolved_group,
-            "cross_group_retry": True,
+            "cross_group_retry": cross_group_retry,
         }
         result = await self._post_json(client, "/api/token/", headers, payload)
         if not result.get("success", False):
@@ -364,12 +365,14 @@ class NewApiClient:
             if token_group is not None
             else str(user.get("group") or token.get("group") or "")
         )
+        expected_cross_group_retry = token_group is None
         group_matches = token_group is None or str(token.get("group") or "") == expected_group
         if (
             token.get("model_limits_enabled")
             and str(token.get("model_limits") or "") == expected_models
             and token.get("unlimited_quota")
             and group_matches
+            and bool(token.get("cross_group_retry")) == expected_cross_group_retry
         ):
             return
         payload = {
@@ -382,7 +385,7 @@ class NewApiClient:
             "model_limits": expected_models,
             "allow_ips": token.get("allow_ips") or "",
             "group": expected_group,
-            "cross_group_retry": True,
+            "cross_group_retry": expected_cross_group_retry,
         }
         result = await self._put_json(client, "/api/token/", headers, payload)
         if not result.get("success", False):

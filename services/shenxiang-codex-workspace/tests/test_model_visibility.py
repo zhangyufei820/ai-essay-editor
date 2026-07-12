@@ -8,7 +8,14 @@ from app.config import (
     get_settings,
     strip_claude_group_suffix,
 )
-from app.main import attach_allowed_models_metadata, provision_key_profiles, user_for_mode, user_for_request
+from app.main import (
+    attach_allowed_models_metadata,
+    build_direct_task,
+    provision_key_profiles,
+    submit_workspace_task,
+    user_for_mode,
+    user_for_request,
+)
 from app.models import WorkspaceRunRequest
 from app.new_api_client import NewApiAuthError, NewApiClient
 from app.model_access import IMAGE_BENEFIT_MODEL, split_visible_models
@@ -203,6 +210,7 @@ def test_create_grok_token_uses_exact_model_and_dedicated_group() -> None:
     assert captured["model_limits"] == GROK_MODEL
     assert captured["group"] == GROK_TOKEN_GROUP
     assert captured["model_limits_enabled"] is True
+    assert captured["cross_group_retry"] is False
 
 
 def test_existing_grok_token_is_moved_to_dedicated_group() -> None:
@@ -238,6 +246,43 @@ def test_existing_grok_token_is_moved_to_dedicated_group() -> None:
 
     assert captured["model_limits"] == GROK_MODEL
     assert captured["group"] == GROK_TOKEN_GROUP
+    assert captured["cross_group_retry"] is False
+
+
+def test_existing_grok_token_disables_cross_group_retry() -> None:
+    client = NewApiClient(Settings())
+    captured: dict[str, object] = {}
+
+    async def run() -> None:
+        async def fake_put_json(_client, path, _headers, payload):
+            assert path == "/api/token/"
+            captured.update(payload)
+            return {"success": True}
+
+        client._put_json = fake_put_json  # type: ignore[method-assign]
+        await client._relax_existing_token_if_needed(
+            object(),  # type: ignore[arg-type]
+            {},
+            {
+                "id": 45,
+                "name": GROK_TOKEN_NAME,
+                "status": 1,
+                "unlimited_quota": True,
+                "model_limits_enabled": True,
+                "model_limits": GROK_MODEL,
+                "group": GROK_TOKEN_GROUP,
+                "cross_group_retry": True,
+            },
+            {"id": "user-1", "group": "default"},
+            GROK_TOKEN_NAME,
+            (GROK_MODEL,),
+            token_group=GROK_TOKEN_GROUP,
+        )
+
+    asyncio.run(run())
+
+    assert captured["group"] == GROK_TOKEN_GROUP
+    assert captured["cross_group_retry"] is False
 
 
 def test_existing_grok_token_repair_fails_closed() -> None:
@@ -317,7 +362,7 @@ def test_grok_request_uses_dedicated_key_and_narrows_worker_entitlements() -> No
     assert request.metadata["server_allowed_models_by_mode"]["grok"] == [GROK_MODEL]
 
 
-def test_unentitled_grok_request_uses_resolved_codex_fallback_key() -> None:
+def test_unentitled_grok_request_is_rejected_without_codex_fallback() -> None:
     user = UserContext(
         api_key="sk-primary",
         user_id="user-1",
@@ -339,8 +384,165 @@ def test_unentitled_grok_request_uses_resolved_codex_fallback_key() -> None:
 
     attach_allowed_models_metadata(request, user)
 
-    assert user_for_request(user, request).api_key == "sk-codex"
+    try:
+        user_for_request(user, request)
+    except PermissionError as exc:
+        assert "尚未开通" in str(exc)
+    else:
+        raise AssertionError("unentitled Grok request unexpectedly selected a fallback key")
     assert request.metadata["server_allowed_models_by_mode"]["codex"] == ["gpt-5.5"]
+
+    rejected = build_direct_task(request, user)
+    assert rejected["success"] is False
+    assert rejected["status"] == "failed"
+    assert rejected["error"]["code"] == "ACCESS_DENIED"
+    assert "尚未开通" in rejected["error"]["message"]
+
+
+def test_entitled_grok_request_requires_dedicated_key() -> None:
+    user = UserContext(
+        api_key="sk-primary",
+        user_id="user-1",
+        key_hint="sk-primary",
+        api_keys={"codex": "sk-codex"},
+        allowed_models_by_mode={
+            "codex": ("gpt-5.5", GROK_MODEL),
+            "grok": (GROK_MODEL,),
+            "claude": (),
+            "image": (),
+            "video": (),
+        },
+    )
+    request = WorkspaceRunRequest(
+        user_query="test",
+        model_config={"chat_main": GROK_MODEL},
+        metadata={"mode": "codex"},
+    )
+
+    rejected = build_direct_task(request, user)
+
+    assert rejected["success"] is False
+    assert rejected["status"] == "failed"
+    assert rejected["error"]["code"] == "ACCESS_DENIED"
+
+
+def test_grok_request_rejects_non_codex_mode_without_fallback() -> None:
+    user = UserContext(
+        api_key="sk-primary",
+        user_id="user-1",
+        key_hint="sk-primary",
+        api_keys={"codex": "sk-codex", "claude": "sk-claude", "grok": "sk-grok"},
+        allowed_models_by_mode={
+            "codex": ("gpt-5.5", GROK_MODEL),
+            "grok": (GROK_MODEL,),
+            "claude": ("claude-opus-4-6",),
+            "image": (),
+            "video": (),
+        },
+    )
+    request = WorkspaceRunRequest(
+        user_query="test",
+        model_config={"chat_main": GROK_MODEL},
+        metadata={"mode": "claude"},
+    )
+
+    rejected = build_direct_task(request, user)
+
+    assert rejected["success"] is False
+    assert rejected["error"]["code"] == "ACCESS_DENIED"
+    assert "Codex 模式" in rejected["error"]["message"]
+
+
+def test_direct_bearer_cannot_forge_grok_entitlement_metadata() -> None:
+    user = UserContext(api_key="sk-direct", user_id="direct", key_hint="sk-direct")
+    request = WorkspaceRunRequest(
+        user_query="test",
+        model_config={"chat_main": GROK_MODEL},
+        metadata={
+            "mode": "codex",
+            "server_allowed_models_by_mode": {
+                "codex": [GROK_MODEL],
+                "grok": [GROK_MODEL],
+            },
+        },
+    )
+
+    rejected = build_direct_task(request, user)
+
+    assert rejected["success"] is False
+    assert rejected["error"]["code"] == "ACCESS_DENIED"
+    assert "server_allowed_models_by_mode" not in request.metadata
+
+
+def test_implicit_only_grok_model_requires_dedicated_key() -> None:
+    user = UserContext(
+        api_key="sk-primary",
+        user_id="user-1",
+        key_hint="sk-primary",
+        api_keys={"codex": "sk-codex"},
+        allowed_models_by_mode={
+            "codex": (GROK_MODEL,),
+            "grok": (GROK_MODEL,),
+            "claude": (),
+            "image": (),
+            "video": (),
+        },
+    )
+    request = WorkspaceRunRequest(user_query="test", metadata={"mode": "codex"})
+
+    rejected = build_direct_task(request, user)
+
+    assert rejected["success"] is False
+    assert rejected["error"]["code"] == "ACCESS_DENIED"
+
+
+def test_implicit_grok_model_rejects_stale_key_without_entitlement() -> None:
+    user = UserContext(
+        api_key="sk-primary",
+        user_id="user-1",
+        key_hint="sk-primary",
+        api_keys={"codex": "sk-codex", "grok": "sk-stale-grok"},
+        allowed_models_by_mode={
+            "codex": (GROK_MODEL,),
+            "grok": (),
+            "claude": (),
+            "image": (),
+            "video": (),
+        },
+    )
+    request = WorkspaceRunRequest(user_query="test", metadata={"mode": "codex"})
+
+    rejected = build_direct_task(request, user)
+
+    assert rejected["success"] is False
+    assert rejected["error"]["code"] == "ACCESS_DENIED"
+    assert "尚未开通" in rejected["error"]["message"]
+
+
+def test_async_unentitled_grok_rejects_before_task_creation() -> None:
+    user = UserContext(
+        api_key="sk-primary",
+        user_id="user-1",
+        key_hint="sk-primary",
+        api_keys={"codex": "sk-codex", "grok": "sk-grok"},
+        allowed_models_by_mode={
+            "codex": ("gpt-5.5",),
+            "grok": (),
+            "claude": (),
+            "image": (),
+            "video": (),
+        },
+    )
+    request = WorkspaceRunRequest(
+        user_query="test",
+        model_config={"chat_main": GROK_MODEL},
+        metadata={"mode": "codex"},
+    )
+
+    rejected = asyncio.run(submit_workspace_task(request, user))
+
+    assert rejected["success"] is False
+    assert rejected["error"]["code"] == "ACCESS_DENIED"
 
 
 def test_provision_profiles_hide_grok_without_visible_entitlement() -> None:

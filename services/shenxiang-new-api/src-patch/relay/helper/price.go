@@ -75,6 +75,10 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
+	if service.IsGrok45PricingGroup(info) {
+		modelPrice = 0
+		usePrice = false
+	}
 	if fixedPriceCNY := imageFixedPriceCNY(meta); fixedPriceCNY > 0 {
 		modelPrice = fixedPriceCNY / usdExchangeRateForBilling()
 		usePrice = true
@@ -83,7 +87,7 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	groupRatioInfo := HandleGroupRatio(c, info)
 
 	// Check if this model uses tiered_expr billing
-	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
+	if !service.IsGrok45PricingGroup(info) && billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
 		return modelPriceHelperTiered(c, info, promptTokens, meta, groupRatioInfo)
 	}
 
@@ -103,21 +107,27 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 		if meta.MaxTokens != 0 {
 			preConsumedTokens += meta.MaxTokens
 		}
-		var success bool
-		var matchName string
-		modelRatio, success, matchName = ratio_setting.GetModelRatio(info.OriginModelName)
-		if !success {
-			acceptUnsetRatio := false
-			if info.UserSetting.AcceptUnsetRatioModel {
-				acceptUnsetRatio = true
+		if service.IsGrok45PricingGroup(info) {
+			modelRatio = service.Grok45ModelRatioForExchangeRate(usdExchangeRateForBilling())
+			completionRatio = service.Grok45CompletionRatio
+			cacheRatio = service.Grok45CacheReadRatio
+		} else {
+			var success bool
+			var matchName string
+			modelRatio, success, matchName = ratio_setting.GetModelRatio(info.OriginModelName)
+			if !success {
+				acceptUnsetRatio := false
+				if info.UserSetting.AcceptUnsetRatioModel {
+					acceptUnsetRatio = true
+				}
+				if !acceptUnsetRatio {
+					return types.PriceData{}, modelPriceNotConfiguredError(matchName, info.UserId)
+				}
 			}
-			if !acceptUnsetRatio {
-				return types.PriceData{}, modelPriceNotConfiguredError(matchName, info.UserId)
-			}
+			completionRatio = ratio_setting.GetCompletionRatio(info.OriginModelName)
+			cacheRatio, _ = ratio_setting.GetCacheRatio(info.OriginModelName)
+			cacheCreationRatio, _ = ratio_setting.GetCreateCacheRatio(info.OriginModelName)
 		}
-		completionRatio = ratio_setting.GetCompletionRatio(info.OriginModelName)
-		cacheRatio, _ = ratio_setting.GetCacheRatio(info.OriginModelName)
-		cacheCreationRatio, _ = ratio_setting.GetCreateCacheRatio(info.OriginModelName)
 		cacheCreationRatio5m = cacheCreationRatio
 		// 固定1h和5min缓存写入价格的比例
 		cacheCreationRatio1h = cacheCreationRatio * claudeCacheCreation1hMultiplier

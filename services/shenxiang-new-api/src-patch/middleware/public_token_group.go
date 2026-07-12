@@ -62,8 +62,19 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 			group = "default"
 			request["group"] = json.RawMessage(`"default"`)
 		}
+		if group == service.Grok45PricingGroupName {
+			request["cross_group_retry"] = json.RawMessage(`false`)
+		}
+		validationBody, err := json.Marshal(request)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "令牌配置无效",
+			})
+			return
+		}
 		managedGrokProfile := service.Grok45UserTokenProfile{}
-		managedGrokProfileAllowed := json.Unmarshal(body, &managedGrokProfile) == nil &&
+		managedGrokProfileAllowed := json.Unmarshal(validationBody, &managedGrokProfile) == nil &&
 			service.IsManagedGrok45UserTokenProfile(managedGrokProfile)
 		if !service.IsPublicTokenGroup(group) && !managedGrokProfileAllowed {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{

@@ -828,6 +828,9 @@ async def submit_workspace_task(
     allow_admin_intent: bool = False,
 ) -> dict[str, Any]:
     attach_allowed_models_metadata(request, user)
+    model_access_rejection = model_access_rejection_for_request(user, request)
+    if model_access_rejection:
+        return model_access_rejection
     if request.risk_level == "unsafe":
         return failed_response("task_rejected", "UNSAFE_REQUEST", "This request was classified as unsafe.", request.skill_name)
     if len(request.files) > settings.max_files_per_task:
@@ -915,6 +918,9 @@ async def submit_workspace_task(
 
 def build_direct_task(request: WorkspaceRunRequest, user: UserContext) -> dict[str, Any]:
     attach_allowed_models_metadata(request, user)
+    model_access_rejection = model_access_rejection_for_request(user, request)
+    if model_access_rejection:
+        return model_access_rejection
     rejection = validate_workspace_request(request)
     if rejection:
         return rejection
@@ -1769,6 +1775,9 @@ def is_allowed_model_for_request(model: str, request: WorkspaceRunRequest) -> bo
 
 
 def user_for_request(user: UserContext, request: WorkspaceRunRequest) -> UserContext:
+    access_error = grok_access_error_for_request(user, request)
+    if access_error:
+        raise PermissionError(access_error)
     mode = request_mode(request)
     requested_model = str(request.model_roles.model_dump().get(request.model_role) or "")
     has_server_model_limits = bool(mode_models_payload_from_metadata(request.metadata))
@@ -1777,13 +1786,50 @@ def user_for_request(user: UserContext, request: WorkspaceRunRequest) -> UserCon
     return user_for_mode(user, mode, model)
 
 
+def explicit_requested_model(request: WorkspaceRunRequest) -> str:
+    return str(request.model_roles.model_dump().get(request.model_role) or "").strip()
+
+
+def grok_access_error_for_request(user: UserContext, request: WorkspaceRunRequest) -> str:
+    requested_model = explicit_requested_model(request)
+    grok_allowed_models = set(getattr(settings, "grok_allowed_models", (GROK_MODEL,)))
+    if not requested_model and user.allowed_models_by_mode is not None:
+        requested_model = selected_text_model(request)
+    if requested_model not in grok_allowed_models:
+        return ""
+    if request_mode(request) != "codex":
+        return "所选模型只能在 Codex 模式使用。"
+    if user.allowed_models_by_mode is None:
+        return "当前令牌无法在云端工作台使用所选模型。"
+    if requested_model not in set(user.allowed_models_by_mode.get("grok", ())):
+        return "当前账号尚未开通所选模型。"
+    if not str((user.api_keys or {}).get("grok") or "").strip():
+        return "当前账号的专用令牌尚未就绪。"
+    return ""
+
+
+def model_access_rejection_for_request(
+    user: UserContext,
+    request: WorkspaceRunRequest,
+) -> dict[str, Any] | None:
+    access_error = grok_access_error_for_request(user, request)
+    if not access_error:
+        return None
+    return failed_response("task_rejected", "ACCESS_DENIED", access_error, request.skill_name)
+
+
 def user_for_mode(user: UserContext, mode: str, model: str = "") -> UserContext:
     key_map = user.api_keys or {}
     credential_profile = mode
     grok_allowed_models = set(getattr(settings, "grok_allowed_models", (GROK_MODEL,)))
     if mode == "codex" and str(model or "").strip() in grok_allowed_models:
         credential_profile = "grok"
-    key = key_map.get(credential_profile) or user.api_key
+    if credential_profile == "grok" and user.api_keys is not None:
+        key = str(key_map.get("grok") or "").strip()
+        if not key:
+            raise PermissionError("当前账号的专用令牌尚未就绪。")
+    else:
+        key = key_map.get(credential_profile) or user.api_key
     return UserContext(
         api_key=key,
         user_id=user.user_id,
@@ -1817,6 +1863,9 @@ def normalize_allowed_models_from_metadata(metadata: dict[str, Any] | None) -> d
 
 
 def attach_allowed_models_metadata(request: WorkspaceRunRequest, user: UserContext) -> None:
+    if user.allowed_models_by_mode is None:
+        request.metadata.pop(SERVER_ALLOWED_MODELS_METADATA_KEY, None)
+        return
     if not user.allowed_models_by_mode:
         return
     allowed_models = {

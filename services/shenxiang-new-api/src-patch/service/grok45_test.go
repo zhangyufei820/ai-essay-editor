@@ -25,7 +25,7 @@ func TestManagedGrok45UserTokenProfileRequiresExactIsolation(t *testing.T) {
 		RemainQuota:        0,
 		ExpiredTime:        -1,
 		AllowIPs:           "",
-		CrossGroupRetry:    true,
+		CrossGroupRetry:    false,
 	}
 	require.True(t, IsManagedGrok45UserTokenProfile(valid))
 
@@ -41,7 +41,7 @@ func TestManagedGrok45UserTokenProfileRequiresExactIsolation(t *testing.T) {
 		{name: "remaining quota", mutate: func(profile *Grok45UserTokenProfile) { profile.RemainQuota = 1 }},
 		{name: "expiry", mutate: func(profile *Grok45UserTokenProfile) { profile.ExpiredTime = 1 }},
 		{name: "ip allowlist", mutate: func(profile *Grok45UserTokenProfile) { profile.AllowIPs = "127.0.0.1" }},
-		{name: "cross group retry", mutate: func(profile *Grok45UserTokenProfile) { profile.CrossGroupRetry = false }},
+		{name: "cross group retry", mutate: func(profile *Grok45UserTokenProfile) { profile.CrossGroupRetry = true }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

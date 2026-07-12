@@ -139,14 +139,16 @@ func TestEnforcePublicTokenGroupSelectionAllowsManagedGrok45Profile(t *testing.T
 	engine.Use(EnforcePublicTokenGroupSelection())
 	engine.POST("/api/token/", func(c *gin.Context) {
 		request := struct {
-			Name        string `json:"name"`
-			Group       string `json:"group"`
-			ModelLimits string `json:"model_limits"`
+			Name            string `json:"name"`
+			Group           string `json:"group"`
+			ModelLimits     string `json:"model_limits"`
+			CrossGroupRetry bool   `json:"cross_group_retry"`
 		}{}
 		require.NoError(t, c.ShouldBindJSON(&request))
 		require.Equal(t, "星人 Grok 4.5 专用令牌", request.Name)
 		require.Equal(t, "grok45", request.Group)
 		require.Equal(t, "grok-4.5", request.ModelLimits)
+		require.False(t, request.CrossGroupRetry)
 		c.Status(http.StatusNoContent)
 	})
 	request := httptest.NewRequest(
@@ -174,7 +176,7 @@ func TestEnforcePublicTokenGroupSelectionAllowsManagedGrok45ProfileUpdate(t *tes
 	request := httptest.NewRequest(
 		http.MethodPut,
 		"/api/token/",
-		strings.NewReader(`{"id":45,"status":1,"name":"星人 Grok 4.5 专用令牌","group":"grok45","model_limits_enabled":true,"model_limits":"grok-4.5","unlimited_quota":true,"remain_quota":0,"expired_time":-1,"allow_ips":"","cross_group_retry":true}`),
+		strings.NewReader(`{"id":45,"status":1,"name":"星人 Grok 4.5 专用令牌","group":"grok45","model_limits_enabled":true,"model_limits":"grok-4.5","unlimited_quota":true,"remain_quota":0,"expired_time":-1,"allow_ips":"","cross_group_retry":false}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
@@ -197,7 +199,7 @@ func TestEnforcePublicTokenGroupSelectionRejectsNonExactGrok45Profile(t *testing
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/api/token/",
-		strings.NewReader(`{"name":"星人 Grok 4.5 专用令牌","group":"grok45","model_limits_enabled":true,"model_limits":"grok-4.5,gpt-5.5","unlimited_quota":true,"remain_quota":0,"expired_time":-1,"allow_ips":"","cross_group_retry":true}`),
+		strings.NewReader(`{"name":"星人 Grok 4.5 专用令牌","group":"grok45","model_limits_enabled":true,"model_limits":"grok-4.5,gpt-5.5","unlimited_quota":true,"remain_quota":0,"expired_time":-1,"allow_ips":"","cross_group_retry":false}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()

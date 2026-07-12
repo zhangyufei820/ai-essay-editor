@@ -11,7 +11,22 @@ const (
 	Grok45PricingGroupName  = "grok45"
 	Grok45PricingGroupRatio = 1.0
 	Grok45UserTokenName     = "星人 Grok 4.5 专用令牌"
+	Grok45AdminTokenName    = "星人 Grok 4.5 测试令牌"
+	Grok45ManagedChannelTag = "xingren-grok45"
+	Grok45ManagedBaseURL    = "https://www.geek2api.com"
+	Grok45InputCNYPer1M     = 2.0
+	Grok45OutputCNYPer1M    = 6.0
+	Grok45CacheReadCNYPer1M = 0.5
+	Grok45CompletionRatio   = Grok45OutputCNYPer1M / Grok45InputCNYPer1M
+	Grok45CacheReadRatio    = Grok45CacheReadCNYPer1M / Grok45InputCNYPer1M
 )
+
+func Grok45ModelRatioForExchangeRate(exchangeRate float64) float64 {
+	if exchangeRate <= 0 {
+		exchangeRate = 7.3
+	}
+	return Grok45InputCNYPer1M / (2 * exchangeRate)
+}
 
 type Grok45UserTokenProfile struct {
 	Name               string `json:"name"`
@@ -34,7 +49,7 @@ func IsManagedGrok45UserTokenProfile(profile Grok45UserTokenProfile) bool {
 		profile.RemainQuota == 0 &&
 		profile.ExpiredTime == -1 &&
 		profile.AllowIPs == "" &&
-		profile.CrossGroupRetry
+		!profile.CrossGroupRetry
 }
 
 func IsGrok45PricingGroup(relayInfo *relaycommon.RelayInfo) bool {
