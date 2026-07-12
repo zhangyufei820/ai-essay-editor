@@ -654,6 +654,10 @@ h2 {
   gap: 4px;
 }
 
+.reasoning-control[hidden] {
+  display: none;
+}
+
 .top-controls label span {
   font-size: 10px;
 }

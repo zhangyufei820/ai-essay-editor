@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.reasoning import ReasoningEffort
+
 
 Mode = Literal["auto", "sync", "async"]
 RiskLevel = Literal["normal", "needs_clarification", "unsafe", "unsupported"]
@@ -43,6 +45,7 @@ class WorkspaceRunRequest(BaseModel):
     output_format: str = Field(default="structured_markdown", max_length=80)
     mode: Mode = "auto"
     risk_level: RiskLevel = "normal"
+    reasoning_effort: ReasoningEffort | None = None
     files: list[WorkspaceFile] = Field(default_factory=list, max_length=20)
     params: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)

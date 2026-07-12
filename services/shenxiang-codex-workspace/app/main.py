@@ -45,6 +45,11 @@ from app.model_access import (
 )
 from app.new_api_client import NewApiAuthError, NewApiClient, safe_json_dumps
 from app.queue import RedisTaskQueue
+from app.reasoning import (
+    REASONING_BILLING_HINT,
+    reasoning_capabilities_for_models,
+    reasoning_effort_for_model,
+)
 from app.registry import (
     community_skills_root,
     get_skill,
@@ -725,6 +730,8 @@ def model_modes(user: UserContext | None = None) -> dict[str, Any]:
             "models": ordered_codex_models(user),
             "token_name": settings.auto_token_name,
             "billing": "按文本 Token 计费，适合日常任务和代码任务。",
+            "reasoning": reasoning_capabilities_for_models(mode_models["codex"]),
+            "reasoning_billing": REASONING_BILLING_HINT,
         },
         "claude": {
             "label": "高阶创作",
@@ -831,6 +838,9 @@ async def submit_workspace_task(
     model_access_rejection = model_access_rejection_for_request(user, request)
     if model_access_rejection:
         return model_access_rejection
+    reasoning_effort_rejection = reasoning_effort_rejection_for_request(request)
+    if reasoning_effort_rejection:
+        return reasoning_effort_rejection
     if request.risk_level == "unsafe":
         return failed_response("task_rejected", "UNSAFE_REQUEST", "This request was classified as unsafe.", request.skill_name)
     if len(request.files) > settings.max_files_per_task:
@@ -921,6 +931,9 @@ def build_direct_task(request: WorkspaceRunRequest, user: UserContext) -> dict[s
     model_access_rejection = model_access_rejection_for_request(user, request)
     if model_access_rejection:
         return model_access_rejection
+    reasoning_effort_rejection = reasoning_effort_rejection_for_request(request)
+    if reasoning_effort_rejection:
+        return reasoning_effort_rejection
     rejection = validate_workspace_request(request)
     if rejection:
         return rejection
@@ -1167,12 +1180,7 @@ async def stream_fast_chat(
         "Content-Type": "application/json",
     }
     responses_payload = fast_chat_responses_payload(request, model)
-    chat_payload = {
-        "model": model,
-        "messages": fast_chat_messages(request),
-        "stream": True,
-        "max_tokens": settings.fast_path_max_output_tokens,
-    }
+    chat_payload = fast_chat_completions_payload(request, model)
     final_text = ""
     first_delta_ms: int | None = None
     protocol = "responses"
@@ -1313,12 +1321,7 @@ async def stream_fast_skill(
         "Content-Type": "application/json",
     }
     responses_payload = fast_skill_responses_payload(request, skill_markdown, model)
-    chat_payload = {
-        "model": model,
-        "messages": fast_skill_messages(request, skill_markdown),
-        "stream": True,
-        "max_tokens": settings.fast_path_max_output_tokens,
-    }
+    chat_payload = fast_skill_completions_payload(request, skill_markdown, model)
     final_text = ""
     first_delta_ms: int | None = None
     protocol = "responses"
@@ -1540,13 +1543,28 @@ async def stream_chat_completion_deltas(
 
 
 def fast_chat_responses_payload(request: WorkspaceRunRequest, model: str) -> dict[str, Any]:
-    return {
+    payload = {
         "model": model,
         "instructions": FAST_CHAT_SYSTEM_PROMPT,
         "input": fast_chat_input(request),
         "stream": True,
         "max_output_tokens": settings.fast_path_max_output_tokens,
     }
+    if effort := selected_reasoning_effort(request, model):
+        payload["reasoning"] = {"effort": effort}
+    return payload
+
+
+def fast_chat_completions_payload(request: WorkspaceRunRequest, model: str) -> dict[str, Any]:
+    payload = {
+        "model": model,
+        "messages": fast_chat_messages(request),
+        "stream": True,
+        "max_tokens": settings.fast_path_max_output_tokens,
+    }
+    if effort := selected_reasoning_effort(request, model):
+        payload["reasoning_effort"] = effort
+    return payload
 
 
 def fast_skill_responses_payload(
@@ -1554,13 +1572,32 @@ def fast_skill_responses_payload(
     skill_markdown: str,
     model: str,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "model": model,
         "instructions": fast_skill_system_prompt(request, skill_markdown),
         "input": fast_skill_user_input(request),
         "stream": True,
         "max_output_tokens": settings.fast_path_max_output_tokens,
     }
+    if effort := selected_reasoning_effort(request, model):
+        payload["reasoning"] = {"effort": effort}
+    return payload
+
+
+def fast_skill_completions_payload(
+    request: WorkspaceRunRequest,
+    skill_markdown: str,
+    model: str,
+) -> dict[str, Any]:
+    payload = {
+        "model": model,
+        "messages": fast_skill_messages(request, skill_markdown),
+        "stream": True,
+        "max_tokens": settings.fast_path_max_output_tokens,
+    }
+    if effort := selected_reasoning_effort(request, model):
+        payload["reasoning_effort"] = effort
+    return payload
 
 
 def fast_chat_input(request: WorkspaceRunRequest) -> str:
@@ -1689,6 +1726,24 @@ def selected_text_model(request: WorkspaceRunRequest) -> str:
 
 def selected_fast_text_model(request: WorkspaceRunRequest) -> str:
     return selected_text_model(request)
+
+
+def selected_reasoning_effort(request: WorkspaceRunRequest, model: str) -> str | None:
+    return reasoning_effort_for_model(model, request.reasoning_effort)
+
+
+def reasoning_effort_rejection_for_request(request: WorkspaceRunRequest) -> dict[str, Any] | None:
+    if request.reasoning_effort is None:
+        return None
+    model = selected_text_model(request)
+    if selected_reasoning_effort(request, model):
+        return None
+    return failed_response(
+        "task_rejected",
+        "INVALID_REASONING_EFFORT",
+        "所选模型不支持当前思考强度。",
+        request.skill_name,
+    )
 
 
 def ordered_codex_models(user: UserContext | None = None) -> list[str]:

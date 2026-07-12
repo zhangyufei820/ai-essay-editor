@@ -54,7 +54,9 @@ import {
 import { Link } from 'react-router-dom';
 import { API, copy } from '../../helpers';
 import {
+  getDefaultReasoningEffort,
   getDefaultTextModel,
+  getReasoningEffortOptions,
   getTextModelGroup,
   toTextModelOptions,
 } from './textModelFilter';
@@ -821,6 +823,7 @@ const TextWorkbench = ({ isMobile }) => {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelError, setModelError] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  const [reasoningEffort, setReasoningEffort] = useState('');
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -840,6 +843,15 @@ const TextWorkbench = ({ isMobile }) => {
   const modelOptions = useMemo(() => toTextModelOptions(models), [models]);
   const activeModel = selectedModel || getDefaultTextModel(models);
   const activeModelGroup = getTextModelGroup(activeModel);
+  const reasoningEffortOptions = useMemo(
+    () => getReasoningEffortOptions(activeModel),
+    [activeModel],
+  );
+  const activeReasoningEffort = reasoningEffortOptions.some(
+    (option) => option.value === reasoningEffort,
+  )
+    ? reasoningEffort
+    : getDefaultReasoningEffort(activeModel);
   const historyStorageKey = useMemo(() => getHistoryStorageKey(user), [user]);
   const canOrganize = input.trim() || attachments.length > 0;
   const hasConversation = messages.some((message) => message.role === 'user' || message.role === 'assistant');
@@ -918,6 +930,18 @@ const TextWorkbench = ({ isMobile }) => {
       })
       .finally(() => setModelsLoading(false));
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    const defaultEffort = getDefaultReasoningEffort(activeModel);
+    setReasoningEffort((currentEffort) => {
+      if (!defaultEffort) return '';
+      return reasoningEffortOptions.some(
+        (option) => option.value === currentEffort,
+      )
+        ? currentEffort
+        : defaultEffort;
+    });
+  }, [activeModel, reasoningEffortOptions]);
 
   useEffect(() => {
     if (threadRef.current) {
@@ -1170,6 +1194,9 @@ const TextWorkbench = ({ isMobile }) => {
           signal: controller.signal,
           body: JSON.stringify({
             model: activeModel,
+            ...(activeReasoningEffort
+              ? { reasoning_effort: activeReasoningEffort }
+              : {}),
             ...(group ? { group } : {}),
             ...(initialModelGroup === DISCOUNT_GROUP
               ? {
@@ -1657,16 +1684,35 @@ const TextWorkbench = ({ isMobile }) => {
               }}
             />
 
-            <Select
-              className='sx-gpt-model-select'
-              value={selectedModel}
-              loading={modelsLoading}
-              disabled={!isLoggedIn || modelsLoading || isSubmitting}
-              optionList={modelOptions}
-              placeholder={modelsLoading ? '模型' : '选择模型'}
-              onChange={(value) => setSelectedModel(value)}
-              style={{ width: isMobile ? 116 : 178 }}
-            />
+            <div
+              className={
+                reasoningEffortOptions.length
+                  ? 'sx-gpt-model-controls has-reasoning'
+                  : 'sx-gpt-model-controls'
+              }
+            >
+              <Select
+                className='sx-gpt-model-select'
+                value={selectedModel}
+                loading={modelsLoading}
+                disabled={!isLoggedIn || modelsLoading || isSubmitting}
+                optionList={modelOptions}
+                placeholder={modelsLoading ? '模型' : '选择模型'}
+                onChange={(value) => setSelectedModel(value)}
+                style={{ width: isMobile ? 116 : 178 }}
+              />
+              {reasoningEffortOptions.length ? (
+                <Select
+                  className='sx-gpt-reasoning-select'
+                  value={activeReasoningEffort}
+                  disabled={!isLoggedIn || modelsLoading || isSubmitting}
+                  optionList={reasoningEffortOptions}
+                  aria-label='思考强度'
+                  onChange={(value) => setReasoningEffort(value)}
+                  style={{ width: isMobile ? 116 : 126 }}
+                />
+              ) : null}
+            </div>
 
             <Button
               className={isSubmitting ? 'sx-gpt-send is-stop' : 'sx-gpt-send'}
@@ -1695,6 +1741,12 @@ const TextWorkbench = ({ isMobile }) => {
             <div className='sx-gpt-message-name' role='note'>
               OpenAI 特价模型优先按 0.05x；特价通道不可用且尚未输出时自动切换原价
               1x，回复会标明实际倍率。
+            </div>
+          ) : null}
+          {activeReasoningEffort ? (
+            <div className='sx-gpt-reasoning-note' role='note'>
+              思考强度：{reasoningEffortOptions.find((option) => option.value === activeReasoningEffort)?.label}；推理
+              Token 按所选模型的输出价与当前分组倍率结算，强度越高可能消耗更多。
             </div>
           ) : null}
         </div>

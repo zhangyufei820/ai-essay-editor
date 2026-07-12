@@ -24,6 +24,23 @@ const FALLBACK_TEXT_MODELS = [
   'kimi-k2',
 ];
 
+const GPT_55_REASONING_EFFORT_OPTIONS = [
+  { label: '无', value: 'none' },
+  { label: '低', value: 'low' },
+  { label: '标准', value: 'medium' },
+  { label: '高', value: 'high' },
+  { label: '极高', value: 'xhigh' },
+];
+
+const REASONING_EFFORT_OPTIONS_BY_MODEL = new Map([
+  ['gpt-5.5', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.5-openai-compact', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.6', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.6-sol', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.6-terra', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.6-luna', GPT_55_REASONING_EFFORT_OPTIONS],
+]);
+
 function isHiddenTextModel(modelName) {
   const name = String(modelName || '').trim().toLowerCase();
   return HIDDEN_TEXT_MODELS.has(name);
@@ -57,6 +74,18 @@ export function getTextModelGroup(modelName) {
   if (GROK_TEXT_MODELS.has(name)) return 'grok45';
   if (DISCOUNT_TEXT_MODELS.has(name)) return 'discount';
   return '';
+}
+
+export function getReasoningEffortOptions(modelName) {
+  return REASONING_EFFORT_OPTIONS_BY_MODEL.get(
+    String(modelName || '').trim().toLowerCase(),
+  ) || [];
+}
+
+export function getDefaultReasoningEffort(modelName) {
+  return getReasoningEffortOptions(modelName).find(
+    (option) => option.value === 'medium',
+  )?.value || '';
 }
 
 export { DEFAULT_TEXT_MODEL, FALLBACK_TEXT_MODELS };
