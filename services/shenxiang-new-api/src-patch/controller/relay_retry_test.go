@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,10 +10,407 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
+
+type playgroundDiscountBillingStub struct {
+	preConsumed    int
+	reserveTargets []int
+	reserveErr     error
+}
+
+func (s *playgroundDiscountBillingStub) Settle(int) error { return nil }
+
+func (s *playgroundDiscountBillingStub) Refund(*gin.Context) {}
+
+func (s *playgroundDiscountBillingStub) NeedsRefund() bool { return true }
+
+func (s *playgroundDiscountBillingStub) GetPreConsumedQuota() int { return s.preConsumed }
+
+func (s *playgroundDiscountBillingStub) Reserve(targetQuota int) error {
+	s.reserveTargets = append(s.reserveTargets, targetQuota)
+	return s.reserveErr
+}
+
+func withPublicPlaygroundDiscountGroups(t *testing.T) {
+	t.Helper()
+	original := setting.UserUsableGroups2JSONString()
+	t.Cleanup(func() {
+		if err := setting.UpdateUserUsableGroupsByJSONString(original); err != nil {
+			t.Fatalf("restore usable groups: %v", err)
+		}
+	})
+	if err := setting.UpdateUserUsableGroupsByJSONString(`{"default":"原价","discount":"特价"}`); err != nil {
+		t.Fatalf("configure usable groups: %v", err)
+	}
+}
+
+func withTokenCounting(t *testing.T) {
+	t.Helper()
+	original := constant.CountToken
+	constant.CountToken = true
+	t.Cleanup(func() {
+		constant.CountToken = original
+	})
+}
+
+func withPlaygroundDiscountPricing(t *testing.T) {
+	t.Helper()
+	originalModelRatio := ratio_setting.ModelRatio2JSONString()
+	originalGroupRatio := ratio_setting.GroupRatio2JSONString()
+	originalCompletionRatio := ratio_setting.CompletionRatio2JSONString()
+	t.Cleanup(func() {
+		if err := ratio_setting.UpdateModelRatioByJSONString(originalModelRatio); err != nil {
+			t.Fatalf("restore model ratio: %v", err)
+		}
+		if err := ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatio); err != nil {
+			t.Fatalf("restore group ratio: %v", err)
+		}
+		if err := ratio_setting.UpdateCompletionRatioByJSONString(originalCompletionRatio); err != nil {
+			t.Fatalf("restore completion ratio: %v", err)
+		}
+	})
+	if err := ratio_setting.UpdateModelRatioByJSONString(`{"gpt-5.5":2}`); err != nil {
+		t.Fatalf("configure model ratio: %v", err)
+	}
+	if err := ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"discount":0.05}`); err != nil {
+		t.Fatalf("configure group ratio: %v", err)
+	}
+	if err := ratio_setting.UpdateCompletionRatioByJSONString(`{"gpt-5.5":6}`); err != nil {
+		t.Fatalf("configure completion ratio: %v", err)
+	}
+}
+
+func newPlaygroundDiscountFallbackContext() (*gin.Context, *httptest.ResponseRecorder) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/pg/chat/completions", nil)
+	return c, recorder
+}
+
+func TestPlaygroundDiscountAvailabilityErrorClassification(t *testing.T) {
+	tests := []struct {
+		name string
+		err  *types.NewAPIError
+		want bool
+	}{
+		{
+			name: "network failure",
+			err:  types.NewOpenAIError(errors.New("connection refused"), types.ErrorCodeDoRequestFailed, http.StatusInternalServerError),
+			want: true,
+		},
+		{
+			name: "upstream rate limit",
+			err: types.WithOpenAIError(types.OpenAIError{
+				Message: "temporarily busy",
+				Code:    "rate_limit_exceeded",
+			}, http.StatusTooManyRequests),
+			want: true,
+		},
+		{
+			name: "upstream quota unavailable",
+			err: types.WithOpenAIError(types.OpenAIError{
+				Message: "insufficient upstream quota",
+				Code:    "insufficient_quota",
+			}, http.StatusForbidden),
+			want: true,
+		},
+		{
+			name: "channel key unavailable",
+			err:  types.NewError(errors.New("no key"), types.ErrorCodeChannelNoAvailableKey),
+			want: true,
+		},
+		{
+			name: "prompt blocked",
+			err:  types.NewErrorWithStatusCode(errors.New("blocked"), types.ErrorCodePromptBlocked, http.StatusBadRequest),
+			want: false,
+		},
+		{
+			name: "upstream policy rejection",
+			err: types.WithOpenAIError(types.OpenAIError{
+				Message: "content policy rejection",
+				Code:    "content_policy_violation",
+			}, http.StatusForbidden),
+			want: false,
+		},
+		{
+			name: "upstream request validation",
+			err: types.WithOpenAIError(types.OpenAIError{
+				Message: "invalid parameter",
+				Code:    "invalid_request_error",
+			}, http.StatusBadRequest),
+			want: false,
+		},
+		{
+			name: "local quota failure",
+			err:  types.NewErrorWithStatusCode(errors.New("quota insufficient"), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden),
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isPlaygroundDiscountAvailabilityError(test.err); got != test.want {
+				t.Fatalf("isPlaygroundDiscountAvailabilityError() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestShouldFallbackPlaygroundDiscountRequiresUnwrittenFirstAttempt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	withPublicPlaygroundDiscountGroups(t)
+	originalCountToken := constant.CountToken
+	constant.CountToken = true
+	t.Cleanup(func() {
+		constant.CountToken = originalCountToken
+	})
+	availabilityErr := types.NewOpenAIError(errors.New("connection refused"), types.ErrorCodeDoRequestFailed, http.StatusInternalServerError)
+	info := &relaycommon.RelayInfo{UsingGroup: service.DiscountPricingGroupName, UserGroup: "default"}
+	boundedMeta := &types.TokenCountMeta{MaxTokens: 4096}
+
+	c, _ := newPlaygroundDiscountFallbackContext()
+	if !shouldFallbackPlaygroundDiscount(c, info, boundedMeta, availabilityErr) {
+		t.Fatal("shouldFallbackPlaygroundDiscount() = false, want true before response output")
+	}
+
+	cWithoutCompletionLimit, _ := newPlaygroundDiscountFallbackContext()
+	if shouldFallbackPlaygroundDiscount(cWithoutCompletionLimit, info, &types.TokenCountMeta{}, availabilityErr) {
+		t.Fatal("shouldFallbackPlaygroundDiscount() = true without a bounded completion size")
+	}
+
+	cWithoutTokenCounting, _ := newPlaygroundDiscountFallbackContext()
+	constant.CountToken = false
+	if shouldFallbackPlaygroundDiscount(cWithoutTokenCounting, info, boundedMeta, availabilityErr) {
+		t.Fatal("shouldFallbackPlaygroundDiscount() = true while prompt token counting is disabled")
+	}
+	constant.CountToken = true
+
+	cWithOutput, _ := newPlaygroundDiscountFallbackContext()
+	_, _ = cWithOutput.Writer.Write([]byte("data: visible"))
+	if shouldFallbackPlaygroundDiscount(cWithOutput, info, boundedMeta, availabilityErr) {
+		t.Fatal("shouldFallbackPlaygroundDiscount() = true after response output")
+	}
+
+	cAlreadyRetried, _ := newPlaygroundDiscountFallbackContext()
+	cAlreadyRetried.Set(playgroundDiscountFallbackKey, true)
+	if shouldFallbackPlaygroundDiscount(cAlreadyRetried, info, boundedMeta, availabilityErr) {
+		t.Fatal("shouldFallbackPlaygroundDiscount() = true after fallback was already attempted")
+	}
+
+	cancelledRequest, _ := newPlaygroundDiscountFallbackContext()
+	cancelledCtx, cancel := context.WithCancel(cancelledRequest.Request.Context())
+	cancel()
+	cancelledRequest.Request = cancelledRequest.Request.WithContext(cancelledCtx)
+	if shouldFallbackPlaygroundDiscount(cancelledRequest, info, boundedMeta, availabilityErr) {
+		t.Fatal("shouldFallbackPlaygroundDiscount() = true after the client request was cancelled")
+	}
+
+	cOtherPath, _ := newPlaygroundDiscountFallbackContext()
+	cOtherPath.Request.URL.Path = "/v1/chat/completions"
+	if shouldFallbackPlaygroundDiscount(cOtherPath, info, boundedMeta, availabilityErr) {
+		t.Fatal("shouldFallbackPlaygroundDiscount() = true outside the homepage playground route")
+	}
+
+	if err := setting.UpdateUserUsableGroupsByJSONString(`{"discount":"特价"}`); err != nil {
+		t.Fatalf("hide default group: %v", err)
+	}
+	cDefaultHidden, _ := newPlaygroundDiscountFallbackContext()
+	if shouldFallbackPlaygroundDiscount(cDefaultHidden, info, boundedMeta, availabilityErr) {
+		t.Fatal("shouldFallbackPlaygroundDiscount() = true when default group is not usable")
+	}
+}
+
+func TestPreparePlaygroundDiscountFallbackReservesDefaultPricing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	withTokenCounting(t)
+	withPlaygroundDiscountPricing(t)
+
+	c, recorder := newPlaygroundDiscountFallbackContext()
+	billing := &playgroundDiscountBillingStub{preConsumed: 10}
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.5",
+		UsingGroup:      service.DiscountPricingGroupName,
+		UserGroup:       "default",
+		Billing:         billing,
+	}
+	info.SetEstimatePromptTokens(100)
+	retry := &service.RetryParam{
+		Ctx:        c,
+		TokenGroup: service.DiscountPricingGroupName,
+		ModelName:  info.OriginModelName,
+		Retry:      common.GetPointer(2),
+	}
+
+	if err := preparePlaygroundDiscountFallback(c, info, retry, &types.TokenCountMeta{MaxTokens: 4096}); err != nil {
+		t.Fatalf("preparePlaygroundDiscountFallback() error = %v", err)
+	}
+	if info.UsingGroup != "default" || retry.TokenGroup != "default" || retry.GetRetry() != 0 {
+		t.Fatalf("fallback groups not switched: info=%q token=%q retry=%d", info.UsingGroup, retry.TokenGroup, retry.GetRetry())
+	}
+	if got := common.GetContextKeyString(c, constant.ContextKeyUsingGroup); got != "default" {
+		t.Fatalf("context using group = %q, want default", got)
+	}
+	if got := common.GetContextKeyString(c, constant.ContextKeyAutoGroup); got != "default" {
+		t.Fatalf("context auto group = %q, want default", got)
+	}
+	if len(billing.reserveTargets) != 1 || billing.reserveTargets[0] != info.PriceData.QuotaToPreConsume {
+		t.Fatalf("reserve targets = %v, price pre-consume = %d", billing.reserveTargets, info.PriceData.QuotaToPreConsume)
+	}
+	minimumCompletionQuota := 4096 * 2 * 6
+	if billing.reserveTargets[0] < minimumCompletionQuota {
+		t.Fatalf("reserve target = %d, want at least max completion cost %d", billing.reserveTargets[0], minimumCompletionQuota)
+	}
+	if info.PriceData.GroupRatioInfo.GroupRatio != 1 {
+		t.Fatalf("fallback group ratio = %v, want 1", info.PriceData.GroupRatioInfo.GroupRatio)
+	}
+	if recorder.Header().Get(playgroundDiscountFallbackHeader) != "1" || recorder.Header().Get(playgroundPricingGroupHeader) != "default" {
+		t.Fatalf("fallback headers = %v", recorder.Header())
+	}
+
+	walletContext, walletRecorder := newPlaygroundDiscountFallbackContext()
+	walletBilling := &playgroundDiscountBillingStub{preConsumed: 1}
+	walletInfo := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.5",
+		UsingGroup:      service.DiscountPricingGroupName,
+		UserGroup:       "default",
+		UserQuota:       1,
+		BillingSource:   service.BillingSourceWallet,
+		Billing:         walletBilling,
+	}
+	walletInfo.SetEstimatePromptTokens(100)
+	walletRetry := &service.RetryParam{
+		Ctx:        walletContext,
+		TokenGroup: service.DiscountPricingGroupName,
+		ModelName:  walletInfo.OriginModelName,
+		Retry:      common.GetPointer(0),
+	}
+	walletErr := preparePlaygroundDiscountFallback(walletContext, walletInfo, walletRetry, &types.TokenCountMeta{MaxTokens: 4096})
+	if walletErr == nil || walletErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota || walletErr.StatusCode != http.StatusForbidden {
+		t.Fatalf("wallet fallback error = %#v, want insufficient quota 403", walletErr)
+	}
+	if len(walletBilling.reserveTargets) != 0 {
+		t.Fatalf("wallet reserve targets = %v, want no reserve when the full original-price estimate is unaffordable", walletBilling.reserveTargets)
+	}
+	if walletInfo.UsingGroup != service.DiscountPricingGroupName || walletRetry.TokenGroup != service.DiscountPricingGroupName {
+		t.Fatalf("wallet fallback mutated groups after rejection: info=%q token=%q", walletInfo.UsingGroup, walletRetry.TokenGroup)
+	}
+	if walletRecorder.Header().Get(playgroundDiscountFallbackHeader) != "" || walletRecorder.Header().Get(playgroundPricingGroupHeader) != "" {
+		t.Fatalf("wallet rejection exposed fallback headers = %v", walletRecorder.Header())
+	}
+}
+
+func TestPreparePlaygroundDiscountFallbackStopsBeforeDefaultWhenReserveFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	withTokenCounting(t)
+	withPlaygroundDiscountPricing(t)
+	c, recorder := newPlaygroundDiscountFallbackContext()
+	reserveFailure := types.NewErrorWithStatusCode(errors.New("reserve failed"), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden)
+	billing := &playgroundDiscountBillingStub{preConsumed: 10, reserveErr: reserveFailure}
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.5",
+		UsingGroup:      service.DiscountPricingGroupName,
+		UserGroup:       "default",
+		Billing:         billing,
+		PriceData:       types.PriceData{QuotaToPreConsume: 17},
+	}
+	info.SetEstimatePromptTokens(100)
+	retry := &service.RetryParam{
+		Ctx:        c,
+		TokenGroup: service.DiscountPricingGroupName,
+		ModelName:  info.OriginModelName,
+		Retry:      common.GetPointer(0),
+	}
+
+	if err := preparePlaygroundDiscountFallback(c, info, retry, &types.TokenCountMeta{MaxTokens: 4096}); err != reserveFailure {
+		t.Fatalf("preparePlaygroundDiscountFallback() error = %#v, want original reserve failure", err)
+	} else if err.GetErrorCode() != types.ErrorCodeInsufficientUserQuota || err.StatusCode != http.StatusForbidden {
+		t.Fatalf("reserve failure lost code/status: code=%q status=%d", err.GetErrorCode(), err.StatusCode)
+	}
+	if info.UsingGroup != service.DiscountPricingGroupName {
+		t.Fatalf("relay info using group = %q, want discount when reserve fails", info.UsingGroup)
+	}
+	if info.PriceData.QuotaToPreConsume != 17 {
+		t.Fatalf("relay price data was not restored after reserve failure: %#v", info.PriceData)
+	}
+	if got := common.GetContextKeyString(c, constant.ContextKeyUsingGroup); got != service.DiscountPricingGroupName {
+		t.Fatalf("context using group = %q, want discount after reserve failure", got)
+	}
+	if got := common.GetContextKeyString(c, constant.ContextKeyAutoGroup); got != service.DiscountPricingGroupName {
+		t.Fatalf("context auto group = %q, want discount after reserve failure", got)
+	}
+	if recorder.Header().Get(playgroundDiscountFallbackHeader) != "" || recorder.Header().Get(playgroundPricingGroupHeader) != "" {
+		t.Fatalf("reserve failure exposed fallback headers = %v", recorder.Header())
+	}
+	if c.GetBool(playgroundDiscountFallbackKey) {
+		t.Fatal("reserve failure marked fallback as completed")
+	}
+	if retry.TokenGroup != service.DiscountPricingGroupName {
+		t.Fatalf("retry token group = %q, want discount when reserve fails", retry.TokenGroup)
+	}
+}
+
+func TestPlaygroundDiscountFallbackRequestAppliesFullReserveBeforeBilling(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	originalCountToken := constant.CountToken
+	constant.CountToken = true
+	t.Cleanup(func() {
+		constant.CountToken = originalCountToken
+	})
+
+	c, _ := newPlaygroundDiscountFallbackContext()
+	c.Request.Header.Set(playgroundDiscountFallbackRequestHeader, "1")
+	info := &relaycommon.RelayInfo{UsingGroup: "default"}
+	info.SetEstimatePromptTokens(100)
+	if !isPlaygroundDiscountFallbackRequest(c, info) {
+		t.Fatal("isPlaygroundDiscountFallbackRequest() = false, want true for marked default request")
+	}
+	withoutHeader, _ := newPlaygroundDiscountFallbackContext()
+	if isPlaygroundDiscountFallbackRequest(withoutHeader, info) {
+		t.Fatal("isPlaygroundDiscountFallbackRequest() = true without fallback header")
+	}
+	nonPlayground, _ := newPlaygroundDiscountFallbackContext()
+	nonPlayground.Request.URL.Path = "/v1/chat/completions"
+	nonPlayground.Request.Header.Set(playgroundDiscountFallbackRequestHeader, "1")
+	if isPlaygroundDiscountFallbackRequest(nonPlayground, info) {
+		t.Fatal("isPlaygroundDiscountFallbackRequest() = true outside playground route")
+	}
+	discountInfo := &relaycommon.RelayInfo{UsingGroup: service.DiscountPricingGroupName}
+	if isPlaygroundDiscountFallbackRequest(c, discountInfo) {
+		t.Fatal("isPlaygroundDiscountFallbackRequest() = true for discount request")
+	}
+
+	priceData := types.PriceData{
+		ModelRatio:      2,
+		CompletionRatio: 6,
+		GroupRatioInfo: types.GroupRatioInfo{
+			GroupRatio: 1,
+		},
+		QuotaToPreConsume: 1000,
+	}
+	boundedMeta := &types.TokenCountMeta{MaxTokens: 4096}
+	adjusted, apiErr := applyPlaygroundDiscountFallbackReserve(info, boundedMeta, priceData)
+	if apiErr != nil {
+		t.Fatalf("applyPlaygroundDiscountFallbackReserve() error = %v", apiErr)
+	}
+	minimumCompletionQuota := 4096 * 2 * 6
+	if adjusted.QuotaToPreConsume < minimumCompletionQuota || info.PriceData.QuotaToPreConsume != adjusted.QuotaToPreConsume {
+		t.Fatalf("fallback request reserve = %d, relay reserve = %d, want at least %d", adjusted.QuotaToPreConsume, info.PriceData.QuotaToPreConsume, minimumCompletionQuota)
+	}
+
+	constant.CountToken = false
+	if _, apiErr := applyPlaygroundDiscountFallbackReserve(info, boundedMeta, priceData); apiErr == nil || apiErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("fallback request without token counting error = %#v, want bad request", apiErr)
+	}
+}
 
 func TestShouldRetryBypassesChannelAffinityForUpstreamForbidden(t *testing.T) {
 	gin.SetMode(gin.TestMode)

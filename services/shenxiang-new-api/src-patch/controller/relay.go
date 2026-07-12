@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -87,9 +88,13 @@ const (
 	playgroundImage2Channel16TempCircuitChannelID = 16
 	playgroundImage2VipMappedChannelID            = 4
 
-	playgroundForcedChannelIDsKey         = "playground_forced_channel_ids"
-	playgroundImage2TempCircuitScopeKey   = "playground_image2_temp_circuit_scope"
-	playgroundImage2TempCircuitRequestKey = "playground_image2_temp_circuit_request"
+	playgroundForcedChannelIDsKey           = "playground_forced_channel_ids"
+	playgroundImage2TempCircuitScopeKey     = "playground_image2_temp_circuit_scope"
+	playgroundImage2TempCircuitRequestKey   = "playground_image2_temp_circuit_request"
+	playgroundDiscountFallbackKey           = "playground_discount_fallback"
+	playgroundDiscountFallbackHeader        = "X-Aiphui-Discount-Fallback"
+	playgroundDiscountFallbackRequestHeader = "X-Aiphui-Discount-Fallback-Request"
+	playgroundPricingGroupHeader            = "X-Aiphui-Pricing-Group"
 )
 
 type temporaryChannelCircuit struct {
@@ -326,10 +331,17 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	relayInfo.SetEstimatePromptTokens(tokens)
 
+	clientRequestedDiscountFallback := isPlaygroundDiscountFallbackRequest(c, relayInfo)
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))
 		return
+	}
+	if clientRequestedDiscountFallback {
+		priceData, newAPIError = applyPlaygroundDiscountFallbackReserve(relayInfo, meta, priceData)
+		if newAPIError != nil {
+			return
+		}
 	}
 
 	// common.SetContextKey(c, constant.ContextKeyTokenCountMeta, meta)
@@ -341,6 +353,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if newAPIError != nil {
 			return
 		}
+	}
+	if clientRequestedDiscountFallback {
+		markPlaygroundDiscountFallback(c)
 	}
 
 	defer func() {
@@ -408,6 +423,19 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.LastError = newAPIError
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+		if shouldFallbackPlaygroundDiscount(c, relayInfo, meta, newAPIError) {
+			service.RecordRelayRetryAttempt(c, channel.Id, channel.Name, retryParam.GetRetry(), newAPIError)
+			fallbackErr := preparePlaygroundDiscountFallback(c, relayInfo, retryParam, meta)
+			if fallbackErr != nil {
+				newAPIError = fallbackErr
+				relayInfo.LastError = fallbackErr
+				break
+			}
+			if maxRetryTimes < 1 {
+				maxRetryTimes = 1
+			}
+			continue
+		}
 
 		if !shouldRetry(c, newAPIError, maxRetryTimes-retryParam.GetRetry()) {
 			break
@@ -425,6 +453,198 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			perfmetrics.RecordRelaySample(relayInfo, false, 0)
 		})
 	}
+}
+
+func shouldFallbackPlaygroundDiscount(c *gin.Context, info *relaycommon.RelayInfo, meta *types.TokenCountMeta, openaiErr *types.NewAPIError) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil || info == nil || meta == nil || openaiErr == nil {
+		return false
+	}
+	if c.Request.Context().Err() != nil || !constant.CountToken || meta.MaxTokens <= 0 {
+		return false
+	}
+	if c.Request.URL.Path != "/pg/chat/completions" || info.UsingGroup != service.DiscountPricingGroupName {
+		return false
+	}
+	if c.GetBool(playgroundDiscountFallbackKey) || service.HasTextOutputSent(c) {
+		return false
+	}
+	if !service.GroupInUserUsableGroups(info.UserGroup, "default") {
+		return false
+	}
+	return isPlaygroundDiscountAvailabilityError(openaiErr)
+}
+
+func isPlaygroundDiscountAvailabilityError(openaiErr *types.NewAPIError) bool {
+	if openaiErr == nil {
+		return false
+	}
+	if types.IsChannelError(openaiErr) {
+		return true
+	}
+	switch openaiErr.GetErrorCode() {
+	case types.ErrorCodeGetChannelFailed,
+		types.ErrorCodeDoRequestFailed,
+		types.ErrorCodeEmptyResponse,
+		types.ErrorCodeModelNotFound:
+		return true
+	case types.ErrorCodeReadResponseBodyFailed,
+		types.ErrorCodeBadResponseStatusCode,
+		types.ErrorCodeBadResponse,
+		types.ErrorCodeBadResponseBody:
+		return isPlaygroundDiscountRetryableStatus(openaiErr.StatusCode)
+	}
+	if !openaiErr.IsUpstreamRelayError() {
+		return false
+	}
+	if isPlaygroundUpstreamQuotaLikeError(openaiErr) {
+		return true
+	}
+	return isPlaygroundDiscountRetryableStatus(openaiErr.StatusCode)
+}
+
+func isPlaygroundDiscountRetryableStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusUnauthorized,
+		http.StatusNotFound,
+		http.StatusRequestTimeout,
+		http.StatusTooEarly,
+		http.StatusTooManyRequests:
+		return true
+	default:
+		return statusCode >= http.StatusInternalServerError
+	}
+}
+
+func isPlaygroundDiscountFallbackRequest(c *gin.Context, info *relaycommon.RelayInfo) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil || info == nil {
+		return false
+	}
+	return c.Request.URL.Path == "/pg/chat/completions" &&
+		info.UsingGroup == "default" &&
+		strings.TrimSpace(c.GetHeader(playgroundDiscountFallbackRequestHeader)) == "1"
+}
+
+func markPlaygroundDiscountFallback(c *gin.Context) {
+	if c == nil {
+		return
+	}
+	c.Set(playgroundDiscountFallbackKey, true)
+	c.Header(playgroundDiscountFallbackHeader, "1")
+	c.Header(playgroundPricingGroupHeader, "default")
+}
+
+func playgroundDiscountDefaultReserveQuota(info *relaycommon.RelayInfo, meta *types.TokenCountMeta, priceData types.PriceData) int {
+	targetQuota := priceData.QuotaToPreConsume
+	if info == nil || meta == nil || meta.MaxTokens <= 0 || priceData.UsePrice || info.TieredBillingSnapshot != nil {
+		return targetQuota
+	}
+
+	promptTokens := common.Max(info.GetEstimatePromptTokens(), common.PreConsumedQuota)
+	estimatedQuota := (float64(promptTokens) + float64(meta.MaxTokens)*priceData.CompletionRatio) *
+		priceData.ModelRatio * priceData.GroupRatioInfo.GroupRatio
+	for _, ratio := range priceData.OtherRatios() {
+		estimatedQuota *= ratio
+	}
+	if math.IsNaN(estimatedQuota) || estimatedQuota <= 0 {
+		return targetQuota
+	}
+	maxInt := int(^uint(0) >> 1)
+	if math.IsInf(estimatedQuota, 1) || estimatedQuota >= float64(maxInt) {
+		return maxInt
+	}
+	return common.Max(targetQuota, int(math.Ceil(estimatedQuota)))
+}
+
+func applyPlaygroundDiscountFallbackReserve(
+	info *relaycommon.RelayInfo,
+	meta *types.TokenCountMeta,
+	priceData types.PriceData,
+) (types.PriceData, *types.NewAPIError) {
+	if info == nil || meta == nil || !constant.CountToken || meta.MaxTokens <= 0 {
+		return priceData, types.NewErrorWithStatusCode(
+			errors.New("原价回退需要启用输入计数并设置最大输出上限"),
+			types.ErrorCodeInvalidRequest,
+			http.StatusBadRequest,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
+	priceData.QuotaToPreConsume = playgroundDiscountDefaultReserveQuota(info, meta, priceData)
+	info.PriceData = priceData
+	return priceData, nil
+}
+
+func preparePlaygroundDiscountFallback(
+	c *gin.Context,
+	info *relaycommon.RelayInfo,
+	retryParam *service.RetryParam,
+	meta *types.TokenCountMeta,
+) *types.NewAPIError {
+	if c == nil || info == nil || retryParam == nil || meta == nil || meta.MaxTokens <= 0 {
+		return types.NewError(errors.New("playground discount fallback context is incomplete"), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+	}
+
+	previousUsingGroup := info.UsingGroup
+	previousPriceData := info.PriceData
+	previousTieredSnapshot := info.TieredBillingSnapshot
+	previousBillingRequestInput := info.BillingRequestInput
+	restoreDiscountPricing := func() {
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, previousUsingGroup)
+		common.SetContextKey(c, constant.ContextKeyAutoGroup, previousUsingGroup)
+		info.UsingGroup = previousUsingGroup
+		info.PriceData = previousPriceData
+		info.TieredBillingSnapshot = previousTieredSnapshot
+		info.BillingRequestInput = previousBillingRequestInput
+	}
+
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, "default")
+	common.SetContextKey(c, constant.ContextKeyAutoGroup, "default")
+	info.UsingGroup = "default"
+
+	priceData, err := helper.ModelPriceHelper(c, info, info.GetEstimatePromptTokens(), meta)
+	if err != nil {
+		restoreDiscountPricing()
+		return types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithSkipRetry(), types.ErrOptionWithStatusCode(http.StatusBadRequest))
+	}
+	priceData, fallbackPriceErr := applyPlaygroundDiscountFallbackReserve(info, meta, priceData)
+	if fallbackPriceErr != nil {
+		restoreDiscountPricing()
+		return fallbackPriceErr
+	}
+	reserveQuota := priceData.QuotaToPreConsume
+	if info.BillingSource == service.BillingSourceWallet && reserveQuota > info.UserQuota {
+		restoreDiscountPricing()
+		return types.NewErrorWithStatusCode(
+			fmt.Errorf("原价回退预扣额度不足, 用户剩余额度: %s, 需要预扣额度: %s", logger.FormatQuota(info.UserQuota), logger.FormatQuota(reserveQuota)),
+			types.ErrorCodeInsufficientUserQuota,
+			http.StatusForbidden,
+			types.ErrOptionWithSkipRetry(),
+			types.ErrOptionWithNoRecordErrorLog(),
+		)
+	}
+	if info.Billing == nil && !priceData.FreeModel {
+		if billingErr := service.PreConsumeBilling(c, reserveQuota, info); billingErr != nil {
+			restoreDiscountPricing()
+			return billingErr
+		}
+	} else if info.Billing != nil {
+		if reserveErr := info.Billing.Reserve(reserveQuota); reserveErr != nil {
+			restoreDiscountPricing()
+			var apiErr *types.NewAPIError
+			if errors.As(reserveErr, &apiErr) {
+				return apiErr
+			}
+			return types.NewError(reserveErr, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+		}
+	}
+
+	markPlaygroundDiscountFallback(c)
+	retryParam.TokenGroup = "default"
+	retryParam.SetRetry(0)
+	retryParam.ResetRetryNextTry()
+	info.RetryIndex = 0
+	info.LastError = nil
+	logger.LogWarn(c, fmt.Sprintf("主页特价文本通道不可用，已切换原价分组重试（model=%s）", info.OriginModelName))
+	return nil
 }
 
 func rejectImageModelTextEndpointRequest(relayFormat types.RelayFormat, request dto.Request) *types.NewAPIError {

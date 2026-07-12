@@ -4,6 +4,14 @@ const MEDIA_MODEL_PATTERN =
 const DEFAULT_TEXT_MODEL = 'gpt-5.4-mini';
 const HIDDEN_TEXT_MODELS = new Set(['gpt-5.3-spark']);
 const GROK_TEXT_MODELS = new Set(['grok-4.5']);
+const DISCOUNT_TEXT_MODELS = new Set([
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.5',
+  'gpt-5.6-luna',
+  'gpt-5.6-terra',
+  'gpt-5.6-sol',
+]);
 
 const FALLBACK_TEXT_MODELS = [
   DEFAULT_TEXT_MODEL,
@@ -46,7 +54,9 @@ export function getDefaultTextModel(models = []) {
 
 export function getTextModelGroup(modelName) {
   const name = String(modelName || '').trim().toLowerCase();
-  return GROK_TEXT_MODELS.has(name) ? 'grok45' : '';
+  if (GROK_TEXT_MODELS.has(name)) return 'grok45';
+  if (DISCOUNT_TEXT_MODELS.has(name)) return 'discount';
+  return '';
 }
 
 export { DEFAULT_TEXT_MODEL, FALLBACK_TEXT_MODELS };

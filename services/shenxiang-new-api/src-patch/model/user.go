@@ -19,6 +19,8 @@ import (
 
 const UserNameMaxLength = 20
 
+var ErrUserQuotaInsufficient = errors.New("user quota is not enough")
+
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
@@ -1083,6 +1085,30 @@ func DecreaseUserQuota(id int, quota int, db bool) (err error) {
 		return nil
 	}
 	return decreaseUserQuota(id, quota)
+}
+
+func DecreaseUserQuotaIfEnough(id int, quota int) error {
+	if quota < 0 {
+		return errors.New("quota 不能为负数！")
+	}
+	if quota == 0 {
+		return nil
+	}
+	result := DB.Model(&User{}).
+		Where("id = ? AND quota >= ?", id, quota).
+		Update("quota", gorm.Expr("quota - ?", quota))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrUserQuotaInsufficient
+	}
+	if common.RedisEnabled {
+		if err := cacheDecrUserQuota(id, int64(quota)); err != nil {
+			common.SysLog("failed to decrease user quota cache after guarded reserve: " + err.Error())
+		}
+	}
+	return nil
 }
 
 func decreaseUserQuota(id int, quota int) (err error) {

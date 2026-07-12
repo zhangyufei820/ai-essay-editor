@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -473,16 +475,69 @@ func TestPlaygroundWalletBillingSessionRefundsUserQuotaWithoutTokenQuota(t *test
 		relayInfo: relayInfo,
 		funding:   &WalletFunding{userId: userID},
 	}
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 
-	apiErr := session.preConsume(nil, quota)
+	apiErr := session.preConsume(ctx, quota)
 	require.Nil(t, apiErr)
 	assert.Equal(t, initQuota-quota, getUserQuota(t, userID))
 	assert.True(t, session.NeedsRefund())
 
-	session.Refund(nil)
+	session.Refund(ctx)
 	require.Eventually(t, func() bool {
 		return getUserQuota(t, userID) == initQuota
 	}, time.Second, 10*time.Millisecond)
+}
+
+func TestBillingSessionReserveAtomicallyRejectsConcurrentWalletOverdraft(t *testing.T) {
+	truncate(t)
+
+	const userID = 35
+	const initialQuota = 100
+	const reserveTarget = 80
+	seedUser(t, userID, initialQuota)
+
+	newSession := func() *BillingSession {
+		return &BillingSession{
+			relayInfo: &relaycommon.RelayInfo{
+				UserId:          userID,
+				IsPlayground:    true,
+				OriginModelName: "gpt-5.5",
+				UsingGroup:      "default",
+				BillingSource:   BillingSourceWallet,
+			},
+			funding: &WalletFunding{userId: userID},
+		}
+	}
+
+	results := make(chan error, 2)
+	var waitGroup sync.WaitGroup
+	for _, session := range []*BillingSession{newSession(), newSession()} {
+		waitGroup.Add(1)
+		go func(current *BillingSession) {
+			defer waitGroup.Done()
+			results <- current.Reserve(reserveTarget)
+		}(session)
+	}
+	waitGroup.Wait()
+	close(results)
+
+	successes := 0
+	insufficient := 0
+	for err := range results {
+		if err == nil {
+			successes++
+			continue
+		}
+		var apiErr *types.NewAPIError
+		require.True(t, errors.As(err, &apiErr), "reserve error should preserve NewAPIError")
+		assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
+		assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+		insufficient++
+	}
+
+	assert.Equal(t, 1, successes)
+	assert.Equal(t, 1, insufficient)
+	assert.Equal(t, initialQuota-reserveTarget, getUserQuota(t, userID))
 }
 
 func TestBillingSessionSettleExpiresSubscriptionWhenPreConsumeExactlyExhaustsQuota(t *testing.T) {
