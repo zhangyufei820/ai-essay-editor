@@ -37,3 +37,9 @@ def test_public_copy_is_inline_preview_first_for_generated_artifacts() -> None:
     assert "生成后请立即下载" not in combined
     assert "只保留一小时" not in combined
     assert "保存在哪里" not in combined
+
+
+def test_return_link_opens_new_api_chat_at_top_level() -> None:
+    index_html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+
+    assert '<a class="ghost-button rail-link" href="/" target="_top" aria-label="返回 API 主站">' in index_html
