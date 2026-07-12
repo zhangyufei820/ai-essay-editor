@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -40,6 +42,23 @@ func TestWalletFundingNeverOverdrawsUserQuota(t *testing.T) {
 	var user model.User
 	require.NoError(t, db.First(&user, 77).Error)
 	require.Equal(t, 20, user.Quota)
+}
+
+func TestSubscriptionFundingCloseReleasesConcurrencyOnce(t *testing.T) {
+	var releaseCalls atomic.Int32
+	funding := &SubscriptionFunding{
+		releaseConcurrency: func() { releaseCalls.Add(1) },
+	}
+	var waitGroup sync.WaitGroup
+	for index := 0; index < 10; index++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			funding.Close()
+		}()
+	}
+	waitGroup.Wait()
+	require.EqualValues(t, 1, releaseCalls.Load())
 }
 
 func TestWalletFundingSettlementNeverOverdrawsUserQuota(t *testing.T) {

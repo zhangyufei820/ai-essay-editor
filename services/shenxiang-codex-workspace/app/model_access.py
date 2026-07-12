@@ -7,8 +7,10 @@ from app.config import Settings
 
 SERVER_ALLOWED_MODELS_METADATA_KEY = "server_allowed_models_by_mode"
 IMAGE_BENEFIT_MODEL = "image 2电商商品图快速通道(1.5K)"
+INTERNAL_DISCOUNT_IMAGE_MODEL = "geek2api-image-2"
+PUBLIC_DISCOUNT_IMAGE_MODEL = "特价 image-2"
 EXTRA_IMAGE_MODELS = (
-    "geek2api-image-2",
+    INTERNAL_DISCOUNT_IMAGE_MODEL,
     "banana-2",
     "gemini-3-pro-image-preview",
 )
@@ -20,17 +22,28 @@ def dedupe_models(models: Iterable[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(value for value in values if value))
 
 
+def public_model_name(model: str) -> str:
+    name = str(model or "").strip()
+    if name.casefold() == INTERNAL_DISCOUNT_IMAGE_MODEL.casefold():
+        return PUBLIC_DISCOUNT_IMAGE_MODEL
+    return name
+
+
+def public_image_models(models: Iterable[str]) -> tuple[str, ...]:
+    return dedupe_models(public_model_name(model) for model in models)
+
+
 def default_mode_models(settings: Settings) -> dict[str, tuple[str, ...]]:
     return {
         "codex": tuple(settings.codex_allowed_models),
         "claude": tuple(settings.claude_allowed_models),
-        "image": tuple(settings.image_allowed_models),
+        "image": public_image_models(settings.image_allowed_models),
         "video": tuple(settings.video_allowed_models),
     }
 
 
 def supported_image_models(settings: Settings) -> tuple[str, ...]:
-    return dedupe_models((*settings.image_allowed_models, *EXTRA_IMAGE_MODELS))
+    return public_image_models((*settings.image_allowed_models, *EXTRA_IMAGE_MODELS))
 
 
 def supported_video_models(settings: Settings) -> tuple[str, ...]:
@@ -49,7 +62,7 @@ def is_image_model(settings: Settings, model: str) -> bool:
         return False
     if name == IMAGE_BENEFIT_MODEL:
         return True
-    if name in supported_image_models(settings):
+    if public_model_name(name) in supported_image_models(settings):
         return True
     if any(hint in lower for hint in ("image", "imagine")):
         return True
@@ -92,7 +105,7 @@ def split_visible_models(
             continue
         if is_image_model(settings, model):
             if include_image_benefit or model != IMAGE_BENEFIT_MODEL:
-                image.append(model)
+                image.append(public_model_name(model))
             continue
         if is_video_model(settings, model):
             video.append(model)
@@ -115,7 +128,8 @@ def normalize_mode_models_payload(raw: Any) -> dict[str, tuple[str, ...]]:
     for mode in ("codex", "claude", "image", "video"):
         values = raw.get(mode)
         if isinstance(values, (list, tuple)):
-            result[mode] = dedupe_models(str(item or "").strip() for item in values)
+            normalized = dedupe_models(str(item or "").strip() for item in values)
+            result[mode] = public_image_models(normalized) if mode == "image" else normalized
     return result
 
 

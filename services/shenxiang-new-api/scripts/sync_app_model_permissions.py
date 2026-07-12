@@ -5,15 +5,23 @@ import json
 import hashlib
 import hmac
 import os
+import stat
 import subprocess
 import sys
+import time
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 
 ROOT = Path("/opt/shenxiang-new-api")
 CODEX_ROOT = Path("/opt/shenxiang-codex-workspace")
+CODEX_ENV_BACKUP_ROOT = Path("/data/ai-essay-editor-quarantine/model-sync-env-backups")
 ADMIN_SYSTEM_TOKEN_USER_ID = 1
+MYSQL_QUERY_TIMEOUT_SECONDS = 15
+MYSQL_UPDATE_TIMEOUT_SECONDS = 60
+REDIS_UPDATE_TIMEOUT_SECONDS = 15
+CODEX_REFRESH_TIMEOUT_SECONDS = 180
+TOKEN_CACHE_INVALIDATION_ATTEMPTS = 3
 
 TOKEN_PROFILES = {
     "codex": ("星人 Codex 文本令牌", "星人 Codex 自动令牌"),
@@ -192,35 +200,10 @@ PUBLIC_OPENAI_TEXT_MODELS = {
 
 
 def mysql(query: str) -> list[list[str]]:
-    password = os.environ["MYSQL_ROOT_PASSWORD"]
-    database = os.environ["MYSQL_DATABASE"]
-    env = os.environ.copy()
-    env["MYSQL_PWD"] = password
-    cmd = [
-        "docker",
-        "exec",
-        "-e",
-        "MYSQL_PWD",
-        "shenxiang-new-api-mysql",
-        "mysql",
-        "--default-character-set=utf8mb4",
-        "-uroot",
-        "-N",
-        "-B",
-        database,
-        "-e",
-        query,
-    ]
-    output = subprocess.check_output(cmd, env=env, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace")
-    rows: list[list[str]] = []
-    for line in output.splitlines():
-        rows.append(line.split("\t"))
-    return rows
-
-
-def mysql_raw(query: str) -> list[list[str]]:
-    password = os.environ["MYSQL_ROOT_PASSWORD"]
-    database = os.environ["MYSQL_DATABASE"]
+    password = os.environ.get("MYSQL_ROOT_PASSWORD", "")
+    database = os.environ.get("MYSQL_DATABASE", "")
+    if not password or not database:
+        raise RuntimeError("model permission MySQL environment is not loaded")
     env = os.environ.copy()
     env["MYSQL_PWD"] = password
     cmd = [
@@ -239,16 +222,64 @@ def mysql_raw(query: str) -> list[list[str]]:
         "-e",
         query,
     ]
-    output = subprocess.check_output(cmd, env=env, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace")
+    try:
+        output = subprocess.check_output(
+            cmd,
+            env=env,
+            stderr=subprocess.DEVNULL,
+            timeout=MYSQL_QUERY_TIMEOUT_SECONDS,
+        ).decode("utf-8", errors="replace")
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        raise RuntimeError("model permission MySQL query failed") from None
     rows: list[list[str]] = []
     for line in output.splitlines():
         rows.append(line.split("\t"))
     return rows
 
 
-def mysql_exec(query: str) -> None:
-    password = os.environ["MYSQL_ROOT_PASSWORD"]
-    database = os.environ["MYSQL_DATABASE"]
+def mysql_raw(query: str) -> list[list[str]]:
+    password = os.environ.get("MYSQL_ROOT_PASSWORD", "")
+    database = os.environ.get("MYSQL_DATABASE", "")
+    if not password or not database:
+        raise RuntimeError("model permission MySQL environment is not loaded")
+    env = os.environ.copy()
+    env["MYSQL_PWD"] = password
+    cmd = [
+        "docker",
+        "exec",
+        "-e",
+        "MYSQL_PWD",
+        "shenxiang-new-api-mysql",
+        "mysql",
+        "--default-character-set=utf8mb4",
+        "--raw",
+        "-uroot",
+        "-N",
+        "-B",
+        database,
+        "-e",
+        query,
+    ]
+    try:
+        output = subprocess.check_output(
+            cmd,
+            env=env,
+            stderr=subprocess.DEVNULL,
+            timeout=MYSQL_QUERY_TIMEOUT_SECONDS,
+        ).decode("utf-8", errors="replace")
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        raise RuntimeError("model permission MySQL query failed") from None
+    rows: list[list[str]] = []
+    for line in output.splitlines():
+        rows.append(line.split("\t"))
+    return rows
+
+
+def mysql_exec(query: str) -> list[str]:
+    password = os.environ.get("MYSQL_ROOT_PASSWORD", "")
+    database = os.environ.get("MYSQL_DATABASE", "")
+    if not password or not database:
+        raise RuntimeError("model permission MySQL environment is not loaded")
     env = os.environ.copy()
     env["MYSQL_PWD"] = password
     cmd = [
@@ -263,7 +294,26 @@ def mysql_exec(query: str) -> None:
         "-uroot",
         database,
     ]
-    subprocess.run(cmd, input=query.encode("utf-8"), env=env, check=True, stderr=subprocess.DEVNULL)
+    try:
+        completed = subprocess.run(
+            cmd,
+            input=query.encode("utf-8"),
+            env=env,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=MYSQL_UPDATE_TIMEOUT_SECONDS,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        raise RuntimeError("model permission MySQL update failed") from None
+    return completed.stdout.decode("utf-8", errors="replace").splitlines()
+
+
+def mysql_status(output: list[str] | None, prefix: str) -> str:
+    for line in reversed(output or []):
+        if line.startswith(prefix):
+            return line.removeprefix(prefix)
+    raise RuntimeError("model ability sync returned no completion status")
 
 
 def token_cache_key(token_key: str) -> str:
@@ -293,22 +343,70 @@ def delete_token_caches(token_keys: list[str]) -> int:
     env = os.environ.copy()
     env["REDISCLI_AUTH"] = password
     payload = "".join(f"DEL {token_cache_key(token_key)}\n" for token_key in unique_keys)
-    subprocess.run(
-        ["docker", "exec", "-i", "-e", "REDISCLI_AUTH", redis_container, "redis-cli", "--pipe"],
-        input=payload.encode("utf-8"),
-        env=env,
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    for _attempt in range(TOKEN_CACHE_INVALIDATION_ATTEMPTS):
+        try:
+            subprocess.run(
+                ["docker", "exec", "-i", "-e", "REDISCLI_AUTH", redis_container, "redis-cli", "--pipe"],
+                input=payload.encode("utf-8"),
+                env=env,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=REDIS_UPDATE_TIMEOUT_SECONDS,
+            )
+            return len(unique_keys)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+            if _attempt + 1 < TOKEN_CACHE_INVALIDATION_ATTEMPTS:
+                time.sleep(_attempt + 1)
+    raise RuntimeError("token cache invalidation failed") from None
+
+
+def active_token_keys() -> list[str]:
+    rows = mysql(
+        "SELECT COALESCE(`key`, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND COALESCE(`key`, '') <> '';"
     )
-    return len(unique_keys)
+    return [row[0] for row in rows if row and row[0].strip()]
+
+
+def invalidate_all_active_token_caches() -> int:
+    return delete_token_caches(active_token_keys())
 
 
 def sql_quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
 
 
+def whitelisted_sql_identifier(identifier: str, allowed: frozenset[str]) -> str:
+    if identifier not in allowed:
+        raise ValueError("unsafe SQL identifier")
+    return identifier
+
+
+def binary_string_equals_sql(column: str, value: str) -> str:
+    column = whitelisted_sql_identifier(
+        column,
+        frozenset(
+            {
+                "tag",
+                "current_channel.tag",
+                "`group`",
+                "current_channel.`group`",
+                "models",
+                "current_channel.models",
+                "model_name",
+                "current_model.model_name",
+            }
+        ),
+    )
+    return "BINARY COALESCE(" + column + ", '') = BINARY " + sql_quote(value)
+
+
 def discount_text_models_allowed_sql(column: str) -> str:
+    column = whitelisted_sql_identifier(
+        column,
+        frozenset({"models", "channel.models", "current_channel.models"}),
+    )
     return (
         "REPLACE(COALESCE(" + column + ", ''), ' ', '') REGEXP BINARY "
         + sql_quote(DISCOUNT_TEXT_MODELS_REGEX)
@@ -442,6 +540,7 @@ def retired_claude_model_limit_predicate() -> str:
 
 
 def supplier_exposed_model_name_predicate(column: str = "model", *, exclude_public_alias_backing: bool = False) -> str:
+    column = whitelisted_sql_identifier(column, frozenset({"model", "model_name"}))
     terms = [*SUPPLIER_EXPOSED_MODELS, *SUPPLIER_EXPOSED_MARKERS]
     clauses = [
         f"COALESCE({column}, '') LIKE " + sql_quote(f"%{term}%")
@@ -542,7 +641,7 @@ def usd_exchange_rate() -> Decimal:
         rate = Decimal(raw)
     except Exception as exc:
         raise ValueError("USDExchangeRate must be a decimal number") from exc
-    if rate <= 0:
+    if not rate.is_finite() or rate <= 0:
         raise ValueError("USDExchangeRate must be greater than 0")
     return rate
 
@@ -1223,34 +1322,134 @@ def sync_abilities() -> None:
         if should_sync_ability_model(row[0])
     }
     discount_allowed_models = set(DISCOUNT_TEXT_ALLOWED_MODELS)
-    discount_allowed_models_sql = ", ".join(sql_quote(model) for model in DISCOUNT_TEXT_ALLOWED_MODELS)
+    discount_tag_matches = binary_string_equals_sql("tag", DISCOUNT_TEXT_CHANNEL_TAG)
+    grok_tag_matches = binary_string_equals_sql("tag", GROK45_CHANNEL_TAG)
+    discount_group_matches = binary_string_equals_sql("`group`", DISCOUNT_TEXT_GROUP)
+    grok_group_matches = binary_string_equals_sql("`group`", GROK45_GROUP)
+    grok_models_match = binary_string_equals_sql("models", GROK45_MODEL)
+    managed_channel_condition = (
+        "("
+        + discount_tag_matches
+        + " OR "
+        + grok_tag_matches
+        + ") OR FIND_IN_SET("
+        + sql_quote(DISCOUNT_TEXT_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0"
+        + " OR FIND_IN_SET("
+        + sql_quote(GROK45_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0"
+        + " OR FIND_IN_SET("
+        + sql_quote(GROK45_MODEL)
+        + ", REPLACE(COALESCE(models, ''), ' ', '')) > 0"
+    )
+    model_lock_names = sorted(existing_models | {GROK45_MODEL})
     statements = [
         "START TRANSACTION;",
-        "UPDATE channels SET status = 2 WHERE tag = "
-        + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-        + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+        "SELECT id FROM channels WHERE "
+        + managed_channel_condition
+        + " ORDER BY id FOR UPDATE;",
+        "SELECT id FROM models WHERE model_name IN ("
+        + ", ".join(sql_quote(model) for model in model_lock_names)
+        + ") AND deleted_at IS NULL ORDER BY id FOR UPDATE;",
+        "SET @discount_tag_count := (SELECT COUNT(*) FROM channels WHERE "
+        + discount_tag_matches
+        + ");",
+        "SET @discount_valid_channel_count := (SELECT COUNT(*) FROM channels WHERE "
+        + discount_tag_matches
+        + " AND "
+        + discount_group_matches
+        + " AND "
+        + discount_text_models_allowed_sql("models")
+        + ");",
+        "SET @discount_group_conflict_count := (SELECT COUNT(*) FROM channels WHERE NOT ("
+        + discount_tag_matches
+        + ") AND FIND_IN_SET("
         + sql_quote(DISCOUNT_TEXT_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0);",
+        "SET @grok_tag_count := (SELECT COUNT(*) FROM channels WHERE "
+        + grok_tag_matches
+        + ");",
+        "SET @grok_valid_channel_count := (SELECT COUNT(*) FROM channels WHERE "
+        + grok_tag_matches
+        + " AND "
+        + grok_group_matches
+        + " AND "
+        + grok_models_match
+        + ");",
+        "SET @grok_group_conflict_count := (SELECT COUNT(*) FROM channels WHERE NOT ("
+        + grok_tag_matches
+        + ") AND FIND_IN_SET("
+        + sql_quote(GROK45_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0);",
+        "SET @grok_model_channel_conflict_count := (SELECT COUNT(*) FROM channels WHERE NOT ("
+        + grok_tag_matches
+        + ") AND FIND_IN_SET("
+        + sql_quote(GROK45_MODEL)
+        + ", REPLACE(COALESCE(models, ''), ' ', '')) > 0);",
+        "SET @grok_active_model_count := (SELECT COUNT(*) FROM models WHERE "
+        + binary_string_equals_sql("model_name", GROK45_MODEL)
+        + " AND deleted_at IS NULL AND status = 1);",
+        "SET @discount_sync_status := CASE "
+        "WHEN @discount_tag_count > 1 THEN 'discount_duplicate_tag' "
+        "WHEN @discount_tag_count = 1 AND @discount_valid_channel_count <> 1 THEN 'discount_invalid_profile' "
+        "WHEN @discount_group_conflict_count > 0 THEN 'discount_group_conflict' "
+        "ELSE 'ok' END;",
+        "SET @grok_sync_status := CASE "
+        "WHEN @grok_tag_count > 1 THEN 'grok_duplicate_tag' "
+        "WHEN @grok_tag_count = 1 AND @grok_valid_channel_count <> 1 THEN 'grok_invalid_profile' "
+        "WHEN @grok_group_conflict_count > 0 OR @grok_model_channel_conflict_count > 0 "
+        "THEN 'grok_channel_conflict' "
+        "WHEN @grok_tag_count = 1 AND @grok_active_model_count <> 1 THEN 'grok_model_cardinality' "
+        "ELSE 'ok' END;",
+        "SET @ability_sync_status := CASE "
+        "WHEN @discount_sync_status <> 'ok' THEN @discount_sync_status "
+        "WHEN @grok_sync_status <> 'ok' THEN @grok_sync_status ELSE 'ok' END;",
+        "SET @discount_sync_allowed := IF(@discount_sync_status = 'ok' AND @discount_tag_count = 1, 1, 0);",
+        "SET @grok_sync_allowed := IF(@grok_sync_status = 'ok' AND @grok_tag_count = 1 "
+        "AND @grok_active_model_count = 1, 1, 0);",
+        "UPDATE channels SET status = 2 WHERE "
+        + discount_tag_matches
+        + " AND (@discount_tag_count > 1 OR NOT ("
+        + discount_group_matches
+        + ")"
         + " OR NOT ("
         + discount_text_models_allowed_sql("models")
         + "));",
-        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
-        + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-        + " AND FIND_IN_SET("
+        "UPDATE channels SET status = 2 WHERE NOT ("
+        + discount_tag_matches
+        + ") AND FIND_IN_SET("
         + sql_quote(DISCOUNT_TEXT_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
-        "UPDATE channels SET status = 2 WHERE tag = "
-        + sql_quote(GROK45_CHANNEL_TAG)
-        + " AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
-        + sql_quote(GROK45_GROUP)
+        "UPDATE channels SET status = 2 WHERE "
+        + grok_tag_matches
+        + " AND (@grok_tag_count > 1 OR NOT ("
+        + grok_group_matches
+        + ") OR NOT ("
+        + grok_models_match
+        + ")"
+        + " OR @grok_active_model_count <> 1)"
         + ";",
-        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
-        + sql_quote(GROK45_CHANNEL_TAG)
-        + " AND FIND_IN_SET("
+        "UPDATE channels SET status = 2 WHERE NOT ("
+        + grok_tag_matches
+        + ") AND (FIND_IN_SET("
         + sql_quote(GROK45_GROUP)
-        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0 OR FIND_IN_SET("
+        + sql_quote(GROK45_MODEL)
+        + ", REPLACE(COALESCE(models, ''), ' ', '')) > 0);",
+        "UPDATE abilities SET enabled = 0 WHERE `group` IN ("
+        + sql_quote(DISCOUNT_TEXT_GROUP)
+        + ", "
+        + sql_quote(GROK45_GROUP)
+        + ") OR model = "
+        + sql_quote(GROK45_MODEL)
+        + " OR tag IN ("
+        + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+        + ", "
+        + sql_quote(GROK45_CHANNEL_TAG)
+        + ") OR channel_id IN (SELECT id FROM channels WHERE "
+        + managed_channel_condition
+        + ");",
     ]
-    invalid_discount_channels: list[str] = []
-    invalid_grok_channels: list[str] = []
     for channel_id, raw_models, _priority, _weight, tag, raw_groups in channel_rows:
         channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
         channel_models = [item.strip() for item in raw_models.split(",") if item.strip()]
@@ -1260,21 +1459,17 @@ def sync_abilities() -> None:
                 or not channel_models
                 or any(model not in discount_allowed_models for model in channel_models)
             ):
-                invalid_discount_channels.append(channel_id)
                 sync_groups = []
             else:
                 sync_groups = channel_groups
         elif DISCOUNT_TEXT_GROUP in channel_groups:
-            invalid_discount_channels.append(channel_id)
             sync_groups = []
         elif tag == GROK45_CHANNEL_TAG:
-            if channel_groups != [GROK45_GROUP]:
-                invalid_grok_channels.append(channel_id)
+            if channel_groups != [GROK45_GROUP] or channel_models != [GROK45_MODEL]:
                 sync_groups = []
             else:
                 sync_groups = channel_groups
-        elif GROK45_GROUP in channel_groups:
-            invalid_grok_channels.append(channel_id)
+        elif GROK45_GROUP in channel_groups or GROK45_MODEL in channel_models:
             sync_groups = []
         else:
             sync_groups = [
@@ -1298,16 +1493,27 @@ def sync_abilities() -> None:
                 current_channel_conditions = [
                     "current_channel.id = " + normalized_channel_id,
                     "current_channel.status = 1",
-                    "COALESCE(current_channel.tag, '') = " + sql_quote(tag),
-                    "REPLACE(COALESCE(current_channel.`group`, ''), ' ', '') = "
+                    binary_string_equals_sql("current_channel.tag", tag),
+                    "BINARY REPLACE(COALESCE(current_channel.`group`, ''), ' ', '') = BINARY "
                     + sql_quote(",".join(channel_groups)),
                     "FIND_IN_SET("
                     + sql_quote(model)
                     + ", REPLACE(COALESCE(current_channel.models, ''), ' ', '')) > 0",
+                    "EXISTS (SELECT 1 FROM models AS current_model WHERE "
+                    + binary_string_equals_sql("current_model.model_name", model)
+                    + " AND current_model.deleted_at IS NULL AND current_model.status = 1)",
                 ]
                 if tag == DISCOUNT_TEXT_CHANNEL_TAG:
                     current_channel_conditions.append(
                         discount_text_models_allowed_sql("current_channel.models")
+                    )
+                    current_channel_conditions.append("@discount_sync_allowed = 1")
+                elif tag == GROK45_CHANNEL_TAG:
+                    current_channel_conditions.extend(
+                        [
+                            binary_string_equals_sql("current_channel.models", GROK45_MODEL),
+                            "@grok_sync_allowed = 1",
+                        ]
                     )
                 elif tag != GROK45_CHANNEL_TAG:
                     current_channel_conditions.extend(
@@ -1323,6 +1529,9 @@ def sync_abilities() -> None:
                             "FIND_IN_SET("
                             + sql_quote(GROK45_GROUP)
                             + ", REPLACE(COALESCE(current_channel.`group`, ''), ' ', '')) = 0",
+                            "FIND_IN_SET("
+                            + sql_quote(GROK45_MODEL)
+                            + ", REPLACE(COALESCE(current_channel.models, ''), ' ', '')) = 0",
                         ]
                     )
                 statements.append(
@@ -1344,67 +1553,22 @@ def sync_abilities() -> None:
                 )
     statements.extend(
         [
-            "UPDATE abilities SET enabled = 0 WHERE `group` = "
-            + sql_quote(DISCOUNT_TEXT_GROUP)
-            + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
-            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-            + ");",
-            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
-            + "(SELECT id FROM channels WHERE tag = "
-            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-            + ") AND `group` <> "
-            + sql_quote(DISCOUNT_TEXT_GROUP)
-            + ";",
-            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
-            "SET ability.enabled = 0 WHERE channel.tag = "
-            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-            + " AND (ability.model NOT IN ("
-            + discount_allowed_models_sql
-            + ") OR NOT ("
-            + discount_text_models_allowed_sql("channel.models")
-            + ") OR FIND_IN_SET(ability.model, REPLACE(COALESCE(channel.models, ''), ' ', '')) = 0);",
-            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
-            + "(SELECT id FROM channels WHERE status <> 1 AND (tag = "
-            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-            + " OR FIND_IN_SET("
-            + sql_quote(DISCOUNT_TEXT_GROUP)
-            + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0));",
-            "UPDATE abilities SET enabled = 0 WHERE `group` = "
-            + sql_quote(GROK45_GROUP)
-            + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
-            + sql_quote(GROK45_CHANNEL_TAG)
-            + ");",
-            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
-            + "(SELECT id FROM channels WHERE tag = "
-            + sql_quote(GROK45_CHANNEL_TAG)
-            + ") AND (`group` <> "
-            + sql_quote(GROK45_GROUP)
-            + " OR model <> "
-            + sql_quote(GROK45_MODEL)
-            + ");",
-            "UPDATE abilities SET enabled = 0 WHERE model = "
-            + sql_quote(GROK45_MODEL)
-            + " AND `group` <> "
-            + sql_quote(GROK45_GROUP)
-            + ";",
-            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
-            + "(SELECT id FROM channels WHERE status <> 1 AND tag = "
-            + sql_quote(GROK45_CHANNEL_TAG)
-            + ");",
+            "COMMIT;",
+            "SELECT CONCAT('ability_sync_status=', @ability_sync_status);",
         ]
     )
-    statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    if invalid_discount_channels:
-        raise RuntimeError(
-            "discount group isolation violation; disabled channel count: "
-            + str(len(invalid_discount_channels))
-        )
-    if invalid_grok_channels:
-        raise RuntimeError(
-            "Grok group isolation violation; disabled channel count: "
-            + str(len(invalid_grok_channels))
-        )
+    status = mysql_status(mysql_exec("\n".join(statements)), "ability_sync_status=")
+    errors = {
+        "discount_duplicate_tag": "multiple channels use the discount isolation tag",
+        "discount_invalid_profile": "discount group isolation violation; managed channel profile is invalid",
+        "discount_group_conflict": "discount group isolation violation; a non-managed channel claims the group",
+        "grok_duplicate_tag": "multiple channels use the Grok isolation tag",
+        "grok_invalid_profile": "Grok group isolation violation; managed channel must expose exactly grok-4.5",
+        "grok_channel_conflict": "Grok group isolation violation; a non-managed channel claims the model or group",
+        "grok_model_cardinality": "Grok group isolation violation; expected exactly one active grok-4.5 model",
+    }
+    if status != "ok":
+        raise RuntimeError(errors.get(status, "model ability sync failed closed"))
 
 
 def enforce_gpt_image2_db_guard() -> dict[str, int]:
@@ -1495,6 +1659,46 @@ def update_env_line(lines: list[str], key: str, value: str) -> tuple[list[str], 
     return output, changed
 
 
+def write_private_file(path: Path, content: str, *, exclusive: bool) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW
+    flags |= os.O_EXCL if exclusive else os.O_TRUNC
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+    except Exception:
+        if exclusive:
+            path.unlink(missing_ok=True)
+        raise
+
+
+def backup_codex_env(content: str) -> Path:
+    CODEX_ENV_BACKUP_ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if CODEX_ENV_BACKUP_ROOT.is_symlink():
+        raise RuntimeError("Codex environment backup root must not be a symlink")
+    CODEX_ENV_BACKUP_ROOT.chmod(0o700)
+    raw_timestamp = os.environ.get("SYNC_TIMESTAMP", "") or str(time.time_ns())
+    timestamp = "".join(character for character in raw_timestamp if character.isalnum() or character in "-_")
+    if not timestamp:
+        raise RuntimeError("invalid model sync timestamp")
+    backup_path = CODEX_ENV_BACKUP_ROOT / f"shenxiang-codex-workspace.env.{timestamp}"
+    write_private_file(backup_path, content, exclusive=True)
+    return backup_path
+
+
+def replace_codex_env(env_path: Path, content: str) -> None:
+    current_mode = stat.S_IMODE(env_path.stat().st_mode) & 0o600
+    temporary_path = env_path.with_name(f".env.model-sync.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        write_private_file(temporary_path, content, exclusive=True)
+        temporary_path.chmod(current_mode or 0o600)
+        os.replace(temporary_path, env_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
 def sync_codex_env(profiles: dict[str, list[str]]) -> bool:
     env_path = CODEX_ROOT / ".env"
     if not env_path.exists():
@@ -1514,10 +1718,9 @@ def sync_codex_env(profiles: dict[str, list[str]]) -> bool:
         lines, changed = update_env_line(lines, key, value)
         changed_any = changed_any or changed
     if changed_any:
-        backup = env_path.with_name(f".env.backup.model-sync.{os.environ.get('SYNC_TIMESTAMP', '')}".rstrip("."))
-        if not backup.exists():
-            backup.write_text(env_path.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
-        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        original = env_path.read_text(encoding="utf-8", errors="strict")
+        backup_codex_env(original)
+        replace_codex_env(env_path, "\n".join(lines) + "\n")
     return changed_any
 
 
@@ -1528,16 +1731,21 @@ def refresh_codex() -> None:
     env.pop("HOST_BIND_IP", None)
     env.pop("HOST_BIND_PORT", None)
     env.pop("NEW_API_CONTAINER_PORT", None)
-    subprocess.run(
-        ["docker", "compose", "up", "-d", "shenxiang-codex-workspace", "shenxiang-codex-worker-fast", "shenxiang-codex-worker-heavy"],
-        cwd=CODEX_ROOT,
-        env=env,
-        check=True,
-        stdout=subprocess.DEVNULL,
-    )
+    try:
+        subprocess.run(
+            ["docker", "compose", "up", "-d", "shenxiang-codex-workspace", "shenxiang-codex-worker-fast", "shenxiang-codex-worker-heavy"],
+            cwd=CODEX_ROOT,
+            env=env,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=CODEX_REFRESH_TIMEOUT_SECONDS,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        raise RuntimeError("Codex workspace refresh failed") from None
 
 
-def main() -> int:
+def run_model_permission_sync() -> int:
     ensure_public_seedance_models()
     ensure_discount_image2_backing_model()
     ensure_public_openai_text_models()
@@ -1568,6 +1776,14 @@ def main() -> int:
         + f", retired_claude={retired_claude_result}"
     )
     return 0
+
+
+def main() -> int:
+    invalidate_all_active_token_caches()
+    try:
+        return run_model_permission_sync()
+    finally:
+        invalidate_all_active_token_caches()
 
 
 if __name__ == "__main__":

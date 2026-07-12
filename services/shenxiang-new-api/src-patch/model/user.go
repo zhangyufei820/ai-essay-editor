@@ -537,7 +537,7 @@ func (user *User) Insert(inviterId int) error {
 				user.SetSetting(defaultSetting)
 			}
 
-			return tx.Create(user).Error
+			return NormalizeUserOAuthIdentityError(tx.Create(user).Error)
 		})
 	}); err != nil {
 		return err
@@ -588,7 +588,7 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 		if user.Setting == "" {
 			user.SetSetting(dto.UserSetting{})
 		}
-		return tx.Create(user).Error
+		return NormalizeUserOAuthIdentityError(tx.Create(user).Error)
 	})
 }
 
@@ -666,21 +666,6 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	if newUser.Email != "" {
 		updates["email"] = newUser.Email
 	}
-	if newUser.GitHubId != "" {
-		updates["github_id"] = newUser.GitHubId
-	}
-	if newUser.DiscordId != "" {
-		updates["discord_id"] = newUser.DiscordId
-	}
-	if newUser.OidcId != "" {
-		updates["oidc_id"] = newUser.OidcId
-	}
-	if newUser.WeChatId != "" {
-		updates["wechat_id"] = newUser.WeChatId
-	}
-	if newUser.TelegramId != "" {
-		updates["telegram_id"] = newUser.TelegramId
-	}
 	if newUser.AccessToken != nil {
 		updates["access_token"] = newUser.AccessToken
 	}
@@ -689,9 +674,6 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	}
 	if newUser.AffCode != "" {
 		updates["aff_code"] = newUser.AffCode
-	}
-	if newUser.LinuxDOId != "" {
-		updates["linux_do_id"] = newUser.LinuxDOId
 	}
 	if newUser.Setting != "" {
 		updates["setting"] = newUser.Setting
@@ -845,8 +827,7 @@ func (user *User) FillUserByGitHubId() error {
 	if user.GitHubId == "" {
 		return errors.New("GitHub id 为空！")
 	}
-	DB.Where(User{GitHubId: user.GitHubId}).First(user)
-	return nil
+	return DB.Where(User{GitHubId: user.GitHubId}).First(user).Error
 }
 
 // UpdateGitHubId updates the user's GitHub ID (used for migration from login to numeric ID)
@@ -854,31 +835,28 @@ func (user *User) UpdateGitHubId(newGitHubId string) error {
 	if user.Id == 0 {
 		return errors.New("user id is empty")
 	}
-	return DB.Model(user).Update("github_id", newGitHubId).Error
+	return user.SetOAuthIdentity(UserOAuthProviderGitHub, newGitHubId)
 }
 
 func (user *User) FillUserByDiscordId() error {
 	if user.DiscordId == "" {
 		return errors.New("discord id 为空！")
 	}
-	DB.Where(User{DiscordId: user.DiscordId}).First(user)
-	return nil
+	return DB.Where(User{DiscordId: user.DiscordId}).First(user).Error
 }
 
 func (user *User) FillUserByOidcId() error {
 	if user.OidcId == "" {
 		return errors.New("oidc id 为空！")
 	}
-	DB.Where(User{OidcId: user.OidcId}).First(user)
-	return nil
+	return DB.Where(User{OidcId: user.OidcId}).First(user).Error
 }
 
 func (user *User) FillUserByWeChatId() error {
 	if user.WeChatId == "" {
 		return errors.New("WeChat id 为空！")
 	}
-	DB.Where(User{WeChatId: user.WeChatId}).First(user)
-	return nil
+	return DB.Where(User{WeChatId: user.WeChatId}).First(user).Error
 }
 
 func (user *User) FillUserByTelegramId() error {
@@ -934,23 +912,28 @@ func GetUniqueUserByEmail(email string) (*User, error) {
 }
 
 func IsWeChatIdAlreadyTaken(wechatId string) bool {
-	return DB.Unscoped().Where("wechat_id = ?", wechatId).Find(&User{}).RowsAffected == 1
+	taken, err := IsUserOAuthIdentityTaken(UserOAuthProviderWeChat, wechatId)
+	return err != nil || taken
 }
 
 func IsGitHubIdAlreadyTaken(githubId string) bool {
-	return DB.Unscoped().Where("github_id = ?", githubId).Find(&User{}).RowsAffected == 1
+	taken, err := IsUserOAuthIdentityTaken(UserOAuthProviderGitHub, githubId)
+	return err != nil || taken
 }
 
 func IsDiscordIdAlreadyTaken(discordId string) bool {
-	return DB.Unscoped().Where("discord_id = ?", discordId).Find(&User{}).RowsAffected == 1
+	taken, err := IsUserOAuthIdentityTaken(UserOAuthProviderDiscord, discordId)
+	return err != nil || taken
 }
 
 func IsOidcIdAlreadyTaken(oidcId string) bool {
-	return DB.Where("oidc_id = ?", oidcId).Find(&User{}).RowsAffected == 1
+	taken, err := IsUserOAuthIdentityTaken(UserOAuthProviderOIDC, oidcId)
+	return err != nil || taken
 }
 
 func IsTelegramIdAlreadyTaken(telegramId string) bool {
-	return DB.Unscoped().Where("telegram_id = ?", telegramId).Find(&User{}).RowsAffected == 1
+	taken, err := IsUserOAuthIdentityTaken(UserOAuthProviderTelegram, telegramId)
+	return err != nil || taken
 }
 
 func ResetUserPasswordByEmail(email string, password string) error {
@@ -1355,9 +1338,8 @@ func GetUsernameById(id int, fromDB bool) (username string, err error) {
 }
 
 func IsLinuxDOIdAlreadyTaken(linuxDOId string) bool {
-	var user User
-	err := DB.Unscoped().Where("linux_do_id = ?", linuxDOId).First(&user).Error
-	return !errors.Is(err, gorm.ErrRecordNotFound)
+	taken, err := IsUserOAuthIdentityTaken(UserOAuthProviderLinuxDO, linuxDOId)
+	return err != nil || taken
 }
 
 func (user *User) FillUserByLinuxDOId() error {

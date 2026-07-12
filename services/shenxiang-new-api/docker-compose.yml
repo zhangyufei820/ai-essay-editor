@@ -3,26 +3,38 @@ name: shenxiang-new-api
 services:
   shenxiang-new-api:
     build:
-      context: ${NEW_API_BUILD_CONTEXT:-.local-source/worktree}
+      context: .local-source/worktree
       dockerfile: Dockerfile
+      args:
+        NEW_API_SOURCE_REPOSITORY: ${NEW_API_SOURCE_REPOSITORY:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        NEW_API_REPOSITORY_COMMIT: ${NEW_API_REPOSITORY_COMMIT:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        NEW_API_UPSTREAM_REPOSITORY: ${NEW_API_UPSTREAM_REPOSITORY:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        NEW_API_UPSTREAM_COMMIT: ${NEW_API_UPSTREAM_COMMIT:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        NEW_API_PATCH_SHA256: ${NEW_API_PATCH_SHA256:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        NEW_API_MANIFEST_SHA256: ${NEW_API_MANIFEST_SHA256:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        NEW_API_WORKTREE_FILE_COUNT: ${NEW_API_WORKTREE_FILE_COUNT:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        NEW_API_WORKTREE_SHA256: ${NEW_API_WORKTREE_SHA256:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        NEW_API_SOURCE_DIGEST: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/worktree/build.env}
       labels:
-        org.opencontainers.image.source: ${NEW_API_SOURCE_REPOSITORY:?run prepare-local-source.sh and load .local-source/build.env}
-        org.opencontainers.image.revision: ${NEW_API_REPOSITORY_COMMIT:?run prepare-local-source.sh and load .local-source/build.env}
-        org.opencontainers.image.version: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/build.env}
-        io.shenxiang.new-api.upstream-repository: ${NEW_API_UPSTREAM_REPOSITORY:?run prepare-local-source.sh and load .local-source/build.env}
-        io.shenxiang.new-api.upstream-revision: ${NEW_API_UPSTREAM_COMMIT:?run prepare-local-source.sh and load .local-source/build.env}
-        io.shenxiang.new-api.patch-sha256: ${NEW_API_PATCH_SHA256:?run prepare-local-source.sh and load .local-source/build.env}
-        io.shenxiang.new-api.source-digest: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/build.env}
-    image: ${NEW_API_IMAGE_REPOSITORY:-shenxiang-new-api-codex}:${NEW_API_IMAGE_TAG:?run prepare-local-source.sh and load .local-source/build.env}
+        org.opencontainers.image.source: ${NEW_API_SOURCE_REPOSITORY:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        org.opencontainers.image.revision: ${NEW_API_REPOSITORY_COMMIT:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        org.opencontainers.image.version: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        io.shenxiang.new-api.upstream-repository: ${NEW_API_UPSTREAM_REPOSITORY:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        io.shenxiang.new-api.upstream-revision: ${NEW_API_UPSTREAM_COMMIT:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        io.shenxiang.new-api.patch-sha256: ${NEW_API_PATCH_SHA256:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        io.shenxiang.new-api.worktree-sha256: ${NEW_API_WORKTREE_SHA256:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+        io.shenxiang.new-api.source-digest: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+    image: ${NEW_API_IMAGE_REPOSITORY:-shenxiang-new-api-codex}:${NEW_API_IMAGE_TAG:?run prepare-local-source.sh and load .local-source/worktree/build.env}
     container_name: shenxiang-new-api
     labels:
-      org.opencontainers.image.source: ${NEW_API_SOURCE_REPOSITORY:?run prepare-local-source.sh and load .local-source/build.env}
-      org.opencontainers.image.revision: ${NEW_API_REPOSITORY_COMMIT:?run prepare-local-source.sh and load .local-source/build.env}
-      org.opencontainers.image.version: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/build.env}
-      io.shenxiang.new-api.upstream-repository: ${NEW_API_UPSTREAM_REPOSITORY:?run prepare-local-source.sh and load .local-source/build.env}
-      io.shenxiang.new-api.upstream-revision: ${NEW_API_UPSTREAM_COMMIT:?run prepare-local-source.sh and load .local-source/build.env}
-      io.shenxiang.new-api.patch-sha256: ${NEW_API_PATCH_SHA256:?run prepare-local-source.sh and load .local-source/build.env}
-      io.shenxiang.new-api.source-digest: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/build.env}
+      org.opencontainers.image.source: ${NEW_API_SOURCE_REPOSITORY:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+      org.opencontainers.image.revision: ${NEW_API_REPOSITORY_COMMIT:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+      org.opencontainers.image.version: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+      io.shenxiang.new-api.upstream-repository: ${NEW_API_UPSTREAM_REPOSITORY:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+      io.shenxiang.new-api.upstream-revision: ${NEW_API_UPSTREAM_COMMIT:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+      io.shenxiang.new-api.patch-sha256: ${NEW_API_PATCH_SHA256:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+      io.shenxiang.new-api.worktree-sha256: ${NEW_API_WORKTREE_SHA256:?run prepare-local-source.sh and load .local-source/worktree/build.env}
+      io.shenxiang.new-api.source-digest: ${NEW_API_SOURCE_DIGEST:?run prepare-local-source.sh and load .local-source/worktree/build.env}
     restart: unless-stopped
     depends_on:
       shenxiang-new-api-mysql:

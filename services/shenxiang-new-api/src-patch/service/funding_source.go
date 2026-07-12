@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/model"
@@ -54,9 +55,17 @@ func (w *WalletFunding) Settle(delta int) error {
 		return nil
 	}
 	if delta > 0 {
-		return model.TryDecreaseUserQuota(w.userId, delta)
+		if err := model.TryDecreaseUserQuota(w.userId, delta); err != nil {
+			return err
+		}
+		w.consumed += delta
+		return nil
 	}
-	return model.IncreaseUserQuota(w.userId, -delta, false)
+	if err := model.IncreaseUserQuota(w.userId, -delta, false); err != nil {
+		return err
+	}
+	w.consumed += delta
+	return nil
 }
 
 func (w *WalletFunding) Refund() error {
@@ -97,6 +106,7 @@ type SubscriptionFunding struct {
 	amount         int64 // 预扣的订阅额度（subConsume）
 	subscriptionId int
 	preConsumed    int64
+	resetEpoch     int64
 	// 以下字段在 PreConsume 成功后填充，供 RelayInfo 同步使用
 	AmountTotal            int64
 	AmountUsedAfter        int64
@@ -106,6 +116,7 @@ type SubscriptionFunding struct {
 	PlanId                 int
 	PlanTitle              string
 	releaseConcurrency     func()
+	closeOnce              sync.Once
 }
 
 func (s *SubscriptionFunding) Source() string { return BillingSourceSubscription }
@@ -118,6 +129,7 @@ func (s *SubscriptionFunding) PreConsume(_ int) error {
 	}
 	s.subscriptionId = res.UserSubscriptionId
 	s.preConsumed = res.PreConsumed
+	s.resetEpoch = res.ResetEpoch
 	s.AmountTotal = res.AmountTotal
 	s.AmountUsedAfter = res.AmountUsedAfter
 	s.MonthlyAmountTotal = res.MonthlyAmountTotal
@@ -151,7 +163,7 @@ func (s *SubscriptionFunding) Settle(delta int) error {
 	if delta == 0 {
 		return nil
 	}
-	return model.PostConsumeUserSubscriptionDelta(s.subscriptionId, int64(delta))
+	return model.PostConsumeUserSubscriptionDeltaForEpoch(s.subscriptionId, int64(delta), s.resetEpoch)
 }
 
 func (s *SubscriptionFunding) Refund() error {
@@ -164,10 +176,12 @@ func (s *SubscriptionFunding) Refund() error {
 }
 
 func (s *SubscriptionFunding) Close() {
-	if s.releaseConcurrency != nil {
-		s.releaseConcurrency()
-		s.releaseConcurrency = nil
-	}
+	s.closeOnce.Do(func() {
+		if s.releaseConcurrency != nil {
+			s.releaseConcurrency()
+			s.releaseConcurrency = nil
+		}
+	})
 }
 
 // refundWithRetry 尝试多次执行退款操作以提高成功率，只能用于基于事务的退款函数！！！！！！

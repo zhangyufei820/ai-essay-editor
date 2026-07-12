@@ -50,7 +50,12 @@ func TestVideoPollingControllerReturnsOnlyPublicFailureReason(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.Channel{}))
+	require.NoError(t, db.AutoMigrate(
+		&model.Task{},
+		&model.Channel{},
+		&model.BillingOperation{},
+		&model.BillingOutbox{},
+	))
 	previousDB := model.DB
 	previousFactory := service.GetTaskAdaptorFunc
 	previousRedisEnabled := common.RedisEnabled

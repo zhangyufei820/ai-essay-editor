@@ -21,6 +21,9 @@ type BuildInfo struct {
 	PatchBase          string `json:"patch_base"`
 	PatchFileCount     int    `json:"patch_file_count"`
 	PatchSHA256        string `json:"patch_sha256"`
+	WorktreeFileCount  int    `json:"worktree_file_count"`
+	WorktreeSHA256     string `json:"worktree_sha256"`
+	ChecksumFile       string `json:"checksum_file"`
 	SourceDigest       string `json:"source_digest"`
 }
 
@@ -45,7 +48,7 @@ func GetBuildInfo() BuildInfo {
 }
 
 func (info BuildInfo) validate() error {
-	if info.SchemaVersion != 1 {
+	if info.SchemaVersion != 2 {
 		return fmt.Errorf("unsupported schema version %d", info.SchemaVersion)
 	}
 	for name, value := range map[string]struct {
@@ -56,6 +59,7 @@ func (info BuildInfo) validate() error {
 		"upstream_commit":   {info.UpstreamCommit, 40},
 		"patch_base":        {info.PatchBase, 40},
 		"patch_sha256":      {info.PatchSHA256, 64},
+		"worktree_sha256":   {info.WorktreeSHA256, 64},
 		"source_digest":     {info.SourceDigest, 64},
 	} {
 		if len(value.value) != value.length || !isLowerHex(value.value) {
@@ -66,15 +70,25 @@ func (info BuildInfo) validate() error {
 		return fmt.Errorf("patch_base does not match upstream_commit")
 	}
 	expectedSourceDigest := fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join([]string{
+		info.Repository,
 		info.RepositoryCommit,
+		info.UpstreamRepository,
 		info.UpstreamCommit,
+		info.PatchBase,
 		info.PatchSHA256,
-	}, "\n"))))
+		info.WorktreeSHA256,
+	}, "\n")+"\n")))
 	if info.SourceDigest != expectedSourceDigest {
-		return fmt.Errorf("source_digest does not match repository, upstream, and patch hashes")
+		return fmt.Errorf("source_digest does not match repository, upstream, patch, and worktree hashes")
 	}
 	if info.PatchFileCount < 1 {
 		return fmt.Errorf("patch_file_count must be positive")
+	}
+	if info.WorktreeFileCount < 1 {
+		return fmt.Errorf("worktree_file_count must be positive")
+	}
+	if info.ChecksumFile != "BUILD-CHECKSUMS.sha256" {
+		return fmt.Errorf("checksum_file must be BUILD-CHECKSUMS.sha256")
 	}
 	if strings.TrimSpace(info.Repository) == "" {
 		return fmt.Errorf("repository is empty")

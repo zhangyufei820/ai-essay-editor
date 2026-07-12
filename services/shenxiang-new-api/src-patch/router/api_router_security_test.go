@@ -35,3 +35,15 @@ func TestOAuthBindRoutesRequireFreshUserAuthentication(t *testing.T) {
 	require.NotContains(t, text, `apiRouter.GET("/oauth/telegram/bind"`)
 	require.NotContains(t, text, `apiRouter.GET("/oauth/telegram/login"`)
 }
+
+func TestTokenGroupSelectionRunsAfterUserAuthenticationOnlyOnTokenRoutes(t *testing.T) {
+	routerSource, err := os.ReadFile("api-router.go")
+	require.NoError(t, err)
+	routerText := string(routerSource)
+	mainSource, err := os.ReadFile("../main.go")
+	require.NoError(t, err)
+
+	require.Contains(t, routerText, `tokenRoute.Use(middleware.UserAuth(), middleware.EnforcePublicTokenGroupSelection())`)
+	require.Equal(t, 1, strings.Count(routerText, "EnforcePublicTokenGroupSelection"))
+	require.NotContains(t, string(mainSource), "server.Use(middleware.EnforcePublicTokenGroupSelection())")
+}

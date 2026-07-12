@@ -148,29 +148,7 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 		return nil
 	}
 
-	userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
-	if err != nil {
-		return err
-	}
-	token, err := model.GetTokenByKey(strings.TrimPrefix(relayInfo.TokenKey, "sk-"), false)
-	if err != nil {
-		return err
-	}
-
-	if userQuota < quota {
-		return fmt.Errorf("user quota is not enough, user quota: %s, need quota: %s", logger.FormatQuota(userQuota), logger.FormatQuota(quota))
-	}
-
-	if !token.UnlimitedQuota && token.RemainQuota < quota {
-		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
-	}
-
-	err = PostConsumeQuota(relayInfo, quota, 0, false)
-	if err != nil {
-		return err
-	}
-	logger.LogInfo(ctx, "realtime streaming consume quota success, quota: "+fmt.Sprintf("%d", quota))
-	return nil
+	return errors.New("durable billing session is required for realtime reservation")
 }
 
 func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, modelName string,
@@ -439,71 +417,7 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 }
 
 func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (err error) {
-
-	// 1) Consume from wallet quota OR subscription item
-	billedSubscription := false
-	var subDelta int64
-	if relayInfo != nil && relayInfo.BillingSource == BillingSourceSubscription {
-		if relayInfo.SubscriptionId == 0 {
-			return errors.New("subscription id is missing")
-		}
-		delta := int64(quota)
-		if delta != 0 {
-			if err := model.PostConsumeUserSubscriptionDelta(relayInfo.SubscriptionId, delta); err != nil {
-				return err
-			}
-			relayInfo.SubscriptionPostDelta += delta
-			billedSubscription = true
-			subDelta = delta
-		}
-	} else {
-		// Wallet
-		if quota > 0 {
-			err = model.TryDecreaseUserQuota(relayInfo.UserId, quota)
-		} else {
-			err = model.IncreaseUserQuota(relayInfo.UserId, -quota, false)
-		}
-		if err != nil {
-			return err
-		}
-	}
-
-	if !relayInfo.IsPlayground || relayInfo.BillingSource == BillingSourceImageBenefit {
-		if quota > 0 {
-			err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
-		} else {
-			err = model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, -quota)
-		}
-		if err != nil {
-			// 补偿：钱包/订阅额度已扣减但 token 额度扣减失败，回滚以避免账目漂移
-			if billedSubscription {
-				if rbErr := model.PostConsumeUserSubscriptionDelta(relayInfo.SubscriptionId, -subDelta); rbErr != nil {
-					common.SysError(fmt.Sprintf("PostConsumeQuota: failed to roll back subscription delta for sub %d (user %d): %v", relayInfo.SubscriptionId, relayInfo.UserId, rbErr))
-				} else {
-					relayInfo.SubscriptionPostDelta -= subDelta
-				}
-			} else {
-				var rbErr error
-				if quota > 0 {
-					rbErr = model.IncreaseUserQuota(relayInfo.UserId, quota, false)
-				} else {
-					rbErr = model.TryDecreaseUserQuota(relayInfo.UserId, -quota)
-				}
-				if rbErr != nil {
-					common.SysError(fmt.Sprintf("PostConsumeQuota: failed to roll back wallet quota for user %d (quota %d): %v", relayInfo.UserId, quota, rbErr))
-				}
-			}
-			return err
-		}
-	}
-
-	if sendEmail {
-		if (quota + preConsumedQuota) != 0 {
-			checkAndSendQuotaNotify(relayInfo, quota, preConsumedQuota)
-		}
-	}
-
-	return nil
+	return errors.New("legacy PostConsumeQuota is disabled; durable BillingSession is required")
 }
 
 func checkAndSendQuotaNotify(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int) {

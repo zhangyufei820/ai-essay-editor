@@ -18,7 +18,9 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -148,6 +150,7 @@ func TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName(t *testi
 			URL:         "/pg/media/files/u-1/discount.png",
 			DisplayURL:  "/pg/media/files/u-1/discount.png",
 			CachedURL:   "/pg/media/files/u-1/discount.png",
+			OriginalURL: "https://private-user:private-pass@provider.example/result.png?token=upstream-secret",
 			Filename:    "discount.png",
 			Model:       "geek2api-image-2",
 			Status:      "ready",
@@ -170,6 +173,10 @@ func TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName(t *testi
 	require.Contains(t, string(openAIJSON), "特价 image-2")
 	require.NotContains(t, string(playgroundJSON), "geek2api")
 	require.NotContains(t, string(openAIJSON), "geek2api")
+	require.NotContains(t, string(playgroundJSON), "provider.example")
+	require.NotContains(t, string(openAIJSON), "provider.example")
+	require.NotContains(t, string(playgroundJSON), "upstream-secret")
+	require.NotContains(t, string(openAIJSON), "upstream-secret")
 }
 
 func TestPlaygroundImageTaskEditsMultipartReplaysWithNormalizedN(t *testing.T) {
@@ -255,7 +262,7 @@ func TestMarkPlaygroundImageTaskLogFailureConvertsConsumeLogToError(t *testing.T
 func TestMarkPlaygroundImageTaskSuccessKeepsFailReasonEmpty(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.Log{}))
+	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.Log{}, &model.BillingOperation{}, &model.BillingOutbox{}))
 	oldDB := model.DB
 	oldLogDB := model.LOG_DB
 	model.DB = db
@@ -702,7 +709,13 @@ func setupPlaygroundImageTaskStateTestDB(t *testing.T) *gorm.DB {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Task{}, &model.Log{}))
+	require.NoError(t, db.AutoMigrate(
+		&model.User{},
+		&model.Task{},
+		&model.Log{},
+		&model.BillingOperation{},
+		&model.BillingOutbox{},
+	))
 
 	oldDB := model.DB
 	oldLogDB := model.LOG_DB
@@ -737,6 +750,103 @@ func createPlaygroundImageTaskSubmittedTestLog(t *testing.T, db *gorm.DB, task *
 	}
 	require.NoError(t, db.Create(&logEntry).Error)
 	return logEntry
+}
+
+func TestSeedPlaygroundImageTaskContextUsesPersistedTaskBillingOverride(t *testing.T) {
+	setupPlaygroundImageTaskStateTestDB(t)
+	redisEnabled := common.RedisEnabled
+	common.RedisEnabled = false
+	t.Cleanup(func() { common.RedisEnabled = redisEnabled })
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	task := &model.Task{
+		ID:     77,
+		TaskID: "task-image-billing-override",
+		PrivateData: model.TaskPrivateData{
+			BillingOperationKey: "task:task-image-billing-override",
+			BillingLedgerMode:   model.BillingLedgerModeActive,
+		},
+	}
+	payload := &playgroundImageTaskPayload{RequestID: "req-image-billing-override"}
+
+	seedPlaygroundImageTaskContext(ctx, 1001, "test-user", 1, "default", "default", "playground", payload, task, []byte(`{"model":"test"}`), &playgroundImageTaskResultCapture{})
+	t.Cleanup(func() { common.CleanupBodyStorage(ctx) })
+
+	require.False(t, ctx.IsAborted())
+	override, exists := service.ResolveTaskBillingOperationOverride(ctx)
+	require.True(t, exists)
+	require.Equal(t, task.PrivateData.BillingOperationKey, override.OperationKey)
+	require.Equal(t, model.BillingLedgerModeActive, override.LedgerMode)
+	require.Equal(t, task.ID, override.TaskRecordID)
+}
+
+func TestCapturePlaygroundImageTaskBillingUsesExplicitChargeDecision(t *testing.T) {
+	db := setupPlaygroundImageTaskStateTestDB(t)
+	task := &model.Task{
+		TaskID: "task-image-explicit-charge-decision",
+		Status: model.TaskStatusInProgress,
+	}
+	require.NoError(t, db.Create(task).Error)
+
+	capturePlaygroundImageTaskBilling(task.TaskID, 75, &relaycommon.RelayInfo{
+		BillingSource: service.BillingSourceImageBenefit,
+		ChannelMeta:   &relaycommon.ChannelMeta{},
+	}, false, true)
+
+	var reloaded model.Task
+	require.NoError(t, db.First(&reloaded, task.ID).Error)
+	require.Equal(t, 75, reloaded.Quota)
+	require.True(t, reloaded.PrivateData.BillingChargeTokenSet)
+	require.False(t, reloaded.PrivateData.BillingChargeToken)
+}
+
+func TestCapturePlaygroundImageTaskBillingPreservesActiveReservation(t *testing.T) {
+	db := setupPlaygroundImageTaskStateTestDB(t)
+	task := &model.Task{
+		TaskID: "task-image-active-reservation",
+		Quota:  120,
+		Status: model.TaskStatusInProgress,
+		PrivateData: model.TaskPrivateData{
+			BillingOperationKey:   "task:task-image-active-reservation",
+			BillingLedgerMode:     model.BillingLedgerModeActive,
+			BillingChargeToken:    true,
+			BillingChargeTokenSet: true,
+		},
+	}
+	require.NoError(t, db.Create(task).Error)
+
+	capturePlaygroundImageTaskBilling(task.TaskID, 75, &relaycommon.RelayInfo{
+		BillingSource: service.BillingSourceImageBenefit,
+		ChannelMeta:   &relaycommon.ChannelMeta{},
+	}, true, true)
+
+	var reloaded model.Task
+	require.NoError(t, db.First(&reloaded, task.ID).Error)
+	require.Equal(t, 120, reloaded.Quota)
+	var payload playgroundImageTaskPayload
+	require.NoError(t, reloaded.GetData(&payload))
+	require.Equal(t, 75, payload.ActualQuota)
+}
+
+func TestCapturePlaygroundImageTaskBillingCannotMutateTerminalTask(t *testing.T) {
+	db := setupPlaygroundImageTaskStateTestDB(t)
+	task := &model.Task{
+		TaskID: "task-image-terminal-billing-capture",
+		Quota:  55,
+		Status: model.TaskStatusSuccess,
+	}
+	require.NoError(t, db.Create(task).Error)
+
+	capturePlaygroundImageTaskBilling(task.TaskID, 99, &relaycommon.RelayInfo{
+		BillingSource: service.BillingSourceImageBenefit,
+		ChannelMeta:   &relaycommon.ChannelMeta{},
+	}, true, true)
+
+	var reloaded model.Task
+	require.NoError(t, db.First(&reloaded, task.ID).Error)
+	require.Equal(t, 55, reloaded.Quota)
+	require.False(t, reloaded.PrivateData.BillingChargeTokenSet)
 }
 
 func createPlaygroundImageTaskOwnedTestMedia(t *testing.T, root string, userID int, filename string) (*playgroundMediaItem, string) {

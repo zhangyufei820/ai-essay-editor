@@ -10,6 +10,7 @@ from pathlib import Path
 
 SERVICE_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SERVICE_DIR / "scripts" / "prepare-local-source.sh"
+VERIFIER = SERVICE_DIR / "scripts" / "verify-build-context.py"
 APPROVED_UPSTREAM = "4e570389dd433a717373ce9c9b822b59f5ed3d5d"
 
 
@@ -94,6 +95,17 @@ class PrepareLocalSourceTest(unittest.TestCase):
     def manifest(self) -> dict[str, object]:
         return json.loads((self.build_root / "worktree" / "BUILD-MANIFEST.json").read_text(encoding="utf-8"))
 
+    def verify(self, worktree: Path | None = None) -> subprocess.CompletedProcess[str]:
+        target = worktree or self.build_root / "worktree"
+        return subprocess.run(
+            [str(VERIFIER), "--worktree", str(target)],
+            cwd=SERVICE_DIR.parents[1],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
     def test_default_prepares_exact_locked_commit_and_manifest(self) -> None:
         result = self.prepare()
 
@@ -102,7 +114,7 @@ class PrepareLocalSourceTest(unittest.TestCase):
         self.assertEqual((worktree / "base.txt").read_text(encoding="utf-8"), "locked\n")
         self.assertEqual((worktree / "overlay.txt").read_text(encoding="utf-8"), "overlay\n")
         manifest = self.manifest()
-        self.assertEqual(manifest["schema_version"], 1)
+        self.assertEqual(manifest["schema_version"], 2)
         self.assertEqual(
             manifest["repository"],
             run("git", "remote", "get-url", "origin", cwd=SERVICE_DIR.parents[1]).stdout.strip(),
@@ -112,11 +124,87 @@ class PrepareLocalSourceTest(unittest.TestCase):
         self.assertEqual(manifest["patch_base"], self.locked_commit)
         self.assertRegex(str(manifest["repository_commit"]), r"^[0-9a-f]{40}$")
         self.assertRegex(str(manifest["patch_sha256"]), r"^[0-9a-f]{64}$")
+        self.assertGreater(int(manifest["worktree_file_count"]), 0)
+        self.assertRegex(str(manifest["worktree_sha256"]), r"^[0-9a-f]{64}$")
+        self.assertEqual(manifest["checksum_file"], "BUILD-CHECKSUMS.sha256")
         self.assertRegex(str(manifest["source_digest"]), r"^[0-9a-f]{64}$")
         self.assertEqual(
             (worktree / "common" / "build-manifest.json").read_bytes(),
             (worktree / "BUILD-MANIFEST.json").read_bytes(),
         )
+        self.assertTrue((worktree / "BUILD-CHECKSUMS.sha256").is_file())
+        self.assertTrue((worktree / "build.env").is_file())
+        self.assertFalse((self.build_root / "build.env").exists())
+        verified = self.verify()
+        self.assertEqual(verified.returncode, 0, verified.stderr + verified.stdout)
+
+    def test_custom_worktree_keeps_its_env_without_overwriting_default(self) -> None:
+        first = self.prepare()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        default_env = self.build_root / "worktree" / "build.env"
+        default_contents = default_env.read_bytes()
+        custom_worktree = self.build_root / "custom-worktree"
+
+        second = self.prepare("--skip-fetch", "--worktree-dir", str(custom_worktree))
+
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(default_env.read_bytes(), default_contents)
+        self.assertTrue((custom_worktree / "build.env").is_file())
+        self.assertFalse((self.build_root / "build.env").exists())
+        verified = self.verify(custom_worktree)
+        self.assertEqual(verified.returncode, 0, verified.stderr + verified.stdout)
+
+    def test_verifier_rejects_materialized_source_tampering(self) -> None:
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (self.build_root / "worktree" / "base.txt").write_text("tampered\n", encoding="utf-8")
+
+        verified = self.verify()
+
+        self.assertNotEqual(verified.returncode, 0)
+        self.assertIn("checksum", verified.stderr.lower())
+
+    def test_verifier_rejects_manifest_copy_mismatch(self) -> None:
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        embedded = self.build_root / "worktree" / "common" / "build-manifest.json"
+        embedded.write_text("{}\n", encoding="utf-8")
+
+        verified = self.verify()
+
+        self.assertNotEqual(verified.returncode, 0)
+        self.assertIn("manifest", verified.stderr.lower())
+
+    def test_verifier_rejects_build_env_mismatch(self) -> None:
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        env_file = self.build_root / "worktree" / "build.env"
+        env_file.write_text(
+            env_file.read_text(encoding="utf-8").replace(
+                "NEW_API_SOURCE_DIGEST=", "NEW_API_SOURCE_DIGEST=" + "0" * 64 + "#",
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+        verified = self.verify()
+
+        self.assertNotEqual(verified.returncode, 0)
+        self.assertIn("build.env", verified.stderr)
+
+    def test_verifier_rejects_checksum_manifest_tampering(self) -> None:
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        checksum_file = self.build_root / "worktree" / "BUILD-CHECKSUMS.sha256"
+        checksum_file.write_text(
+            checksum_file.read_text(encoding="utf-8").replace("a", "b", 1),
+            encoding="utf-8",
+        )
+
+        verified = self.verify()
+
+        self.assertNotEqual(verified.returncode, 0)
+        self.assertIn("checksum", verified.stderr.lower())
 
     def test_patch_base_mismatch_fails_before_overlay(self) -> None:
         self.patch_base_file.write_text(f"{self.moving_commit}\n", encoding="utf-8")
@@ -250,6 +338,15 @@ class PrepareLocalSourceTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("symbolic links", result.stderr)
         self.assertEqual(outside.read_text(encoding="utf-8"), "unchanged\n")
+
+    def test_unsafe_patch_filename_fails_before_manifest_generation(self) -> None:
+        (self.patch_dir / "unsafe\nname.txt").write_text("unsafe\n", encoding="utf-8")
+
+        result = self.prepare()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsafe file name", result.stderr.lower())
+        self.assertFalse((self.build_root / "worktree" / "BUILD-MANIFEST.json").exists())
 
     def test_patch_digest_is_deterministic_and_content_sensitive(self) -> None:
         first = self.prepare()

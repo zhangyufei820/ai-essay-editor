@@ -81,10 +81,10 @@ func authHelper(c *gin.Context, minRole int) {
 			// Token is valid
 			username = user.Username
 			role = user.Role
-				id = user.Id
-				status = user.Status
-				group = user.Group
-				useAccessToken = true
+			id = user.Id
+			status = user.Status
+			group = user.Group
+			useAccessToken = true
 		} else {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
@@ -321,6 +321,14 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 			c.Abort()
 			return
 		}
+		if !hasValidDedicatedTokenContract(token) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": common.TranslateMessage(c, i18n.MsgTokenInvalid),
+			})
+			c.Abort()
+			return
+		}
 
 		userCache, err := model.GetUserCache(token.UserId)
 		if err != nil {
@@ -423,6 +431,11 @@ func TokenAuth() func(c *gin.Context) {
 			}
 			return
 		}
+		if !hasValidDedicatedTokenContract(token) {
+			abortWithOpenAiMessage(c, http.StatusForbidden,
+				common.TranslateMessage(c, i18n.MsgTokenInvalid), types.ErrorCodeAccessDenied)
+			return
+		}
 
 		allowIps := token.GetIpLimits()
 		if len(allowIps) > 0 {
@@ -480,6 +493,16 @@ func TokenAuth() func(c *gin.Context) {
 		}
 		c.Next()
 	}
+}
+
+func hasValidDedicatedTokenContract(token *model.Token) bool {
+	if token == nil {
+		return false
+	}
+	if strings.TrimSpace(token.Group) != service.Grok45PricingGroupName {
+		return true
+	}
+	return service.IsExactGrok45TokenConfiguration(token)
 }
 
 func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) error {

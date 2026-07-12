@@ -272,6 +272,50 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
 
         self.assertIsNone(redirected)
 
+    def test_mysql_query_timeout_is_bounded_and_does_not_leak_secrets(self) -> None:
+        secret = "fake-discount-secret-for-timeout"
+        environment = {
+            "MYSQL_ROOT_PASSWORD": "fake-database-password",
+            "MYSQL_DATABASE": "new-api",
+            self.module.UPSTREAM_KEY_ENV: secret,
+        }
+        with mock.patch.dict(self.module.os.environ, environment, clear=True), mock.patch.object(
+            self.module.subprocess,
+            "check_output",
+            side_effect=self.module.subprocess.TimeoutExpired(["docker"], 15),
+        ) as check_output:
+            with self.assertRaises(self.module.ConfigurationError) as raised:
+                self.module.mysql("SELECT 1")
+
+        self.assertEqual(str(raised.exception), "production MySQL query failed")
+        self.assertNotIn(secret, str(raised.exception))
+        self.assertEqual(
+            check_output.call_args.kwargs["timeout"],
+            self.module.MYSQL_QUERY_TIMEOUT_SECONDS,
+        )
+
+    def test_mysql_update_timeout_is_bounded_and_does_not_leak_secrets(self) -> None:
+        secret = "fake-discount-secret-for-timeout"
+        environment = {
+            "MYSQL_ROOT_PASSWORD": "fake-database-password",
+            "MYSQL_DATABASE": "new-api",
+            self.module.UPSTREAM_KEY_ENV: secret,
+        }
+        with mock.patch.dict(self.module.os.environ, environment, clear=True), mock.patch.object(
+            self.module.subprocess,
+            "run",
+            side_effect=self.module.subprocess.TimeoutExpired(["docker"], 30),
+        ) as run:
+            with self.assertRaises(self.module.ConfigurationError) as raised:
+                self.module.mysql_exec("START TRANSACTION; COMMIT;")
+
+        self.assertEqual(str(raised.exception), "production MySQL update failed")
+        self.assertNotIn(secret, str(raised.exception))
+        self.assertEqual(
+            run.call_args.kwargs["timeout"],
+            self.module.MYSQL_UPDATE_TIMEOUT_SECONDS,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

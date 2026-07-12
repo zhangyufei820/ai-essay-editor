@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/QuantumNous/new-api/logger"
@@ -79,10 +80,18 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 		return nil
 	}
 
-	// 回退：无 BillingSession 时使用旧路径
-	quotaDelta := actualQuota - relayInfo.FinalPreConsumedQuota
-	if quotaDelta != 0 {
-		return PostConsumeQuota(relayInfo, quotaDelta, relayInfo.FinalPreConsumedQuota, true)
+	return errors.New("durable billing session is required for settlement")
+}
+
+func ChargeBillingAdjustment(relayInfo *relaycommon.RelayInfo, purpose string, quota int) error {
+	if relayInfo == nil || relayInfo.Billing == nil {
+		return errors.New("durable billing session is required for adjustment")
 	}
-	return nil
+	charger, ok := relayInfo.Billing.(interface {
+		ChargeAdjustment(string, int) error
+	})
+	if !ok {
+		return errors.New("billing adjustment is unsupported")
+	}
+	return charger.ChargeAdjustment(purpose, quota)
 }

@@ -109,8 +109,9 @@ import sys
 
 
 name, build_root, candidate = sys.argv[1:]
-build_root = os.path.abspath(build_root)
-candidate = os.path.abspath(candidate)
+build_root = os.path.realpath(os.path.abspath(build_root))
+candidate_input = os.path.abspath(candidate)
+candidate = os.path.join(os.path.realpath(os.path.dirname(candidate_input)), os.path.basename(candidate_input))
 
 
 def fail(message: str) -> None:
@@ -271,7 +272,7 @@ materialize_locked_source() {
   fi
 }
 
-write_build_manifest() {
+write_build_provenance() {
   local repository_root repository_url repository_commit repository_dirty
   need_cmd python3
   repository_root="$(git -C "$SERVICE_DIR" rev-parse --show-toplevel 2>/dev/null)" || die "project repository root is unavailable"
@@ -296,69 +297,119 @@ write_build_manifest() {
 import hashlib
 import json
 import os
+import re
 import stat
 from pathlib import Path
 
 patch_dir = Path(os.environ["PATCH_DIRECTORY"])
 worktree = Path(os.environ["PREPARED_WORKTREE"])
+generated_paths = {
+    "BUILD-CHECKSUMS.sha256",
+    "BUILD-MANIFEST.json",
+    "build.env",
+    "common/build-manifest.json",
+}
+safe_path = re.compile(r"^[A-Za-z0-9_@./$()+,=-]+$")
+
+
+def fail(message: str) -> None:
+    print(f"[prepare-local-source] ERROR: {message}", file=os.sys.stderr)
+    raise SystemExit(1)
+
+
+def regular_files(root: Path, *, exclude_generated: bool = False) -> list[tuple[str, Path]]:
+    files: list[tuple[str, Path]] = []
+    for current, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        for name in sorted(directory_names):
+            path = current_path / name
+            relative = path.relative_to(root).as_posix()
+            if not safe_path.fullmatch(relative):
+                fail(f"unsafe file name under {root}: {relative!r}")
+            if path.is_symlink():
+                fail(f"symbolic links are forbidden under {root}: {relative}")
+        for name in sorted(file_names):
+            path = current_path / name
+            relative = path.relative_to(root).as_posix()
+            if not safe_path.fullmatch(relative):
+                fail(f"unsafe file name under {root}: {relative!r}")
+            metadata = path.lstat()
+            if stat.S_ISLNK(metadata.st_mode):
+                fail(f"symbolic links are forbidden under {root}: {relative}")
+            if not stat.S_ISREG(metadata.st_mode):
+                fail(f"only regular files are allowed under {root}: {relative}")
+            if exclude_generated and relative in generated_paths:
+                fail(f"source tree collides with generated provenance file: {relative}")
+            files.append((relative, path))
+    return sorted(files)
+
+
+patch_files = regular_files(patch_dir)
 digest = hashlib.sha256()
-file_count = 0
-for path in sorted(patch_dir.rglob("*"), key=lambda item: item.as_posix()):
-    if not path.is_file() and not path.is_symlink():
-        continue
-    relative = path.relative_to(patch_dir).as_posix()
+for relative, path in patch_files:
     mode = stat.S_IMODE(path.lstat().st_mode)
-    if path.is_symlink():
-        content = os.readlink(path).encode("utf-8")
-        kind = "symlink"
-    else:
-        content = path.read_bytes()
-        kind = "file"
+    content = path.read_bytes()
     digest.update(relative.encode("utf-8"))
     digest.update(b"\0")
-    digest.update(kind.encode("ascii"))
+    digest.update(b"file")
     digest.update(b"\0")
     digest.update(f"{mode:o}".encode("ascii"))
     digest.update(b"\0")
     digest.update(content)
     digest.update(b"\0")
-    file_count += 1
 
 patch_sha256 = digest.hexdigest()
-identity = "\n".join(
-    (
-        os.environ["REPOSITORY_COMMIT"],
-        os.environ["LOCKED_UPSTREAM_COMMIT"],
-        patch_sha256,
-    )
-).encode("utf-8")
+worktree_files = regular_files(worktree, exclude_generated=True)
+checksum_lines = []
+for relative, path in worktree_files:
+    checksum_lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {relative}\n")
+checksum_bytes = "".join(checksum_lines).encode("utf-8")
+worktree_sha256 = hashlib.sha256(checksum_bytes).hexdigest()
+identity_values = (
+    os.environ["REPOSITORY_URL"],
+    os.environ["REPOSITORY_COMMIT"],
+    os.environ["LOCKED_UPSTREAM_REPO"],
+    os.environ["LOCKED_UPSTREAM_COMMIT"],
+    os.environ["PATCH_BASE_VALUE"],
+    patch_sha256,
+    worktree_sha256,
+)
+identity = "".join(f"{value}\n" for value in identity_values).encode("utf-8")
 manifest = {
-    "schema_version": 1,
+    "schema_version": 2,
     "repository": os.environ["REPOSITORY_URL"],
     "repository_commit": os.environ["REPOSITORY_COMMIT"],
     "repository_dirty": os.environ["REPOSITORY_DIRTY"] == "true",
     "upstream_repository": os.environ["LOCKED_UPSTREAM_REPO"],
     "upstream_commit": os.environ["LOCKED_UPSTREAM_COMMIT"],
     "patch_base": os.environ["PATCH_BASE_VALUE"],
-    "patch_file_count": file_count,
+    "patch_file_count": len(patch_files),
     "patch_sha256": patch_sha256,
+    "worktree_file_count": len(worktree_files),
+    "worktree_sha256": worktree_sha256,
+    "checksum_file": "BUILD-CHECKSUMS.sha256",
     "source_digest": hashlib.sha256(identity).hexdigest(),
 }
 encoded = (json.dumps(manifest, ensure_ascii=True, indent=2, sort_keys=True) + "\n").encode("utf-8")
+(worktree / "BUILD-CHECKSUMS.sha256").write_bytes(checksum_bytes)
 (worktree / "BUILD-MANIFEST.json").write_bytes(encoded)
 (worktree / "common").mkdir(parents=True, exist_ok=True)
 (worktree / "common" / "build-manifest.json").write_bytes(encoded)
 
 env_lines = {
+    "NEW_API_CHECKSUM_FILE": manifest["checksum_file"],
     "NEW_API_IMAGE_TAG": manifest["source_digest"][:16],
+    "NEW_API_MANIFEST_SHA256": hashlib.sha256(encoded).hexdigest(),
     "NEW_API_PATCH_SHA256": manifest["patch_sha256"],
     "NEW_API_REPOSITORY_COMMIT": manifest["repository_commit"],
     "NEW_API_SOURCE_DIGEST": manifest["source_digest"],
     "NEW_API_SOURCE_REPOSITORY": manifest["repository"],
     "NEW_API_UPSTREAM_COMMIT": manifest["upstream_commit"],
     "NEW_API_UPSTREAM_REPOSITORY": manifest["upstream_repository"],
+    "NEW_API_WORKTREE_FILE_COUNT": str(manifest["worktree_file_count"]),
+    "NEW_API_WORKTREE_SHA256": manifest["worktree_sha256"],
 }
-(worktree.parent / "build.env").write_text(
+(worktree / "build.env").write_text(
     "".join(f"{key}={value}\n" for key, value in sorted(env_lines.items())),
     encoding="utf-8",
 )
@@ -389,7 +440,7 @@ overlay_patch() {
     die "generated worktree contains forbidden .git metadata after overlay"
   printf 'generated by services/shenxiang-new-api/scripts/prepare-local-source.sh\n' > "${WORKTREE_DIR_ABS}/.generated-by-prepare-local-source"
 
-  write_build_manifest
+  write_build_provenance
 
   [ -f "${WORKTREE_DIR_ABS}/go.mod" ] || die "prepared worktree is missing go.mod: $WORKTREE_DIR_ABS"
 }

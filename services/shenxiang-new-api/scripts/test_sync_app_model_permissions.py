@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import stat
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT_PATH = Path(__file__).with_name("sync_app_model_permissions.py")
@@ -87,6 +90,194 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 os.environ.pop("CRYPTO_SECRET", None)
             else:
                 os.environ["CRYPTO_SECRET"] = old_secret
+
+    def test_mysql_subprocesses_timeout_with_generic_errors(self) -> None:
+        secret = "fake-sync-database-password"
+        environment = {
+            "MYSQL_ROOT_PASSWORD": secret,
+            "MYSQL_DATABASE": "new-api",
+        }
+        for reader in (self.module.mysql, self.module.mysql_raw):
+            with self.subTest(reader=reader.__name__), mock.patch.dict(
+                self.module.os.environ,
+                environment,
+                clear=True,
+            ), mock.patch.object(
+                self.module.subprocess,
+                "check_output",
+                side_effect=self.module.subprocess.TimeoutExpired(["docker"], 15),
+            ) as check_output:
+                with self.assertRaisesRegex(RuntimeError, "MySQL query failed") as raised:
+                    reader("SELECT 1")
+
+                self.assertNotIn(secret, str(raised.exception))
+                self.assertEqual(
+                    check_output.call_args.kwargs["timeout"],
+                    self.module.MYSQL_QUERY_TIMEOUT_SECONDS,
+                )
+
+    def test_mysql_update_timeout_is_fail_closed_and_generic(self) -> None:
+        secret = "fake-sync-database-password"
+        environment = {
+            "MYSQL_ROOT_PASSWORD": secret,
+            "MYSQL_DATABASE": "new-api",
+        }
+        with mock.patch.dict(self.module.os.environ, environment, clear=True), mock.patch.object(
+            self.module.subprocess,
+            "run",
+            side_effect=self.module.subprocess.TimeoutExpired(["docker"], 60),
+        ) as run:
+            with self.assertRaisesRegex(RuntimeError, "MySQL update failed") as raised:
+                self.module.mysql_exec("START TRANSACTION; COMMIT;")
+
+        self.assertNotIn(secret, str(raised.exception))
+        self.assertEqual(
+            run.call_args.kwargs["timeout"],
+            self.module.MYSQL_UPDATE_TIMEOUT_SECONDS,
+        )
+
+    def test_redis_timeout_is_fail_closed_and_does_not_leak_secret(self) -> None:
+        secret = "fake-sync-redis-password"
+        environment = {
+            "CRYPTO_SECRET": "fake-crypto-secret",
+            "REDIS_PASSWORD": secret,
+        }
+        with mock.patch.dict(self.module.os.environ, environment, clear=True), mock.patch.object(
+            self.module.subprocess,
+            "run",
+            side_effect=self.module.subprocess.TimeoutExpired(["docker"], 15),
+        ) as run, mock.patch.object(self.module.time, "sleep") as sleep:
+            with self.assertRaisesRegex(RuntimeError, "cache invalidation failed") as raised:
+                self.module.delete_token_caches(["token-value"])
+
+        self.assertNotIn(secret, str(raised.exception))
+        self.assertEqual(run.call_count, self.module.TOKEN_CACHE_INVALIDATION_ATTEMPTS)
+        self.assertEqual(sleep.call_count, self.module.TOKEN_CACHE_INVALIDATION_ATTEMPTS - 1)
+        self.assertEqual(
+            run.call_args.kwargs["timeout"],
+            self.module.REDIS_UPDATE_TIMEOUT_SECONDS,
+        )
+
+    def test_redis_cache_invalidation_retries_transient_failures(self) -> None:
+        environment = {
+            "CRYPTO_SECRET": "fake-crypto-secret",
+            "REDIS_PASSWORD": "fake-redis-password",
+        }
+        failures = [
+            self.module.subprocess.TimeoutExpired(["docker"], 15),
+            OSError("temporary failure"),
+            mock.Mock(),
+        ]
+        with mock.patch.dict(self.module.os.environ, environment, clear=True), mock.patch.object(
+            self.module.subprocess,
+            "run",
+            side_effect=failures,
+        ) as run, mock.patch.object(self.module.time, "sleep") as sleep:
+            self.assertEqual(self.module.delete_token_caches(["token-value"]), 1)
+
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2])
+
+    def test_all_active_token_cache_invalidation_queries_fresh_keys(self) -> None:
+        captured_queries: list[str] = []
+        captured_keys: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            captured_queries.append(query)
+            return [["key-before"], [""], ["key-after"]]
+
+        self.module.mysql = fake_mysql
+        self.module.delete_token_caches = lambda keys: captured_keys.extend(keys) or len(keys)
+
+        self.assertEqual(self.module.invalidate_all_active_token_caches(), 2)
+        self.assertIn("deleted_at IS NULL", captured_queries[0])
+        self.assertEqual(captured_keys, ["key-before", "key-after"])
+
+    def test_main_invalidates_all_token_caches_before_and_after_sync(self) -> None:
+        events: list[str] = []
+        self.module.invalidate_all_active_token_caches = lambda: events.append("invalidate") or 1
+        self.module.run_model_permission_sync = lambda: events.append("sync") or 0
+
+        self.assertEqual(self.module.main(), 0)
+        self.assertEqual(events, ["invalidate", "sync", "invalidate"])
+
+    def test_main_invalidates_all_token_caches_after_partial_sync_failure(self) -> None:
+        events: list[str] = []
+        self.module.invalidate_all_active_token_caches = lambda: events.append("invalidate") or 1
+
+        def fail_sync() -> int:
+            events.append("sync")
+            raise RuntimeError("partial commit")
+
+        self.module.run_model_permission_sync = fail_sync
+        with self.assertRaisesRegex(RuntimeError, "partial commit"):
+            self.module.main()
+        self.assertEqual(events, ["invalidate", "sync", "invalidate"])
+
+    def test_codex_refresh_timeout_is_fail_closed(self) -> None:
+        with mock.patch.object(self.module.Path, "exists", return_value=True), mock.patch.object(
+            self.module.subprocess,
+            "run",
+            side_effect=self.module.subprocess.TimeoutExpired(["docker"], 180),
+        ) as run:
+            with self.assertRaisesRegex(RuntimeError, "workspace refresh failed"):
+                self.module.refresh_codex()
+
+        self.assertEqual(
+            run.call_args.kwargs["timeout"],
+            self.module.CODEX_REFRESH_TIMEOUT_SECONDS,
+        )
+
+    def test_codex_env_backup_is_external_and_private(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            codex_root = root / "opt" / "shenxiang-codex-workspace"
+            backup_root = root / "quarantine" / "model-sync-env-backups"
+            codex_root.mkdir(parents=True)
+            env_path = codex_root / ".env"
+            original = "SERVICE_SECRET=synthetic-test-value\nCODEX_ALLOWED_MODELS=old\n"
+            env_path.write_text(original, encoding="utf-8")
+            env_path.chmod(0o644)
+            self.module.CODEX_ROOT = codex_root
+            self.module.CODEX_ENV_BACKUP_ROOT = backup_root
+
+            with mock.patch.dict(self.module.os.environ, {"SYNC_TIMESTAMP": "20260712-test"}, clear=False):
+                changed = self.module.sync_codex_env(
+                    {
+                        "codex": ["gpt-5.5"],
+                        "claude": ["claude-opus-4-8"],
+                        "image": ["gpt-image-2-4K"],
+                        "video": ["seedance-2.0-cl-mini"],
+                    }
+                )
+
+            self.assertTrue(changed)
+            backups = list(backup_root.iterdir())
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_text(encoding="utf-8"), original)
+            self.assertEqual(stat.S_IMODE(backups[0].stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(backup_root.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(env_path.stat().st_mode), 0o600)
+            self.assertIn("SERVICE_SECRET=synthetic-test-value", env_path.read_text(encoding="utf-8"))
+            self.assertEqual(list(codex_root.glob(".env.backup*")), [])
+
+    def test_dynamic_sql_columns_are_strictly_whitelisted(self) -> None:
+        self.assertIn("current_channel.models", self.module.discount_text_models_allowed_sql("current_channel.models"))
+        self.assertIn("model_name", self.module.supplier_exposed_model_name_predicate("model_name"))
+        for builder, value in (
+            (self.module.discount_text_models_allowed_sql, "models) OR 1=1 --"),
+            (self.module.supplier_exposed_model_name_predicate, "model) OR 1=1 --"),
+        ):
+            with self.subTest(builder=builder.__name__):
+                with self.assertRaisesRegex(ValueError, "SQL identifier"):
+                    builder(value)
+
+    def test_usd_exchange_rate_rejects_non_finite_values(self) -> None:
+        for raw in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(raw=raw):
+                self.module.option_value = lambda _key, value=raw: value
+                with self.assertRaisesRegex(ValueError, "greater than 0"):
+                    self.module.usd_exchange_rate()
 
     def test_supplier_exposed_model_limit_predicate_covers_known_markers(self) -> None:
         predicate = self.module.supplier_exposed_model_limit_predicate()
@@ -192,7 +383,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.module.active_groups = lambda: ["default"]
         self.module.mysql = fake_mysql
-        self.module.mysql_exec = captured.append
+        self.module.mysql_exec = lambda query: captured.append(query) or ["ability_sync_status=ok"]
 
         self.module.sync_abilities()
 
@@ -216,7 +407,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.module.active_groups = lambda: ["default", "internal", "discount"]
         self.module.mysql = fake_mysql
-        self.module.mysql_exec = captured.append
+        self.module.mysql_exec = lambda query: captured.append(query) or ["ability_sync_status=ok"]
 
         self.module.sync_abilities()
 
@@ -227,19 +418,22 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("'discount', 'gpt-5.5', 21", sql)
         self.assertIn("'default', 'gpt-5.5', 21", sql)
         self.assertIn("'internal', 'gpt-5.5', 21", sql)
-        self.assertIn("FIND_IN_SET(ability.model", sql)
+        self.assertIn("EXISTS (SELECT 1 FROM models AS current_model", sql)
         self.assertNotIn("INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) VALUES", sql)
         self.assertIn("FROM channels AS current_channel", sql)
         self.assertIn("current_channel.id = 31", sql)
         self.assertIn("current_channel.status = 1", sql)
-        self.assertIn("COALESCE(current_channel.tag, '') = 'xingren-discount-text'", sql)
-        self.assertIn("REPLACE(COALESCE(current_channel.`group`, ''), ' ', '') = 'discount'", sql)
+        self.assertIn("BINARY COALESCE(current_channel.tag, '') = BINARY 'xingren-discount-text'", sql)
+        self.assertIn("BINARY REPLACE(COALESCE(current_channel.`group`, ''), ' ', '') = BINARY 'discount'", sql)
         self.assertIn(
             "FIND_IN_SET('gpt-5.5', REPLACE(COALESCE(current_channel.models, ''), ' ', '')) > 0",
             sql,
         )
         self.assertIn("REGEXP BINARY", sql)
-        self.assertGreater(sql.index("UPDATE abilities SET enabled = 0"), sql.rindex("ON DUPLICATE KEY UPDATE"))
+        first_managed_disable = sql.index("UPDATE abilities SET enabled = 0 WHERE `group` IN")
+        self.assertLess(first_managed_disable, sql.index("INSERT INTO abilities"))
+        self.assertIn("@discount_sync_allowed = 1", sql)
+        self.assertIn("ability_sync_status=", sql)
 
     def test_sync_abilities_fails_closed_for_discount_channel_with_extra_model(self) -> None:
         captured: list[str] = []
@@ -260,13 +454,15 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.module.active_groups = lambda: ["default", "discount"]
         self.module.mysql = fake_mysql
-        self.module.mysql_exec = captured.append
+        self.module.mysql_exec = lambda query: captured.append(query) or [
+            "ability_sync_status=discount_invalid_profile"
+        ]
 
         with self.assertRaisesRegex(RuntimeError, "discount group isolation violation"):
             self.module.sync_abilities()
 
         sql = "\n".join(captured)
-        self.assertIn("UPDATE channels SET status = 2 WHERE tag = 'xingren-discount-text'", sql)
+        self.assertIn("UPDATE channels SET status = 2 WHERE BINARY COALESCE(tag, '')", sql)
         self.assertIn("REGEXP BINARY", sql)
         self.assertNotIn("SELECT 'discount', 'gpt-5.5', 31", sql)
         self.assertNotIn("gpt-5.7-preview', 31", sql)
@@ -283,13 +479,16 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.module.active_groups = lambda: ["default", "discount"]
         self.module.mysql = fake_mysql
-        self.module.mysql_exec = captured.append
+        self.module.mysql_exec = lambda query: captured.append(query) or [
+            "ability_sync_status=discount_invalid_profile"
+        ]
 
         with self.assertRaisesRegex(RuntimeError, "discount group isolation violation"):
             self.module.sync_abilities()
         sql = "\n".join(captured)
         self.assertIn("UPDATE channels SET status = 2", sql)
-        self.assertIn("WHERE status <> 1", sql)
+        self.assertIn("@discount_sync_status", sql)
+        self.assertIn("ability_sync_status=", sql)
         self.assertNotIn("'discount', 'gpt-5.5', 31", sql)
 
     def test_sync_abilities_disables_nonisolated_channel_using_discount_group(self) -> None:
@@ -304,14 +503,72 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.module.active_groups = lambda: ["default", "discount"]
         self.module.mysql = fake_mysql
-        self.module.mysql_exec = captured.append
+        self.module.mysql_exec = lambda query: captured.append(query) or [
+            "ability_sync_status=discount_group_conflict"
+        ]
 
-        with self.assertRaisesRegex(RuntimeError, "disabled channel count: 1"):
+        with self.assertRaisesRegex(RuntimeError, "discount group isolation violation"):
             self.module.sync_abilities()
         sql = "\n".join(captured)
         self.assertIn("FIND_IN_SET('discount'", sql)
         self.assertNotIn("'default', 'gpt-5.5', 21", sql)
         self.assertNotIn("'discount', 'gpt-5.5', 21", sql)
+
+    def test_sync_abilities_locks_and_rejects_duplicate_discount_tag(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [
+                    ["31", "gpt-5.5", "0", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAG, "discount"],
+                    ["32", "gpt-5.4", "0", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAG, "discount"],
+                ]
+            if "SELECT model_name FROM models" in query:
+                return [["gpt-5.5"], ["gpt-5.4"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "discount"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = lambda query: captured.append(query) or [
+            "ability_sync_status=discount_duplicate_tag"
+        ]
+
+        with self.assertRaisesRegex(RuntimeError, "multiple channels use the discount isolation tag"):
+            self.module.sync_abilities()
+
+        sql = captured[0]
+        self.assertTrue(sql.startswith("START TRANSACTION;"))
+        self.assertIn("FOR UPDATE;", sql)
+        self.assertIn("@discount_tag_count", sql)
+        self.assertIn("@discount_tag_count > 1", sql)
+        self.assertIn("SET status = 2", sql)
+        self.assertIn("@discount_sync_allowed = 1", sql)
+
+    def test_sync_abilities_disables_stale_managed_abilities_before_reenable(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return []
+            if "SELECT model_name FROM models" in query:
+                return [["gpt-5.5"]]
+            return []
+
+        self.module.active_groups = lambda: ["default"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = lambda query: captured.append(query) or ["ability_sync_status=ok"]
+
+        self.module.sync_abilities()
+
+        sql = captured[0]
+        disable_index = sql.index("UPDATE abilities SET enabled = 0 WHERE `group` IN")
+        self.assertIn("'discount'", sql[disable_index:])
+        self.assertIn("'grok45'", sql[disable_index:])
+        self.assertIn("model = 'grok-4.5'", sql[disable_index:])
+        self.assertIn("tag IN ('xingren-discount-text', 'xingren-grok45')", sql[disable_index:])
+        insert_index = sql.find("INSERT INTO abilities")
+        if insert_index >= 0:
+            self.assertLess(disable_index, insert_index)
 
     def test_ensure_discount_image2_backing_model_uses_public_metadata(self) -> None:
         captured: list[str] = []

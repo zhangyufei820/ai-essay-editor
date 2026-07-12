@@ -337,6 +337,12 @@ func createImageTaskWithBodyStorageFactory(c *gin.Context, openAICompat bool, st
 	}
 
 	taskID := model.GenerateTaskID()
+	billingOperationKey, err := model.TaskBillingOperationKey(taskID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to prepare image task billing"})
+		return
+	}
+	billingLedgerMode := model.GetBillingLedgerMode()
 	requestID := c.GetString(common.RequestIdKey)
 	if requestID == "" {
 		requestID = common.GetTimeString() + common.GetRandomString(8)
@@ -393,6 +399,11 @@ func createImageTaskWithBodyStorageFactory(c *gin.Context, openAICompat bool, st
 		Properties: model.Properties{
 			Input:           truncatePlaygroundText(imageReq.Prompt, 3000),
 			OriginModelName: truncatePlaygroundText(imageReq.Model, 160),
+		},
+		PrivateData: model.TaskPrivateData{
+			BillingOperationKey: billingOperationKey,
+			BillingLedgerMode:   billingLedgerMode,
+			BillingRequestID:    requestID,
 		},
 	}
 	task.SetData(payload)
@@ -557,17 +568,19 @@ func sanitizePlaygroundImageTaskPayloadForResponse(payload *playgroundImageTaskP
 		return
 	}
 	payload.RequestFile = ""
-	if displayModel == "" {
-		return
+	if displayModel != "" {
+		payload.Model = displayModel
+		payload.DisplayModel = displayModel
 	}
-	payload.Model = displayModel
-	payload.DisplayModel = displayModel
 	if payload.Item == nil {
 		return
 	}
 	item := *payload.Item
-	item.Model = displayModel
-	if len(item.Metadata) > 0 {
+	item.OriginalURL = ""
+	if displayModel != "" {
+		item.Model = displayModel
+	}
+	if displayModel != "" && len(item.Metadata) > 0 {
 		metadata := make(map[string]interface{}, len(item.Metadata))
 		for key, value := range item.Metadata {
 			metadata[key] = value
@@ -1107,7 +1120,7 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		common.CleanupBodyStorage(ginCtx)
 	})
 	engine.Use(func(ginCtx *gin.Context) {
-		seedPlaygroundImageTaskContext(ginCtx, userID, username, role, userGroup, usingGroup, tokenName, &payload, task.TaskID, bodyBytes, capture)
+		seedPlaygroundImageTaskContext(ginCtx, userID, username, role, userGroup, usingGroup, tokenName, &payload, task, bodyBytes, capture)
 	})
 	engine.Use(middleware.Distribute())
 	engine.POST("/pg/images/generations", func(ginCtx *gin.Context) {
@@ -1367,7 +1380,27 @@ func playgroundImageTaskFailureHasAny(value string, needles ...string) bool {
 	return false
 }
 
-func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username string, role int, userGroup string, usingGroup string, tokenName string, payload *playgroundImageTaskPayload, taskID string, bodyBytes []byte, capture *playgroundImageTaskResultCapture) {
+func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username string, role int, userGroup string, usingGroup string, tokenName string, payload *playgroundImageTaskPayload, task *model.Task, bodyBytes []byte, capture *playgroundImageTaskResultCapture) {
+	if ginCtx == nil || task == nil {
+		if ginCtx != nil {
+			ginCtx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": "image task billing context unavailable"}})
+		}
+		return
+	}
+	taskID := task.TaskID
+	ledgerMode := task.PrivateData.BillingLedgerMode
+	if ledgerMode == "" {
+		ledgerMode = model.BillingLedgerModeOff
+	}
+	expectedOperationKey, err := model.TaskBillingOperationKey(taskID)
+	if err != nil || task.PrivateData.BillingOperationKey != expectedOperationKey {
+		ginCtx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": "image task billing context invalid"}})
+		return
+	}
+	if err := service.SetTaskBillingOperationOverride(ginCtx, task.PrivateData.BillingOperationKey, ledgerMode, task.ID); err != nil {
+		ginCtx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": "image task billing context invalid"}})
+		return
+	}
 	requestID := ""
 	if payload != nil {
 		requestID = payload.RequestID
@@ -1442,7 +1475,8 @@ func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username st
 	ginCtx.Set(common.KeyBodyStorage, storage)
 	ginCtx.Set(playgroundImageAsyncBillingCaptureKey, func(actualQuota int, info *relaycommon.RelayInfo) {
 		capture.Quota = actualQuota
-		capturePlaygroundImageTaskBilling(taskID, actualQuota, info)
+		chargeToken, chargeTokenSet := service.ResolveTaskBillingChargeDecision(ginCtx)
+		capturePlaygroundImageTaskBilling(taskID, actualQuota, info, chargeToken, chargeTokenSet)
 	})
 	ginCtx.Set(relaypkg.PlaygroundImageResponseCaptureKey, func(_ *dto.ImageRequest, usage *dto.Usage) {
 		capture.Usage = usage
@@ -1478,18 +1512,36 @@ func applyPlaygroundImageTaskFailureCapture(task *model.Task, capture *playgroun
 	task.ChannelId = capture.LastFailureChannelID
 }
 
-func capturePlaygroundImageTaskBilling(taskID string, actualQuota int, info *relaycommon.RelayInfo) {
+func capturePlaygroundImageTaskBilling(taskID string, actualQuota int, info *relaycommon.RelayInfo, chargeToken bool, chargeTokenSet bool) {
+	if actualQuota < 0 {
+		logger.LogError(nil, fmt.Sprintf("refusing negative image task billing capture for %s", taskID))
+		return
+	}
 	task, exists, err := model.GetByOnlyTaskId(taskID)
 	if err != nil || !exists || task == nil {
 		return
 	}
-	task.Quota = actualQuota
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		return
+	}
+	fromStatus := task.Status
+	ledgerTracked := task.PrivateData.BillingOperationKey != ""
+	if !ledgerTracked {
+		task.Quota = actualQuota
+	}
 	if info != nil {
-		task.ChannelId = info.ChannelId
+		if info.ChannelMeta != nil {
+			task.ChannelId = info.ChannelId
+		}
 		task.Group = truncatePlaygroundText(info.UsingGroup, 50)
-		task.PrivateData.BillingSource = info.BillingSource
-		task.PrivateData.SubscriptionId = info.SubscriptionId
-		task.PrivateData.TokenId = info.TokenId
+		if !ledgerTracked {
+			task.PrivateData.BillingSource = info.BillingSource
+			task.PrivateData.SubscriptionId = info.SubscriptionId
+			task.PrivateData.TokenId = info.TokenId
+			if requestID := strings.TrimSpace(info.RequestId); requestID != "" {
+				task.PrivateData.BillingRequestID = requestID
+			}
+		}
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
 			ModelPrice:      info.PriceData.ModelPrice,
 			GroupRatio:      info.PriceData.GroupRatioInfo.GroupRatio,
@@ -1498,15 +1550,28 @@ func capturePlaygroundImageTaskBilling(taskID string, actualQuota int, info *rel
 			OriginModelName: info.OriginModelName,
 			PerCallBilling:  info.PriceData.UsePrice,
 		}
-		if info.UpstreamModelName != "" {
+		if info.ChannelMeta != nil && info.UpstreamModelName != "" {
 			task.Properties.UpstreamModelName = info.UpstreamModelName
 		}
+	}
+	if chargeTokenSet {
+		if task.PrivateData.BillingChargeTokenSet && task.PrivateData.BillingChargeToken != chargeToken {
+			logger.LogError(nil, fmt.Sprintf("image task billing charge decision mismatch for %s", task.TaskID))
+			return
+		}
+		task.PrivateData.BillingChargeToken = chargeToken
+		task.PrivateData.BillingChargeTokenSet = true
 	}
 	payload := playgroundImageTaskPayload{}
 	_ = task.GetData(&payload)
 	payload.ActualQuota = actualQuota
 	task.SetData(payload)
-	_ = task.Update()
+	won, err := task.UpdateWithStatus(fromStatus)
+	if err != nil {
+		logger.LogError(nil, fmt.Sprintf("failed to persist image task billing capture %s: %s", task.TaskID, err.Error()))
+	} else if !won {
+		logger.LogWarn(nil, fmt.Sprintf("image task %s changed concurrently; discarded billing capture", task.TaskID))
+	}
 }
 
 func cacheFirstPlaygroundImageTaskResult(c *gin.Context, task *model.Task, payload *playgroundImageTaskPayload, response *dto.ImageResponse) (*playgroundMediaItem, error) {
@@ -1569,12 +1634,16 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	payload.OriginalStatus = status
 	requestFile := payload.RequestFile
 	payload.RequestFile = ""
+	desiredQuota := task.Quota
 	if actualQuota > 0 {
 		payload.ActualQuota = actualQuota
-		task.Quota = actualQuota
+		desiredQuota = actualQuota
+		if task.PrivateData.BillingOperationKey == "" {
+			task.Quota = actualQuota
+		}
 	}
 	task.SetData(payload)
-	won, err := task.UpdateWithStatus(fromStatus)
+	won, err := service.PersistTaskTerminalSuccess(nil, task, fromStatus, desiredQuota, "image task settled")
 	if err != nil {
 		logger.LogError(nil, fmt.Sprintf("failed to complete playground image task %s: %s", task.TaskID, err.Error()))
 		if ownsCachedMedia {
@@ -1696,7 +1765,7 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	requestFile := payload.RequestFile
 	payload.RequestFile = ""
 	task.SetData(payload)
-	won, err := task.UpdateWithStatus(fromStatus)
+	won, err := service.PersistTaskTerminalFailure(nil, task, fromStatus, reason, "image_task_failed", true)
 	if err != nil {
 		logger.LogError(nil, fmt.Sprintf("failed to fail playground image task %s: %s", task.TaskID, err.Error()))
 		return
@@ -1706,7 +1775,6 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	}
 	markPlaygroundImageTaskLogFailure(task, &payload, reason)
 	cleanupPlaygroundImageTaskRequest(requestFile)
-	service.RefundTaskQuota(nil, task, reason)
 }
 
 func sanitizePlaygroundImageTaskFailure(reason string) string {

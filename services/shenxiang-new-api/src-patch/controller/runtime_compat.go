@@ -44,5 +44,7 @@ func UpdateTaskBulk() {
 	if !constant.UpdateTask || !model.HasUnfinishedSyncTasks() {
 		return
 	}
-	service.RunTaskPollingOnce(context.Background(), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	service.RunTaskPollingOnce(ctx, nil)
 }

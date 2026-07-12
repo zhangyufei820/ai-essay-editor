@@ -23,7 +23,9 @@ import (
 )
 
 type safetyTaskPollingAdaptor struct {
-	response func() *http.Response
+	response   func() *http.Response
+	parse      func([]byte) (*relaycommon.TaskInfo, error)
+	parseCalls atomic.Int32
 }
 
 func (a *safetyTaskPollingAdaptor) Init(*relaycommon.RelayInfo) {}
@@ -36,7 +38,11 @@ func (a *safetyTaskPollingAdaptor) FetchTaskWithContext(context.Context, string,
 	return a.response(), nil
 }
 
-func (a *safetyTaskPollingAdaptor) ParseTaskResult([]byte) (*relaycommon.TaskInfo, error) {
+func (a *safetyTaskPollingAdaptor) ParseTaskResult(body []byte) (*relaycommon.TaskInfo, error) {
+	a.parseCalls.Add(1)
+	if a.parse != nil {
+		return a.parse(body)
+	}
 	return &relaycommon.TaskInfo{}, nil
 }
 
@@ -86,6 +92,38 @@ func TestTaskPollingCapsVideoAndSunoResponseBodies(t *testing.T) {
 		require.ErrorContains(t, err, "upstream response exceeds 16 byte limit")
 		require.True(t, body.closed.Load())
 	})
+}
+
+func TestVideoPollingNonSuccessHTTPDoesNotParseOrRefund(t *testing.T) {
+	truncate(t)
+	const userID, quota = 910, 100
+	seedUser(t, userID, 1000)
+	task := makeTask(userID, 0, quota, 0, BillingSourceWallet, 0)
+	task.TaskID = "public-http-error"
+	task.PrivateData.UpstreamTaskID = "upstream-http-error"
+	require.NoError(t, model.DB.Create(task).Error)
+	body := &trackedResponseBody{Reader: strings.NewReader(`{"error":{"message":"unauthorized"},"status":"FAILURE"}`)}
+	adaptor := &safetyTaskPollingAdaptor{
+		response: func() *http.Response {
+			return &http.Response{StatusCode: http.StatusUnauthorized, Body: body}
+		},
+		parse: func([]byte) (*relaycommon.TaskInfo, error) {
+			return relaycommon.FailTaskInfo("unauthorized"), nil
+		},
+	}
+
+	err := updateVideoSingleTask(
+		context.Background(), adaptor, &model.Channel{}, task.GetUpstreamTaskID(),
+		map[string]*model.Task{task.GetUpstreamTaskID(): task},
+	)
+
+	require.ErrorContains(t, err, "non-success status 401")
+	require.Zero(t, adaptor.parseCalls.Load())
+	require.True(t, body.closed.Load())
+	require.Equal(t, 1000, getUserQuota(t, userID))
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusInProgress), reloaded.Status)
 }
 
 func TestVideoCASLoserDoesNotPublishMedia(t *testing.T) {
@@ -323,6 +361,41 @@ func TestMissingUpstreamTaskDoesNotOverwriteConcurrentTaskIDAssignment(t *testin
 	require.Equal(t, "assigned-upstream-id", persisted.TaskID)
 	require.Equal(t, model.TaskStatus(model.TaskStatusSubmitted), persisted.Status)
 	require.Equal(t, 1000, getUserQuota(t, userID))
+}
+
+func TestMissingUpstreamActiveTaskPersistsTerminalRefundIntent(t *testing.T) {
+	truncate(t)
+	const userID, preConsumed = 849, 70
+	seedUser(t, userID, 1000+preConsumed)
+	task := &model.Task{
+		TaskID:   "task_missing_active_upstream",
+		Platform: constant.TaskPlatform("kling"),
+		UserId:   userID,
+		Quota:    preConsumed,
+		Status:   model.TaskStatusSubmitted,
+		PrivateData: model.TaskPrivateData{
+			UpstreamTaskID: "   ",
+			BillingSource:  BillingSourceWallet,
+		},
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+	operationKey := prepareActiveTaskBillingOperation(t, task, false)
+	require.Equal(t, 1000, getUserQuota(t, userID))
+
+	won, err := failPollingTaskWithoutUpstreamID(context.Background(), task, true)
+
+	require.NoError(t, err)
+	require.True(t, won)
+	var persisted model.Task
+	require.NoError(t, model.DB.First(&persisted, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusFailure), persisted.Status)
+	require.Equal(t, PublicAsyncTaskFailureMessage, persisted.FailReason)
+	require.Equal(t, 1000+preConsumed, getUserQuota(t, userID))
+	var operation model.BillingOperation
+	require.NoError(t, model.DB.Where("operation_key = ?", operationKey).First(&operation).Error)
+	require.Equal(t, model.BillingOutcomeFailure, operation.Outcome)
+	require.Zero(t, operation.AppliedQuota)
 }
 
 func TestPollingTaskIndexSeparatesIdenticalUpstreamIDsByChannel(t *testing.T) {

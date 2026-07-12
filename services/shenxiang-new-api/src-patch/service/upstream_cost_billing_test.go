@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -60,6 +61,51 @@ func TestApplyUpstreamCostBillingFallsBackWhenCostMissing(t *testing.T) {
 	require.Equal(t, "missing_upstream_cost", result.FallbackReason)
 	require.Equal(t, 321, quota)
 	require.Equal(t, 321, result.FinalQuota)
+}
+
+func TestApplyUpstreamCostBillingRejectsNonFiniteCost(t *testing.T) {
+	for _, cost := range []any{math.NaN(), math.Inf(1), "NaN", "+Inf"} {
+		quota, result := ApplyUpstreamCostBilling(nil, &dto.Usage{Cost: cost}, 321)
+
+		require.False(t, result.Applied)
+		require.Equal(t, "missing_upstream_cost", result.FallbackReason)
+		require.Equal(t, 321, quota)
+	}
+}
+
+func TestUpstreamCostMarkupRateRejectsNonFiniteConfiguration(t *testing.T) {
+	for _, value := range []string{"NaN", "+Inf", "-Inf"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("UPSTREAM_COST_MARKUP_RATE", value)
+			require.Equal(t, DefaultUpstreamCostMarkupRate, upstreamCostMarkupRate())
+		})
+	}
+}
+
+func TestQuotaFromUpstreamCostRejectsNonFiniteExchangeRate(t *testing.T) {
+	oldExchangeRate := operation_setting.USDExchangeRate
+	defer func() { operation_setting.USDExchangeRate = oldExchangeRate }()
+
+	for _, exchangeRate := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		operation_setting.USDExchangeRate = exchangeRate
+		require.NotPanics(t, func() {
+			_, _, _, ok := quotaFromUpstreamCost(7.3, "CNY", DefaultUpstreamCostMarkupRate)
+			require.False(t, ok)
+		})
+	}
+}
+
+func TestQuotaFromUpstreamCostRejectsNonFiniteQuotaPerUnit(t *testing.T) {
+	oldQuotaPerUnit := common.QuotaPerUnit
+	defer func() { common.QuotaPerUnit = oldQuotaPerUnit }()
+
+	for _, quotaPerUnit := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		common.QuotaPerUnit = quotaPerUnit
+		require.NotPanics(t, func() {
+			_, _, _, ok := quotaFromUpstreamCost(1, "USD", DefaultUpstreamCostMarkupRate)
+			require.False(t, ok)
+		})
+	}
 }
 
 func TestApplyUpstreamCostBillingKeepsMarketplacePriceForDiscountGroup(t *testing.T) {
@@ -149,6 +195,14 @@ func TestMergeRealtimeUpstreamCostAddsMatchingCurrency(t *testing.T) {
 	require.True(t, ok, reason)
 	require.Equal(t, "USD", currency)
 	require.InDelta(t, 0.35, cost, 0.000001)
+}
+
+func TestMergeRealtimeUpstreamCostRejectsOverflowingSum(t *testing.T) {
+	total := &dto.RealtimeUsage{CostUSD: math.MaxFloat64}
+
+	MergeRealtimeUpstreamCost(total, &dto.RealtimeUsage{CostUSD: math.MaxFloat64})
+
+	require.Equal(t, math.MaxFloat64, total.CostUSD)
 }
 
 func TestShouldRetryTextEmptyOutputOnceBeforeResponseWritten(t *testing.T) {

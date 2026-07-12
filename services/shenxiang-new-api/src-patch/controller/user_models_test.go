@@ -5,9 +5,31 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/stretchr/testify/require"
 )
+
+func configurePricingGrok45Entitlements(t *testing.T) {
+	t.Helper()
+	originalGroups := setting.UserUsableGroups2JSONString()
+	specialGroups := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup
+	originalSpecialGroups := specialGroups.ReadAll()
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalGroups))
+		specialGroups.Clear()
+		specialGroups.AddAll(originalSpecialGroups)
+	})
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{
+		"default":"原价",
+		"discount":"特价",
+		"grok45":"Grok 4.5 专用通道"
+	}`))
+	specialGroups.Clear()
+	specialGroups.Set("restricted", map[string]string{"-:grok45": "不可用"})
+}
 
 func TestNormalizeUserVisibleModelsAddsSeedancePrivateVideoForRootUser(t *testing.T) {
 	models := normalizeUserVisibleModels(1, []string{"grok-video-super-720p", "seedance-2.0"})
@@ -104,6 +126,55 @@ func TestPublicPricingGroupsDoesNotPromoteAllToDiscount(t *testing.T) {
 	})
 
 	require.Equal(t, []string{"default"}, groups)
+}
+
+func TestPricingUsableGroupsExposeGrok45OnlyToEntitledUsers(t *testing.T) {
+	configurePricingGrok45Entitlements(t)
+
+	entitled := getPricingUsableGroups("entitled", true)
+	restricted := getPricingUsableGroups("restricted", true)
+	anonymous := getPricingUsableGroups("", false)
+
+	require.Contains(t, entitled, service.Grok45PricingGroupName)
+	require.NotContains(t, restricted, service.Grok45PricingGroupName)
+	require.NotContains(t, anonymous, service.Grok45PricingGroupName)
+	require.NotContains(t, service.GetPublicUserUsableGroups("entitled"), service.Grok45PricingGroupName)
+}
+
+func TestFilterPricingByUsableGroupsDoesNotLeakGrok45Pricing(t *testing.T) {
+	configurePricingGrok45Entitlements(t)
+	pricing := []model.Pricing{
+		{ModelName: "gpt-5.5", EnableGroup: []string{"default"}},
+		{ModelName: service.Grok45ModelName, EnableGroup: []string{service.Grok45PricingGroupName}},
+	}
+
+	entitled := filterPricingByUsableGroups(pricing, getPricingUsableGroups("entitled", true))
+	restricted := filterPricingByUsableGroups(pricing, getPricingUsableGroups("restricted", true))
+	anonymous := filterPricingByUsableGroups(pricing, getPricingUsableGroups("", false))
+
+	require.Equal(t, pricing, entitled)
+	require.Equal(t, []model.Pricing{{ModelName: "gpt-5.5", EnableGroup: []string{"default"}}}, restricted)
+	require.Equal(t, restricted, anonymous)
+}
+
+func TestPricingGroupRatiosPinGrok45OnlyWhenVisible(t *testing.T) {
+	originalGroupRatio := ratio_setting.GroupRatio2JSONString()
+	originalSpecialRatio := ratio_setting.GroupGroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatio))
+		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(originalSpecialRatio))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"discount":0.7,"grok45":0.6}`))
+	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"entitled":{"grok45":0.2}}`))
+
+	entitled := getPricingGroupRatios("entitled", map[string]string{
+		"default": "原价",
+		"grok45":  "Grok 4.5 专用通道",
+	})
+	restricted := getPricingGroupRatios("restricted", map[string]string{"default": "原价"})
+
+	require.Equal(t, service.Grok45PricingGroupRatio, entitled[service.Grok45PricingGroupName])
+	require.NotContains(t, restricted, service.Grok45PricingGroupName)
 }
 
 func TestFilterPricingVendorsHidesSupplierExposedVendors(t *testing.T) {

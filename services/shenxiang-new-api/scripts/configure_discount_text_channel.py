@@ -26,6 +26,8 @@ DEFAULT_UPSTREAM_HOST = "www.geek2api.com"
 UPSTREAM_KEY_ENV = "DISCOUNT_UPSTREAM_API_KEY"
 UPSTREAM_BASE_URL_ENV = "DISCOUNT_UPSTREAM_BASE_URL"
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
+MYSQL_QUERY_TIMEOUT_SECONDS = 15
+MYSQL_UPDATE_TIMEOUT_SECONDS = 30
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 CODEX_TEXT_MODELS = (
     "gpt-5.4",
@@ -186,8 +188,9 @@ def mysql(query: str) -> list[list[str]]:
             command,
             env=environment,
             stderr=subprocess.DEVNULL,
+            timeout=MYSQL_QUERY_TIMEOUT_SECONDS,
         ).decode("utf-8", errors="strict")
-    except (subprocess.CalledProcessError, UnicodeDecodeError):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, UnicodeDecodeError, OSError):
         raise ConfigurationError("production MySQL query failed") from None
     return [line.split("\t") for line in output.splitlines()]
 
@@ -222,9 +225,10 @@ def mysql_exec(query: str) -> list[str]:
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            timeout=MYSQL_UPDATE_TIMEOUT_SECONDS,
         )
         output = completed.stdout.decode("utf-8", errors="strict")
-    except (subprocess.CalledProcessError, UnicodeDecodeError):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, UnicodeDecodeError, OSError):
         raise ConfigurationError("production MySQL update failed") from None
     return output.splitlines()
 

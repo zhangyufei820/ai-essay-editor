@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 
 	"github.com/gin-contrib/sessions"
@@ -75,7 +76,8 @@ func WeChatAuth(c *gin.Context) {
 		})
 		return
 	}
-	if err := consumeOAuthState(sessions.Default(c), req.State); err != nil {
+	stateClaims, err := consumeOAuthState(sessions.Default(c), req.State)
+	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"message": "登录状态已失效，请重试",
 			"success": false,
@@ -91,37 +93,47 @@ func WeChatAuth(c *gin.Context) {
 		})
 		return
 	}
-	user := model.User{
-		WeChatId: wechatId,
+	foundUser, found, err := model.LookupUserByOAuthIdentity(model.UserOAuthProviderWeChat, wechatId)
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		return
 	}
-	if model.IsWeChatIdAlreadyTaken(wechatId) {
-		err := user.FillUserByWeChatId()
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
-			return
-		}
-		if user.Id == 0 {
+	user := model.User{WeChatId: wechatId}
+	if found {
+		if foundUser.DeletedAt.Valid {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "用户已注销",
 			})
 			return
 		}
+		user = *foundUser
 	} else {
 		if common.RegisterEnabled {
+			if err := validateOAuthRegistrationConsent(stateClaims); err != nil {
+				common.ApiErrorMsg(c, oauthRegistrationConsentMessage)
+				return
+			}
 			user.Username = "wechat_" + strconv.Itoa(model.GetMaxUserId()+1)
 			user.DisplayName = "WeChat User"
 			user.Role = common.RoleCommonUser
 			user.Status = common.UserStatusEnabled
 
 			if err := user.Insert(0); err != nil {
-				c.JSON(http.StatusOK, gin.H{
-					"success": false,
-					"message": err.Error(),
-				})
+				if !errors.Is(err, model.ErrUserOAuthIdentityAlreadyBound) {
+					_, identityFound, lookupErr := model.LookupUserByOAuthIdentity(model.UserOAuthProviderWeChat, wechatId)
+					if lookupErr != nil {
+						common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+						return
+					}
+					if identityFound {
+						err = model.ErrUserOAuthIdentityAlreadyBound
+					}
+				}
+				if writeOAuthIdentityError(c, "WeChat", err) {
+					return
+				}
+				common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 				return
 			}
 		} else {
@@ -172,11 +184,13 @@ func WeChatBind(c *gin.Context) {
 		})
 		return
 	}
-	if model.IsWeChatIdAlreadyTaken(wechatId) {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "该微信账号已被绑定",
-		})
+	identityTaken, err := model.IsUserOAuthIdentityTaken(model.UserOAuthProviderWeChat, wechatId)
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		return
+	}
+	if identityTaken {
+		writeOAuthIdentityError(c, "WeChat", model.ErrUserOAuthIdentityAlreadyBound)
 		return
 	}
 	userID := c.GetInt("id")
@@ -193,10 +207,12 @@ func WeChatBind(c *gin.Context) {
 		writeOAuthBindAuthenticationError(c, errOAuthBindUserDisabled)
 		return
 	}
-	user.WeChatId = wechatId
-	err = user.Update(false)
+	err = user.SetOAuthIdentity(model.UserOAuthProviderWeChat, wechatId)
 	if err != nil {
-		common.ApiError(c, err)
+		if writeOAuthIdentityError(c, "WeChat", err) {
+			return
+		}
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

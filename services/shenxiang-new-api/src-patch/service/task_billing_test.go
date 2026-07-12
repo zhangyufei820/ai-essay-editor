@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -52,6 +53,8 @@ func TestMain(m *testing.M) {
 		&model.SubscriptionPreConsumeRecord{},
 		&model.SystemTask{},
 		&model.SystemTaskLock{},
+		&model.BillingOperation{},
+		&model.BillingOutbox{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -66,6 +69,8 @@ func TestMain(m *testing.M) {
 func truncate(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
+		model.DB.Exec("DELETE FROM billing_outbox")
+		model.DB.Exec("DELETE FROM billing_operations")
 		model.DB.Exec("DELETE FROM tasks")
 		model.DB.Exec("DELETE FROM users")
 		model.DB.Exec("DELETE FROM tokens")
@@ -121,6 +126,10 @@ func seedChannel(t *testing.T, id int) {
 }
 
 func makeTask(userId, channelId, quota, tokenId int, billingSource string, subscriptionId int) *model.Task {
+	resetEpoch := int64(0)
+	if billingSource == BillingSourceSubscription {
+		resetEpoch = time.Now().Unix()
+	}
 	return &model.Task{
 		TaskID:    "task_" + time.Now().Format("150405.000"),
 		UserId:    userId,
@@ -135,9 +144,10 @@ func makeTask(userId, channelId, quota, tokenId int, billingSource string, subsc
 			OriginModelName: "test-model",
 		},
 		PrivateData: model.TaskPrivateData{
-			BillingSource:  billingSource,
-			SubscriptionId: subscriptionId,
-			TokenId:        tokenId,
+			BillingSource:          billingSource,
+			SubscriptionId:         subscriptionId,
+			SubscriptionResetEpoch: resetEpoch,
+			TokenId:                tokenId,
 			BillingContext: &model.TaskBillingContext{
 				ModelPrice:      0.02,
 				GroupRatio:      1.0,
@@ -156,6 +166,13 @@ func getUserQuota(t *testing.T, id int) int {
 	var user model.User
 	require.NoError(t, model.DB.Select("quota").Where("id = ?", id).First(&user).Error)
 	return user.Quota
+}
+
+func getUserUsedQuota(t *testing.T, id int) int {
+	t.Helper()
+	var user model.User
+	require.NoError(t, model.DB.Select("used_quota").Where("id = ?", id).First(&user).Error)
+	return user.UsedQuota
 }
 
 func getTokenRemainQuota(t *testing.T, id int) int {
@@ -450,6 +467,7 @@ func TestImageBenefitPlaygroundTokenPreConsume(t *testing.T) {
 
 func TestImageBenefitPlaygroundBillingSessionRefundsTokenQuota(t *testing.T) {
 	truncate(t)
+	t.Setenv("BILLING_LEDGER_MODE", string(model.BillingLedgerModeOff))
 
 	const userID, tokenID = 32, 32
 	const quota = 90
@@ -460,27 +478,24 @@ func TestImageBenefitPlaygroundBillingSessionRefundsTokenQuota(t *testing.T) {
 		UserId:          userID,
 		TokenId:         tokenID,
 		TokenKey:        "benefit-session-key",
+		RequestId:       "benefit-session-refund",
 		IsPlayground:    true,
 		OriginModelName: model.ImageBenefitModelName,
 		BillingSource:   BillingSourceImageBenefit,
 	}
-	session := &BillingSession{
-		relayInfo: relayInfo,
-		funding:   &ImageBenefitFunding{},
-	}
-
-	apiErr := session.preConsume(nil, quota)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Set("image_benefit_token", true)
+	session, apiErr := NewBillingSession(context, relayInfo, quota)
 	require.Nil(t, apiErr)
 	assert.Equal(t, 1000-quota, getTokenRemainQuota(t, tokenID))
 
 	session.Refund(nil)
-	require.Eventually(t, func() bool {
-		return getTokenRemainQuota(t, tokenID) == 1000
-	}, time.Second, 10*time.Millisecond)
+	assert.Equal(t, 1000, getTokenRemainQuota(t, tokenID))
 }
 
 func TestPlaygroundWalletBillingSessionRefundsUserQuotaWithoutTokenQuota(t *testing.T) {
 	truncate(t)
+	t.Setenv("BILLING_LEDGER_MODE", string(model.BillingLedgerModeOff))
 
 	const userID = 33
 	const initQuota = 1000
@@ -488,50 +503,31 @@ func TestPlaygroundWalletBillingSessionRefundsUserQuotaWithoutTokenQuota(t *test
 	seedUser(t, userID, initQuota)
 
 	relayInfo := &relaycommon.RelayInfo{
-		UserId:       userID,
-		IsPlayground: true,
+		UserId:          userID,
+		RequestId:       "playground-wallet-refund",
+		OriginModelName: "gpt-ledger-test",
+		IsPlayground:    true,
+		UserSetting: dto.UserSetting{
+			BillingPreference: "wallet_only",
+		},
 	}
-	session := &BillingSession{
-		relayInfo: relayInfo,
-		funding:   &WalletFunding{userId: userID},
-	}
-
-	apiErr := session.preConsume(nil, quota)
+	session, apiErr := NewBillingSession(newBillingLedgerTestContext(), relayInfo, quota)
 	require.Nil(t, apiErr)
 	assert.Equal(t, initQuota-quota, getUserQuota(t, userID))
 	assert.True(t, session.NeedsRefund())
 
 	session.Refund(nil)
-	require.Eventually(t, func() bool {
-		return getUserQuota(t, userID) == initQuota
-	}, time.Second, 10*time.Millisecond)
+	assert.Equal(t, initQuota, getUserQuota(t, userID))
 }
 
-func TestBillingSessionSettleExpiresSubscriptionWhenPreConsumeExactlyExhaustsQuota(t *testing.T) {
-	truncate(t)
-
-	const userID, subID = 34, 34
-	seedUser(t, userID, 0)
-	require.NoError(t, model.DB.Create(&model.UserSubscription{
-		Id:                 subID,
-		UserId:             userID,
-		AmountTotal:        100,
-		AmountUsed:         100,
-		MonthlyAmountTotal: 100,
-		MonthlyAmountUsed:  100,
-		Status:             "active",
-		StartTime:          time.Now().Unix(),
-		EndTime:            time.Now().Add(30 * 24 * time.Hour).Unix(),
-	}).Error)
-
+func TestBillingSessionSettlementRejectsMissingDurableOperation(t *testing.T) {
 	session := &BillingSession{
-		relayInfo:        &relaycommon.RelayInfo{UserId: userID},
-		funding:          &SubscriptionFunding{subscriptionId: subID},
+		relayInfo:        &relaycommon.RelayInfo{UserId: 34},
+		funding:          &WalletFunding{userId: 34},
 		preConsumedQuota: 10,
 	}
 
-	require.NoError(t, session.Settle(10))
-	assert.Equal(t, "expired", getSubscriptionStatus(t, subID))
+	require.EqualError(t, session.Settle(10), "durable billing operation is required for settlement")
 }
 
 func TestRefundTaskQuota_NoToken(t *testing.T) {
@@ -1038,4 +1034,534 @@ func TestSettle_NonPerCall_AdaptorAdjustWorks(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
+}
+
+func TestCalculateTaskSuccessBillingIsSideEffectFree(t *testing.T) {
+	truncate(t)
+	const userID, tokenID, channelID = 40, 40, 40
+	const currentUserQuota, currentTokenQuota = 7000, 6000
+	const reservedQuota, desiredQuota = 5000, 3000
+	seedUser(t, userID, currentUserQuota)
+	seedToken(t, tokenID, userID, "sk-pure-task-billing", currentTokenQuota)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, reservedQuota, tokenID, BillingSourceWallet, 0)
+
+	decision := calculateTaskSuccessBilling(
+		&mockAdaptor{adjustReturn: desiredQuota},
+		task,
+		&relaycommon.TaskInfo{Status: model.TaskStatusSuccess},
+	)
+
+	require.Equal(t, desiredQuota, decision.DesiredQuota)
+	require.Equal(t, reservedQuota, task.Quota)
+	require.Equal(t, currentUserQuota, getUserQuota(t, userID))
+	require.Equal(t, currentTokenQuota, getTokenRemainQuota(t, tokenID))
+	require.Zero(t, countLogs(t))
+}
+
+func TestTaskBillingContextOverridesAreExplicit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	_, exists := ResolveTaskBillingOperationOverride(ctx)
+	require.False(t, exists)
+	_, exists = ResolveTaskBillingChargeDecision(ctx)
+	require.False(t, exists)
+
+	require.Error(t, SetTaskBillingOperationOverride(ctx, "", model.BillingLedgerModeActive, 123))
+	require.Error(t, SetTaskBillingOperationOverride(ctx, " task:task_override", model.BillingLedgerModeActive, 123))
+	require.Error(t, SetTaskBillingOperationOverride(ctx, "task:task_override", model.BillingLedgerModeActive, 0))
+	require.NoError(t, SetTaskBillingOperationOverride(ctx, "task:task_override", model.BillingLedgerModeActive, 123))
+	override, exists := ResolveTaskBillingOperationOverride(ctx)
+	require.True(t, exists)
+	require.Equal(t, "task:task_override", override.OperationKey)
+	require.Equal(t, model.BillingLedgerModeActive, override.LedgerMode)
+	require.Equal(t, int64(123), override.TaskRecordID)
+
+	SetTaskBillingChargeDecision(ctx, false)
+	chargeDecision, exists := ResolveTaskBillingChargeDecision(ctx)
+	require.True(t, exists)
+	require.False(t, chargeDecision)
+}
+
+func TestTaskBillingMetadataFailsClosedWhenInvalid(t *testing.T) {
+	_, err := taskBillingOperationKey(&model.Task{
+		TaskID: "task_expected",
+		PrivateData: model.TaskPrivateData{
+			BillingOperationKey: "task:task_other",
+		},
+	})
+	require.Error(t, err)
+
+	truncate(t)
+	task := makeTask(49, 0, 0, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_invalid_ledger_mode"
+	task.PrivateData.BillingOperationKey = "task:" + task.TaskID
+	task.PrivateData.BillingLedgerMode = model.BillingLedgerMode("invalid")
+	require.NoError(t, model.DB.Create(task).Error)
+	task.Status = model.TaskStatusFailure
+	won, err := PersistTaskTerminalFailure(
+		context.Background(), task, model.TaskStatusInProgress, "public failure", "media_task_failed", true,
+	)
+	require.Error(t, err)
+	require.False(t, won)
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusInProgress), reloaded.Status)
+}
+
+func TestTaskBillingMissingOperationKeyFailsClosedForPartialDurableMetadata(t *testing.T) {
+	testCases := []struct {
+		name   string
+		mutate func(*model.Task)
+	}{
+		{
+			name: "ledger mode",
+			mutate: func(task *model.Task) {
+				task.PrivateData.BillingLedgerMode = model.BillingLedgerModeActive
+			},
+		},
+		{
+			name: "request id",
+			mutate: func(task *model.Task) {
+				task.PrivateData.BillingRequestID = "request-partial-metadata"
+			},
+		},
+		{
+			name: "charge token decision",
+			mutate: func(task *model.Task) {
+				task.PrivateData.BillingChargeTokenSet = true
+			},
+		},
+	}
+
+	for index, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			truncate(t)
+			task := makeTask(60+index, 0, 0, 0, BillingSourceWallet, 0)
+			task.TaskID = fmt.Sprintf("task_partial_metadata_%d", index)
+			testCase.mutate(task)
+			require.NoError(t, model.DB.Create(task).Error)
+			task.Status = model.TaskStatusFailure
+
+			won, err := PersistTaskTerminalFailure(
+				context.Background(), task, model.TaskStatusInProgress, "public failure", "media_task_failed", true,
+			)
+			require.Error(t, err)
+			require.False(t, won)
+			var reloaded model.Task
+			require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+			require.Equal(t, model.TaskStatus(model.TaskStatusInProgress), reloaded.Status)
+		})
+	}
+}
+
+func TestTaskBillingMissingOperationKeyFailsClosedWhenOperationExists(t *testing.T) {
+	truncate(t)
+	const userID = 63
+	seedUser(t, userID, 1000)
+	task := makeTask(userID, 0, 100, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_missing_operation_key"
+	operationKey := prepareActiveTaskBillingOperation(t, task, false)
+
+	task.PrivateData.BillingOperationKey = ""
+	task.PrivateData.BillingLedgerMode = ""
+	task.PrivateData.BillingRequestID = ""
+	task.PrivateData.BillingChargeTokenSet = false
+	require.NoError(t, model.DB.Model(task).Select("private_data").Updates(task).Error)
+	task.Status = model.TaskStatusFailure
+
+	won, err := PersistTaskTerminalFailure(
+		context.Background(), task, model.TaskStatusInProgress, "public failure", "media_task_failed", true,
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "operation exists")
+	require.False(t, won)
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusInProgress), reloaded.Status)
+	var operation model.BillingOperation
+	require.NoError(t, model.DB.Where("operation_key = ?", operationKey).First(&operation).Error)
+	require.Equal(t, model.BillingOutcomeOpen, operation.Outcome)
+}
+
+func prepareActiveTaskBillingOperation(t *testing.T, task *model.Task, chargeToken bool) string {
+	t.Helper()
+	operationKey, err := model.TaskBillingOperationKey(task.TaskID)
+	require.NoError(t, err)
+	task.PrivateData.BillingOperationKey = operationKey
+	task.PrivateData.BillingLedgerMode = model.BillingLedgerModeActive
+	task.PrivateData.BillingRequestID = "request-" + task.TaskID
+	task.PrivateData.BillingChargeToken = chargeToken
+	task.PrivateData.BillingChargeTokenSet = true
+	require.NoError(t, model.DB.Create(task).Error)
+	_, err = model.EnsureBillingOperationBaseline(model.BillingOperationBaseline{
+		OperationKey:  operationKey,
+		RequestID:     task.PrivateData.BillingRequestID,
+		TaskID:        task.ID,
+		Kind:          model.BillingOperationKindTask,
+		UserID:        task.UserId,
+		TokenID:       task.PrivateData.TokenId,
+		FundingSource: task.PrivateData.BillingSource,
+		FundingRefID:  task.PrivateData.SubscriptionId,
+		ChargeToken:   chargeToken,
+		ReservedQuota: int64(task.Quota),
+		LedgerMode:    model.BillingLedgerModeActive,
+	})
+	require.NoError(t, err)
+	return operationKey
+}
+
+func TestActiveUntrackedFreeTaskTransitionsWithoutLedger(t *testing.T) {
+	truncate(t)
+	task := makeTask(46, 0, 0, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_active_free_untracked"
+	task.PrivateData.BillingOperationKey = "task:" + task.TaskID
+	task.PrivateData.BillingLedgerMode = model.BillingLedgerModeActive
+	require.NoError(t, model.DB.Create(task).Error)
+	task.Status = model.TaskStatusFailure
+	task.Progress = "100%"
+	task.FailReason = "public failure"
+
+	won, err := PersistTaskTerminalFailure(
+		context.Background(),
+		task,
+		model.TaskStatusInProgress,
+		task.FailReason,
+		"media_task_failed",
+		true,
+	)
+	require.NoError(t, err)
+	require.True(t, won)
+	require.Zero(t, countLogs(t))
+	var operationCount int64
+	require.NoError(t, model.DB.Model(&model.BillingOperation{}).Count(&operationCount).Error)
+	require.Zero(t, operationCount)
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusFailure), reloaded.Status)
+	require.Zero(t, reloaded.Quota)
+}
+
+func TestActiveZeroTaskWithUnexpectedLedgerFailsClosed(t *testing.T) {
+	truncate(t)
+	const userID = 48
+	seedUser(t, userID, 1000)
+	task := makeTask(userID, 0, 0, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_active_zero_unexpected_ledger"
+	task.PrivateData.BillingOperationKey = "task:" + task.TaskID
+	task.PrivateData.BillingLedgerMode = model.BillingLedgerModeActive
+	task.PrivateData.BillingRequestID = "request-" + task.TaskID
+	require.NoError(t, model.DB.Create(task).Error)
+	_, err := model.EnsureBillingOperationBaseline(model.BillingOperationBaseline{
+		OperationKey:  task.PrivateData.BillingOperationKey,
+		RequestID:     task.PrivateData.BillingRequestID,
+		TaskID:        task.ID,
+		Kind:          model.BillingOperationKindTask,
+		UserID:        task.UserId,
+		FundingSource: BillingSourceWallet,
+		ReservedQuota: 0,
+		LedgerMode:    model.BillingLedgerModeActive,
+	})
+	require.NoError(t, err)
+	task.Status = model.TaskStatusFailure
+	task.Progress = "100%"
+
+	won, err := PersistTaskTerminalFailure(
+		context.Background(),
+		task,
+		model.TaskStatusInProgress,
+		"public failure",
+		"media_task_failed",
+		true,
+	)
+	require.Error(t, err)
+	require.False(t, won)
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusInProgress), reloaded.Status)
+}
+
+func TestActiveTrackedTaskWithoutChargeDecisionFailsClosed(t *testing.T) {
+	truncate(t)
+	task := makeTask(47, 0, 100, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_active_missing_charge_decision"
+	task.PrivateData.BillingOperationKey = "task:" + task.TaskID
+	task.PrivateData.BillingLedgerMode = model.BillingLedgerModeActive
+	require.NoError(t, model.DB.Create(task).Error)
+	task.Status = model.TaskStatusFailure
+	task.Progress = "100%"
+
+	won, err := PersistTaskTerminalFailure(
+		context.Background(),
+		task,
+		model.TaskStatusInProgress,
+		"public failure",
+		"media_task_failed",
+		true,
+	)
+	require.Error(t, err)
+	require.False(t, won)
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusInProgress), reloaded.Status)
+	require.Equal(t, 100, reloaded.Quota)
+}
+
+func TestActiveTaskFailureCrashWindowReplaysFromOutbox(t *testing.T) {
+	truncate(t)
+	const userID, tokenID, channelID = 41, 41, 41
+	const currentUserQuota, currentTokenQuota, reservedQuota = 7000, 6000, 4000
+	seedUser(t, userID, currentUserQuota+reservedQuota)
+	seedToken(t, tokenID, userID, "sk-active-failure-crash", currentTokenQuota+reservedQuota)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, reservedQuota, tokenID, BillingSourceWallet, 0)
+	task.TaskID = "task_active_failure_crash"
+	operationKey := prepareActiveTaskBillingOperation(t, task, true)
+	task.Status = model.TaskStatusFailure
+	task.Progress = "100%"
+	task.FailReason = "public failure"
+
+	persisted, err := persistTaskTerminalBillingStatus(
+		context.Background(),
+		task,
+		model.TaskStatusInProgress,
+		model.BillingOutcomeFailure,
+		0,
+		"media_task_failed",
+	)
+	require.NoError(t, err)
+	require.True(t, persisted.Won)
+	require.Equal(t, model.BillingLedgerModeActive, persisted.LedgerMode)
+	require.Equal(t, currentUserQuota, getUserQuota(t, userID))
+	require.Equal(t, currentTokenQuota, getTokenRemainQuota(t, tokenID))
+
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusFailure), reloaded.Status)
+	require.Equal(t, reservedQuota, reloaded.Quota)
+
+	require.NoError(t, model.ProcessBillingOperationInline(operationKey))
+	require.Equal(t, currentUserQuota+reservedQuota, getUserQuota(t, userID))
+	require.Equal(t, currentTokenQuota+reservedQuota, getTokenRemainQuota(t, tokenID))
+	require.NoError(t, model.ProcessBillingOperationInline(operationKey))
+	require.Equal(t, currentUserQuota+reservedQuota, getUserQuota(t, userID))
+	require.Equal(t, currentTokenQuota+reservedQuota, getTokenRemainQuota(t, tokenID))
+}
+
+func TestActiveTaskFailureSettlesOnceAndRecordsRefundIntent(t *testing.T) {
+	truncate(t)
+	const userID, tokenID, channelID = 44, 44, 44
+	const currentUserQuota, currentTokenQuota, reservedQuota = 7000, 6000, 4000
+	seedUser(t, userID, currentUserQuota+reservedQuota)
+	seedToken(t, tokenID, userID, "sk-active-failure-log", currentTokenQuota+reservedQuota)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, reservedQuota, tokenID, BillingSourceWallet, 0)
+	task.TaskID = "task_active_failure_log"
+	operationKey := prepareActiveTaskBillingOperation(t, task, true)
+	task.Status = model.TaskStatusFailure
+	task.Progress = "100%"
+	task.FailReason = "public failure"
+
+	won, err := PersistTaskTerminalFailure(
+		context.Background(),
+		task,
+		model.TaskStatusInProgress,
+		task.FailReason,
+		"media_task_failed",
+		true,
+	)
+	require.NoError(t, err)
+	require.True(t, won)
+	require.Equal(t, currentUserQuota+reservedQuota, getUserQuota(t, userID))
+	require.Equal(t, currentTokenQuota+reservedQuota, getTokenRemainQuota(t, tokenID))
+	require.Equal(t, int64(1), countLogs(t))
+
+	logEntry := getLastLog(t)
+	require.NotNil(t, logEntry)
+	require.Equal(t, model.LogTypeRefund, logEntry.Type)
+	require.Equal(t, reservedQuota, logEntry.Quota)
+	other := getLastLogOther(t)
+	require.Equal(t, "ledger_outbox", other["billing_settlement"])
+	require.Equal(t, "refund_intent", other["billing_effect"])
+	require.Equal(t, operationKey, other["billing_operation_key"])
+
+	require.NoError(t, model.ProcessBillingOperationInline(operationKey))
+	require.Equal(t, currentUserQuota+reservedQuota, getUserQuota(t, userID))
+	require.Equal(t, currentTokenQuota+reservedQuota, getTokenRemainQuota(t, tokenID))
+	require.Equal(t, int64(1), countLogs(t))
+
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, reservedQuota, reloaded.Quota)
+}
+
+func TestPersistTaskTerminalRejectsLegacyTerminalReplayBeforeRefund(t *testing.T) {
+	truncate(t)
+	const userID, quota = 66, 100
+	seedUser(t, userID, 1000)
+	task := makeTask(userID, 0, quota, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_realtime_terminal_replay"
+	task.Status = model.TaskStatusSuccess
+	require.NoError(t, model.DB.Create(task).Error)
+
+	candidate := *task
+	candidate.Status = model.TaskStatusFailure
+	won, err := PersistTaskTerminalFailure(
+		context.Background(), &candidate, model.TaskStatusSuccess,
+		"late upstream failure", "media_task_failed", true,
+	)
+	require.Error(t, err)
+	require.False(t, won)
+	require.Equal(t, 1000, getUserQuota(t, userID))
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusSuccess), reloaded.Status)
+}
+
+func TestActiveTaskTerminalIntentRollsBackStatusWhenOutboxWriteFails(t *testing.T) {
+	truncate(t)
+	const userID, channelID, reservedQuota = 42, 42, 4000
+	seedUser(t, userID, 7000)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, reservedQuota, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_active_outbox_rollback"
+	prepareActiveTaskBillingOperation(t, task, false)
+	require.NoError(t, model.DB.Exec(`
+		CREATE TRIGGER fail_task_billing_outbox_insert
+		BEFORE INSERT ON billing_outbox
+		BEGIN
+			SELECT RAISE(FAIL, 'forced outbox failure');
+		END
+	`).Error)
+	t.Cleanup(func() { model.DB.Exec("DROP TRIGGER IF EXISTS fail_task_billing_outbox_insert") })
+	task.Status = model.TaskStatusFailure
+	task.Progress = "100%"
+
+	persisted, err := persistTaskTerminalBillingStatus(
+		context.Background(),
+		task,
+		model.TaskStatusInProgress,
+		model.BillingOutcomeFailure,
+		0,
+		"media_task_failed",
+	)
+	require.Error(t, err)
+	require.False(t, persisted.Won)
+
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusInProgress), reloaded.Status)
+	require.Equal(t, reservedQuota, reloaded.Quota)
+}
+
+func TestActiveTaskSuccessCASWinnerSettlesOnce(t *testing.T) {
+	truncate(t)
+	const userID, tokenID, channelID = 43, 43, 43
+	const currentUserQuota, currentTokenQuota = 7000, 6000
+	const reservedQuota, desiredQuota = 5000, 3000
+	seedUser(t, userID, currentUserQuota+reservedQuota)
+	seedToken(t, tokenID, userID, "sk-active-success-cas", currentTokenQuota+reservedQuota)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, reservedQuota, tokenID, BillingSourceWallet, 0)
+	task.TaskID = "task_active_success_cas"
+	prepareActiveTaskBillingOperation(t, task, true)
+	staleTask := *task
+	task.Status = model.TaskStatusSuccess
+	task.Progress = "100%"
+	staleTask.Status = model.TaskStatusSuccess
+	staleTask.Progress = "100%"
+
+	won, err := PersistTaskTerminalSuccess(
+		context.Background(),
+		task,
+		model.TaskStatusInProgress,
+		desiredQuota,
+		"test success",
+	)
+	require.NoError(t, err)
+	require.True(t, won)
+	won, err = PersistTaskTerminalSuccess(
+		context.Background(),
+		&staleTask,
+		model.TaskStatusInProgress,
+		desiredQuota,
+		"test success replay",
+	)
+	require.NoError(t, err)
+	require.False(t, won)
+	require.Equal(t, currentUserQuota+(reservedQuota-desiredQuota), getUserQuota(t, userID))
+	require.Equal(t, currentTokenQuota+(reservedQuota-desiredQuota), getTokenRemainQuota(t, tokenID))
+	require.Zero(t, getUserUsedQuota(t, userID))
+	require.Equal(t, int64(1), countLogs(t))
+	logEntry := getLastLog(t)
+	require.NotNil(t, logEntry)
+	require.Equal(t, model.LogTypeRefund, logEntry.Type)
+	require.Equal(t, reservedQuota-desiredQuota, logEntry.Quota)
+	other := getLastLogOther(t)
+	require.Equal(t, "ledger_outbox", other["billing_settlement"])
+	require.Equal(t, "settlement_intent", other["billing_effect"])
+	require.Equal(t, float64(reservedQuota), other["pre_consumed_quota"])
+	require.Equal(t, float64(desiredQuota), other["actual_quota"])
+
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusSuccess), reloaded.Status)
+	require.Equal(t, desiredQuota, reloaded.Quota)
+}
+
+func TestActiveTaskSuccessAdditionalChargeUpdatesUsageAndLogOnce(t *testing.T) {
+	truncate(t)
+	const userID, tokenID, channelID = 45, 45, 45
+	const currentUserQuota, currentTokenQuota = 9000, 8000
+	const reservedQuota, desiredQuota = 3000, 5000
+	seedUser(t, userID, currentUserQuota+reservedQuota)
+	seedToken(t, tokenID, userID, "sk-active-success-charge", currentTokenQuota+reservedQuota)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, reservedQuota, tokenID, BillingSourceWallet, 0)
+	task.TaskID = "task_active_success_charge"
+	operationKey := prepareActiveTaskBillingOperation(t, task, true)
+	task.Status = model.TaskStatusSuccess
+	task.Progress = "100%"
+	clamp := &common.QuotaClamp{
+		Op:       "QuotaFromFloat",
+		Kind:     common.QuotaClampOverflow,
+		Original: 1e30,
+		Clamped:  desiredQuota,
+	}
+
+	won, err := PersistTaskTerminalSuccess(
+		context.Background(),
+		task,
+		model.TaskStatusInProgress,
+		desiredQuota,
+		"test additional charge",
+		clamp,
+	)
+	require.NoError(t, err)
+	require.True(t, won)
+	require.Equal(t, currentUserQuota-(desiredQuota-reservedQuota), getUserQuota(t, userID))
+	require.Equal(t, currentTokenQuota-(desiredQuota-reservedQuota), getTokenRemainQuota(t, tokenID))
+	require.Equal(t, desiredQuota-reservedQuota, getUserUsedQuota(t, userID))
+	require.Equal(t, int64(1), countLogs(t))
+
+	logEntry := getLastLog(t)
+	require.NotNil(t, logEntry)
+	require.Equal(t, model.LogTypeConsume, logEntry.Type)
+	require.Equal(t, desiredQuota-reservedQuota, logEntry.Quota)
+	other := getLastLogOther(t)
+	require.Equal(t, "ledger_outbox", other["billing_settlement"])
+	require.Equal(t, "settlement_intent", other["billing_effect"])
+	require.Equal(t, operationKey, other["billing_operation_key"])
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	require.True(t, ok)
+	saturation, ok := adminInfo["quota_saturation"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, common.QuotaClampOverflow, saturation["kind"])
+
+	require.NoError(t, model.ProcessBillingOperationInline(operationKey))
+	require.Equal(t, currentUserQuota-(desiredQuota-reservedQuota), getUserQuota(t, userID))
+	require.Equal(t, currentTokenQuota-(desiredQuota-reservedQuota), getTokenRemainQuota(t, tokenID))
+	require.Equal(t, desiredQuota-reservedQuota, getUserUsedQuota(t, userID))
+	require.Equal(t, int64(1), countLogs(t))
 }

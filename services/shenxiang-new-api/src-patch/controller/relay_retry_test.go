@@ -55,6 +55,7 @@ func TestIsVideoTaskPathIncludesPublicSubmitEndpoint(t *testing.T) {
 		want bool
 	}{
 		{name: "public video submit", path: "/v1/videos", want: true},
+		{name: "public video generations", path: "/v1/video/generations", want: true},
 		{name: "playground videos", path: "/pg/videos", want: true},
 		{name: "playground video generations", path: "/pg/video/generations", want: true},
 		{name: "public video fetch", path: "/v1/videos/task_123", want: false},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/QuantumNous/new-api/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -98,4 +99,34 @@ func TestGrok45SystemTokenLimitsAreReconciledExactly(t *testing.T) {
 	}
 
 	require.Equal(t, Grok45ModelName, systemTokenModelLimits("gpt-5.5,"+Grok45ModelName, profile))
+}
+
+func TestGrok45SystemTokenUpdatesReconcileExactSecurityContract(t *testing.T) {
+	allowIPs := "127.0.0.1"
+	profile := SystemTokenProfile{
+		Mode:   "grok",
+		Models: []string{Grok45ModelName},
+		Group:  Grok45PricingGroupName,
+	}
+	token := model.Token{
+		ExpiredTime:        3600,
+		RemainQuota:        10,
+		UnlimitedQuota:     false,
+		ModelLimitsEnabled: false,
+		ModelLimits:        "gpt-5.5," + Grok45ModelName,
+		AllowIps:           &allowIPs,
+		Group:              "default",
+		CrossGroupRetry:    true,
+	}
+
+	updates := systemTokenUpdates(token, profile, Grok45PricingGroupName)
+
+	require.Equal(t, true, updates["model_limits_enabled"])
+	require.Equal(t, Grok45ModelName, updates["model_limits"])
+	require.Equal(t, Grok45PricingGroupName, updates["group"])
+	require.Equal(t, true, updates["unlimited_quota"])
+	require.Equal(t, 0, updates["remain_quota"])
+	require.Equal(t, int64(-1), updates["expired_time"])
+	require.Equal(t, "", updates["allow_ips"])
+	require.Equal(t, false, updates["cross_group_retry"])
 }

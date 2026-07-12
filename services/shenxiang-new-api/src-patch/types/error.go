@@ -251,6 +251,8 @@ func (e *NewAPIError) PublicMessage() string {
 			return "模型服务暂时不可用，请稍后重试。"
 		}
 		return "账户额度不足，请充值或联系管理员。"
+	case ErrorCodeQueryDataError, ErrorCodeUpdateDataError:
+		return "模型服务暂时不可用，请稍后重试。"
 	case ErrorCodeGetChannelFailed, ErrorCodeDoRequestFailed, ErrorCodeBadResponseStatusCode,
 		ErrorCodeReadResponseBodyFailed, ErrorCodeBadResponse, ErrorCodeBadResponseBody,
 		ErrorCodeEmptyResponse, ErrorCodeModelNotFound, ErrorCodeAwsInvokeError,

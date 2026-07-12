@@ -149,6 +149,9 @@ def test_task_file_route_hides_internal_guidance_files(tmp_path, monkeypatch):
     workspace.mkdir()
     (workspace / "AGENTS.md").write_text("internal", encoding="utf-8")
     (workspace / "result.md").write_text("public", encoding="utf-8")
+    (workspace / "shared-result.md").symlink_to("AGENTS.md")
+    (workspace / "preview.html").write_text("<script>alert(1)</script>", encoding="utf-8")
+    (workspace / "image.svg").write_text("<svg onload='alert(1)'></svg>", encoding="utf-8")
 
     class FakeStore:
         def get(self, requested_task_id):
@@ -162,5 +165,18 @@ def test_task_file_route_hides_internal_guidance_files(tmp_path, monkeypatch):
         workspace_main.get_task_file(task_id, "AGENTS.md", user)
 
     assert exc.value.status_code == 404
+    with pytest.raises(workspace_main.HTTPException) as symlink_exc:
+        workspace_main.get_task_file(task_id, "shared-result.md", user)
+
+    assert symlink_exc.value.status_code == 404
     public_response = workspace_main.get_task_file(task_id, "result.md", user)
     assert public_response.filename == "result.md"
+    assert public_response.headers["x-content-type-options"] == "nosniff"
+
+    html_response = workspace_main.get_task_file(task_id, "preview.html", user)
+    assert html_response.headers["content-disposition"].startswith("inline")
+    assert html_response.headers["content-security-policy"].startswith("sandbox;")
+    assert "default-src 'none'" in html_response.headers["content-security-policy"]
+
+    svg_response = workspace_main.get_task_file(task_id, "image.svg", user)
+    assert svg_response.headers["content-disposition"].startswith("attachment")

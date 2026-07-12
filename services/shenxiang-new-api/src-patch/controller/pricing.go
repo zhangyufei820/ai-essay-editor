@@ -35,8 +35,8 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 
 func publicPricingGroups(enableGroups []string, usableGroups map[string]string) []string {
 	allGroups := common.StringsContains(enableGroups, "all")
-	visibleGroups := make([]string, 0, 2)
-	for _, group := range []string{"default", service.DiscountPricingGroupName} {
+	visibleGroups := make([]string, 0, 3)
+	for _, group := range []string{"default", service.DiscountPricingGroupName, service.Grok45PricingGroupName} {
 		if _, ok := usableGroups[group]; !ok {
 			continue
 		}
@@ -45,6 +45,37 @@ func publicPricingGroups(enableGroups []string, usableGroups map[string]string) 
 		}
 	}
 	return visibleGroups
+}
+
+func getPricingUsableGroups(userGroup string, authenticated bool) map[string]string {
+	usableGroups := service.GetPublicUserUsableGroups(userGroup)
+	if !authenticated {
+		return usableGroups
+	}
+	allGroups := service.GetUserUsableGroups(userGroup)
+	if description, ok := allGroups[service.Grok45PricingGroupName]; ok {
+		usableGroups[service.Grok45PricingGroupName] = description
+	}
+	return usableGroups
+}
+
+func getPricingGroupRatios(userGroup string, usableGroups map[string]string) map[string]float64 {
+	groupRatios := ratio_setting.GetGroupRatioCopy()
+	for group := range groupRatios {
+		if ratio, ok := ratio_setting.GetGroupGroupRatio(userGroup, group); ok {
+			groupRatios[group] = ratio
+		}
+		if _, ok := usableGroups[group]; !ok {
+			delete(groupRatios, group)
+		}
+	}
+	if _, ok := usableGroups[service.DiscountPricingGroupName]; ok {
+		groupRatios[service.DiscountPricingGroupName] = service.DiscountPricingGroupRatio
+	}
+	if _, ok := usableGroups[service.Grok45PricingGroupName]; ok {
+		groupRatios[service.Grok45PricingGroupName] = service.Grok45PricingGroupRatio
+	}
+	return groupRatios
 }
 
 func sanitizePublicPricingItem(item model.Pricing) model.Pricing {
@@ -113,38 +144,20 @@ func isHiddenPricingVendor(vendor model.PricingVendor) bool {
 func GetPricing(c *gin.Context) {
 	pricing := model.GetPricing()
 	userId, exists := c.Get("id")
-	usableGroup := map[string]string{}
-	groupRatio := map[string]float64{}
-	for s, f := range ratio_setting.GetGroupRatioCopy() {
-		groupRatio[s] = f
-	}
 	var group string
+	authenticated := false
 	if exists {
-		user, err := model.GetUserCache(userId.(int))
-		if err == nil {
-			group = user.Group
-			for g := range groupRatio {
-				ratio, ok := ratio_setting.GetGroupGroupRatio(group, g)
-				if ok {
-					groupRatio[g] = ratio
-				}
+		if id, ok := userId.(int); ok && id > 0 {
+			user, err := model.GetUserCache(id)
+			if err == nil {
+				group = user.Group
+				authenticated = true
 			}
 		}
 	}
-	if _, ok := groupRatio[service.DiscountPricingGroupName]; ok {
-		groupRatio[service.DiscountPricingGroupName] = service.DiscountPricingGroupRatio
-	}
-	if _, ok := groupRatio[service.Grok45PricingGroupName]; ok {
-		groupRatio[service.Grok45PricingGroupName] = service.Grok45PricingGroupRatio
-	}
-
-	usableGroup = service.GetPublicUserUsableGroups(group)
+	usableGroup := getPricingUsableGroups(group, authenticated)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
-	for group := range ratio_setting.GetGroupRatioCopy() {
-		if _, ok := usableGroup[group]; !ok {
-			delete(groupRatio, group)
-		}
-	}
+	groupRatio := getPricingGroupRatios(group, usableGroup)
 
 	c.JSON(200, gin.H{
 		"success":            true,

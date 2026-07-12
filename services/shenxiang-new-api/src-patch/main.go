@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -80,6 +81,89 @@ func localPprofListenAddr(configured string) string {
 	return "127.0.0.1:8005"
 }
 
+type trackedHTTPHandler struct {
+	mutex         sync.Mutex
+	handler       http.Handler
+	active        int
+	admissionOpen bool
+	done          chan struct{}
+	doneOnce      sync.Once
+}
+
+func newTrackedHTTPHandler(handler http.Handler) *trackedHTTPHandler {
+	return &trackedHTTPHandler{
+		handler:       handler,
+		admissionOpen: true,
+		done:          make(chan struct{}),
+	}
+}
+
+func (handler *trackedHTTPHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	handler.mutex.Lock()
+	if !handler.admissionOpen {
+		handler.mutex.Unlock()
+		http.Error(writer, "server is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+	handler.active++
+	handler.mutex.Unlock()
+	defer func() {
+		handler.mutex.Lock()
+		handler.active--
+		if !handler.admissionOpen && handler.active == 0 {
+			handler.doneOnce.Do(func() { close(handler.done) })
+		}
+		handler.mutex.Unlock()
+	}()
+	handler.handler.ServeHTTP(writer, request)
+}
+
+func (handler *trackedHTTPHandler) stopAdmission() {
+	handler.mutex.Lock()
+	handler.admissionOpen = false
+	if handler.active == 0 {
+		handler.doneOnce.Do(func() { close(handler.done) })
+	}
+	handler.mutex.Unlock()
+}
+
+func (handler *trackedHTTPHandler) wait(ctx context.Context) bool {
+	select {
+	case <-handler.done:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+type httpShutdownServer interface {
+	Shutdown(context.Context) error
+	Close() error
+}
+
+type httpShutdownResult struct {
+	shutdownErr     error
+	closeErr        error
+	handlersDrained bool
+}
+
+func shutdownHTTPServer(ctx context.Context, server httpShutdownServer, handler *trackedHTTPHandler) httpShutdownResult {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	handler.stopAdmission()
+	result := httpShutdownResult{}
+	result.shutdownErr = server.Shutdown(ctx)
+	if result.shutdownErr != nil {
+		result.closeErr = server.Close()
+		if errors.Is(result.closeErr, http.ErrServerClosed) {
+			result.closeErr = nil
+		}
+	}
+	result.handlersDrained = handler.wait(ctx)
+	return result
+}
+
 func main() {
 	startTime := time.Now()
 
@@ -96,13 +180,6 @@ func main() {
 	if common.DebugEnabled {
 		common.SysLog("running in debug mode")
 	}
-
-	defer func() {
-		err := model.CloseDB()
-		if err != nil {
-			common.FatalLog("failed to close database: " + err.Error())
-		}
-	}()
 
 	if common.RedisEnabled {
 		// for compatibility with old versions
@@ -154,6 +231,30 @@ func main() {
 	// Subscription quota reset task (daily/weekly/monthly/custom)
 	service.StartSubscriptionQuotaResetTask()
 	service.StartSystemInstanceReporter()
+	runtimeWorkerContext, stopRuntimeWorkers := context.WithCancel(context.Background())
+	service.ConfigureAsyncVideoWatcherContext(runtimeWorkerContext)
+	billingLedgerWorkerDone := make(chan struct{})
+	gopool.Go(func() {
+		defer close(billingLedgerWorkerDone)
+		service.BillingLedgerWorkerLoop(runtimeWorkerContext)
+	})
+	var stopRuntimeWorkersOnce sync.Once
+	stopRuntimeWorkersAndWait := func() {
+		stopRuntimeWorkersOnce.Do(func() {
+			stopRuntimeWorkers()
+			workerShutdownContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			select {
+			case <-billingLedgerWorkerDone:
+			case <-workerShutdownContext.Done():
+				common.SysError("billing ledger worker did not stop within shutdown deadline")
+			}
+			if err := service.StopAsyncVideoWatchers(workerShutdownContext); err != nil {
+				common.SysError("async video watchers did not stop within shutdown deadline")
+			}
+		})
+	}
+	defer stopRuntimeWorkersAndWait()
 
 	// Wire task polling adaptor factory (breaks service -> relay import cycle)
 	service.GetTaskAdaptorFunc = func(platform constant.TaskPlatform) service.TaskPollingAdaptor {
@@ -213,7 +314,6 @@ func main() {
 	server.Use(middleware.RequestId())
 	server.Use(middleware.PoweredBy())
 	server.Use(middleware.I18n())
-	server.Use(middleware.EnforcePublicTokenGroupSelection())
 	middleware.SetUpLogger(server)
 	// Initialize session store
 	store := cookie.NewStore([]byte(common.SessionSecret))
@@ -246,7 +346,8 @@ func main() {
 		port = strconv.Itoa(*common.Port)
 	}
 
-	srv := newHTTPServer(port, server)
+	trackedHandler := newTrackedHTTPHandler(server)
+	srv := newHTTPServer(port, trackedHandler)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			common.FatalLog("failed to start HTTP server: " + err.Error())
@@ -259,13 +360,20 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 	common.SysLog(fmt.Sprintf("received signal: %v, shutting down...", sig))
-
 	shutdownTimeout := time.Duration(common.GetEnvOrDefault("SHUTDOWN_TIMEOUT_SECONDS", 120)) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		common.SysError(fmt.Sprintf("server forced to shutdown: %v", err))
+	shutdownResult := shutdownHTTPServer(ctx, srv, trackedHandler)
+	if shutdownResult.shutdownErr != nil {
+		common.SysError(fmt.Sprintf("server forced to shutdown: %v", shutdownResult.shutdownErr))
 	}
+	if shutdownResult.closeErr != nil {
+		common.SysError(fmt.Sprintf("server close failed: %v", shutdownResult.closeErr))
+	}
+	if !shutdownResult.handlersDrained {
+		common.SysError("HTTP handlers did not stop within shutdown deadline")
+	}
+	stopRuntimeWorkersAndWait()
 	if common.DataExportEnabled {
 		model.SaveQuotaDataCache()
 	}
@@ -427,6 +535,7 @@ func InitResources() error {
 
 	// 加载环境变量
 	common.InitEnv()
+	normalizeSyncFrequency()
 
 	logger.SetupLogger()
 
@@ -495,6 +604,15 @@ func InitResources() error {
 	}
 
 	return nil
+}
+
+func normalizeSyncFrequency() {
+	const maxSyncFrequencySeconds = 24 * 60 * 60
+	if common.SyncFrequency > 0 && common.SyncFrequency <= maxSyncFrequencySeconds {
+		return
+	}
+	common.SysError("SYNC_FREQUENCY must be between 1 and 86400 seconds; using 60 seconds")
+	common.SyncFrequency = 60
 }
 
 func registerMonthlyCardTokenRoute(server *gin.Engine) {

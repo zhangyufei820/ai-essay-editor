@@ -55,7 +55,7 @@ const fallbackModelModes = {
   image: {
     label: "图像生成",
     description: "Image 2、高速图像、通用图像和高质量图像是独立模型，请按任务明确选择。",
-    models: ["gpt-image-2-4K", "geek2api-image-2", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview"],
+    models: ["gpt-image-2-4K", "特价 image-2", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview"],
     billing: "按张计费。Image 2：1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10。",
   },
   video: {
@@ -400,7 +400,7 @@ function defaultModelForMode(mode, choices) {
 
 function modelLabel(model) {
   if (model === "gpt-image-2-4K") return "星人 Image 2 4K · 生图 / 局部编辑";
-  if (model === "geek2api-image-2") return "Image 2 · 1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10";
+  if (model === "特价 image-2") return "特价 image-2 · 1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10";
   if (model === "grok-imagine-image") return "高速图像 · 快速编辑 / mask";
   if (model === "banana-2") return "通用图像 · 图像生成 / 图像编辑";
   if (model === "gemini-3-pro-image-preview") return "高质量图像 · 精细生成";
@@ -1174,7 +1174,7 @@ function renderGeneratedArtifact(url, label = "", forcedType = "") {
   const safeUrl = escapeHtml(url);
   const safeLabel = escapeHtml(label || artifactLabelForType(type));
   const preview = type === "pdf" || type === "html"
-    ? `<iframe src="${safeUrl}" title="${safeLabel}" loading="lazy"></iframe>`
+    ? `<iframe src="${safeUrl}" title="${safeLabel}" loading="lazy" sandbox referrerpolicy="no-referrer"></iframe>`
     : `<div class="document-preview"><strong>${safeLabel}</strong><span>已生成文档，可在线打开查看。</span></div>`;
   return `
     <figure class="generated-media ${type}">

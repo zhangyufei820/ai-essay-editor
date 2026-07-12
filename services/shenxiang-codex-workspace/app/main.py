@@ -105,6 +105,12 @@ INTERNAL_TASK_FILE_PARTS = {
     "bin",
     "__pycache__",
 }
+SANDBOXED_DOCUMENT_SUFFIXES = {".html", ".htm", ".xhtml"}
+DOWNLOAD_ONLY_DOCUMENT_SUFFIXES = {".svg", ".xml"}
+SANDBOXED_DOCUMENT_CSP = (
+    "sandbox; default-src 'none'; img-src data: blob: https:; media-src data: blob: https:; "
+    "style-src 'unsafe-inline'; font-src data: https:; base-uri 'none'; form-action 'none'"
+)
 
 
 class FastPathFallback(Exception):
@@ -586,14 +592,36 @@ def get_task_file(
     workspace = Path(str(task["workspace"]))
     workspace_root = workspace.resolve()
     requested = (workspace / file_path).resolve()
-    if requested != workspace_root and not str(requested).startswith(str(workspace_root) + "/"):
+    try:
+        resolved_relative = requested.relative_to(workspace_root)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid file path")
     if not requested.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    normalized_parts = set(Path(file_path).parts)
-    if Path(file_path).name in INTERNAL_TASK_FILE_NAMES or normalized_parts.intersection(INTERNAL_TASK_FILE_PARTS):
+    candidate_paths = (Path(file_path), resolved_relative)
+    if any(
+        candidate.name in INTERNAL_TASK_FILE_NAMES
+        or set(candidate.parts).intersection(INTERNAL_TASK_FILE_PARTS)
+        for candidate in candidate_paths
+    ):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(str(requested), filename=requested.name, content_disposition_type="inline")
+    suffix = requested.suffix.lower()
+    headers = {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+    }
+    disposition = "inline"
+    if suffix in SANDBOXED_DOCUMENT_SUFFIXES:
+        headers["Content-Security-Policy"] = SANDBOXED_DOCUMENT_CSP
+    elif suffix in DOWNLOAD_ONLY_DOCUMENT_SUFFIXES:
+        disposition = "attachment"
+    return FileResponse(
+        str(requested),
+        filename=requested.name,
+        content_disposition_type=disposition,
+        headers=headers,
+    )
 
 
 @app.post("/admin/run", dependencies=[Depends(require_admin_bearer)])
@@ -762,25 +790,27 @@ def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple
     if mode_models:
         pseudo_user = UserContext(api_key="", user_id="", key_hint="sk-****", allowed_models_by_mode=mode_models)
     modes = model_modes(pseudo_user)
-    modes["grok"] = {
-        "label": "Grok 4.5 专用",
-        "description": "Grok 4.5 文本模型独立令牌。",
-        "models": list(settings.grok_allowed_models),
-        "token_name": settings.grok_token_name,
-        "billing": "按文本 Token 计费，仅限 Grok 4.5。",
-    }
+    raw_grok_models = mode_models.get("grok") if isinstance(mode_models, dict) else None
+    visible_grok_models = (
+        {str(model or "").strip() for model in raw_grok_models}
+        if isinstance(raw_grok_models, (list, tuple))
+        else set()
+    )
+    entitled_grok_models = tuple(model for model in settings.grok_allowed_models if model in visible_grok_models)
+    if entitled_grok_models:
+        modes["grok"] = {
+            "label": "Grok 4.5 专用",
+            "description": "Grok 4.5 文本模型独立令牌。",
+            "models": list(entitled_grok_models),
+            "token_name": settings.grok_token_name,
+            "billing": "按文本 Token 计费，仅限 Grok 4.5。",
+        }
     public_root = settings.public_base_url.removesuffix("/codex").rstrip("/")
     claude_base_url = f"{public_root}/claude"
     profiles = [
         {
             "mode": "codex",
             "usage": "对话、代码、普通 OpenAI-compatible 客户端",
-            "base_url": f"{settings.new_api_base_url}",
-            "endpoint": "/v1/chat/completions",
-        },
-        {
-            "mode": "grok",
-            "usage": "Grok 4.5 文本对话和代码任务",
             "base_url": f"{settings.new_api_base_url}",
             "endpoint": "/v1/chat/completions",
         },
@@ -803,6 +833,16 @@ def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple
             "endpoint": "按模型文档使用视频生成接口",
         },
     ]
+    if entitled_grok_models:
+        profiles.insert(
+            1,
+            {
+                "mode": "grok",
+                "usage": "Grok 4.5 文本对话和代码任务",
+                "base_url": f"{settings.new_api_base_url}",
+                "endpoint": "/v1/chat/completions",
+            },
+        )
     result: list[dict[str, Any]] = []
     for profile in profiles:
         mode = profile["mode"]
@@ -1781,7 +1821,9 @@ def user_for_mode(user: UserContext, mode: str, model: str = "") -> UserContext:
     key_map = user.api_keys or {}
     credential_profile = mode
     grok_allowed_models = set(getattr(settings, "grok_allowed_models", (GROK_MODEL,)))
-    if mode == "codex" and str(model or "").strip() in grok_allowed_models:
+    entitled_grok_models = set((user.allowed_models_by_mode or {}).get("grok", ()))
+    selected_model = str(model or "").strip()
+    if mode == "codex" and selected_model in grok_allowed_models and selected_model in entitled_grok_models:
         credential_profile = "grok"
     key = key_map.get(credential_profile) or user.api_key
     return UserContext(

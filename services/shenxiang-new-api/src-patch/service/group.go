@@ -76,11 +76,16 @@ func GroupInUserUsableGroups(userGroup, groupName string) bool {
 	return ok
 }
 
+func UserCanUseGrok45PricingGroup(userGroup string) bool {
+	_, ok := GetUserUsableGroups(userGroup)[Grok45PricingGroupName]
+	return ok
+}
+
 func GetUserAutoGroup(userGroup string) []string {
 	groups := GetUserUsableGroups(userGroup)
 	autoGroups := make([]string, 0)
 	for _, group := range setting.GetAutoGroups() {
-		if group == DiscountPricingGroupName {
+		if group == DiscountPricingGroupName || group == Grok45PricingGroupName {
 			continue
 		}
 		if _, ok := groups[group]; ok {
@@ -102,8 +107,11 @@ func GetPublicUserAutoGroup(userGroup string) []string {
 }
 
 func GetUserGroupRatio(userGroup, group string) float64 {
-	if group == DiscountPricingGroupName {
+	switch group {
+	case DiscountPricingGroupName:
 		return DiscountPricingGroupRatio
+	case Grok45PricingGroupName:
+		return Grok45PricingGroupRatio
 	}
 	ratio, ok := ratio_setting.GetGroupGroupRatio(userGroup, group)
 	if ok {

@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -41,7 +42,7 @@ func upstreamCostMarkupRate() float64 {
 		return DefaultUpstreamCostMarkupRate
 	}
 	parsed, err := strconv.ParseFloat(value, 64)
-	if err != nil || parsed < 0 {
+	if err != nil || parsed < 0 || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
 		common.SysError(fmt.Sprintf("invalid UPSTREAM_COST_MARKUP_RATE %q; using default %.4f", value, DefaultUpstreamCostMarkupRate))
 		return DefaultUpstreamCostMarkupRate
 	}
@@ -340,7 +341,11 @@ func MergeRealtimeUpstreamCost(totalUsage *dto.RealtimeUsage, usage *dto.Realtim
 		return
 	}
 	if currentOK {
-		cost += currentCost
+		mergedCost := cost + currentCost
+		if !isFinitePositiveCost(mergedCost) {
+			return
+		}
+		cost = mergedCost
 	}
 	switch currency {
 	case "CNY":
@@ -375,6 +380,9 @@ func InjectUpstreamCostBillingInfo(other map[string]interface{}, result *Upstrea
 }
 
 func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (quota int, billedCostUSD float64, clamp *common.QuotaClamp, ok bool) {
+	if !isFinitePositiveCost(cost) || markupRate < 0 || math.IsNaN(markupRate) || math.IsInf(markupRate, 0) {
+		return 0, 0, nil, false
+	}
 	currency = normalizeCostCurrency(currency)
 	if currency == "" {
 		currency = "USD"
@@ -385,7 +393,7 @@ func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (q
 		billedCostUSD = costDecimal.Mul(decimal.NewFromFloat(1 + markupRate)).InexactFloat64()
 	case "CNY":
 		exchangeRate := operation_setting.USDExchangeRate
-		if exchangeRate <= 0 {
+		if !isFinitePositiveCost(exchangeRate) {
 			common.SysError("USDExchangeRate is not configured; upstream CNY cost billing is disabled to avoid profit distortion")
 			return 0, 0, nil, false
 		}
@@ -394,6 +402,13 @@ func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (q
 			Mul(decimal.NewFromFloat(1 + markupRate)).
 			InexactFloat64()
 	default:
+		return 0, 0, nil, false
+	}
+	if !isFinitePositiveCost(billedCostUSD) {
+		return 0, 0, nil, false
+	}
+	if !isFinitePositiveCost(common.QuotaPerUnit) {
+		common.SysError("QuotaPerUnit is invalid; upstream cost billing is disabled")
 		return 0, 0, nil, false
 	}
 	quotaDecimal := decimal.NewFromFloat(billedCostUSD).Mul(decimal.NewFromFloat(common.QuotaPerUnit))
@@ -410,10 +425,14 @@ func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (q
 
 func parsePositiveCost(value any) (float64, bool) {
 	cost, ok := parseCost(value)
-	if !ok || cost <= 0 {
+	if !ok || !isFinitePositiveCost(cost) {
 		return 0, false
 	}
 	return cost, true
+}
+
+func isFinitePositiveCost(cost float64) bool {
+	return cost > 0 && !math.IsNaN(cost) && !math.IsInf(cost, 0)
 }
 
 func firstResponseHeader(headers http.Header, names ...string) string {

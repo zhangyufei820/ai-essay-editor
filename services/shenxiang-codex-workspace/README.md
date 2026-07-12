@@ -41,9 +41,11 @@ shenxiang-codex-workspace
 - 社区 Skill 位于 `user-skills/community/installed`，所有用户可见。
 - 用户可以创建社区共享 Skill，创建前必须同意公开共享规则。
 - 用户不允许删除任何文件。
-- 用户不能读取其他用户任务、Skill 或历史数据。
+- API 层按 New API 用户 ID 校验任务、Skill 和历史数据的访问边界。
 - Worker 不挂载 `/data/ai-essay-editor`、`/opt/shenxiang-new-api`、Docker socket、Nginx/OpenResty、1Panel 或 SSH 目录。
 - 任务数据默认保留 24 小时，由 `scripts/cleanup_runs.sh` 定时清理。
+
+当前任务目录和 Worker 仍共享同一 Unix UID 与宿主挂载；上述边界属于应用层隔离，不等同于操作系统级强隔离。运行不可信代码前仍需补充 per-task 容器、mount namespace 或等价沙箱。
 
 ## 部署
 

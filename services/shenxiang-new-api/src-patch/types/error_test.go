@@ -67,6 +67,16 @@ func TestPublicMessageKeepsSubscriptionConcurrencyMessage(t *testing.T) {
 	}
 }
 
+func TestPublicMessageHidesDatabaseErrors(t *testing.T) {
+	for _, errorCode := range []ErrorCode{ErrorCodeQueryDataError, ErrorCodeUpdateDataError} {
+		err := NewError(errors.New("Error 1062: duplicate entry for internal_index"), errorCode)
+
+		if got, want := err.PublicMessage(), "模型服务暂时不可用，请稍后重试。"; got != want {
+			t.Fatalf("PublicMessage() for %s = %q, want %q", errorCode, got, want)
+		}
+	}
+}
+
 func TestPublicMessageHidesSupplierNames(t *testing.T) {
 	for _, message := range []string{
 		"geek2api-image-2 upstream rejected request",

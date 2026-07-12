@@ -8,13 +8,12 @@ from typing import Any
 import httpx
 from redis import Redis
 
-from app.config import GROK_TOKEN_GROUP, Settings, secret_values_for_redaction
+from app.config import GROK_MODEL, GROK_TOKEN_GROUP, Settings, secret_values_for_redaction
 from app.model_access import (
     IMAGE_BENEFIT_MODEL,
     SERVER_ALLOWED_MODELS_METADATA_KEY,
     default_mode_models,
     dedupe_models,
-    mode_models_payload_from_metadata,
     normalize_mode_models_payload,
     split_visible_models,
     supported_image_models,
@@ -23,6 +22,7 @@ from app.model_access import (
 from app.security import public_error_message, redact
 
 logger = logging.getLogger(__name__)
+TOKEN_CONTRACT_VERSION = "contract-v2"
 
 class NewApiAuthError(RuntimeError):
     pass
@@ -137,11 +137,11 @@ class NewApiClient:
         mode_models: dict[str, tuple[str, ...]] | None = None,
     ) -> dict[str, str]:
         effective_models = self._effective_mode_models(mode_models)
-        grok_models = set(effective_models["grok"])
+        dedicated_grok_models = set(self.settings.grok_allowed_models)
         profiles = {
             "codex": (
                 self.settings.auto_token_name,
-                tuple(model for model in effective_models["codex"] if model not in grok_models),
+                tuple(model for model in effective_models["codex"] if model not in dedicated_grok_models),
                 None,
             ),
             "claude": (self.settings.claude_token_name, effective_models["claude"], None),
@@ -190,13 +190,8 @@ class NewApiClient:
         user: dict[str, Any],
     ) -> dict[str, tuple[str, ...]]:
         visible_models = await self._load_visible_models(client, headers)
-        if visible_models is not None:
-            mode_models = split_visible_models(self.settings, visible_models)
-        else:
-            existing = user.get("metadata") if isinstance(user.get("metadata"), dict) else None
-            mode_models = mode_models_payload_from_metadata(existing)
-            if not mode_models:
-                mode_models = default_mode_models(self.settings)
+        mode_models = split_visible_models(self.settings, visible_models)
+        mode_models["grok"] = self._filter_grok_models(visible_models)
         has_image_benefit = await self._has_image_benefit_access(client, headers, user_id)
         if has_image_benefit:
             image_models = dedupe_models((*mode_models.get("image", ()), IMAGE_BENEFIT_MODEL))
@@ -206,14 +201,17 @@ class NewApiClient:
             effective["image"] = dedupe_models((*effective["image"], IMAGE_BENEFIT_MODEL))
         return effective
 
-    async def _load_visible_models(self, client: httpx.AsyncClient, headers: dict[str, str]) -> tuple[str, ...] | None:
-        payload = await self._get_json(client, "/api/user/models", headers)
-        if not payload.get("success", False):
-            return None
+    async def _load_visible_models(self, client: httpx.AsyncClient, headers: dict[str, str]) -> tuple[str, ...]:
+        try:
+            payload = await self._get_json(client, "/api/user/models", headers)
+        except httpx.RequestError as exc:
+            raise NewApiAuthError("无法确认当前账号模型权限，请稍后重试。") from exc
+        if payload.get("success") is not True:
+            raise NewApiAuthError("无法确认当前账号模型权限，请稍后重试。")
         data = payload.get("data")
-        if not isinstance(data, list):
-            return None
-        return dedupe_models(str(item or "").strip() for item in data)
+        if not isinstance(data, list) or any(not isinstance(item, str) for item in data):
+            raise NewApiAuthError("模型权限服务返回格式异常，请稍后重试。")
+        return dedupe_models(item.strip() for item in data)
 
     async def _has_image_benefit_access(
         self,
@@ -245,8 +243,7 @@ class NewApiClient:
         claude_models = current["claude"] if "claude" in current else defaults["claude"]
         image_models = current["image"] if "image" in current else supported_image_models(self.settings)
         video_models = current["video"] if "video" in current else supported_video_models(self.settings)
-        grok_allowed = set(self.settings.grok_allowed_models)
-        grok_models = tuple(model for model in codex_models if model in grok_allowed)
+        grok_models = self._explicit_grok_models(mode_models)
         return {
             "codex": tuple(codex_models),
             "grok": grok_models,
@@ -254,6 +251,17 @@ class NewApiClient:
             "image": tuple(image_models),
             "video": tuple(video_models),
         }
+
+    def _explicit_grok_models(self, mode_models: Any) -> tuple[str, ...]:
+        if not isinstance(mode_models, dict):
+            return ()
+        return self._filter_grok_models(mode_models.get("grok"))
+
+    def _filter_grok_models(self, models: Any) -> tuple[str, ...]:
+        if not isinstance(models, (list, tuple)):
+            return ()
+        visible_models = set(dedupe_models(str(model or "").strip() for model in models))
+        return tuple(model for model in self.settings.grok_allowed_models if model in visible_models)
 
     def _attach_mode_models(self, user: dict[str, Any], mode_models: dict[str, tuple[str, ...]]) -> None:
         metadata = user.get("metadata")
@@ -287,10 +295,12 @@ class NewApiClient:
         *,
         token_group: str | None = None,
     ) -> str:
+        models = self._token_contract_models(models, token_group)
         expected_models = ",".join(models)
         expected_group = token_group if token_group is not None else str(user.get("group") or "")
         models_digest = hashlib.sha256(f"{expected_models}\n{expected_group}".encode("utf-8")).hexdigest()[:24]
         cache_key = f"codex:auto-token:{user_id}:{token_name}:{models_digest}"
+        cache_key += f":{TOKEN_CONTRACT_VERSION}"
         cached = self._cache_get(cache_key)
         if cached:
             return cached
@@ -365,7 +375,9 @@ class NewApiClient:
         *,
         token_group: str | None = None,
     ) -> int:
+        models = self._token_contract_models(models, token_group)
         resolved_group = token_group if token_group is not None else str(user.get("group") or "")
+        is_dedicated_grok = token_group == GROK_TOKEN_GROUP
         payload = {
             "name": token_name,
             "remain_quota": 0,
@@ -375,7 +387,7 @@ class NewApiClient:
             "model_limits": ",".join(models),
             "allow_ips": "",
             "group": resolved_group,
-            "cross_group_retry": True,
+            "cross_group_retry": not is_dedicated_grok,
         }
         result = await self._post_json(client, "/api/token/", headers, payload)
         if not result.get("success", False):
@@ -396,6 +408,7 @@ class NewApiClient:
         *,
         token_group: str | None = None,
     ) -> None:
+        models = self._token_contract_models(models, token_group)
         expected_models = ",".join(models)
         expected_group = (
             token_group
@@ -403,35 +416,52 @@ class NewApiClient:
             else str(user.get("group") or token.get("group") or "")
         )
         group_matches = token_group is None or str(token.get("group") or "") == expected_group
-        if (
+        contract_matches = (
             token.get("model_limits_enabled")
             and str(token.get("model_limits") or "") == expected_models
             and token.get("unlimited_quota")
             and group_matches
-        ):
+        )
+        is_dedicated_grok = token_group == GROK_TOKEN_GROUP
+        if is_dedicated_grok:
+            contract_matches = bool(
+                contract_matches
+                and str(token.get("remain_quota")) == "0"
+                and str(token.get("expired_time")) == "-1"
+                and token.get("allow_ips") == ""
+                and token.get("cross_group_retry") is False
+            )
+        if contract_matches:
             return
         payload = {
             "id": int(token["id"]),
             "name": token_name,
             "remain_quota": 0,
-            "expired_time": int(token.get("expired_time") or -1),
+            "expired_time": -1 if is_dedicated_grok else int(token.get("expired_time") or -1),
             "unlimited_quota": True,
             "model_limits_enabled": True,
             "model_limits": expected_models,
-            "allow_ips": token.get("allow_ips") or "",
+            "allow_ips": "" if is_dedicated_grok else token.get("allow_ips") or "",
             "group": expected_group,
-            "cross_group_retry": True,
+            "cross_group_retry": not is_dedicated_grok,
         }
         result = await self._put_json(client, "/api/token/", headers, payload)
         if not result.get("success", False):
-            if token_group is not None:
-                raise NewApiAuthError(
-                    public_error_message(
-                        str(result.get("message") or ""),
-                        "自动修复专用 Key 失败。",
-                    )
+            raise NewApiAuthError(
+                public_error_message(
+                    str(result.get("message") or ""),
+                    "自动修复专用 Key 失败。",
                 )
-            logger.warning("failed to relax codex auto token user=%s message=%s", user.get("id"), result.get("message", ""))
+            )
+
+    def _token_contract_models(
+        self,
+        models: tuple[str, ...],
+        token_group: str | None,
+    ) -> tuple[str, ...]:
+        if token_group == GROK_TOKEN_GROUP:
+            return (GROK_MODEL,)
+        return models
 
     async def _fetch_token_key(self, client: httpx.AsyncClient, headers: dict[str, str], token_id: Any) -> str:
         result = await self._post_json(client, f"/api/token/{int(token_id)}/key", headers, {})
@@ -517,7 +547,7 @@ class NewApiClient:
 
     def _user_bootstrap_cache_key(self, user_id: str, cookie_header: str) -> str:
         digest = hashlib.sha256(f"{user_id}\n{cookie_header}".encode("utf-8")).hexdigest()
-        return f"codex:user-bootstrap:{digest}"
+        return f"codex:user-bootstrap:{TOKEN_CONTRACT_VERSION}:{digest}"
 
     def _key_hint(self, key: str) -> str:
         if len(key) <= 12:

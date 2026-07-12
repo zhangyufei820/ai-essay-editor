@@ -99,13 +99,8 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 					return err
 				}
 			} else {
-				nextLimits := systemTokenModelLimits(token.ModelLimits, profile)
-				if !token.ModelLimitsEnabled || nextLimits != token.ModelLimits || token.Group != tokenGroup {
-					updates := map[string]interface{}{
-						"model_limits_enabled": true,
-						"model_limits":         nextLimits,
-						"group":                tokenGroup,
-					}
+				updates := systemTokenUpdates(token, profile, tokenGroup)
+				if len(updates) > 0 {
 					if err := tx.Model(&model.Token{}).Where("id = ?", token.Id).Updates(updates).Error; err != nil {
 						return err
 					}
@@ -129,6 +124,13 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 			if err != nil {
 				return err
 			}
+			crossGroupRetry := true
+			var allowIPs *string
+			if profile.Mode == "grok" {
+				crossGroupRetry = false
+				emptyAllowIPs := ""
+				allowIPs = &emptyAllowIPs
+			}
 			newToken := model.Token{
 				UserId:             user.Id,
 				Key:                key,
@@ -141,8 +143,9 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 				UnlimitedQuota:     true,
 				ModelLimitsEnabled: true,
 				ModelLimits:        strings.Join(profile.Models, ","),
+				AllowIps:           allowIPs,
 				Group:              tokenGroup,
-				CrossGroupRetry:    true,
+				CrossGroupRetry:    crossGroupRetry,
 			}
 			if err := tx.Create(&newToken).Error; err != nil {
 				return err
@@ -167,6 +170,39 @@ func systemTokenModelLimits(existing string, profile SystemTokenProfile) string 
 		return strings.Join(profile.Models, ",")
 	}
 	return mergeModelLimits(existing, profile.Models)
+}
+
+func systemTokenUpdates(token model.Token, profile SystemTokenProfile, tokenGroup string) map[string]interface{} {
+	updates := make(map[string]interface{})
+	nextLimits := systemTokenModelLimits(token.ModelLimits, profile)
+	if !token.ModelLimitsEnabled {
+		updates["model_limits_enabled"] = true
+	}
+	if nextLimits != token.ModelLimits {
+		updates["model_limits"] = nextLimits
+	}
+	if token.Group != tokenGroup {
+		updates["group"] = tokenGroup
+	}
+	if profile.Mode != "grok" {
+		return updates
+	}
+	if !token.UnlimitedQuota {
+		updates["unlimited_quota"] = true
+	}
+	if token.RemainQuota != 0 {
+		updates["remain_quota"] = 0
+	}
+	if token.ExpiredTime != -1 {
+		updates["expired_time"] = int64(-1)
+	}
+	if len(token.GetIpLimits()) != 0 {
+		updates["allow_ips"] = ""
+	}
+	if token.CrossGroupRetry {
+		updates["cross_group_retry"] = false
+	}
+	return updates
 }
 
 func mergeModelLimits(existing string, required []string) string {

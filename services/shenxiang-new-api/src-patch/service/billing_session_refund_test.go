@@ -1,57 +1,66 @@
 package service
 
 import (
-	"net/http/httptest"
 	"testing"
-	"time"
 
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
-type blockingRefundFunding struct {
-	release chan struct{}
+func TestBillingSessionRejectsNegativeSettlementInEveryLedgerMode(t *testing.T) {
+	for _, ledgerMode := range []model.BillingLedgerMode{
+		model.BillingLedgerModeOff,
+		model.BillingLedgerModeShadow,
+		model.BillingLedgerModeActive,
+	} {
+		t.Run(string(ledgerMode), func(t *testing.T) {
+			funding := &recordingRefundFunding{}
+			session := &BillingSession{
+				relayInfo:        &relaycommon.RelayInfo{UserId: 1},
+				funding:          funding,
+				ledgerMode:       ledgerMode,
+				ledgerTracked:    true,
+				preConsumedQuota: 10,
+			}
+
+			require.EqualError(t, session.Settle(-1), "billing actual quota cannot be negative")
+			require.Zero(t, funding.settleCall)
+		})
+	}
 }
 
-func (f *blockingRefundFunding) Source() string          { return BillingSourceWallet }
-func (f *blockingRefundFunding) PreConsume(_ int) error { return nil }
-func (f *blockingRefundFunding) Settle(_ int) error     { return nil }
-func (f *blockingRefundFunding) Close()                 {}
-func (f *blockingRefundFunding) Refund() error {
-	<-f.release
+type recordingRefundFunding struct {
+	settleCall int
+	refundCall int
+	closeCall  int
+}
+
+func (f *recordingRefundFunding) Source() string         { return BillingSourceWallet }
+func (f *recordingRefundFunding) PreConsume(_ int) error { return nil }
+func (f *recordingRefundFunding) Settle(_ int) error {
+	f.settleCall++
+	return nil
+}
+func (f *recordingRefundFunding) Close() { f.closeCall++ }
+func (f *recordingRefundFunding) Refund() error {
+	f.refundCall++
 	return nil
 }
 
-func TestBillingSessionRefundCompletesBeforeReturning(t *testing.T) {
-	funding := &blockingRefundFunding{release: make(chan struct{})}
+func TestBillingSessionUntrackedRefundFailsClosed(t *testing.T) {
+	funding := &recordingRefundFunding{}
 	session := &BillingSession{
 		relayInfo:        &relaycommon.RelayInfo{UserId: 1},
 		funding:          funding,
 		preConsumedQuota: 10,
-		tokenConsumed:    1,
-	}
-	done := make(chan struct{})
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	go func() {
-		session.Refund(ctx)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		close(funding.release)
-		t.Fatal("Refund returned before the funding refund completed")
-	case <-time.After(50 * time.Millisecond):
+		tokenConsumed:    10,
 	}
 
-	close(funding.release)
-	require.Eventually(t, func() bool {
-		select {
-		case <-done:
-			return true
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond)
+	session.Refund(nil)
+	require.True(t, session.refunded)
+	require.Zero(t, funding.refundCall)
+	require.Equal(t, 1, funding.closeCall)
+	require.NoError(t, session.Settle(20))
+	require.Zero(t, funding.settleCall)
 }

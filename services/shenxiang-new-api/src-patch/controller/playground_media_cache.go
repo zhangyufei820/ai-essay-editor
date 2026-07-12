@@ -152,9 +152,6 @@ func cachePlaygroundDataMedia(c *gin.Context, req playgroundMediaCacheRequest, r
 }
 
 func writePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest, reader io.Reader, ext string, maxBytes int64) (*playgroundMediaItem, error) {
-	common.PlaygroundMediaCacheMu.Lock()
-	defer common.PlaygroundMediaCacheMu.Unlock()
-
 	root := playgroundMediaUserDir(c)
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, errors.New("failed to create media cache directory")
@@ -184,6 +181,9 @@ func writePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest, reade
 	if err := tempFile.Close(); err != nil {
 		return nil, errors.New("failed to finalize temporary media file")
 	}
+
+	common.PlaygroundMediaCacheMu.Lock()
+	defer common.PlaygroundMediaCacheMu.Unlock()
 
 	userBytes, userFiles, err := playgroundMediaCacheUsage(root, true)
 	if err != nil {
@@ -282,12 +282,8 @@ func annotatePlaygroundMediaActualSize(mediaPath string, kind string, bytesWritt
 	}
 }
 
-func playgroundOriginalURL(rawURL string) string {
-	rawURL = strings.TrimSpace(rawURL)
-	if rawURL == "" || strings.HasPrefix(strings.ToLower(rawURL), "data:") {
-		return ""
-	}
-	return rawURL
+func playgroundOriginalURL(_ string) string {
+	return ""
 }
 
 func playgroundMediaPublicURLPrefix() string {

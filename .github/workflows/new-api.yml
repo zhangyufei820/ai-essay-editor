@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "services/shenxiang-new-api/**"
+      - "services/shenxiang-codex-workspace/**"
+      - "services/shenxiang-claude-gateway/**"
       - ".github/workflows/new-api.yml"
   push:
     branches:
@@ -11,6 +13,8 @@ on:
       - master
     paths:
       - "services/shenxiang-new-api/**"
+      - "services/shenxiang-codex-workspace/**"
+      - "services/shenxiang-claude-gateway/**"
       - ".github/workflows/new-api.yml"
   workflow_dispatch:
 
@@ -41,10 +45,48 @@ jobs:
       - name: Run New API script tests
         run: python3 -m unittest discover -s services/shenxiang-new-api/scripts -p 'test_*.py'
 
+      - name: Run Codex workspace client tests
+        working-directory: services/shenxiang-codex-workspace
+        run: |
+          python3 -m pip install --disable-pip-version-check pytest==8.3.4 -r requirements.txt
+          python3 -m pytest -q tests
+
+      - name: Run Claude gateway tests
+        run: npm test --prefix services/shenxiang-claude-gateway
+
       - name: Prepare locked source and verify embedded provenance
         run: >-
           services/shenxiang-new-api/scripts/prepare-local-source.sh --
           go test ./common -run TestBuildInfo -count=1
+
+      - name: Run all New API tests
+        working-directory: services/shenxiang-new-api/.local-source/worktree
+        run: |
+          mkdir -p web/default/dist web/classic/dist
+          cp router/testdata/web/default/dist/index.html web/default/dist/index.html
+          cp router/testdata/web/classic/dist/index.html web/classic/dist/index.html
+          go test ./... -count=1
+
+      - name: Run concurrency-sensitive New API tests
+        working-directory: services/shenxiang-new-api/.local-source/worktree
+        run: >-
+          go test -race
+          . ./middleware ./service ./controller ./router ./common ./model
+          ./relay ./relay/channel ./relay/helper ./types
+          ./relay/channel/task/vertex ./relay/channel/vertex
+          -count=1
+
+      - name: Run Classic frontend security tests
+        working-directory: services/shenxiang-new-api/.local-source/worktree
+        run: node --test web/classic/src/helpers/securityRendering.test.js
+
+      - name: Rebuild locked source before image build
+        run: services/shenxiang-new-api/scripts/prepare-local-source.sh --skip-fetch
+
+      - name: Verify immutable build context
+        run: >-
+          python3 services/shenxiang-new-api/scripts/verify-build-context.py
+          --worktree services/shenxiang-new-api/.local-source/worktree
 
       - name: Validate Compose provenance
         env:
@@ -58,7 +100,7 @@ jobs:
           CRYPTO_SECRET: ci-crypto-secret-not-for-production
         run: >-
           docker compose
-          --env-file services/shenxiang-new-api/.local-source/build.env
+          --env-file services/shenxiang-new-api/.local-source/worktree/build.env
           -f services/shenxiang-new-api/docker-compose.yml
           config --quiet
 
@@ -74,13 +116,13 @@ jobs:
           CRYPTO_SECRET: ci-crypto-secret-not-for-production
         run: >-
           docker compose
-          --env-file services/shenxiang-new-api/.local-source/build.env
+          --env-file services/shenxiang-new-api/.local-source/worktree/build.env
           -f services/shenxiang-new-api/docker-compose.yml
           build shenxiang-new-api
 
       - name: Verify built image provenance labels
         run: |
-          image_tag="$(sed -n 's/^NEW_API_IMAGE_TAG=//p' services/shenxiang-new-api/.local-source/build.env)"
+          image_tag="$(sed -n 's/^NEW_API_IMAGE_TAG=//p' services/shenxiang-new-api/.local-source/worktree/build.env)"
           case "$image_tag" in
             ''|*[!0-9a-f]*) echo "invalid generated image tag" >&2; exit 1 ;;
           esac
@@ -90,7 +132,7 @@ jobs:
           from pathlib import Path
 
           values = {}
-          for line in Path("services/shenxiang-new-api/.local-source/build.env").read_text(encoding="utf-8").splitlines():
+          for line in Path("services/shenxiang-new-api/.local-source/worktree/build.env").read_text(encoding="utf-8").splitlines():
               key, value = line.split("=", 1)
               values[key] = value
           labels = json.loads(Path("/tmp/new-api-labels.json").read_text(encoding="utf-8"))
@@ -101,6 +143,7 @@ jobs:
               "io.shenxiang.new-api.upstream-repository": values["NEW_API_UPSTREAM_REPOSITORY"],
               "io.shenxiang.new-api.upstream-revision": values["NEW_API_UPSTREAM_COMMIT"],
               "io.shenxiang.new-api.patch-sha256": values["NEW_API_PATCH_SHA256"],
+              "io.shenxiang.new-api.worktree-sha256": values["NEW_API_WORKTREE_SHA256"],
               "io.shenxiang.new-api.source-digest": values["NEW_API_SOURCE_DIGEST"],
           }
           if any(labels.get(key) != value for key, value in expected.items()):

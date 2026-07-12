@@ -11,6 +11,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 
@@ -41,6 +42,7 @@ JSON_OPTION_KEYS = (
     "UserUsableGroups",
     "AutoGroups",
     "GroupGroupRatio",
+    "group_ratio_setting.group_special_usable_group",
     "ModelRatio",
     "CompletionRatio",
     "CacheRatio",
@@ -53,6 +55,24 @@ JSON_OPTION_KEYS = (
 
 class ConfigurationError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class ChannelProfile:
+    channel_id: str
+    channel_type: str
+    api_key: str
+    status: str
+    name: str
+    weight: str
+    base_url: str
+    models: str
+    groups: str
+    model_mapping: str
+    priority: str
+    auto_ban: str
+    tag: str
+    remark: str
 
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -175,6 +195,7 @@ def mysql(query: str) -> list[list[str]]:
         "shenxiang-new-api-mysql",
         "mysql",
         "--default-character-set=utf8mb4",
+        "--raw",
         "-uroot",
         "-N",
         "-B",
@@ -189,12 +210,12 @@ def mysql(query: str) -> list[list[str]]:
             stderr=subprocess.DEVNULL,
             timeout=MYSQL_QUERY_TIMEOUT_SECONDS,
         ).decode("utf-8", errors="strict")
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, UnicodeDecodeError):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, UnicodeDecodeError, OSError):
         raise ConfigurationError("production MySQL query failed") from None
     return [line.split("\t") for line in output.splitlines()]
 
 
-def mysql_exec(query: str) -> None:
+def mysql_exec(query: str) -> list[str]:
     password = os.environ.get("MYSQL_ROOT_PASSWORD", "")
     database = os.environ.get("MYSQL_DATABASE", "")
     if not password or not database:
@@ -214,17 +235,19 @@ def mysql_exec(query: str) -> None:
         database,
     ]
     try:
-        subprocess.run(
+        completed = subprocess.run(
             command,
             input=query.encode("utf-8"),
             env=environment,
             check=True,
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=MYSQL_UPDATE_TIMEOUT_SECONDS,
         )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        output = completed.stdout.decode("utf-8", errors="strict")
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, UnicodeDecodeError, OSError):
         raise ConfigurationError("production MySQL update failed") from None
+    return output.splitlines()
 
 
 def parse_json(raw_value: str, option_key: str, expected_type: type) -> object:
@@ -249,14 +272,17 @@ def load_options() -> tuple[dict[str, str], Decimal]:
         + ")"
     )
     values = {row[0]: row[1] for row in rows if len(row) == 2}
+    missing = [key for key in keys if key not in values]
+    if missing:
+        raise ConfigurationError("required Grok options are missing: " + ",".join(missing))
     try:
-        exchange_rate = Decimal(values.get("USDExchangeRate", "7.3"))
+        exchange_rate = Decimal(values["USDExchangeRate"])
     except InvalidOperation:
         raise ConfigurationError("USDExchangeRate is not a decimal number") from None
-    if exchange_rate <= 0:
+    if not exchange_rate.is_finite() or exchange_rate <= 0:
         raise ConfigurationError("USDExchangeRate must be positive")
-    options = {key: values.get(key, "{}") for key in JSON_OPTION_KEYS}
-    options["AutoGroups"] = values.get("AutoGroups", "[]")
+    options = {key: values[key] for key in JSON_OPTION_KEYS}
+    options["USDExchangeRate"] = values["USDExchangeRate"]
     return options, exchange_rate
 
 
@@ -269,6 +295,11 @@ def build_option_updates(options: dict[str, str], exchange_rate: Decimal) -> dic
     user_usable_groups = parse_json(options["UserUsableGroups"], "UserUsableGroups", dict)
     auto_groups = parse_json(options["AutoGroups"], "AutoGroups", list)
     group_group_ratio = parse_json(options["GroupGroupRatio"], "GroupGroupRatio", dict)
+    special_usable_groups = parse_json(
+        options["group_ratio_setting.group_special_usable_group"],
+        "group_ratio_setting.group_special_usable_group",
+        dict,
+    )
     model_ratio = parse_json(options["ModelRatio"], "ModelRatio", dict)
     completion_ratio = parse_json(options["CompletionRatio"], "CompletionRatio", dict)
     cache_ratio = parse_json(options["CacheRatio"], "CacheRatio", dict)
@@ -283,6 +314,11 @@ def build_option_updates(options: dict[str, str], exchange_rate: Decimal) -> dic
     for overrides in group_group_ratio.values():
         if isinstance(overrides, dict):
             overrides.pop(PRICING_GROUP, None)
+    for overrides in special_usable_groups.values():
+        if not isinstance(overrides, dict):
+            continue
+        overrides.pop(PRICING_GROUP, None)
+        overrides.pop("+:" + PRICING_GROUP, None)
 
     model_ratio[MODEL_NAME] = decimal_as_float(INPUT_CNY_PER_1M / (Decimal("2") * exchange_rate))
     completion_ratio[MODEL_NAME] = decimal_as_float(OUTPUT_CNY_PER_1M / INPUT_CNY_PER_1M)
@@ -297,6 +333,7 @@ def build_option_updates(options: dict[str, str], exchange_rate: Decimal) -> dic
         "UserUsableGroups": json_option(user_usable_groups),
         "AutoGroups": json_option(auto_groups),
         "GroupGroupRatio": json_option(group_group_ratio),
+        "group_ratio_setting.group_special_usable_group": json_option(special_usable_groups),
         "ModelRatio": json_option(model_ratio),
         "CompletionRatio": json_option(completion_ratio),
         "CacheRatio": json_option(cache_ratio),
@@ -307,17 +344,79 @@ def build_option_updates(options: dict[str, str], exchange_rate: Decimal) -> dic
     }
 
 
-def option_upsert(option_key: str, option_value: str) -> str:
-    quoted_value = sql_quote(option_value)
+def option_guard_statements(options: dict[str, str]) -> list[str]:
+    expected_keys = (*JSON_OPTION_KEYS, "USDExchangeRate")
+    missing = [key for key in expected_keys if key not in options]
+    if missing:
+        raise ConfigurationError("required Grok options are missing: " + ",".join(missing))
+    keys = ",".join(sql_quote(key) for key in expected_keys)
+    exact_matches = " OR ".join(
+        "(`key` = "
+        + sql_quote(key)
+        + " AND BINARY COALESCE(`value`, '') = BINARY "
+        + sql_quote(options[key])
+        + ")"
+        for key in expected_keys
+    )
+    return [
+        "SELECT `key` FROM options WHERE `key` IN (" + keys + ") ORDER BY `key` FOR UPDATE;",
+        "SET @grok_options_match := (SELECT COUNT(*) FROM options WHERE "
+        + exact_matches
+        + ");",
+    ]
+
+
+def guarded_option_update(option_key: str, option_value: str, expected_value: str) -> str:
     return (
-        "INSERT INTO options (`key`, `value`) VALUES ("
+        "UPDATE options SET `value` = "
+        + sql_quote(option_value)
+        + " WHERE `key` = "
         + sql_quote(option_key)
-        + ", "
-        + quoted_value
-        + ") ON DUPLICATE KEY UPDATE `value` = "
-        + quoted_value
+        + " AND @grok_apply_allowed = 1"
+        + " AND BINARY COALESCE(`value`, '') = BINARY "
+        + sql_quote(expected_value)
         + ";"
     )
+
+
+def profile_match_condition(profile: ChannelProfile) -> str:
+    numeric_fields = {
+        "id": profile.channel_id,
+        "type": profile.channel_type,
+        "status": profile.status,
+        "weight": profile.weight,
+        "priority": profile.priority,
+        "auto_ban": profile.auto_ban,
+    }
+    string_fields = {
+        "`key`": profile.api_key,
+        "name": profile.name,
+        "base_url": profile.base_url,
+        "models": profile.models,
+        "`group`": profile.groups,
+        "model_mapping": profile.model_mapping,
+        "tag": profile.tag,
+        "remark": profile.remark,
+    }
+    conditions = [
+        "COALESCE(profile_channel." + field + ", 0) = " + str(int(value))
+        for field, value in numeric_fields.items()
+    ]
+    conditions.extend(
+        "BINARY COALESCE(profile_channel."
+        + field
+        + ", '') = BINARY "
+        + sql_quote(value)
+        for field, value in string_fields.items()
+    )
+    return " AND ".join(conditions)
+
+
+def mysql_status(output: list[str], prefix: str) -> str:
+    for line in reversed(output):
+        if line.startswith(prefix):
+            return line.removeprefix(prefix)
+    raise ConfigurationError("production MySQL update returned no completion status")
 
 
 def build_apply_sql(
@@ -325,11 +424,69 @@ def build_apply_sql(
     base_url: str,
     options: dict[str, str],
     exchange_rate: Decimal,
+    *,
+    expected_profile: ChannelProfile | None = None,
 ) -> str:
     option_updates = build_option_updates(options, exchange_rate)
     mapping = json_option({MODEL_NAME: MODEL_NAME})
     statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
-    statements.extend(option_upsert(key, value) for key, value in option_updates.items())
+    statements.extend(option_guard_statements(options))
+    relevant_channel_condition = (
+        "tag = "
+        + sql_quote(CHANNEL_TAG)
+        + " OR FIND_IN_SET("
+        + sql_quote(PRICING_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0"
+    )
+    conflicting_channel_condition = (
+        "COALESCE(tag, '') <> "
+        + sql_quote(CHANNEL_TAG)
+        + " AND FIND_IN_SET("
+        + sql_quote(PRICING_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0"
+    )
+    statements.extend(
+        [
+            "SELECT id FROM channels WHERE " + relevant_channel_condition + " ORDER BY id FOR UPDATE;",
+            "SELECT id FROM vendors WHERE name = "
+            + sql_quote(MODEL_VENDOR_NAME)
+            + " ORDER BY id FOR UPDATE;",
+            "SELECT id FROM models WHERE model_name = "
+            + sql_quote(MODEL_NAME)
+            + " ORDER BY id FOR UPDATE;",
+            "SET @grok_tag_channel_count := (SELECT COUNT(*) FROM channels WHERE tag = "
+            + sql_quote(CHANNEL_TAG)
+            + ");",
+            "SET @grok_group_conflict_count := (SELECT COUNT(*) FROM channels WHERE "
+            + conflicting_channel_condition
+            + ");",
+        ]
+    )
+    if expected_profile is None:
+        statements.append("SET @grok_profile_match := 1;")
+    else:
+        statements.append(
+            "SET @grok_profile_match := (SELECT COUNT(*) FROM channels AS profile_channel WHERE "
+            + profile_match_condition(expected_profile)
+            + ");"
+        )
+    statements.extend(
+        [
+            "SET @grok_apply_status := CASE "
+            + "WHEN @grok_options_match <> "
+            + str(len(JSON_OPTION_KEYS) + 1)
+            + " THEN 'options_conflict' "
+            + "WHEN @grok_group_conflict_count > 0 THEN 'channel_conflict' "
+            + "WHEN @grok_tag_channel_count > 1 THEN 'duplicate_channels' "
+            + "WHEN @grok_profile_match <> 1 THEN 'profile_conflict' "
+            + "ELSE 'ok' END;",
+            "SET @grok_apply_allowed := IF(@grok_apply_status = 'ok', 1, 0);",
+        ]
+    )
+    statements.extend(
+        guarded_option_update(key, value, options[key])
+        for key, value in option_updates.items()
+    )
     statements.extend(
         [
             "SET @grok_model := " + sql_quote(MODEL_NAME) + " COLLATE utf8mb4_unicode_ci;",
@@ -350,13 +507,14 @@ def build_apply_sql(
                     "@now",
                 ]
             )
-            + " WHERE @grok_vendor_id IS NULL;",
+            + " WHERE @grok_vendor_id IS NULL AND @grok_apply_allowed = 1;",
             "SET @grok_vendor_id := IFNULL(@grok_vendor_id, LAST_INSERT_ID());",
             "UPDATE vendors SET description = "
             + sql_quote(MODEL_VENDOR_DESCRIPTION)
             + ", icon = "
             + sql_quote(MODEL_VENDOR_ICON)
-            + ", status = 1, updated_time = @now, deleted_at = NULL WHERE id = @grok_vendor_id;",
+            + ", status = 1, updated_time = @now, deleted_at = NULL WHERE id = @grok_vendor_id"
+            + " AND @grok_apply_allowed = 1;",
             "SET @keep_model_id := (SELECT MIN(id) FROM models WHERE model_name = @grok_model AND deleted_at IS NULL);",
             "SET @keep_model_id := IFNULL(@keep_model_id, (SELECT MIN(id) FROM models WHERE model_name = @grok_model));",
             "INSERT INTO models "
@@ -377,7 +535,7 @@ def build_apply_sql(
                     "0",
                 ]
             )
-            + " WHERE @keep_model_id IS NULL;",
+            + " WHERE @keep_model_id IS NULL AND @grok_apply_allowed = 1;",
             "SET @keep_model_id := IFNULL(@keep_model_id, LAST_INSERT_ID());",
             "UPDATE models SET description = "
             + sql_quote(MODEL_DESCRIPTION)
@@ -389,9 +547,9 @@ def build_apply_sql(
             + ", endpoints = "
             + sql_quote(MODEL_ENDPOINTS)
             + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
-            "WHERE id = @keep_model_id;",
+            "WHERE id = @keep_model_id AND @grok_apply_allowed = 1;",
             "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
-            "WHERE model_name = @grok_model AND id <> @keep_model_id;",
+            "WHERE model_name = @grok_model AND id <> @keep_model_id AND @grok_apply_allowed = 1;",
             "SET @grok_channel_id := (SELECT MIN(id) FROM channels WHERE tag = " + sql_quote(CHANNEL_TAG) + ");",
             "INSERT INTO channels "
             "(type, `key`, status, name, weight, created_time, test_time, response_time, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark) "
@@ -416,7 +574,7 @@ def build_apply_sql(
                     sql_quote(PRICING_GROUP_DESCRIPTION),
                 ]
             )
-            + " WHERE @grok_channel_id IS NULL;",
+            + " WHERE @grok_channel_id IS NULL AND @grok_apply_allowed = 1;",
             "SET @grok_channel_id := IFNULL(@grok_channel_id, LAST_INSERT_ID());",
             "UPDATE channels SET type = 1, `key` = "
             + sql_quote(validate_upstream_key(api_key))
@@ -434,17 +592,18 @@ def build_apply_sql(
             + sql_quote(CHANNEL_TAG)
             + ", remark = "
             + sql_quote(PRICING_GROUP_DESCRIPTION)
-            + " WHERE id = @grok_channel_id;",
+            + " WHERE id = @grok_channel_id AND @grok_apply_allowed = 1;",
             "UPDATE abilities SET enabled = 0 WHERE `group` = "
             + sql_quote(PRICING_GROUP)
-            + " AND channel_id <> @grok_channel_id;",
+            + " AND channel_id <> @grok_channel_id AND @grok_apply_allowed = 1;",
             "UPDATE abilities SET enabled = 0 WHERE model = "
             + sql_quote(MODEL_NAME)
             + " AND `group` <> "
             + sql_quote(PRICING_GROUP)
-            + ";",
-            "UPDATE abilities SET enabled = 0 WHERE channel_id = @grok_channel_id;",
-            "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) VALUES ("
+            + " AND @grok_apply_allowed = 1;",
+            "UPDATE abilities SET enabled = 0 WHERE channel_id = @grok_channel_id"
+            + " AND @grok_apply_allowed = 1;",
+            "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) SELECT "
             + ", ".join(
                 [
                     sql_quote(PRICING_GROUP),
@@ -456,47 +615,62 @@ def build_apply_sql(
                     sql_quote(CHANNEL_TAG),
                 ]
             )
-            + ") ON DUPLICATE KEY UPDATE enabled = 1, priority = 0, weight = 100, tag = "
+            + " WHERE @grok_apply_allowed = 1 AND @grok_channel_id IS NOT NULL"
+            + " ON DUPLICATE KEY UPDATE enabled = 1, priority = 0, weight = 100, tag = "
             + sql_quote(CHANNEL_TAG)
             + ";",
             "COMMIT;",
+            "SELECT CONCAT('grok_apply_status=', @grok_apply_status);",
         ]
     )
     return "\n".join(statements)
 
 
-def validate_channel_isolation() -> None:
-    rows = mysql("SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(CHANNEL_TAG))
-    if (int(rows[0][0]) if rows else 0) > 1:
-        raise ConfigurationError("multiple channels use the reserved Grok isolation tag")
-    rows = mysql(
-        "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') <> "
-        + sql_quote(CHANNEL_TAG)
-        + " AND FIND_IN_SET("
-        + sql_quote(PRICING_GROUP)
-        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0"
-    )
-    if (int(rows[0][0]) if rows else 0) > 0:
-        raise ConfigurationError("the Grok group is assigned to a non-isolated channel")
-
-
-def apply_grok45(api_key: str, base_url: str) -> None:
-    validate_channel_isolation()
+def apply_grok45(
+    api_key: str,
+    base_url: str,
+    *,
+    expected_profile: ChannelProfile | None = None,
+) -> None:
     options, exchange_rate = load_options()
-    mysql_exec(build_apply_sql(api_key, base_url, options, exchange_rate))
+    output = mysql_exec(
+        build_apply_sql(
+            api_key,
+            base_url,
+            options,
+            exchange_rate,
+            expected_profile=expected_profile,
+        )
+    )
+    status = mysql_status(output, "grok_apply_status=")
+    errors = {
+        "options_conflict": "Grok options changed concurrently; retry the apply operation",
+        "profile_conflict": "the managed Grok channel profile changed concurrently",
+        "channel_conflict": "the Grok group is already assigned to a non-isolated channel",
+        "duplicate_channels": "multiple channels use the reserved Grok isolation tag",
+    }
+    if status != "ok":
+        raise ConfigurationError(errors.get(status, "Grok model apply failed closed"))
 
 
-def load_existing_channel() -> tuple[str, str] | None:
+def load_existing_channel() -> ChannelProfile | None:
     rows = mysql(
-        "SELECT COALESCE(`key`, ''), COALESCE(base_url, '') FROM channels WHERE tag = "
+        "SELECT id, COALESCE(type, 0), COALESCE(`key`, ''), COALESCE(status, 0), "
+        "COALESCE(name, ''), COALESCE(weight, 0), COALESCE(base_url, ''), "
+        "COALESCE(models, ''), COALESCE(`group`, ''), COALESCE(model_mapping, ''), "
+        "COALESCE(priority, 0), COALESCE(auto_ban, 0), COALESCE(tag, ''), COALESCE(remark, '') "
+        "FROM channels WHERE tag = "
         + sql_quote(CHANNEL_TAG)
         + " ORDER BY id"
     )
     if not rows:
         return None
-    if len(rows) != 1 or len(rows[0]) != 2:
+    if len(rows) != 1 or len(rows[0]) != 14:
         raise ConfigurationError("the configured Grok channel is ambiguous")
-    return validate_upstream_key(rows[0][0]), normalize_base_url(rows[0][1])
+    profile = ChannelProfile(*rows[0])
+    validate_upstream_key(profile.api_key)
+    normalize_base_url(profile.base_url)
+    return profile
 
 
 def emit_result(action: str) -> None:
@@ -520,9 +694,10 @@ def main() -> int:
             if configured is None:
                 emit_result("not_configured")
                 return 0
-            api_key, base_url = configured
+            api_key = validate_upstream_key(configured.api_key)
+            base_url = normalize_base_url(configured.base_url)
             require_exact_model(fetch_upstream_models(base_url, api_key))
-            apply_grok45(api_key, base_url)
+            apply_grok45(api_key, base_url, expected_profile=configured)
         emit_result("reconciled")
         return 0
 

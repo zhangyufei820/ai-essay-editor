@@ -36,7 +36,7 @@ func (a *TaskAdaptor) FetchTaskWithContext(ctx context.Context, baseURL, key str
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	token, err := vertexcore.AcquireAccessToken(*credentials, proxy)
+	token, err := vertexcore.AcquireAccessTokenWithContext(ctx, *credentials, proxy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire access token: %w", err)
 	}

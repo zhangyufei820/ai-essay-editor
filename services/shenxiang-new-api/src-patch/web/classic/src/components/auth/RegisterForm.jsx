@@ -21,7 +21,6 @@ import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   API,
-  getOAuthState,
   getLogo,
   showError,
   showInfo,
@@ -30,8 +29,6 @@ import {
   getSystemName,
   getOAuthProviderIcon,
   setUserData,
-  onDiscordOAuthClicked,
-  onCustomOAuthClicked,
 } from '../../helpers';
 import Turnstile from 'react-turnstile';
 import {
@@ -52,11 +49,6 @@ import {
   IconLock,
   IconKey,
 } from '@douyinfe/semi-icons';
-import {
-  onGitHubOAuthClicked,
-  onLinuxDOOAuthClicked,
-  onOIDCClicked,
-} from '../../helpers';
 import OIDCIcon from '../common/logo/OIDCIcon';
 import LinuxDoIcon from '../common/logo/LinuxDoIcon';
 import WeChatIcon from '../common/logo/WeChatIcon';
@@ -137,12 +129,12 @@ const RegisterForm = () => {
     (status.custom_oauth_providers || []).length > 0;
   const hasOAuthRegisterOptions = Boolean(
     status.github_oauth ||
-      status.discord_oauth ||
-      status.oidc_enabled ||
-      status.wechat_login ||
-      status.linuxdo_oauth ||
-      status.telegram_oauth ||
-      hasCustomOAuthProviders,
+    status.discord_oauth ||
+    status.oidc_enabled ||
+    status.wechat_login ||
+    status.linuxdo_oauth ||
+    status.telegram_oauth ||
+    hasCustomOAuthProviders,
   );
 
   const [showEmailVerification, setShowEmailVerification] = useState(false);
@@ -180,7 +172,69 @@ const RegisterForm = () => {
     };
   }, []);
 
+  const ensureOAuthRegistrationConsent = () => {
+    if ((hasUserAgreement || hasPrivacyPolicy) && !agreedToTerms) {
+      showInfo(t('请先阅读并同意用户协议和隐私政策'));
+      return false;
+    }
+    return true;
+  };
+
+  const prepareOAuthRegistrationState = async () => {
+    if (!ensureOAuthRegistrationConsent()) {
+      return '';
+    }
+
+    try {
+      await API.get('/api/user/logout', { skipErrorHandler: true }).catch(
+        () => undefined,
+      );
+      localStorage.removeItem('user');
+      updateAPI();
+
+      const params = {
+        registration_consent: agreedToTerms ? 'true' : 'false',
+      };
+      const storedAffCode = localStorage.getItem('aff');
+      if (storedAffCode) {
+        params.aff = storedAffCode;
+      }
+      const res = await API.get('/api/oauth/state', { params });
+      const { success, message, data } = res.data;
+      if (!success || !data) {
+        showError(message || t('OAuth 注册初始化失败，请重试'));
+        return '';
+      }
+      return data;
+    } catch (error) {
+      showError(t('OAuth 注册初始化失败，请重试'));
+      return '';
+    }
+  };
+
+  const startOAuthRegistration = async (buildAuthorizationUrl) => {
+    const state = await prepareOAuthRegistrationState();
+    if (!state) {
+      return false;
+    }
+
+    try {
+      const authorizationUrl = buildAuthorizationUrl(state);
+      if (!['http:', 'https:'].includes(authorizationUrl.protocol)) {
+        throw new Error('unsupported OAuth authorization protocol');
+      }
+      window.location.assign(authorizationUrl.toString());
+      return true;
+    } catch (error) {
+      showError(t('OAuth 配置错误，请联系管理员'));
+      return false;
+    }
+  };
+
   const onWeChatLoginClicked = () => {
+    if (!ensureOAuthRegistrationConsent()) {
+      return;
+    }
     setWechatLoading(true);
     setShowWeChatLoginModal(true);
     setWechatLoading(false);
@@ -193,18 +247,21 @@ const RegisterForm = () => {
     }
     setWechatCodeSubmitLoading(true);
     try {
-	  const state = await getOAuthState();
-	  const res = await API.post('/api/oauth/wechat', {
-	    code: inputs.wechat_verification_code,
-	    state,
-	  });
+      const state = await prepareOAuthRegistrationState();
+      if (!state) {
+        return;
+      }
+      const res = await API.post('/api/oauth/wechat', {
+        code: inputs.wechat_verification_code,
+        state,
+      });
       const { success, message, data } = res.data;
       if (success) {
-		if (data && data.require_2fa) {
-		  setShowWeChatLoginModal(false);
-		  setShowTwoFA(true);
-		  return;
-		}
+        if (data && data.require_2fa) {
+          setShowWeChatLoginModal(false);
+          setShowTwoFA(true);
+          return;
+        }
         userDispatch({ type: 'login', payload: data });
         localStorage.setItem('user', JSON.stringify(data));
         setUserData(data);
@@ -290,7 +347,10 @@ const RegisterForm = () => {
     }
   };
 
-  const handleGitHubClick = () => {
+  const handleGitHubClick = async () => {
+    if (!ensureOAuthRegistrationConsent()) {
+      return;
+    }
     if (githubButtonDisabled) {
       return;
     }
@@ -305,49 +365,118 @@ const RegisterForm = () => {
       setGithubButtonState('timeout');
       setGithubButtonDisabled(true);
     }, 20000);
-    try {
-      onGitHubOAuthClicked(status.github_client_id, { shouldLogout: true });
-    } finally {
-      setTimeout(() => setGithubLoading(false), 3000);
+    const redirected = await startOAuthRegistration((state) => {
+      const authorizationUrl = new URL(
+        'https://github.com/login/oauth/authorize',
+      );
+      authorizationUrl.searchParams.set('client_id', status.github_client_id);
+      authorizationUrl.searchParams.set('state', state);
+      authorizationUrl.searchParams.set('scope', 'user:email');
+      return authorizationUrl;
+    });
+    if (!redirected) {
+      clearTimeout(githubTimeoutRef.current);
+      setGithubButtonState('idle');
+      setGithubButtonDisabled(false);
     }
+    setTimeout(() => setGithubLoading(false), 3000);
   };
 
-  const handleDiscordClick = () => {
+  const handleDiscordClick = async () => {
+    if (!ensureOAuthRegistrationConsent()) {
+      return;
+    }
     setDiscordLoading(true);
     try {
-      onDiscordOAuthClicked(status.discord_client_id, { shouldLogout: true });
+      await startOAuthRegistration((state) => {
+        const authorizationUrl = new URL(
+          'https://discord.com/oauth2/authorize',
+        );
+        authorizationUrl.searchParams.set(
+          'client_id',
+          status.discord_client_id,
+        );
+        authorizationUrl.searchParams.set(
+          'redirect_uri',
+          `${window.location.origin}/oauth/discord`,
+        );
+        authorizationUrl.searchParams.set('response_type', 'code');
+        authorizationUrl.searchParams.set('scope', 'identify openid');
+        authorizationUrl.searchParams.set('state', state);
+        return authorizationUrl;
+      });
     } finally {
       setTimeout(() => setDiscordLoading(false), 3000);
     }
   };
 
-  const handleOIDCClick = () => {
+  const handleOIDCClick = async () => {
+    if (!ensureOAuthRegistrationConsent()) {
+      return;
+    }
     setOidcLoading(true);
     try {
-      onOIDCClicked(
-        status.oidc_authorization_endpoint,
-        status.oidc_client_id,
-        false,
-        { shouldLogout: true },
-      );
+      await startOAuthRegistration((state) => {
+        const authorizationUrl = new URL(status.oidc_authorization_endpoint);
+        authorizationUrl.searchParams.set('client_id', status.oidc_client_id);
+        authorizationUrl.searchParams.set(
+          'redirect_uri',
+          `${window.location.origin}/oauth/oidc`,
+        );
+        authorizationUrl.searchParams.set('response_type', 'code');
+        authorizationUrl.searchParams.set('scope', 'openid profile email');
+        authorizationUrl.searchParams.set('state', state);
+        return authorizationUrl;
+      });
     } finally {
       setTimeout(() => setOidcLoading(false), 3000);
     }
   };
 
-  const handleLinuxDOClick = () => {
+  const handleLinuxDOClick = async () => {
+    if (!ensureOAuthRegistrationConsent()) {
+      return;
+    }
     setLinuxdoLoading(true);
     try {
-      onLinuxDOOAuthClicked(status.linuxdo_client_id, { shouldLogout: true });
+      await startOAuthRegistration((state) => {
+        const authorizationUrl = new URL(
+          'https://connect.linux.do/oauth2/authorize',
+        );
+        authorizationUrl.searchParams.set('response_type', 'code');
+        authorizationUrl.searchParams.set(
+          'client_id',
+          status.linuxdo_client_id,
+        );
+        authorizationUrl.searchParams.set('state', state);
+        return authorizationUrl;
+      });
     } finally {
       setTimeout(() => setLinuxdoLoading(false), 3000);
     }
   };
 
-  const handleCustomOAuthClick = (provider) => {
+  const handleCustomOAuthClick = async (provider) => {
+    if (!ensureOAuthRegistrationConsent()) {
+      return;
+    }
     setCustomOAuthLoading((prev) => ({ ...prev, [provider.slug]: true }));
     try {
-      onCustomOAuthClicked(provider, { shouldLogout: true });
+      await startOAuthRegistration((state) => {
+        const authorizationUrl = new URL(provider.authorization_endpoint);
+        authorizationUrl.searchParams.set('client_id', provider.client_id);
+        authorizationUrl.searchParams.set(
+          'redirect_uri',
+          `${window.location.origin}/oauth/${provider.slug}`,
+        );
+        authorizationUrl.searchParams.set('response_type', 'code');
+        authorizationUrl.searchParams.set(
+          'scope',
+          provider.scopes || 'openid profile email',
+        );
+        authorizationUrl.searchParams.set('state', state);
+        return authorizationUrl;
+      });
     } finally {
       setTimeout(() => {
         setCustomOAuthLoading((prev) => ({ ...prev, [provider.slug]: false }));
@@ -368,16 +497,22 @@ const RegisterForm = () => {
   };
 
   const onTelegramLoginClicked = async (response) => {
+    if (!ensureOAuthRegistrationConsent()) {
+      return;
+    }
     try {
-      const state = await getOAuthState();
+      const state = await prepareOAuthRegistrationState();
+      if (!state) {
+        return;
+      }
       const payload = buildTelegramAuthPayload(response, state);
       const res = await API.post('/api/oauth/telegram/login', payload);
       const { success, message, data } = res.data;
       if (success) {
-		if (data && data.require_2fa) {
-		  setShowTwoFA(true);
-		  return;
-		}
+        if (data && data.require_2fa) {
+          setShowTwoFA(true);
+          return;
+        }
         userDispatch({ type: 'login', payload: data });
         localStorage.setItem('user', JSON.stringify(data));
         showSuccess('登录成功！');
@@ -521,6 +656,45 @@ const RegisterForm = () => {
                   </div>
                 )}
 
+                {(hasUserAgreement || hasPrivacyPolicy) && (
+                  <div
+                    className='mt-6'
+                    data-testid='oauth-registration-consent'
+                  >
+                    <Checkbox
+                      checked={agreedToTerms}
+                      onChange={(event) =>
+                        setAgreedToTerms(event.target.checked)
+                      }
+                    >
+                      <Text size='small' className='text-gray-600'>
+                        {t('我已阅读并同意')}
+                        {hasUserAgreement && (
+                          <a
+                            href='/user-agreement'
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            className='text-blue-600 hover:text-blue-800 mx-1'
+                          >
+                            {t('用户协议')}
+                          </a>
+                        )}
+                        {hasUserAgreement && hasPrivacyPolicy && t('和')}
+                        {hasPrivacyPolicy && (
+                          <a
+                            href='/privacy-policy'
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            className='text-blue-600 hover:text-blue-800 mx-1'
+                          >
+                            {t('隐私政策')}
+                          </a>
+                        )}
+                      </Text>
+                    </Checkbox>
+                  </div>
+                )}
+
                 <Divider margin='12px' align='center'>
                   {t('或')}
                 </Divider>
@@ -556,28 +730,28 @@ const RegisterForm = () => {
   };
 
   const handle2FASuccess = (data) => {
-	userDispatch({ type: 'login', payload: data });
-	setUserData(data);
-	updateAPI();
-	showSuccess('登录成功！');
-	navigate('/console');
+    userDispatch({ type: 'login', payload: data });
+    setUserData(data);
+    updateAPI();
+    showSuccess('登录成功！');
+    navigate('/console');
   };
 
   const render2FAModal = () => (
-	<Modal
-	  title={t('两步验证')}
-	  visible={showTwoFA}
-	  onCancel={() => setShowTwoFA(false)}
-	  footer={null}
-	  width={450}
-	  centered
-	>
-	  <TwoFAVerification
-		onSuccess={handle2FASuccess}
-		onBack={() => setShowTwoFA(false)}
-		isModal={true}
-	  />
-	</Modal>
+    <Modal
+      title={t('两步验证')}
+      visible={showTwoFA}
+      onCancel={() => setShowTwoFA(false)}
+      footer={null}
+      width={450}
+      centered
+    >
+      <TwoFAVerification
+        onSuccess={handle2FASuccess}
+        onBack={() => setShowTwoFA(false)}
+        isModal={true}
+      />
+    </Modal>
   );
 
   const renderEmailRegisterForm = () => {
@@ -807,12 +981,11 @@ const RegisterForm = () => {
         style={{ top: '50%', left: '-120px' }}
       />
       <div className='w-full max-w-sm mt-[60px]'>
-        {showEmailRegister ||
-        !hasOAuthRegisterOptions
+        {showEmailRegister || !hasOAuthRegisterOptions
           ? renderEmailRegisterForm()
           : renderOAuthOptions()}
         {renderWeChatLoginModal()}
-		{render2FAModal()}
+        {render2FAModal()}
 
         {turnstileEnabled && (
           <div className='flex justify-center mt-6'>

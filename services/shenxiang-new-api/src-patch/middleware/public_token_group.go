@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
@@ -37,9 +38,10 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 		}
 		request := map[string]json.RawMessage{}
 		if err := json.Unmarshal(body, &request); err != nil {
-			c.Request.Body = io.NopCloser(bytes.NewReader(body))
-			c.Request.ContentLength = int64(len(body))
-			c.Next()
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "令牌配置无效",
+			})
 			return
 		}
 		if request == nil {
@@ -52,9 +54,10 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 		group := ""
 		if rawGroup, ok := request["group"]; ok && string(rawGroup) != "null" {
 			if err := json.Unmarshal(rawGroup, &group); err != nil {
-				c.Request.Body = io.NopCloser(bytes.NewReader(body))
-				c.Request.ContentLength = int64(len(body))
-				c.Next()
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": "令牌配置无效",
+				})
 				return
 			}
 		}
@@ -62,7 +65,31 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 			group = "default"
 			request["group"] = json.RawMessage(`"default"`)
 		}
-		if !service.IsPublicTokenGroup(group) {
+		if group == service.Grok45PricingGroupName {
+			if c.GetInt("id") <= 0 {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"success": false,
+					"message": "登录状态无效",
+				})
+				return
+			}
+			userGroup := c.GetString("user_group")
+			if userGroup == "" || !service.UserCanUseGrok45PricingGroup(userGroup) {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"success": false,
+					"message": "令牌分组不可用",
+				})
+				return
+			}
+			var token model.Token
+			if err := json.Unmarshal(body, &token); err != nil || !service.IsExactGrok45TokenConfiguration(&token) {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": "专用令牌配置无效",
+				})
+				return
+			}
+		} else if !service.IsPublicTokenGroup(group) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"success": false,
 				"message": "令牌只可选择原价或特价分组",

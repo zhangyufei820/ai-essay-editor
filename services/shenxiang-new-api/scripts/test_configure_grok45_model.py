@@ -35,6 +35,10 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
             "UserUsableGroups": '{"default":"默认"}',
             "AutoGroups": '["default","grok45"]',
             "GroupGroupRatio": '{"vip":{"default":0.8,"grok45":0.2}}',
+            "group_ratio_setting.group_special_usable_group": (
+                '{"vip":{"grok45":"grant","+:grok45":"grant",'
+                '"-:grok45":"deny","other":"keep"}}'
+            ),
             "ModelRatio": '{"existing":1}',
             "CompletionRatio": '{"existing":2}',
             "CacheRatio": '{"existing":0.5}',
@@ -42,6 +46,7 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
             "ModelPrice": '{"grok-4.5":9}',
             "billing_setting.billing_mode": '{"grok-4.5":"tiered_expr"}',
             "billing_setting.billing_expr": '{"grok-4.5":"unsafe"}',
+            "USDExchangeRate": "7.3",
         }
 
     def test_exact_model_is_required(self) -> None:
@@ -79,6 +84,13 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         )
         self.assertNotIn(self.module.PRICING_GROUP, json.loads(updates["AutoGroups"]))
         self.assertNotIn(self.module.PRICING_GROUP, json.loads(updates["GroupGroupRatio"])["vip"])
+        special_groups = json.loads(
+            updates["group_ratio_setting.group_special_usable_group"]
+        )["vip"]
+        self.assertNotIn(self.module.PRICING_GROUP, special_groups)
+        self.assertNotIn("+:" + self.module.PRICING_GROUP, special_groups)
+        self.assertEqual(special_groups["-:" + self.module.PRICING_GROUP], "deny")
+        self.assertEqual(special_groups["other"], "keep")
         for key in (
             "CreateCacheRatio",
             "ModelPrice",
@@ -104,6 +116,90 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         self.assertIn('openai-response', sql)
         self.assertNotIn("'default', 'grok-4.5'", sql)
 
+    def test_apply_sql_locks_options_and_channel_profile_before_guarded_updates(self) -> None:
+        profile = self.module.ChannelProfile(
+            channel_id="41",
+            channel_type="1",
+            api_key="fake-grok-key-for-unit-tests",
+            status="1",
+            name="managed-name",
+            weight="100",
+            base_url=self.module.EXPECTED_UPSTREAM_BASE_URL,
+            models=self.module.MODEL_NAME,
+            groups=self.module.PRICING_GROUP,
+            model_mapping='{"grok-4.5":"grok-4.5"}',
+            priority="0",
+            auto_ban="1",
+            tag=self.module.CHANNEL_TAG,
+            remark="managed-remark",
+        )
+
+        sql = self.module.build_apply_sql(
+            profile.api_key,
+            profile.base_url,
+            self.base_options(),
+            Decimal("7.3"),
+            expected_profile=profile,
+        )
+
+        self.assertTrue(sql.startswith("START TRANSACTION;"))
+        self.assertIn("FROM options", sql)
+        self.assertIn("FROM channels", sql)
+        self.assertGreaterEqual(sql.count("FOR UPDATE;"), 2)
+        self.assertIn("@grok_options_match", sql)
+        self.assertIn("@grok_profile_match", sql)
+        self.assertIn("@grok_tag_channel_count", sql)
+        self.assertIn("@grok_group_conflict_count", sql)
+        self.assertIn("grok_apply_status=", sql)
+        self.assertIn("BINARY COALESCE(profile_channel.`key`, '')", sql)
+        self.assertIn("@grok_apply_allowed = 1", sql)
+        self.assertNotIn("INSERT INTO options", sql)
+
+    def test_apply_sql_guards_against_concurrent_option_changes(self) -> None:
+        sql = self.module.build_apply_sql(
+            "fake-grok-key-for-unit-tests",
+            self.module.EXPECTED_UPSTREAM_BASE_URL,
+            self.base_options(),
+            Decimal("7.3"),
+        )
+
+        self.assertIn("@grok_options_match <> 13", sql)
+        option_updates = [
+            statement
+            for statement in sql.splitlines()
+            if statement.startswith("UPDATE options")
+        ]
+        self.assertEqual(len(option_updates), 12)
+        for statement in option_updates:
+            with self.subTest(statement=statement):
+                self.assertIn("@grok_apply_allowed = 1", statement)
+
+    def test_apply_grok45_fails_closed_on_transaction_conflict(self) -> None:
+        for status, message in (
+            ("options_conflict", "options changed concurrently"),
+            ("profile_conflict", "channel profile changed concurrently"),
+            ("channel_conflict", "non-isolated channel"),
+            ("duplicate_channels", "multiple channels"),
+        ):
+            with self.subTest(status=status), mock.patch.object(
+                self.module,
+                "load_options",
+                return_value=(self.base_options(), Decimal("7.3")),
+            ), mock.patch.object(
+                self.module,
+                "mysql_exec",
+                return_value=["grok_apply_status=" + status],
+            ), mock.patch.object(
+                self.module,
+                "mysql",
+                side_effect=AssertionError("channel isolation must be checked in the write transaction"),
+            ):
+                with self.assertRaisesRegex(self.module.ConfigurationError, message):
+                    self.module.apply_grok45(
+                        "fake-grok-key-for-unit-tests",
+                        self.module.EXPECTED_UPSTREAM_BASE_URL,
+                    )
+
     def test_reconcile_without_channel_needs_no_upstream_key(self) -> None:
         stdout = io.StringIO()
         with mock.patch.object(self.module, "load_existing_channel", return_value=None), mock.patch.object(
@@ -113,6 +209,78 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(json.loads(stdout.getvalue())["action"], "not_configured")
+
+    def test_load_existing_channel_captures_full_profile_snapshot(self) -> None:
+        row = [
+            "41",
+            "1",
+            "fake-grok-key-for-unit-tests",
+            "1",
+            "managed-name",
+            "100",
+            self.module.EXPECTED_UPSTREAM_BASE_URL,
+            self.module.MODEL_NAME,
+            self.module.PRICING_GROUP,
+            '{"grok-4.5":"grok-4.5"}',
+            "0",
+            "1",
+            self.module.CHANNEL_TAG,
+            "managed-remark",
+        ]
+        with mock.patch.object(self.module, "mysql", return_value=[row]) as mysql:
+            profile = self.module.load_existing_channel()
+
+        self.assertEqual(profile, self.module.ChannelProfile(*row))
+        query = mysql.call_args.args[0]
+        for column in ("type", "status", "models", "`group`", "model_mapping", "base_url", "`key`"):
+            with self.subTest(column=column):
+                self.assertIn(column, query)
+
+    def test_reconcile_passes_profile_snapshot_to_transaction(self) -> None:
+        profile = self.module.ChannelProfile(
+            channel_id="41",
+            channel_type="1",
+            api_key="fake-grok-key-for-unit-tests",
+            status="1",
+            name="managed-name",
+            weight="100",
+            base_url=self.module.EXPECTED_UPSTREAM_BASE_URL,
+            models=self.module.MODEL_NAME,
+            groups=self.module.PRICING_GROUP,
+            model_mapping='{"grok-4.5":"grok-4.5"}',
+            priority="0",
+            auto_ban="1",
+            tag=self.module.CHANNEL_TAG,
+            remark="managed-remark",
+        )
+        with mock.patch.object(
+            self.module,
+            "model_sync_lock",
+            return_value=contextlib.nullcontext(),
+        ), mock.patch.object(
+            self.module,
+            "load_existing_channel",
+            return_value=profile,
+        ), mock.patch.object(
+            self.module,
+            "fetch_upstream_models",
+            return_value={self.module.MODEL_NAME},
+        ), mock.patch.object(
+            self.module,
+            "apply_grok45",
+        ) as apply, mock.patch.object(
+            sys,
+            "argv",
+            [str(MODULE_PATH), "--reconcile-if-configured"],
+        ), contextlib.redirect_stdout(io.StringIO()):
+            result = self.module.main()
+
+        self.assertEqual(result, 0)
+        apply.assert_called_once_with(
+            profile.api_key,
+            profile.base_url,
+            expected_profile=profile,
+        )
 
     def test_command_output_never_contains_the_credential(self) -> None:
         secret = "fake-grok-secret-for-unit-tests"
@@ -159,12 +327,13 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
             self.module.subprocess,
             "check_output",
             side_effect=self.module.subprocess.TimeoutExpired(["docker"], 15),
-        ):
+        ) as check_output:
             with self.assertRaises(self.module.ConfigurationError) as raised:
                 self.module.mysql("SELECT 1")
 
         self.assertEqual(str(raised.exception), "production MySQL query failed")
         self.assertNotIn(secret, str(raised.exception))
+        self.assertIn("--raw", check_output.call_args.args[0])
 
 
 if __name__ == "__main__":

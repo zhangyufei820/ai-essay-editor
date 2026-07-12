@@ -103,3 +103,16 @@ test('all OAuth entry screens honor the server-side 2FA challenge', () => {
     assert.match(source, /setShowTwoFA\(true\)/);
   }
 });
+
+test('OAuth registration binds explicit legal consent to its server state', () => {
+  const registerSource = fs.readFileSync(
+    path.join(classicSource, 'components/auth/RegisterForm.jsx'),
+    'utf8',
+  );
+
+  assert.match(registerSource, /registration_consent/);
+  assert.match(registerSource, /prepareOAuthRegistrationState/);
+  assert.match(registerSource, /ensureOAuthRegistrationConsent/);
+  assert.match(registerSource, /data-testid='oauth-registration-consent'/);
+  assert.doesNotMatch(registerSource, /\bgetOAuthState\(/);
+});

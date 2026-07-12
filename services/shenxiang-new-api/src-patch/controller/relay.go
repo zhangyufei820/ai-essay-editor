@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +35,177 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
+
+type deferredTaskResponseWriter struct {
+	gin.ResponseWriter
+	header    http.Header
+	body      bytes.Buffer
+	status    int
+	committed bool
+}
+
+type taskBillingHandoff interface {
+	PrepareTaskBillingHandoff(*model.Task) (model.BillingReservationIntent, bool, error)
+	CompleteTaskBillingHandoff()
+}
+
+type taskBillingHandoffResourceReleaser interface {
+	ReleaseTaskBillingHandoffResources()
+}
+
+var errTaskPersistenceOutcomeUnknown = errors.New("task persistence outcome is unknown")
+var errTaskPersistenceConflict = errors.New("task persistence identity conflict")
+
+func newDeferredTaskResponseWriter(writer gin.ResponseWriter) *deferredTaskResponseWriter {
+	header := make(http.Header)
+	if writer != nil {
+		header = writer.Header().Clone()
+	}
+	return &deferredTaskResponseWriter{ResponseWriter: writer, header: header}
+}
+
+func (writer *deferredTaskResponseWriter) Header() http.Header {
+	return writer.header
+}
+
+func (writer *deferredTaskResponseWriter) WriteHeader(statusCode int) {
+	if writer.Written() {
+		return
+	}
+	writer.status = statusCode
+}
+
+func (writer *deferredTaskResponseWriter) WriteHeaderNow() {
+	if !writer.Written() {
+		writer.status = http.StatusOK
+	}
+}
+
+func (writer *deferredTaskResponseWriter) Write(data []byte) (int, error) {
+	writer.WriteHeaderNow()
+	return writer.body.Write(data)
+}
+
+func (writer *deferredTaskResponseWriter) WriteString(data string) (int, error) {
+	writer.WriteHeaderNow()
+	return writer.body.WriteString(data)
+}
+
+func (writer *deferredTaskResponseWriter) Status() int {
+	if writer.status == 0 {
+		return http.StatusOK
+	}
+	return writer.status
+}
+
+func (writer *deferredTaskResponseWriter) Size() int {
+	if !writer.Written() {
+		return -1
+	}
+	return writer.body.Len()
+}
+
+func (writer *deferredTaskResponseWriter) Written() bool {
+	return writer.status != 0
+}
+
+func (writer *deferredTaskResponseWriter) Flush() {
+	writer.WriteHeaderNow()
+}
+
+func (writer *deferredTaskResponseWriter) Commit() error {
+	if writer == nil || writer.ResponseWriter == nil {
+		return errors.New("task response writer is unavailable")
+	}
+	if writer.committed {
+		return nil
+	}
+	destination := writer.ResponseWriter.Header()
+	for key := range destination {
+		destination.Del(key)
+	}
+	for key, values := range writer.header {
+		for _, value := range values {
+			destination.Add(key, value)
+		}
+	}
+	writer.ResponseWriter.WriteHeader(writer.Status())
+	if writer.body.Len() > 0 {
+		if _, err := writer.ResponseWriter.Write(writer.body.Bytes()); err != nil {
+			return err
+		}
+	}
+	writer.committed = true
+	return nil
+}
+
+func validateTaskSubmitResult(result *relay.TaskSubmitResult) error {
+	if result == nil {
+		return errors.New("task submission result is unavailable")
+	}
+	if strings.TrimSpace(result.UpstreamTaskID) == "" {
+		return errors.New("upstream response did not include a task id")
+	}
+	return nil
+}
+
+func persistSubmittedTask(task *model.Task, billing relaycommon.BillingSettler) error {
+	if task == nil {
+		return errors.New("task is unavailable")
+	}
+	handoff, hasHandoff := billing.(taskBillingHandoff)
+	var err error
+	if hasHandoff {
+		reservationIntent, useReservationIntent, prepareErr := handoff.PrepareTaskBillingHandoff(task)
+		if prepareErr != nil {
+			return prepareErr
+		}
+		if useReservationIntent {
+			err = task.InsertWithBillingReservationIntent(reservationIntent)
+		} else {
+			err = task.Insert()
+		}
+	} else {
+		err = task.Insert()
+	}
+	if err != nil {
+		persisted, verifyErr := verifySubmittedTaskPersistence(task)
+		if verifyErr != nil {
+			if errors.Is(verifyErr, errTaskPersistenceConflict) {
+				return verifyErr
+			}
+			return fmt.Errorf("%w: %v", errTaskPersistenceOutcomeUnknown, err)
+		}
+		if !persisted {
+			return fmt.Errorf("%w: %v", errTaskPersistenceOutcomeUnknown, err)
+		}
+	}
+	if hasHandoff {
+		handoff.CompleteTaskBillingHandoff()
+	}
+	return nil
+}
+
+func verifySubmittedTaskPersistence(task *model.Task) (bool, error) {
+	if task == nil || strings.TrimSpace(task.TaskID) == "" {
+		return false, errors.New("task persistence identity is unavailable")
+	}
+	persisted, exists, err := model.GetByOnlyTaskId(task.TaskID)
+	if err != nil || !exists || persisted == nil {
+		return false, err
+	}
+	if persisted.UserId != task.UserId || persisted.Platform != task.Platform ||
+		persisted.ChannelId != task.ChannelId || persisted.Action != task.Action ||
+		persisted.GetUpstreamTaskID() != task.GetUpstreamTaskID() {
+		return false, fmt.Errorf("%w: public task id is already owned by another submission", errTaskPersistenceConflict)
+	}
+	if task.PrivateData.BillingOperationKey != "" &&
+		persisted.PrivateData.BillingOperationKey != task.PrivateData.BillingOperationKey {
+		return false, fmt.Errorf("%w: persisted task billing operation does not match", errTaskPersistenceConflict)
+	}
+	task.ID = persisted.ID
+	return true, nil
+}
 
 func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	var err *types.NewAPIError
@@ -1031,6 +1203,13 @@ func RelayMidjourney(c *gin.Context) {
 		})
 		return
 	}
+	relayMidjourneyWithInfo(c, relayInfo)
+}
+
+func relayMidjourneyWithInfo(c *gin.Context, relayInfo *relaycommon.RelayInfo) {
+	if relayInfo == nil || rejectUnsafeMidjourneyMutation(c, relayInfo.RelayMode) {
+		return
+	}
 
 	var mjErr *dto.MidjourneyResponse
 	switch relayInfo.RelayMode {
@@ -1064,6 +1243,23 @@ func RelayMidjourney(c *gin.Context) {
 		})
 		channelId := c.GetInt("channel_id")
 		logger.LogError(c, fmt.Sprintf("relay error (channel #%d, status code %d): %s", channelId, statusCode, fmt.Sprintf("%s %s", mjErr.Description, mjErr.Result)))
+	}
+}
+
+func rejectUnsafeMidjourneyMutation(c *gin.Context, relayMode int) bool {
+	switch relayMode {
+	case relayconstant.RelayModeMidjourneyNotify,
+		relayconstant.RelayModeMidjourneyTaskFetch,
+		relayconstant.RelayModeMidjourneyTaskFetchByCondition,
+		relayconstant.RelayModeMidjourneyTaskImageSeed:
+		return false
+	default:
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"description": "Midjourney 提交暂时不可用，计费安全升级中。",
+			"type":        "billing_safety_unavailable",
+			"code":        "midjourney_billing_safety_unavailable",
+		})
+		return true
 	}
 }
 
@@ -1175,10 +1371,16 @@ func RelayTask(c *gin.Context) {
 
 	var result *relay.TaskSubmitResult
 	var taskErr *dto.TaskError
+	billingRefundTransferred := false
+	originalTaskWriter := c.Writer
+	var pendingTaskResponse *deferredTaskResponseWriter
 	defer func() {
-		if taskErr != nil && relayInfo.Billing != nil {
+		if taskErr != nil && relayInfo.Billing != nil && !billingRefundTransferred {
 			relayInfo.Billing.Refund(c)
 		}
+	}()
+	defer func() {
+		c.Writer = originalTaskWriter
 	}()
 
 	retryParam := &service.RetryParam{
@@ -1221,8 +1423,17 @@ func RelayTask(c *gin.Context) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		attemptResponse := newDeferredTaskResponseWriter(originalTaskWriter)
+		c.Writer = attemptResponse
 		result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
+		c.Writer = originalTaskWriter
 		if taskErr == nil {
+			if resultErr := validateTaskSubmitResult(result); resultErr != nil {
+				taskErr = service.TaskErrorWrapperLocal(resultErr, "service_unavailable", http.StatusBadGateway)
+			}
+		}
+		if taskErr == nil {
+			pendingTaskResponse = attemptResponse
 			break
 		}
 
@@ -1244,37 +1455,54 @@ func RelayTask(c *gin.Context) {
 		logger.LogInfo(c, retryLogStr)
 	}
 
-	// ── 成功：结算 + 日志 + 插入任务 ──
+	// ── 成功：结算 + 插入任务 + 日志 ──
 	if taskErr == nil {
 		if settleErr := service.SettleBilling(c, relayInfo, result.Quota); settleErr != nil {
 			common.SysError("settle task billing error: " + settleErr.Error())
 		}
-		service.LogTaskConsumption(c, relayInfo)
+		if pendingTaskResponse == nil {
+			taskErr = service.TaskErrorWrapperLocal(errors.New("task response is unavailable"), "service_unavailable", http.StatusInternalServerError)
+		} else {
+			task := model.InitTask(result.Platform, relayInfo)
+			task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
+			task.PrivateData.BillingSource = relayInfo.BillingSource
+			task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
+			task.PrivateData.TokenId = relayInfo.TokenId
+			task.PrivateData.BillingContext = &model.TaskBillingContext{
+				ModelPrice:      relayInfo.PriceData.ModelPrice,
+				GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
+				ModelRatio:      relayInfo.PriceData.ModelRatio,
+				OtherRatios:     relayInfo.PriceData.OtherRatios(),
+				OriginModelName: relayInfo.OriginModelName,
+				PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
+			}
+			task.Quota = result.Quota
+			task.Data = result.TaskData
+			annotatePlaygroundVideoTaskData(c, task, relayInfo)
+			task.Action = relayInfo.Action
 
-		task := model.InitTask(result.Platform, relayInfo)
-		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
-		task.PrivateData.BillingSource = relayInfo.BillingSource
-		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
-		task.PrivateData.TokenId = relayInfo.TokenId
-		task.PrivateData.BillingContext = &model.TaskBillingContext{
-			ModelPrice:      relayInfo.PriceData.ModelPrice,
-			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
-			ModelRatio:      relayInfo.PriceData.ModelRatio,
-			OtherRatios:     relayInfo.PriceData.OtherRatios(),
-			OriginModelName: relayInfo.OriginModelName,
-			PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
-		}
-		task.Quota = result.Quota
-		task.Data = result.TaskData
-		annotatePlaygroundVideoTaskData(c, task, relayInfo)
-		task.Action = relayInfo.Action
-		if insertErr := task.Insert(); insertErr != nil {
-			common.SysError("insert task error: " + insertErr.Error())
-		} else if isVideoTaskPath(c) {
-			publicTaskID := task.TaskID
-			gopool.Go(func() {
-				service.WatchAsyncVideoTask(publicTaskID)
-			})
+			if insertErr := persistSubmittedTask(task, relayInfo.Billing); insertErr != nil {
+				common.SysError("insert task error: " + insertErr.Error())
+				if errors.Is(insertErr, errTaskPersistenceOutcomeUnknown) {
+					billingRefundTransferred = true
+					if releaser, ok := relayInfo.Billing.(taskBillingHandoffResourceReleaser); ok {
+						releaser.ReleaseTaskBillingHandoffResources()
+					}
+					common.SysError("task persistence outcome unknown; durable billing recovery retains ownership")
+				}
+				taskErr = service.TaskErrorWrapperLocal(errors.New("failed to persist task"), "service_unavailable", http.StatusInternalServerError)
+			} else {
+				service.LogTaskConsumption(c, relayInfo)
+				if isVideoTaskPath(c) {
+					publicTaskID := task.TaskID
+					gopool.Go(func() {
+						service.WatchAsyncVideoTask(publicTaskID)
+					})
+				}
+				if commitErr := pendingTaskResponse.Commit(); commitErr != nil {
+					common.SysError("write task response error: " + commitErr.Error())
+				}
+			}
 		}
 	}
 
@@ -1288,7 +1516,7 @@ func isVideoTaskPath(c *gin.Context) bool {
 		return false
 	}
 	switch strings.TrimSpace(c.Request.URL.Path) {
-	case "/v1/videos", "/pg/videos", "/pg/video/generations":
+	case "/v1/videos", "/v1/video/generations", "/pg/videos", "/pg/video/generations":
 		return true
 	default:
 		return false
@@ -1310,6 +1538,12 @@ func respondTaskError(c *gin.Context, taskErr *dto.TaskError) {
 
 func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *dto.TaskError, retryTimes int) bool {
 	if taskErr == nil {
+		return false
+	}
+	if c != nil && c.GetBool(relay.TaskSubmitDispatchedContextKey) {
+		return false
+	}
+	if taskErr.LocalError {
 		return false
 	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
@@ -1339,9 +1573,6 @@ func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *dto.TaskError,
 	}
 	if taskErr.StatusCode == 408 {
 		// azure处理超时不重试
-		return false
-	}
-	if taskErr.LocalError {
 		return false
 	}
 	if taskErr.StatusCode/100 == 2 {

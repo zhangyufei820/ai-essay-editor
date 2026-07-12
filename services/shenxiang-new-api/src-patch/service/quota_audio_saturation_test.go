@@ -7,11 +7,26 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+type saturationBillingRecorder struct {
+	reserved int
+}
+
+func (recorder *saturationBillingRecorder) Settle(int) error         { return nil }
+func (recorder *saturationBillingRecorder) Refund(*gin.Context)      {}
+func (recorder *saturationBillingRecorder) NeedsRefund() bool        { return false }
+func (recorder *saturationBillingRecorder) GetPreConsumedQuota() int { return recorder.reserved }
+func (recorder *saturationBillingRecorder) Reserve(target int) error {
+	recorder.reserved = target
+	return nil
+}
 
 func TestCalculateAudioQuotaSaturatesPriceOverflow(t *testing.T) {
 	quota, clamp := calculateAudioQuota(QuotaInfo{
@@ -74,6 +89,30 @@ func TestAudioQuotaClampIsAttachableToConsumeLog(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, common.QuotaClampOverflow, saturation["kind"])
 	require.Equal(t, common.MaxQuota, saturation["clamped"])
+}
+
+func TestPreWssConsumeQuotaSaturatesCumulativeReservation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(nil)
+	ctx.Set(realtimeBillingTargetQuotaKey, common.MaxQuota)
+	billing := &saturationBillingRecorder{}
+	relayInfo := &relaycommon.RelayInfo{
+		OriginModelName: "audio-quota-cumulative-test",
+		UsingGroup:      "default",
+		UserGroup:       "default",
+		PriceData: types.PriceData{
+			ModelRatio: 1,
+		},
+		Billing: billing,
+	}
+	usage := &dto.RealtimeUsage{
+		InputTokenDetails: dto.InputTokenDetails{TextTokens: 1},
+	}
+
+	require.NoError(t, PreWssConsumeQuota(ctx, relayInfo, usage))
+	require.Equal(t, common.MaxQuota, billing.reserved)
+	require.NotNil(t, relayInfo.QuotaClamp)
+	require.Equal(t, common.QuotaClampOverflow, relayInfo.QuotaClamp.Kind)
 }
 
 func TestAudioQuotaConsumePathsPreserveClampAuditOrder(t *testing.T) {

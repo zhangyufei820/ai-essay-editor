@@ -78,11 +78,76 @@ type TaskPollingSummary struct {
 const (
 	asyncVideoWatchInterval       = 15 * time.Second
 	asyncVideoWatchTimeout        = 35 * time.Minute
+	taskPollingRunTimeout         = 5 * time.Minute
+	taskPollingFetchTimeout       = 30 * time.Second
 	maxPollingFailureRunes        = 500
 	PublicAsyncTaskFailureMessage = "模型服务暂时无法处理该任务，请稍后重试"
 )
 
 var activeAsyncVideoWatchers sync.Map
+
+type asyncVideoWatcherGeneration struct {
+	context   context.Context
+	cancel    context.CancelFunc
+	accepting bool
+	waitGroup sync.WaitGroup
+}
+
+func newAsyncVideoWatcherGeneration(parent context.Context) *asyncVideoWatcherGeneration {
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
+	return &asyncVideoWatcherGeneration{context: ctx, cancel: cancel, accepting: true}
+}
+
+var asyncVideoWatcherLifecycle = struct {
+	sync.Mutex
+	generation *asyncVideoWatcherGeneration
+}{generation: newAsyncVideoWatcherGeneration(context.Background())}
+
+func ConfigureAsyncVideoWatcherContext(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	asyncVideoWatcherLifecycle.Lock()
+	defer asyncVideoWatcherLifecycle.Unlock()
+	previous := asyncVideoWatcherLifecycle.generation
+	if previous != nil {
+		previous.accepting = false
+		previous.cancel()
+		previous.waitGroup.Wait()
+	}
+	asyncVideoWatcherLifecycle.generation = newAsyncVideoWatcherGeneration(ctx)
+}
+
+func StopAsyncVideoWatchers(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	asyncVideoWatcherLifecycle.Lock()
+	defer asyncVideoWatcherLifecycle.Unlock()
+	generation := asyncVideoWatcherLifecycle.generation
+	if generation != nil {
+		generation.accepting = false
+		generation.cancel()
+	}
+	if generation == nil {
+		return nil
+	}
+	done := make(chan struct{})
+	go func() {
+		generation.waitGroup.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 var playgroundVideoCacheWriteSem = make(chan struct{}, 4)
 
 var (
@@ -136,6 +201,18 @@ func lookupPollingTask(tasks map[string]*model.Task, channelID int, upstreamID s
 	return nil
 }
 
+func persistTaskWithStatus(ctx context.Context, task *model.Task, fromStatus model.TaskStatus) (bool, error) {
+	taskToPersist := *task
+	return taskToPersist.UpdateWithStatusContext(ctx, fromStatus)
+}
+
+func withTaskPollingTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
 // sweepTimedOutTasks 在主轮询之前独立清理超时任务。
 // 每次最多处理 100 条，剩余的下个周期继续处理。
 // 使用 per-task CAS (UpdateWithStatus) 防止覆盖被正常轮询已推进的任务。
@@ -147,7 +224,13 @@ func sweepTimedOutTasks(ctx context.Context) {
 		return
 	}
 	cutoff := time.Now().Unix() - int64(constant.TaskTimeoutMinutes)*60
-	tasks := model.GetTimedOutUnfinishedTasks(cutoff, 100)
+	tasks, err := model.GetTimedOutUnfinishedTasksWithContext(ctx, cutoff, 100)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			logger.LogError(ctx, fmt.Sprintf("query timed out tasks: %v", err))
+		}
+		return
+	}
 	if len(tasks) == 0 {
 		return
 	}
@@ -174,7 +257,7 @@ func sweepTimedOutTasks(ctx context.Context) {
 			task.FailReason = reason
 		}
 
-		won, err := task.UpdateWithStatus(oldStatus)
+		won, err := PersistTaskTerminalFailure(ctx, task, oldStatus, reason, "task_timeout", !isLegacy)
 		if err != nil {
 			logger.LogError(ctx, fmt.Sprintf("sweepTimedOutTasks CAS update error for task %s: %v", task.TaskID, err))
 			continue
@@ -184,9 +267,6 @@ func sweepTimedOutTasks(ctx context.Context) {
 			continue
 		}
 		timedOutCount++
-		if !isLegacy && task.Quota != 0 {
-			RefundTaskQuota(ctx, task, reason)
-		}
 	}
 
 	if timedOutCount > 0 {
@@ -199,7 +279,11 @@ func TaskPollingLoop() {
 	for {
 		time.Sleep(time.Duration(15) * time.Second)
 		common.SysLog("任务进度轮询开始")
-		RunTaskPollingOnce(context.TODO(), nil)
+		func() {
+			ctx, cancel := withTaskPollingTimeout(context.Background(), taskPollingRunTimeout)
+			defer cancel()
+			RunTaskPollingOnce(ctx, nil)
+		}()
 		common.SysLog("任务进度轮询完成")
 	}
 }
@@ -209,9 +293,8 @@ func RunTaskPollingOnce(ctx context.Context, progress func(processed, total int)
 	if GetTaskAdaptorFunc == nil {
 		return summary
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx, cancel := withTaskPollingTimeout(ctx, taskPollingRunTimeout)
+	defer cancel()
 	if ctx.Err() != nil {
 		return summary
 	}
@@ -219,7 +302,13 @@ func RunTaskPollingOnce(ctx context.Context, progress func(processed, total int)
 	if ctx.Err() != nil {
 		return summary
 	}
-	allTasks := model.GetAllUnFinishSyncTasks(constant.TaskQueryLimit)
+	allTasks, err := model.GetAllUnFinishSyncTasksWithContext(ctx, constant.TaskQueryLimit)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			logger.LogError(ctx, fmt.Sprintf("query unfinished tasks: %v", err))
+		}
+		return summary
+	}
 	summary.Total = len(allTasks)
 	if progress != nil {
 		progress(0, summary.Total)
@@ -296,14 +385,38 @@ func failPollingTaskWithoutUpstreamID(ctx context.Context, task *model.Task, rec
 	}
 
 	const reason = PublicAsyncTaskFailureMessage
-	won, err := task.FailIfTaskIDMissing(task.Status, reason, time.Now().Unix(), taskcommon.ProgressComplete)
+	fromStatus := task.Status
+	task.Status = model.TaskStatusFailure
+	task.FailReason = reason
+	task.FinishTime = time.Now().Unix()
+	task.Progress = taskcommon.ProgressComplete
+	_, ledgerErr := taskBillingLedgerMode(task)
+	if ledgerErr != nil {
+		return false, ledgerErr
+	}
+	if task.PrivateData.BillingOperationKey != "" {
+		won, err := PersistTaskTerminalFailure(
+			ctx,
+			task,
+			fromStatus,
+			reason,
+			"missing_upstream_task_id",
+			true,
+		)
+		if err != nil || !won {
+			return won, err
+		}
+		recordPollingTaskFailure(ctx, task, "missing_upstream_task_id", recordVideoResult)
+		return true, nil
+	}
+	won, err := task.FailIfTaskIDMissing(fromStatus, reason, task.FinishTime, task.Progress)
 	if err != nil || !won {
 		return won, err
 	}
-	recordPollingTaskFailure(ctx, task, "missing_upstream_task_id", recordVideoResult)
 	if task.Quota != 0 {
 		RefundTaskQuota(ctx, task, reason)
 	}
+	recordPollingTaskFailure(ctx, task, "missing_upstream_task_id", recordVideoResult)
 	return true, nil
 }
 
@@ -312,25 +425,41 @@ func WatchAsyncVideoTask(taskID string) {
 	if taskID == "" {
 		return
 	}
+	asyncVideoWatcherLifecycle.Lock()
+	generation := asyncVideoWatcherLifecycle.generation
+	if generation == nil || !generation.accepting || generation.context.Err() != nil {
+		asyncVideoWatcherLifecycle.Unlock()
+		return
+	}
+	watcherContext := generation.context
+	generation.waitGroup.Add(1)
+	asyncVideoWatcherLifecycle.Unlock()
+	defer generation.waitGroup.Done()
 	if _, loaded := activeAsyncVideoWatchers.LoadOrStore(taskID, struct{}{}); loaded {
 		return
 	}
 	defer activeAsyncVideoWatchers.Delete(taskID)
 
-	timer := time.NewTimer(asyncVideoWatchTimeout)
-	defer timer.Stop()
+	watchCtx, cancel := withTaskPollingTimeout(watcherContext, asyncVideoWatchTimeout)
+	defer cancel()
 	ticker := time.NewTicker(asyncVideoWatchInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-timer.C:
-			logger.LogWarn(context.Background(), fmt.Sprintf("async video watcher timed out for task %s", taskID))
+		case <-watchCtx.Done():
+			if errors.Is(watchCtx.Err(), context.DeadlineExceeded) {
+				logger.LogWarn(watchCtx, fmt.Sprintf("async video watcher timed out for task %s", taskID))
+			}
 			return
 		case <-ticker.C:
-			done, err := pollAsyncVideoTaskByPublicID(context.Background(), taskID)
+			done, err := func() (bool, error) {
+				pollCtx, pollCancel := withTaskPollingTimeout(watchCtx, taskPollingFetchTimeout)
+				defer pollCancel()
+				return pollAsyncVideoTaskByPublicID(pollCtx, taskID)
+			}()
 			if err != nil {
-				logger.LogWarn(context.Background(), fmt.Sprintf("async video watcher failed for task %s: %s", taskID, err.Error()))
+				logger.LogWarn(watchCtx, fmt.Sprintf("async video watcher failed for task %s: %s", taskID, err.Error()))
 				continue
 			}
 			if done {
@@ -341,7 +470,7 @@ func WatchAsyncVideoTask(taskID string) {
 }
 
 func pollAsyncVideoTaskByPublicID(ctx context.Context, taskID string) (bool, error) {
-	task, exists, err := model.GetByOnlyTaskId(taskID)
+	task, exists, err := model.GetByOnlyTaskIdWithContext(ctx, taskID)
 	if err != nil {
 		return false, err
 	}
@@ -360,7 +489,7 @@ func pollAsyncVideoTaskByPublicID(ctx context.Context, taskID string) (bool, err
 	if err := updateVideoTasks(ctx, task.Platform, task.ChannelId, []string{upstreamID}, taskM); err != nil {
 		return false, err
 	}
-	refreshed, exists, err := model.GetByOnlyTaskId(taskID)
+	refreshed, exists, err := model.GetByOnlyTaskIdWithContext(ctx, taskID)
 	if err != nil {
 		return false, err
 	}
@@ -392,9 +521,8 @@ func DispatchPlatformUpdate(ctx context.Context, platform constant.TaskPlatform,
 
 // UpdateSunoTasks 按渠道更新所有 Suno 任务
 func UpdateSunoTasks(ctx context.Context, taskChannelM map[int][]string, taskM map[string]*model.Task) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx, cancel := withTaskPollingTimeout(ctx, taskPollingRunTimeout)
+	defer cancel()
 	for channelId, taskIds := range taskChannelM {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -426,7 +554,9 @@ func updateSunoTasks(ctx context.Context, channelId int, taskIds []string, taskM
 		return errors.New("adaptor not found")
 	}
 	proxy := ch.GetSetting().Proxy
-	resp, err := adaptor.FetchTaskWithContext(ctx, *ch.BaseURL, ch.Key, map[string]any{
+	requestCtx, requestCancel := withTaskPollingTimeout(ctx, taskPollingFetchTimeout)
+	defer requestCancel()
+	resp, err := adaptor.FetchTaskWithContext(requestCtx, *ch.BaseURL, ch.Key, map[string]any{
 		"ids": taskIds,
 	}, proxy)
 	if err != nil {
@@ -442,9 +572,14 @@ func updateSunoTasks(ctx context.Context, channelId int, taskIds []string, taskM
 		return fmt.Errorf("Get Task status code: %d", resp.StatusCode)
 	}
 	responseBody, err := common.ReadAllCapped(resp.Body)
+	requestErr := requestCtx.Err()
+	requestCancel()
 	if err != nil {
 		common.SysLog(fmt.Sprintf("Get Suno Task parse body error: %v", err))
 		return err
+	}
+	if requestErr != nil {
+		return requestErr
 	}
 	var responseItems dto.TaskResponse[[]dto.SunoDataResponse]
 	err = common.Unmarshal(responseBody, &responseItems)
@@ -471,7 +606,6 @@ func updateSunoTasks(ctx context.Context, channelId int, taskIds []string, taskM
 		}
 
 		snapshot := task.Snapshot()
-		shouldRefund := false
 		task.Status = lo.If(model.TaskStatus(responseItem.Status) != "", model.TaskStatus(responseItem.Status)).Else(task.Status)
 		if responseItem.FailReason != "" || task.Status == model.TaskStatusFailure {
 			task.FailReason = SanitizeAsyncTaskFailure(responseItem.FailReason)
@@ -482,7 +616,6 @@ func updateSunoTasks(ctx context.Context, channelId int, taskIds []string, taskM
 		if responseItem.FailReason != "" || task.Status == model.TaskStatusFailure {
 			logger.LogInfo(ctx, task.TaskID+" 构建失败，"+task.FailReason)
 			task.Progress = "100%"
-			shouldRefund = task.Quota != 0 && snapshot.Status != model.TaskStatusFailure
 		}
 		if responseItem.Status == model.TaskStatusSuccess {
 			task.Progress = "100%"
@@ -495,22 +628,22 @@ func updateSunoTasks(ctx context.Context, channelId int, taskIds []string, taskM
 
 		isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure
 		if isDone && snapshot.Status != task.Status {
-			won, updateErr := task.UpdateWithStatus(snapshot.Status)
+			var won bool
+			var updateErr error
+			if task.Status == model.TaskStatusFailure {
+				won, updateErr = PersistTaskTerminalFailure(ctx, task, snapshot.Status, task.FailReason, "media_task_failed", true)
+			} else {
+				won, updateErr = PersistTaskTerminalSuccess(ctx, task, snapshot.Status, task.Quota, "")
+			}
 			if updateErr != nil {
 				logger.LogError(ctx, fmt.Sprintf("UpdateSunoTask CAS error for task %s: %s", task.TaskID, updateErr.Error()))
-				shouldRefund = false
 			} else if !won {
-				logger.LogWarn(ctx, fmt.Sprintf("Suno task %s already transitioned; skip refund", task.TaskID))
-				shouldRefund = false
+				logger.LogWarn(ctx, fmt.Sprintf("Suno task %s already transitioned; skip billing", task.TaskID))
 			}
 		} else if !snapshot.Equal(task.Snapshot()) {
-			if _, updateErr := task.UpdateWithStatus(snapshot.Status); updateErr != nil {
+			if _, updateErr := persistTaskWithStatus(ctx, task, snapshot.Status); updateErr != nil {
 				logger.LogError(ctx, fmt.Sprintf("UpdateSunoTask error for task %s: %s", task.TaskID, updateErr.Error()))
-				shouldRefund = false
 			}
-		}
-		if shouldRefund {
-			RefundTaskQuota(ctx, task, task.FailReason)
 		}
 	}
 	return nil
@@ -564,9 +697,8 @@ func taskNeedsUpdate(oldTask *model.Task, newTask dto.SunoDataResponse) bool {
 
 // UpdateVideoTasks 按渠道更新所有视频任务
 func UpdateVideoTasks(ctx context.Context, platform constant.TaskPlatform, taskChannelM map[int][]string, taskM map[string]*model.Task) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx, cancel := withTaskPollingTimeout(ctx, taskPollingRunTimeout)
+	defer cancel()
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -665,7 +797,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	if privateData.Key != "" {
 		key = privateData.Key
 	}
-	resp, err := adaptor.FetchTaskWithContext(ctx, baseURL, key, map[string]any{
+	requestCtx, requestCancel := withTaskPollingTimeout(ctx, taskPollingFetchTimeout)
+	defer requestCancel()
+	resp, err := adaptor.FetchTaskWithContext(requestCtx, baseURL, key, map[string]any{
 		"task_id": task.GetUpstreamTaskID(),
 		"action":  task.Action,
 	}, proxy)
@@ -677,11 +811,16 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	}
 	defer resp.Body.Close()
 	responseBody, err := common.ReadAllCapped(resp.Body)
+	requestErr := requestCtx.Err()
+	requestCancel()
 	if err != nil {
 		return fmt.Errorf("readAll failed for task %s: %w", taskId, err)
 	}
-	if ctx.Err() != nil {
-		return ctx.Err()
+	if requestErr != nil {
+		return requestErr
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("fetchTask returned non-success status %d for task %s", resp.StatusCode, taskId)
 	}
 
 	logger.LogDebug(ctx, "updateVideoSingleTask response received: task=%s bytes=%d", taskId, len(responseBody))
@@ -736,12 +875,11 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		playgroundMarker,
 	)
 
-	shouldRefund := false
 	shouldSettle := false
+	shouldRecordFailure := false
 	shouldFinalizeSuccess := false
 	resultURLForCache := ""
 	var videoMarker *playgroundVideoMediaMarker
-	quota := task.Quota
 
 	task.Status = model.TaskStatus(taskResult.Status)
 	switch taskResult.Status {
@@ -777,7 +915,6 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			}
 			shouldFinalizeSuccess = true
 		}
-		shouldSettle = true
 	case model.TaskStatusFailure:
 		task.Status = model.TaskStatusFailure
 		task.Progress = taskcommon.ProgressComplete
@@ -787,14 +924,19 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		task.FailReason = sanitizePollingFailure(taskResult.Reason)
 		logger.LogInfo(ctx, fmt.Sprintf("Task %s failed: %s", task.TaskID, task.FailReason))
 		taskResult.Progress = taskcommon.ProgressComplete
-		if quota != 0 {
-			shouldRefund = true
-		}
 	default:
 		return fmt.Errorf("unknown task status %s for task %s", taskResult.Status, task.TaskID)
 	}
 	if taskResult.Progress != "" {
 		task.Progress = taskResult.Progress
+	}
+	successBilling := taskSuccessBillingDecision{DesiredQuota: task.Quota}
+	if task.Status == model.TaskStatusSuccess && snap.Status != model.TaskStatusSuccess {
+		successBilling = calculateTaskSuccessBilling(adaptor, task, taskResult)
+		if successBilling.CalculationError != nil {
+			logger.LogError(ctx, successBilling.CalculationError.Error())
+			successBilling = taskSuccessBillingDecision{DesiredQuota: task.Quota}
+		}
 	}
 
 	isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure
@@ -802,18 +944,23 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		return ctx.Err()
 	}
 	if isDone && snap.Status != task.Status {
-		won, err := task.UpdateWithStatus(snap.Status)
+		var won bool
+		if task.Status == model.TaskStatusFailure {
+			won, err = PersistTaskTerminalFailure(ctx, task, snap.Status, task.FailReason, "media_task_failed", true)
+		} else {
+			won, err = PersistTaskTerminalSuccess(ctx, task, snap.Status, successBilling.DesiredQuota, successBilling.Reason, successBilling.Clamps...)
+		}
 		if err != nil {
 			logger.LogError(ctx, fmt.Sprintf("UpdateWithStatus failed for task %s: %s", task.TaskID, err.Error()))
-			shouldRefund = false
-			shouldSettle = false
 		} else if !won {
 			logger.LogWarn(ctx, fmt.Sprintf("Task %s already transitioned by another process, skip billing", task.TaskID))
-			shouldRefund = false
-			shouldSettle = false
+		} else if task.Status == model.TaskStatusFailure {
+			shouldRecordFailure = true
+		} else {
+			shouldSettle = true
 		}
 	} else if !snap.Equal(task.Snapshot()) {
-		if _, err := task.UpdateWithStatus(snap.Status); err != nil {
+		if _, err := persistTaskWithStatus(ctx, task, snap.Status); err != nil {
 			logger.LogError(ctx, fmt.Sprintf("Failed to update task %s: %s", task.TaskID, err.Error()))
 		}
 	} else {
@@ -840,7 +987,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 				task.PrivateData.ResultURL = cachedItem.URL
 			}
 			task.Data = mergePlaygroundVideoTaskData(task.Data, videoMarker)
-			won, persistErr := task.UpdateWithStatus(model.TaskStatusSuccess)
+			won, persistErr := persistTaskWithStatus(ctx, task, model.TaskStatusSuccess)
 			if persistErr != nil || !won {
 				finalizationPersisted = false
 				removePlaygroundVideoMediaItem(task, cachedItem)
@@ -878,12 +1025,8 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		}
 	}
 
-	if shouldSettle {
-		settleTaskBillingOnComplete(ctx, adaptor, task, taskResult)
-	}
-	if shouldRefund {
+	if shouldRecordFailure {
 		recordPollingTaskFailure(ctx, task, "media_task_failed", true)
-		RefundTaskQuota(ctx, task, task.FailReason)
 	}
 
 	return nil
@@ -905,19 +1048,16 @@ func failPollingTasksForUnavailableChannel(ctx context.Context, channelID int, t
 		if task.FinishTime == 0 {
 			task.FinishTime = time.Now().Unix()
 		}
-		won, err := task.UpdateWithStatus(previousStatus)
+		won, err := PersistTaskTerminalFailure(ctx, task, previousStatus, task.FailReason, "channel_unavailable", true)
 		if err != nil {
 			logger.LogError(ctx, fmt.Sprintf("failed to mark task %s after channel #%d lookup failure: %s", task.TaskID, channelID, err.Error()))
 			continue
 		}
 		if !won {
-			logger.LogWarn(ctx, fmt.Sprintf("task %s already transitioned after channel #%d lookup failure; skip refund", task.TaskID, channelID))
+			logger.LogWarn(ctx, fmt.Sprintf("task %s already transitioned after channel #%d lookup failure; skip billing", task.TaskID, channelID))
 			continue
 		}
 		recordPollingTaskFailure(ctx, task, "channel_unavailable", recordVideoResult)
-		if task.Quota != 0 {
-			RefundTaskQuota(ctx, task, task.FailReason)
-		}
 	}
 }
 
@@ -1651,20 +1791,12 @@ func truncateBase64(s string) string {
 //  2. taskResult.TotalTokens > 0 → 按 token 重算
 //  3. 都不满足 → 保持预扣额度不变
 func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo) {
-	// 0. 按次计费的任务不做差额结算
-	if bc := task.PrivateData.BillingContext; bc != nil && bc.PerCallBilling {
-		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 按次计费，跳过差额结算", task.TaskID))
+	decision := calculateTaskSuccessBilling(adaptor, task, taskResult)
+	if decision.CalculationError != nil {
+		logger.LogError(ctx, decision.CalculationError.Error())
 		return
 	}
-	// 1. 优先让 adaptor 决定最终额度
-	if actualQuota := adaptor.AdjustBillingOnComplete(task, taskResult); actualQuota > 0 {
-		RecalculateTaskQuota(ctx, task, actualQuota, "adaptor计费调整")
-		return
+	if decision.Reason != "" {
+		RecalculateTaskQuota(ctx, task, decision.DesiredQuota, decision.Reason, decision.Clamps...)
 	}
-	// 2. 回退到 token 重算
-	if taskResult.TotalTokens > 0 {
-		RecalculateTaskQuotaByTokens(ctx, task, taskResult.TotalTokens)
-		return
-	}
-	// 3. 无调整，保持预扣额度
 }

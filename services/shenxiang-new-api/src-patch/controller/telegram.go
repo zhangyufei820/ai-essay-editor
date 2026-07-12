@@ -18,7 +18,6 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 const (
@@ -46,7 +45,7 @@ func TelegramBind(c *gin.Context) {
 		writeInvalidTelegramAuth(c)
 		return
 	}
-	if err := consumeOAuthState(sessions.Default(c), params.Get("state")); err != nil {
+	if _, err := consumeOAuthState(sessions.Default(c), params.Get("state")); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"message": i18n.T(c, i18n.MsgOAuthStateInvalid),
 			"success": false,
@@ -70,16 +69,20 @@ func TelegramBind(c *gin.Context) {
 	}
 
 	telegramID := params.Get("id")
-	if model.IsTelegramIdAlreadyTaken(telegramID) {
-		c.JSON(http.StatusConflict, gin.H{
-			"message": "该 Telegram 账户已被绑定",
-			"success": false,
-		})
+	identityTaken, err := model.IsUserOAuthIdentityTaken(model.UserOAuthProviderTelegram, telegramID)
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 		return
 	}
-	user.TelegramId = telegramID
-	if err := user.Update(false); err != nil {
-		common.ApiError(c, err)
+	if identityTaken {
+		writeOAuthIdentityError(c, "Telegram", model.ErrUserOAuthIdentityAlreadyBound)
+		return
+	}
+	if err := user.SetOAuthIdentity(model.UserOAuthProviderTelegram, telegramID); err != nil {
+		if writeOAuthIdentityError(c, "Telegram", err) {
+			return
+		}
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 		return
 	}
 
@@ -102,7 +105,7 @@ func TelegramLogin(c *gin.Context) {
 		writeInvalidTelegramAuth(c)
 		return
 	}
-	if err := consumeOAuthState(sessions.Default(c), params.Get("state")); err != nil {
+	if _, err := consumeOAuthState(sessions.Default(c), params.Get("state")); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"message": i18n.T(c, i18n.MsgOAuthStateInvalid),
 			"success": false,
@@ -110,21 +113,25 @@ func TelegramLogin(c *gin.Context) {
 		return
 	}
 
-	user := model.User{}
-	if err := model.DB.Where("telegram_id = ?", params.Get("id")).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			common.ApiErrorI18n(c, i18n.MsgUserTelegramNotBound)
-		} else {
-			common.SysLog("telegram login user lookup failed: " + err.Error())
-			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
-		}
+	user, found, err := model.LookupUserByOAuthIdentity(model.UserOAuthProviderTelegram, params.Get("id"))
+	if err != nil {
+		common.SysLog("telegram login user lookup failed")
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		return
+	}
+	if !found {
+		common.ApiErrorI18n(c, i18n.MsgUserTelegramNotBound)
+		return
+	}
+	if user.DeletedAt.Valid {
+		common.ApiErrorI18n(c, i18n.MsgUserDisabled)
 		return
 	}
 	if user.Status != common.UserStatusEnabled {
 		common.ApiErrorI18n(c, i18n.MsgUserDisabled)
 		return
 	}
-	completeLogin(&user, c)
+	completeLogin(user, c)
 }
 
 func telegramAuthParamsFromRequest(c *gin.Context) (url.Values, error) {
