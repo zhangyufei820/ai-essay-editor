@@ -1,3 +1,6 @@
 logs/
 __pycache__/
 *.pyc
+
+# Docker Compose runtime persistence
+/redis/
