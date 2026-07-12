@@ -3,6 +3,7 @@ const MEDIA_MODEL_PATTERN =
 
 const DEFAULT_TEXT_MODEL = 'gpt-5.4-mini';
 const HIDDEN_TEXT_MODELS = new Set(['gpt-5.3-spark']);
+const GROK_TEXT_MODELS = new Set(['grok-4.5']);
 
 const FALLBACK_TEXT_MODELS = [
   DEFAULT_TEXT_MODEL,
@@ -41,6 +42,11 @@ export function toTextModelOptions(models = []) {
 export function getDefaultTextModel(models = []) {
   const options = toTextModelOptions(models);
   return options.find((option) => option.value === DEFAULT_TEXT_MODEL)?.value || options[0]?.value || DEFAULT_TEXT_MODEL;
+}
+
+export function getTextModelGroup(modelName) {
+  const name = String(modelName || '').trim().toLowerCase();
+  return GROK_TEXT_MODELS.has(name) ? 'grok45' : '';
 }
 
 export { DEFAULT_TEXT_MODEL, FALLBACK_TEXT_MODELS };

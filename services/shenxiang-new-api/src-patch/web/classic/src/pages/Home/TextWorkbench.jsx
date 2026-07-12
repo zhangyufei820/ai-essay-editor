@@ -53,7 +53,11 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { API, copy } from '../../helpers';
-import { getDefaultTextModel, toTextModelOptions } from './textModelFilter';
+import {
+  getDefaultTextModel,
+  getTextModelGroup,
+  toTextModelOptions,
+} from './textModelFilter';
 import { useThemePreference } from '../../context/Theme';
 
 const MAX_ATTACHMENTS = 6;
@@ -1031,6 +1035,7 @@ const TextWorkbench = ({ isMobile }) => {
       };
       if (userId) headers['New-Api-User'] = userId;
 
+      const modelGroup = getTextModelGroup(activeModel);
       const response = await fetch('/pg/chat/completions', {
         method: 'POST',
         headers,
@@ -1038,6 +1043,7 @@ const TextWorkbench = ({ isMobile }) => {
         signal: controller.signal,
         body: JSON.stringify({
           model: activeModel,
+          ...(modelGroup ? { group: modelGroup } : {}),
           stream: true,
           messages: [
             ...history,

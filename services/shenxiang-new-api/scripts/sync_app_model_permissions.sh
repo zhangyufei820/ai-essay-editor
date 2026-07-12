@@ -21,4 +21,7 @@ set -a
 . "$ROOT/.env"
 set +a
 
-flock -n "$LOCK" python3 "$ROOT/scripts/sync_app_model_permissions.py"
+exec 9>"$LOCK"
+flock -n 9
+python3 "$ROOT/scripts/sync_app_model_permissions.py"
+GROK45_MODEL_SYNC_LOCK_HELD=1 python3 "$ROOT/scripts/configure_grok45_model.py" --reconcile-if-configured

@@ -39,6 +39,9 @@ SUPPLIER_EXPOSED_MODELS = {
 PUBLIC_ALIAS_BACKING_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL: DISCOUNT_IMAGE2_PUBLIC_MODEL,
 }
+GROK45_MODEL = "grok-4.5"
+GROK45_GROUP = "grok45"
+GROK45_CHANNEL_TAG = "xingren-grok45"
 SUPPLIER_EXPOSED_MARKERS = (
     "ccapi",
     "drag tokens",
@@ -1183,7 +1186,8 @@ def sync_abilities() -> None:
     groups = active_groups()
     channel_rows = mysql(
         """
-        SELECT id, COALESCE(models, ''), COALESCE(priority, 0), COALESCE(weight, 0), COALESCE(tag, '')
+        SELECT id, COALESCE(models, ''), COALESCE(priority, 0), COALESCE(weight, 0),
+               COALESCE(tag, ''), COALESCE(`group`, '')
         FROM channels
         WHERE status = 1 AND COALESCE(models, '') <> ''
         ORDER BY id
@@ -1194,16 +1198,67 @@ def sync_abilities() -> None:
         for row in mysql("SELECT model_name FROM models WHERE deleted_at IS NULL AND status = 1")
         if should_sync_ability_model(row[0])
     }
-    statements = ["START TRANSACTION;"]
-    for channel_id, raw_models, priority, weight, tag in channel_rows:
+    statements = [
+        "START TRANSACTION;",
+        "UPDATE channels SET status = 2 WHERE tag = "
+        + sql_quote(GROK45_CHANNEL_TAG)
+        + " AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+        + sql_quote(GROK45_GROUP)
+        + ";",
+        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
+        + sql_quote(GROK45_CHANNEL_TAG)
+        + " AND FIND_IN_SET("
+        + sql_quote(GROK45_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
+        "UPDATE abilities SET enabled = 0 WHERE `group` = "
+        + sql_quote(GROK45_GROUP)
+        + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
+        + sql_quote(GROK45_CHANNEL_TAG)
+        + ");",
+        "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
+        + "(SELECT id FROM channels WHERE tag = "
+        + sql_quote(GROK45_CHANNEL_TAG)
+        + ") AND (`group` <> "
+        + sql_quote(GROK45_GROUP)
+        + " OR model <> "
+        + sql_quote(GROK45_MODEL)
+        + ");",
+        "UPDATE abilities SET enabled = 0 WHERE model = "
+        + sql_quote(GROK45_MODEL)
+        + " AND `group` <> "
+        + sql_quote(GROK45_GROUP)
+        + ";",
+        "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
+        + "(SELECT id FROM channels WHERE status <> 1 AND tag = "
+        + sql_quote(GROK45_CHANNEL_TAG)
+        + ");",
+    ]
+    invalid_grok_channels: list[str] = []
+    for channel_id, raw_models, priority, weight, tag, raw_groups in channel_rows:
+        channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
+        if tag == GROK45_CHANNEL_TAG:
+            if channel_groups != [GROK45_GROUP]:
+                invalid_grok_channels.append(channel_id)
+                sync_groups = []
+            else:
+                sync_groups = channel_groups
+        elif GROK45_GROUP in channel_groups:
+            invalid_grok_channels.append(channel_id)
+            sync_groups = []
+        else:
+            sync_groups = [group for group in groups if group != GROK45_GROUP]
         for model in [item.strip() for item in raw_models.split(",") if item.strip()]:
+            if model == GROK45_MODEL and tag != GROK45_CHANNEL_TAG:
+                continue
+            if tag == GROK45_CHANNEL_TAG and model != GROK45_MODEL:
+                continue
             if not should_sync_ability_model(model):
                 continue
             if model not in existing_models:
                 continue
             if is_disabled_ability_pair(channel_id, model):
                 continue
-            for group in groups:
+            for group in sync_groups:
                 statements.append(
                     "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) VALUES ("
                     + ", ".join(
@@ -1221,6 +1276,11 @@ def sync_abilities() -> None:
                 )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
+    if invalid_grok_channels:
+        raise RuntimeError(
+            "Grok group isolation violation; disabled channel count: "
+            + str(len(invalid_grok_channels))
+        )
 
 
 def enforce_gpt_image2_db_guard() -> dict[str, int]:

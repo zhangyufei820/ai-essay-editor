@@ -49,6 +49,10 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 		logger.LogDebug(ctx, "final group: %s", autoGroup)
 		relayInfo.UsingGroup = autoGroup.(string)
 	}
+	if service.IsGrok45PricingGroup(relayInfo) {
+		groupRatioInfo.GroupRatio = service.Grok45PricingGroupRatio
+		return groupRatioInfo
+	}
 
 	// check user group special ratio
 	userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)

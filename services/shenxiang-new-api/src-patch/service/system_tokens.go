@@ -16,6 +16,7 @@ type SystemTokenProfile struct {
 	Mode   string
 	Name   string
 	Models []string
+	Group  string
 }
 
 type SystemTokenEnsureResult struct {
@@ -59,6 +60,12 @@ func SystemTokenProfiles() []SystemTokenProfile {
 			Name:   "星人视频生成令牌",
 			Models: videoTokenModels(),
 		},
+		{
+			Mode:   "grok",
+			Name:   "星人 Grok 4.5 测试令牌",
+			Models: []string{Grok45ModelName},
+			Group:  Grok45PricingGroupName,
+		},
 	}
 }
 
@@ -82,17 +89,22 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 		}
 
 		for _, profile := range SystemTokenProfiles() {
+			tokenGroup := strings.TrimSpace(profile.Group)
+			if tokenGroup == "" {
+				tokenGroup = user.Group
+			}
 			var token model.Token
 			if err := tx.Where("user_id = ? AND name = ?", user.Id, profile.Name).First(&token).Error; err != nil {
 				if !errors.Is(err, gorm.ErrRecordNotFound) {
 					return err
 				}
 			} else {
-				nextLimits := mergeModelLimits(token.ModelLimits, profile.Models)
-				if !token.ModelLimitsEnabled || nextLimits != token.ModelLimits {
+				nextLimits := systemTokenModelLimits(token.ModelLimits, profile)
+				if !token.ModelLimitsEnabled || nextLimits != token.ModelLimits || token.Group != tokenGroup {
 					updates := map[string]interface{}{
 						"model_limits_enabled": true,
 						"model_limits":         nextLimits,
+						"group":                tokenGroup,
 					}
 					if err := tx.Model(&model.Token{}).Where("id = ?", token.Id).Updates(updates).Error; err != nil {
 						return err
@@ -129,7 +141,7 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 				UnlimitedQuota:     true,
 				ModelLimitsEnabled: true,
 				ModelLimits:        strings.Join(profile.Models, ","),
-				Group:              user.Group,
+				Group:              tokenGroup,
 				CrossGroupRetry:    true,
 			}
 			if err := tx.Create(&newToken).Error; err != nil {
@@ -148,6 +160,13 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 		}
 	}
 	return result, nil
+}
+
+func systemTokenModelLimits(existing string, profile SystemTokenProfile) string {
+	if profile.Mode == "grok" {
+		return strings.Join(profile.Models, ",")
+	}
+	return mergeModelLimits(existing, profile.Models)
 }
 
 func mergeModelLimits(existing string, required []string) string {

@@ -73,3 +73,29 @@ func TestEnsureSystemTokensRejectsNonAdminUser(t *testing.T) {
 	require.Zero(t, result.Updated)
 	require.Zero(t, result.Skipped)
 }
+
+func TestSystemTokenProfilesIncludesIsolatedGrok45Token(t *testing.T) {
+	var grokProfile *SystemTokenProfile
+	for _, profile := range SystemTokenProfiles() {
+		if profile.Mode == "grok" {
+			profileCopy := profile
+			grokProfile = &profileCopy
+			break
+		}
+	}
+
+	require.NotNil(t, grokProfile)
+	require.Equal(t, "星人 Grok 4.5 测试令牌", grokProfile.Name)
+	require.Equal(t, []string{Grok45ModelName}, grokProfile.Models)
+	require.Equal(t, Grok45PricingGroupName, grokProfile.Group)
+}
+
+func TestGrok45SystemTokenLimitsAreReconciledExactly(t *testing.T) {
+	profile := SystemTokenProfile{
+		Mode:   "grok",
+		Models: []string{Grok45ModelName},
+		Group:  Grok45PricingGroupName,
+	}
+
+	require.Equal(t, Grok45ModelName, systemTokenModelLimits("gpt-5.5,"+Grok45ModelName, profile))
+}

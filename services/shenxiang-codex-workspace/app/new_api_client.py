@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from redis import Redis
 
-from app.config import Settings, secret_values_for_redaction
+from app.config import GROK_TOKEN_GROUP, Settings, secret_values_for_redaction
 from app.model_access import (
     IMAGE_BENEFIT_MODEL,
     SERVER_ALLOWED_MODELS_METADATA_KEY,
@@ -99,16 +99,32 @@ class NewApiClient:
         mode_models: dict[str, tuple[str, ...]] | None = None,
     ) -> dict[str, str]:
         effective_models = self._effective_mode_models(mode_models)
+        grok_models = set(effective_models["grok"])
         profiles = {
-            "codex": (self.settings.auto_token_name, effective_models["codex"]),
-            "claude": (self.settings.claude_token_name, effective_models["claude"]),
-            "image": (self.settings.image_token_name, effective_models["image"]),
-            "video": (self.settings.video_token_name, effective_models["video"]),
+            "codex": (
+                self.settings.auto_token_name,
+                tuple(model for model in effective_models["codex"] if model not in grok_models),
+                None,
+            ),
+            "claude": (self.settings.claude_token_name, effective_models["claude"], None),
+            "image": (self.settings.image_token_name, effective_models["image"], None),
+            "video": (self.settings.video_token_name, effective_models["video"], None),
         }
+        if effective_models["grok"]:
+            profiles["grok"] = (self.settings.grok_token_name, effective_models["grok"], GROK_TOKEN_GROUP)
         tokens = await self._list_tokens(client, headers)
         result: dict[str, str] = {}
-        for mode, (name, models) in profiles.items():
-            result[mode] = await self._ensure_named_token(client, user_id, headers, user, tokens, name, models)
+        for mode, (name, models, token_group) in profiles.items():
+            result[mode] = await self._ensure_named_token(
+                client,
+                user_id,
+                headers,
+                user,
+                tokens,
+                name,
+                models,
+                token_group=token_group,
+            )
         return result
 
     async def _ensure_codex_token(
@@ -191,8 +207,11 @@ class NewApiClient:
         claude_models = current["claude"] if "claude" in current else defaults["claude"]
         image_models = current["image"] if "image" in current else supported_image_models(self.settings)
         video_models = current["video"] if "video" in current else supported_video_models(self.settings)
+        grok_allowed = set(self.settings.grok_allowed_models)
+        grok_models = tuple(model for model in codex_models if model in grok_allowed)
         return {
             "codex": tuple(codex_models),
+            "grok": grok_models,
             "claude": tuple(claude_models),
             "image": tuple(image_models),
             "video": tuple(video_models),
@@ -227,9 +246,12 @@ class NewApiClient:
         tokens: list[dict[str, Any]],
         token_name: str,
         models: tuple[str, ...],
+        *,
+        token_group: str | None = None,
     ) -> str:
         expected_models = ",".join(models)
-        models_digest = hashlib.sha256(expected_models.encode("utf-8")).hexdigest()[:24]
+        expected_group = token_group if token_group is not None else str(user.get("group") or "")
+        models_digest = hashlib.sha256(f"{expected_models}\n{expected_group}".encode("utf-8")).hexdigest()[:24]
         cache_key = f"codex:auto-token:{user_id}:{token_name}:{models_digest}"
         cached = self._cache_get(cache_key)
         if cached:
@@ -238,9 +260,24 @@ class NewApiClient:
         existing = self._find_existing_token(tokens, token_name, models)
         if existing:
             token_id = existing.get("id")
-            await self._relax_existing_token_if_needed(client, headers, existing, user, token_name, models)
+            await self._relax_existing_token_if_needed(
+                client,
+                headers,
+                existing,
+                user,
+                token_name,
+                models,
+                token_group=token_group,
+            )
         else:
-            token_id = await self._create_codex_token(client, headers, user, token_name, models)
+            token_id = await self._create_codex_token(
+                client,
+                headers,
+                user,
+                token_name,
+                models,
+                token_group=token_group,
+            )
 
         token_key = await self._fetch_token_key(client, headers, token_id)
         self._cache_set(cache_key, token_key)
@@ -287,7 +324,10 @@ class NewApiClient:
         user: dict[str, Any],
         token_name: str,
         models: tuple[str, ...],
+        *,
+        token_group: str | None = None,
     ) -> int:
+        resolved_group = token_group if token_group is not None else str(user.get("group") or "")
         payload = {
             "name": token_name,
             "remain_quota": 0,
@@ -296,7 +336,7 @@ class NewApiClient:
             "model_limits_enabled": True,
             "model_limits": ",".join(models),
             "allow_ips": "",
-            "group": str(user.get("group") or ""),
+            "group": resolved_group,
             "cross_group_retry": True,
         }
         result = await self._post_json(client, "/api/token/", headers, payload)
@@ -315,12 +355,21 @@ class NewApiClient:
         user: dict[str, Any],
         token_name: str,
         models: tuple[str, ...],
+        *,
+        token_group: str | None = None,
     ) -> None:
         expected_models = ",".join(models)
+        expected_group = (
+            token_group
+            if token_group is not None
+            else str(user.get("group") or token.get("group") or "")
+        )
+        group_matches = token_group is None or str(token.get("group") or "") == expected_group
         if (
             token.get("model_limits_enabled")
             and str(token.get("model_limits") or "") == expected_models
             and token.get("unlimited_quota")
+            and group_matches
         ):
             return
         payload = {
@@ -332,11 +381,18 @@ class NewApiClient:
             "model_limits_enabled": True,
             "model_limits": expected_models,
             "allow_ips": token.get("allow_ips") or "",
-            "group": str(user.get("group") or token.get("group") or ""),
+            "group": expected_group,
             "cross_group_retry": True,
         }
         result = await self._put_json(client, "/api/token/", headers, payload)
         if not result.get("success", False):
+            if token_group is not None:
+                raise NewApiAuthError(
+                    public_error_message(
+                        str(result.get("message") or ""),
+                        "自动修复专用 Key 失败。",
+                    )
+                )
             logger.warning("failed to relax codex auto token user=%s message=%s", user.get("id"), result.get("message", ""))
 
     async def _fetch_token_key(self, client: httpx.AsyncClient, headers: dict[str, str], token_id: Any) -> str:

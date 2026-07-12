@@ -171,7 +171,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         def fake_mysql(query: str) -> list[list[str]]:
             if "FROM channels" in query:
-                return [["27", "geek2api-image-2,custom-geek2api-leak,image 2电商商品图快速通道(1.5K)", "0", "100", "test"]]
+                return [["27", "geek2api-image-2,custom-geek2api-leak,image 2电商商品图快速通道(1.5K)", "0", "100", "test", "default"]]
             if "SELECT model_name FROM models" in query:
                 return [["geek2api-image-2"], ["custom-geek2api-leak"], ["image 2电商商品图快速通道(1.5K)"]]
             return []

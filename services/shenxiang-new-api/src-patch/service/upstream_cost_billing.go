@@ -89,6 +89,10 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 		PreviousQuota: currentQuota,
 		FinalQuota:    currentQuota,
 	}
+	if IsGrok45PricingGroup(relayInfo) {
+		result.FallbackReason = "grok45_static_pricing"
+		return currentQuota, result
+	}
 	cost, currency, source, ok, reason := ExtractUpstreamCostFromUsage(usage)
 	if !ok {
 		result.FallbackReason = reason

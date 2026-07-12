@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from redis import ConnectionPool, Redis
 
 from app import __version__
-from app.config import ensure_codex_config, ensure_directories, get_settings, secret_values_for_redaction
+from app.config import GROK_MODEL, ensure_codex_config, ensure_directories, get_settings, secret_values_for_redaction
 from app.codex_runner import CodexRunner
 from app.models import (
     AdminRunRequest,
@@ -755,12 +755,25 @@ def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple
     if mode_models:
         pseudo_user = UserContext(api_key="", user_id="", key_hint="sk-****", allowed_models_by_mode=mode_models)
     modes = model_modes(pseudo_user)
+    modes["grok"] = {
+        "label": "Grok 4.5 专用",
+        "description": "Grok 4.5 文本模型独立令牌。",
+        "models": list(settings.grok_allowed_models),
+        "token_name": settings.grok_token_name,
+        "billing": "按文本 Token 计费，仅限 Grok 4.5。",
+    }
     public_root = settings.public_base_url.removesuffix("/codex").rstrip("/")
     claude_base_url = f"{public_root}/claude"
     profiles = [
         {
             "mode": "codex",
             "usage": "对话、代码、普通 OpenAI-compatible 客户端",
+            "base_url": f"{settings.new_api_base_url}",
+            "endpoint": "/v1/chat/completions",
+        },
+        {
+            "mode": "grok",
+            "usage": "Grok 4.5 文本对话和代码任务",
             "base_url": f"{settings.new_api_base_url}",
             "endpoint": "/v1/chat/completions",
         },
@@ -869,7 +882,7 @@ async def submit_workspace_task(
     }
     store = task_store()
     queue = task_queue()
-    task_user = user_for_mode(user, request_mode(request))
+    task_user = user_for_request(user, request)
     store.put_task_secret(task_id, task_user.api_key)
     task["key_hint"] = task_user.key_hint
     store.create(task)
@@ -932,7 +945,7 @@ def build_direct_task(request: WorkspaceRunRequest, user: UserContext) -> dict[s
         "cost_points": skill.cost_points,
         "created_at": now_iso(),
         "updated_at": now_iso(),
-        "_user_api_key": user_for_mode(user, request_mode(request)).api_key,
+        "_user_api_key": user_for_request(user, request).api_key,
     }
 
 
@@ -1134,8 +1147,8 @@ async def stream_fast_chat(
     task_id = str(task.get("task_id") or f"fast_{uuid4().hex[:16]}")
     started = time.monotonic()
     mode = request_mode(request)
-    mode_user = user_for_mode(user, mode)
     model = selected_fast_text_model(request)
+    mode_user = user_for_mode(user, mode, model)
     headers = {
         "Authorization": f"Bearer {mode_user.api_key}",
         "Content-Type": "application/json",
@@ -1270,8 +1283,8 @@ async def stream_fast_skill(
 ) -> AsyncIterator[dict[str, Any]]:
     task_id = str(task.get("task_id") or f"skill_{uuid4().hex[:16]}")
     started = time.monotonic()
-    mode_user = user_for_mode(user, "codex")
     model = selected_fast_text_model(request)
+    mode_user = user_for_mode(user, "codex", model)
     try:
         skill_markdown = load_fast_skill_markdown(user, request.skill_name)
     except (OSError, ValueError) as exc:
@@ -1748,9 +1761,22 @@ def is_allowed_model_for_request(model: str, request: WorkspaceRunRequest) -> bo
     return is_text_model(model) and str(model or "") in allowed
 
 
-def user_for_mode(user: UserContext, mode: str) -> UserContext:
+def user_for_request(user: UserContext, request: WorkspaceRunRequest) -> UserContext:
+    mode = request_mode(request)
+    requested_model = str(request.model_roles.model_dump().get(request.model_role) or "")
+    has_server_model_limits = bool(mode_models_payload_from_metadata(request.metadata))
+    should_resolve_model = mode == "codex" and (requested_model or has_server_model_limits)
+    model = selected_text_model(request) if should_resolve_model else ""
+    return user_for_mode(user, mode, model)
+
+
+def user_for_mode(user: UserContext, mode: str, model: str = "") -> UserContext:
     key_map = user.api_keys or {}
-    key = key_map.get(mode) or user.api_key
+    credential_profile = mode
+    grok_allowed_models = set(getattr(settings, "grok_allowed_models", (GROK_MODEL,)))
+    if mode == "codex" and str(model or "").strip() in grok_allowed_models:
+        credential_profile = "grok"
+    key = key_map.get(credential_profile) or user.api_key
     return UserContext(
         api_key=key,
         user_id=user.user_id,
@@ -1775,17 +1801,30 @@ def normalize_allowed_models_from_metadata(metadata: dict[str, Any] | None) -> d
     result = {}
     for mode in ("codex", "claude", "image", "video"):
         result[mode] = payload.get(mode, ())
+    raw_payload = metadata.get(SERVER_ALLOWED_MODELS_METADATA_KEY) if isinstance(metadata, dict) else None
+    raw_grok_models = raw_payload.get("grok") if isinstance(raw_payload, dict) else None
+    if isinstance(raw_grok_models, (list, tuple)):
+        visible_grok_models = {str(model or "").strip() for model in raw_grok_models}
+        result["grok"] = tuple(model for model in settings.grok_allowed_models if model in visible_grok_models)
     return result
 
 
 def attach_allowed_models_metadata(request: WorkspaceRunRequest, user: UserContext) -> None:
     if not user.allowed_models_by_mode:
         return
-    request.metadata[SERVER_ALLOWED_MODELS_METADATA_KEY] = {
+    allowed_models = {
         mode: list(models)
         for mode, models in user.allowed_models_by_mode.items()
         if models
     }
+    request.metadata[SERVER_ALLOWED_MODELS_METADATA_KEY] = allowed_models
+    if request_mode(request) != "codex":
+        return
+    selected_model = selected_text_model(request)
+    if selected_model not in set(settings.grok_allowed_models):
+        return
+    allowed_models["codex"] = [selected_model]
+    allowed_models["grok"] = [selected_model]
 
 
 def user_mode_models(user: UserContext | None) -> dict[str, tuple[str, ...]]:

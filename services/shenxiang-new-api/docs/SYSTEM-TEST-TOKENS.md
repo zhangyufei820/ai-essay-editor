@@ -24,6 +24,7 @@ Known admin system token names:
 星人 Claude 高阶令牌
 星人图像生成令牌
 星人视频生成令牌
+星人 Grok 4.5 测试令牌
 ```
 
 Implementation guardrails:

@@ -123,6 +123,9 @@ func GetPricing(c *gin.Context) {
 			}
 		}
 	}
+	if _, ok := groupRatio[service.Grok45PricingGroupName]; ok {
+		groupRatio[service.Grok45PricingGroupName] = service.Grok45PricingGroupRatio
+	}
 
 	usableGroup = service.GetUserUsableGroups(group)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)

@@ -5,6 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+GROK_MODEL = "grok-4.5"
+GROK_TOKEN_GROUP = "grok45"
+GROK_TOKEN_NAME = "星人 Grok 4.5 专用令牌"
+
+
 DEFAULT_VIDEO_ALLOWED_MODELS = (
     "seedance-2.0",
     "seedance-2.0-dj-fast",
@@ -39,6 +44,7 @@ class Settings:
     default_code_model: str = "gpt-5.4-mini"
     codex_chat_fallback_model: str = "gpt-5.4-mini"
     auto_token_name: str = "星人 Codex 文本令牌"
+    grok_token_name: str = GROK_TOKEN_NAME
     claude_token_name: str = "星人高阶创作令牌"
     image_token_name: str = "星人图像生成令牌"
     video_token_name: str = "星人视频生成令牌"
@@ -51,6 +57,7 @@ class Settings:
         "gpt-5.4",
         "gpt-5.5",
     )
+    grok_allowed_models: tuple[str, ...] = (GROK_MODEL,)
     claude_allowed_models: tuple[str, ...] = (
         "claude-fable-5",
         "claude-opus-4-6",
@@ -103,6 +110,7 @@ def get_settings() -> Settings:
         default_code_model=os.getenv("DEFAULT_CODE_MODEL", "gpt-5.4-mini"),
         codex_chat_fallback_model=os.getenv("CODEX_CHAT_FALLBACK_MODEL", "gpt-5.4-mini"),
         auto_token_name=os.getenv("AUTO_TOKEN_NAME", "星人 Codex 文本令牌"),
+        grok_token_name=os.getenv("GROK_TOKEN_NAME", GROK_TOKEN_NAME),
         claude_token_name=os.getenv("CLAUDE_TOKEN_NAME", "星人高阶创作令牌"),
         image_token_name=os.getenv("IMAGE_TOKEN_NAME", "星人图像生成令牌"),
         video_token_name=os.getenv("VIDEO_TOKEN_NAME", "星人视频生成令牌"),
@@ -114,6 +122,7 @@ def get_settings() -> Settings:
             "CODEX_ALLOWED_MODELS",
             "gpt-5.4-mini,gpt-5.4,gpt-5.5",
         ),
+        grok_allowed_models=_env_list("GROK_ALLOWED_MODELS", GROK_MODEL),
         claude_allowed_models=_env_list(
             "CLAUDE_ALLOWED_MODELS",
             "claude-fable-5,claude-opus-4-6,claude-opus-4-7,claude-opus-4-8",
