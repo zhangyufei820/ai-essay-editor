@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -471,6 +472,24 @@ func xingrenAssistantPostChatCompletion(ctx context.Context, payload map[string]
 	return xingrenAssistantRedact(reply), nil
 }
 
+func buildXingrenCodexUserToken(userID int, key string, tokenName string, modelLimits string, tokenGroup string) *model.Token {
+	return &model.Token{
+		UserId:             userID,
+		Key:                key,
+		Status:             common.TokenStatusEnabled,
+		Name:               tokenName,
+		CreatedTime:        common.GetTimestamp(),
+		AccessedTime:       common.GetTimestamp(),
+		ExpiredTime:        -1,
+		RemainQuota:        0,
+		UnlimitedQuota:     true,
+		ModelLimitsEnabled: true,
+		ModelLimits:        modelLimits,
+		Group:              service.NormalizePublicTokenGroup(tokenGroup),
+		CrossGroupRetry:    false,
+	}
+}
+
 func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("Pragma", "no-cache")
@@ -506,10 +525,6 @@ func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 		}
 		tokenGroup = strings.TrimSpace(group)
 	}
-	if tokenGroup == "" {
-		tokenGroup = "default"
-	}
-
 	maxTokens := operation_setting.GetMaxUserTokens()
 	count, err := model.CountUserTokens(userID)
 	if err != nil {
@@ -539,21 +554,7 @@ func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 	selectedModel := xingrenCodexModel(req.Model)
 	modelLimits := xingrenCodexTokenModelLimits(selectedModel)
 	tokenName := xingrenCodexTokenName()
-	newToken := &model.Token{
-		UserId:             userID,
-		Key:                key,
-		Status:             common.TokenStatusEnabled,
-		Name:               tokenName,
-		CreatedTime:        common.GetTimestamp(),
-		AccessedTime:       common.GetTimestamp(),
-		ExpiredTime:        -1,
-		RemainQuota:        0,
-		UnlimitedQuota:     true,
-		ModelLimitsEnabled: true,
-		ModelLimits:        modelLimits,
-		Group:              tokenGroup,
-		CrossGroupRetry:    true,
-	}
+	newToken := buildXingrenCodexUserToken(userID, key, tokenName, modelLimits, tokenGroup)
 	if err := newToken.Insert(); err != nil {
 		c.JSON(http.StatusInternalServerError, xingrenCodexTokenResponse{
 			Success: false,

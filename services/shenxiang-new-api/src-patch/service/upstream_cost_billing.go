@@ -89,6 +89,10 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 		PreviousQuota: currentQuota,
 		FinalQuota:    currentQuota,
 	}
+	if IsDiscountPricingGroup(relayInfo) {
+		result.FallbackReason = "discount_group_static_pricing"
+		return currentQuota, result
+	}
 	if IsGrok45PricingGroup(relayInfo) {
 		result.FallbackReason = "grok45_static_pricing"
 		return currentQuota, result

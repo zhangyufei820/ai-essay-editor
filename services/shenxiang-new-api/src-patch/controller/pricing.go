@@ -25,18 +25,26 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 			continue
 		}
 		item = sanitizePublicPricingItem(item)
-		if common.StringsContains(item.EnableGroup, "all") {
+		item.EnableGroup = publicPricingGroups(item.EnableGroup, usableGroup)
+		if len(item.EnableGroup) > 0 {
 			filtered = append(filtered, item)
-			continue
-		}
-		for _, group := range item.EnableGroup {
-			if _, ok := usableGroup[group]; ok {
-				filtered = append(filtered, item)
-				break
-			}
 		}
 	}
 	return filtered
+}
+
+func publicPricingGroups(enableGroups []string, usableGroups map[string]string) []string {
+	allGroups := common.StringsContains(enableGroups, "all")
+	visibleGroups := make([]string, 0, 2)
+	for _, group := range []string{"default", service.DiscountPricingGroupName} {
+		if _, ok := usableGroups[group]; !ok {
+			continue
+		}
+		if common.StringsContains(enableGroups, group) || (group == "default" && allGroups) {
+			visibleGroups = append(visibleGroups, group)
+		}
+	}
+	return visibleGroups
 }
 
 func sanitizePublicPricingItem(item model.Pricing) model.Pricing {
@@ -123,11 +131,14 @@ func GetPricing(c *gin.Context) {
 			}
 		}
 	}
+	if _, ok := groupRatio[service.DiscountPricingGroupName]; ok {
+		groupRatio[service.DiscountPricingGroupName] = service.DiscountPricingGroupRatio
+	}
 	if _, ok := groupRatio[service.Grok45PricingGroupName]; ok {
 		groupRatio[service.Grok45PricingGroupName] = service.Grok45PricingGroupRatio
 	}
 
-	usableGroup = service.GetUserUsableGroups(group)
+	usableGroup = service.GetPublicUserUsableGroups(group)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
 	for group := range ratio_setting.GetGroupRatioCopy() {
 		if _, ok := usableGroup[group]; !ok {
@@ -142,7 +153,7 @@ func GetPricing(c *gin.Context) {
 		"group_ratio":        groupRatio,
 		"usable_group":       usableGroup,
 		"supported_endpoint": model.GetSupportedEndpointMap(),
-		"auto_groups":        service.GetUserAutoGroup(group),
+		"auto_groups":        service.GetPublicUserAutoGroup(group),
 		"pricing_version":    "a42d372ccf0b5dd13ecf71203521f9d2",
 	})
 }

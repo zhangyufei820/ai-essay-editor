@@ -179,7 +179,7 @@ func MonthlyCardTextBillingQuotaForPlan(retailQuota int, planId int, planTitle s
 	return int(quota)
 }
 
-func selectCurrentMonthlyCardTextDiscountPlan(userId int, retailQuota int) (*monthlyCardTextPlanSelection, error) {
+func selectCurrentMonthlyCardTextPlan(userId int, retailQuota int, applyValueMultiplier bool) (*monthlyCardTextPlanSelection, error) {
 	if userId <= 0 {
 		return nil, errors.New("invalid userId")
 	}
@@ -213,12 +213,16 @@ func selectCurrentMonthlyCardTextDiscountPlan(userId int, retailQuota int) (*mon
 		if row.Currency != "" && !strings.EqualFold(row.Currency, "CNY") {
 			continue
 		}
-		billedQuota := MonthlyCardTextBillingQuotaForPlan(retailQuota, row.PlanId, row.PlanTitle)
+		billedQuota := monthlyCardTextPlanBilledQuota(retailQuota, row.PlanId, row.PlanTitle, applyValueMultiplier)
+		multiplier := 1.0
+		if applyValueMultiplier {
+			multiplier = MonthlyCardTextValueMultiplierForPlan(row.PlanId, row.PlanTitle)
+		}
 		selection := &monthlyCardTextPlanSelection{
 			PlanId:      row.PlanId,
 			PlanTitle:   row.PlanTitle,
 			BilledQuota: billedQuota,
-			Multiplier:  MonthlyCardTextValueMultiplierForPlan(row.PlanId, row.PlanTitle),
+			Multiplier:  multiplier,
 		}
 		if fallback == nil {
 			fallback = selection
@@ -234,14 +238,27 @@ func selectCurrentMonthlyCardTextDiscountPlan(userId int, retailQuota int) (*mon
 	return fallback, nil
 }
 
+func monthlyCardTextPlanBilledQuota(retailQuota int, planId int, planTitle string, applyValueMultiplier bool) int {
+	if !applyValueMultiplier {
+		return retailQuota
+	}
+	return MonthlyCardTextBillingQuotaForPlan(retailQuota, planId, planTitle)
+}
+
 func monthlyCardTextDiscountApplies(relayInfo *relaycommon.RelayInfo) bool {
 	if relayInfo == nil || relayInfo.BillingSource != BillingSourceSubscription {
 		return false
 	}
-	if !MonthlyCardTextSupportsModel(relayInfo.OriginModelName) {
+	if !monthlyCardTextValueAppliesToModel(relayInfo) {
 		return false
 	}
 	return model.IsCurrentMonthlyCardTextDiscountPlanInfo(relayInfo.SubscriptionPlanId, relayInfo.SubscriptionPlanTitle)
+}
+
+func monthlyCardTextValueAppliesToModel(relayInfo *relaycommon.RelayInfo) bool {
+	return relayInfo != nil &&
+		!IsDiscountPricingGroup(relayInfo) &&
+		MonthlyCardTextSupportsModel(relayInfo.OriginModelName)
 }
 
 func EffectiveMonthlyCardTextBillingQuota(relayInfo *relaycommon.RelayInfo, retailQuota int) int {

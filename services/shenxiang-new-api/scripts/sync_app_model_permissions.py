@@ -39,6 +39,23 @@ SUPPLIER_EXPOSED_MODELS = {
 PUBLIC_ALIAS_BACKING_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL: DISCOUNT_IMAGE2_PUBLIC_MODEL,
 }
+DISCOUNT_TEXT_GROUP = "discount"
+DISCOUNT_TEXT_CHANNEL_TAG = "xingren-discount-text"
+DISCOUNT_TEXT_ALLOWED_MODELS = (
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.5",
+    "gpt-5.5-openai-compact",
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
+)
+_DISCOUNT_TEXT_MODEL_REGEX_ALTERNATION = "|".join(
+    model.replace(".", "[.]") for model in DISCOUNT_TEXT_ALLOWED_MODELS
+)
+DISCOUNT_TEXT_MODELS_REGEX = (
+    "^(" + _DISCOUNT_TEXT_MODEL_REGEX_ALTERNATION + ")(,(" + _DISCOUNT_TEXT_MODEL_REGEX_ALTERNATION + "))*$"
+)
 GROK45_MODEL = "grok-4.5"
 GROK45_GROUP = "grok45"
 GROK45_CHANNEL_TAG = "xingren-grok45"
@@ -289,6 +306,13 @@ def delete_token_caches(token_keys: list[str]) -> int:
 
 def sql_quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
+
+
+def discount_text_models_allowed_sql(column: str) -> str:
+    return (
+        "REPLACE(COALESCE(" + column + ", ''), ' ', '') REGEXP BINARY "
+        + sql_quote(DISCOUNT_TEXT_MODELS_REGEX)
+    )
 
 
 def is_retired_codex_text_model(model: str) -> bool:
@@ -1198,8 +1222,22 @@ def sync_abilities() -> None:
         for row in mysql("SELECT model_name FROM models WHERE deleted_at IS NULL AND status = 1")
         if should_sync_ability_model(row[0])
     }
+    discount_allowed_models = set(DISCOUNT_TEXT_ALLOWED_MODELS)
+    discount_allowed_models_sql = ", ".join(sql_quote(model) for model in DISCOUNT_TEXT_ALLOWED_MODELS)
     statements = [
         "START TRANSACTION;",
+        "UPDATE channels SET status = 2 WHERE tag = "
+        + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+        + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+        + sql_quote(DISCOUNT_TEXT_GROUP)
+        + " OR NOT ("
+        + discount_text_models_allowed_sql("models")
+        + "));",
+        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
+        + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+        + " AND FIND_IN_SET("
+        + sql_quote(DISCOUNT_TEXT_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
         "UPDATE channels SET status = 2 WHERE tag = "
         + sql_quote(GROK45_CHANNEL_TAG)
         + " AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
@@ -1210,33 +1248,26 @@ def sync_abilities() -> None:
         + " AND FIND_IN_SET("
         + sql_quote(GROK45_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
-        "UPDATE abilities SET enabled = 0 WHERE `group` = "
-        + sql_quote(GROK45_GROUP)
-        + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
-        + sql_quote(GROK45_CHANNEL_TAG)
-        + ");",
-        "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
-        + "(SELECT id FROM channels WHERE tag = "
-        + sql_quote(GROK45_CHANNEL_TAG)
-        + ") AND (`group` <> "
-        + sql_quote(GROK45_GROUP)
-        + " OR model <> "
-        + sql_quote(GROK45_MODEL)
-        + ");",
-        "UPDATE abilities SET enabled = 0 WHERE model = "
-        + sql_quote(GROK45_MODEL)
-        + " AND `group` <> "
-        + sql_quote(GROK45_GROUP)
-        + ";",
-        "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
-        + "(SELECT id FROM channels WHERE status <> 1 AND tag = "
-        + sql_quote(GROK45_CHANNEL_TAG)
-        + ");",
     ]
+    invalid_discount_channels: list[str] = []
     invalid_grok_channels: list[str] = []
-    for channel_id, raw_models, priority, weight, tag, raw_groups in channel_rows:
+    for channel_id, raw_models, _priority, _weight, tag, raw_groups in channel_rows:
         channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
-        if tag == GROK45_CHANNEL_TAG:
+        channel_models = [item.strip() for item in raw_models.split(",") if item.strip()]
+        if tag == DISCOUNT_TEXT_CHANNEL_TAG:
+            if (
+                channel_groups != [DISCOUNT_TEXT_GROUP]
+                or not channel_models
+                or any(model not in discount_allowed_models for model in channel_models)
+            ):
+                invalid_discount_channels.append(channel_id)
+                sync_groups = []
+            else:
+                sync_groups = channel_groups
+        elif DISCOUNT_TEXT_GROUP in channel_groups:
+            invalid_discount_channels.append(channel_id)
+            sync_groups = []
+        elif tag == GROK45_CHANNEL_TAG:
             if channel_groups != [GROK45_GROUP]:
                 invalid_grok_channels.append(channel_id)
                 sync_groups = []
@@ -1246,8 +1277,12 @@ def sync_abilities() -> None:
             invalid_grok_channels.append(channel_id)
             sync_groups = []
         else:
-            sync_groups = [group for group in groups if group != GROK45_GROUP]
-        for model in [item.strip() for item in raw_models.split(",") if item.strip()]:
+            sync_groups = [
+                group
+                for group in groups
+                if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
+            ]
+        for model in channel_models:
             if model == GROK45_MODEL and tag != GROK45_CHANNEL_TAG:
                 continue
             if tag == GROK45_CHANNEL_TAG and model != GROK45_MODEL:
@@ -1259,23 +1294,112 @@ def sync_abilities() -> None:
             if is_disabled_ability_pair(channel_id, model):
                 continue
             for group in sync_groups:
+                normalized_channel_id = str(int(channel_id))
+                current_channel_conditions = [
+                    "current_channel.id = " + normalized_channel_id,
+                    "current_channel.status = 1",
+                    "COALESCE(current_channel.tag, '') = " + sql_quote(tag),
+                    "REPLACE(COALESCE(current_channel.`group`, ''), ' ', '') = "
+                    + sql_quote(",".join(channel_groups)),
+                    "FIND_IN_SET("
+                    + sql_quote(model)
+                    + ", REPLACE(COALESCE(current_channel.models, ''), ' ', '')) > 0",
+                ]
+                if tag == DISCOUNT_TEXT_CHANNEL_TAG:
+                    current_channel_conditions.append(
+                        discount_text_models_allowed_sql("current_channel.models")
+                    )
+                elif tag != GROK45_CHANNEL_TAG:
+                    current_channel_conditions.extend(
+                        [
+                            "COALESCE(current_channel.tag, '') NOT IN ("
+                            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+                            + ", "
+                            + sql_quote(GROK45_CHANNEL_TAG)
+                            + ")",
+                            "FIND_IN_SET("
+                            + sql_quote(DISCOUNT_TEXT_GROUP)
+                            + ", REPLACE(COALESCE(current_channel.`group`, ''), ' ', '')) = 0",
+                            "FIND_IN_SET("
+                            + sql_quote(GROK45_GROUP)
+                            + ", REPLACE(COALESCE(current_channel.`group`, ''), ' ', '')) = 0",
+                        ]
+                    )
                 statements.append(
-                    "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) VALUES ("
+                    "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) SELECT "
                     + ", ".join(
                         [
                             sql_quote(group),
                             sql_quote(model),
-                            channel_id,
+                            normalized_channel_id,
                             "1",
-                            priority or "0",
-                            weight or "100",
-                            sql_quote(tag or "xingren-auto"),
+                            "COALESCE(current_channel.priority, 0)",
+                            "COALESCE(current_channel.weight, 100)",
+                            "COALESCE(NULLIF(current_channel.tag, ''), 'xingren-auto')",
                         ]
                     )
-                    + ") ON DUPLICATE KEY UPDATE enabled = 1, priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag);"
+                    + " FROM channels AS current_channel WHERE "
+                    + " AND ".join(current_channel_conditions)
+                    + " ON DUPLICATE KEY UPDATE enabled = 1, priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag);"
                 )
+    statements.extend(
+        [
+            "UPDATE abilities SET enabled = 0 WHERE `group` = "
+            + sql_quote(DISCOUNT_TEXT_GROUP)
+            + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
+            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+            + ");",
+            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
+            + "(SELECT id FROM channels WHERE tag = "
+            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+            + ") AND `group` <> "
+            + sql_quote(DISCOUNT_TEXT_GROUP)
+            + ";",
+            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+            "SET ability.enabled = 0 WHERE channel.tag = "
+            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+            + " AND (ability.model NOT IN ("
+            + discount_allowed_models_sql
+            + ") OR NOT ("
+            + discount_text_models_allowed_sql("channel.models")
+            + ") OR FIND_IN_SET(ability.model, REPLACE(COALESCE(channel.models, ''), ' ', '')) = 0);",
+            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
+            + "(SELECT id FROM channels WHERE status <> 1 AND (tag = "
+            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+            + " OR FIND_IN_SET("
+            + sql_quote(DISCOUNT_TEXT_GROUP)
+            + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0));",
+            "UPDATE abilities SET enabled = 0 WHERE `group` = "
+            + sql_quote(GROK45_GROUP)
+            + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
+            + sql_quote(GROK45_CHANNEL_TAG)
+            + ");",
+            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
+            + "(SELECT id FROM channels WHERE tag = "
+            + sql_quote(GROK45_CHANNEL_TAG)
+            + ") AND (`group` <> "
+            + sql_quote(GROK45_GROUP)
+            + " OR model <> "
+            + sql_quote(GROK45_MODEL)
+            + ");",
+            "UPDATE abilities SET enabled = 0 WHERE model = "
+            + sql_quote(GROK45_MODEL)
+            + " AND `group` <> "
+            + sql_quote(GROK45_GROUP)
+            + ";",
+            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
+            + "(SELECT id FROM channels WHERE status <> 1 AND tag = "
+            + sql_quote(GROK45_CHANNEL_TAG)
+            + ");",
+        ]
+    )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
+    if invalid_discount_channels:
+        raise RuntimeError(
+            "discount group isolation violation; disabled channel count: "
+            + str(len(invalid_discount_channels))
+        )
     if invalid_grok_channels:
         raise RuntimeError(
             "Grok group isolation violation; disabled channel count: "

@@ -44,6 +44,20 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("geek2api-image-2", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("gpt-image-2-4K", self.module.CODEX_ALLOWED_MODELS)
 
+    def test_discount_text_models_are_exactly_the_public_text_aliases(self) -> None:
+        self.assertEqual(
+            self.module.DISCOUNT_TEXT_ALLOWED_MODELS,
+            (
+                "gpt-5.4",
+                "gpt-5.4-mini",
+                "gpt-5.5",
+                "gpt-5.5-openai-compact",
+                "gpt-5.6-luna",
+                "gpt-5.6-terra",
+                "gpt-5.6-sol",
+            ),
+        )
+
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
         raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2,claude-opus-4-8,seedance-2.0-cl-mini"
 
@@ -186,6 +200,118 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("geek2api-image-2", sql)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("custom-geek2api-leak", sql)
+
+    def test_sync_abilities_keeps_discount_channel_isolated(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [
+                    ["31", "gpt-5.5", "0", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAG, "discount"],
+                    ["21", "gpt-5.5", "0", "100", "stable", "default,internal"],
+                ]
+            if "SELECT model_name FROM models" in query:
+                return [["gpt-5.5"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "internal", "discount"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        discount_insert = "SELECT 'discount', 'gpt-5.5', 31"
+        self.assertIn(discount_insert, sql)
+        self.assertNotIn("'default', 'gpt-5.5', 31", sql)
+        self.assertNotIn("'discount', 'gpt-5.5', 21", sql)
+        self.assertIn("'default', 'gpt-5.5', 21", sql)
+        self.assertIn("'internal', 'gpt-5.5', 21", sql)
+        self.assertIn("FIND_IN_SET(ability.model", sql)
+        self.assertNotIn("INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) VALUES", sql)
+        self.assertIn("FROM channels AS current_channel", sql)
+        self.assertIn("current_channel.id = 31", sql)
+        self.assertIn("current_channel.status = 1", sql)
+        self.assertIn("COALESCE(current_channel.tag, '') = 'xingren-discount-text'", sql)
+        self.assertIn("REPLACE(COALESCE(current_channel.`group`, ''), ' ', '') = 'discount'", sql)
+        self.assertIn(
+            "FIND_IN_SET('gpt-5.5', REPLACE(COALESCE(current_channel.models, ''), ' ', '')) > 0",
+            sql,
+        )
+        self.assertIn("REGEXP BINARY", sql)
+        self.assertGreater(sql.index("UPDATE abilities SET enabled = 0"), sql.rindex("ON DUPLICATE KEY UPDATE"))
+
+    def test_sync_abilities_fails_closed_for_discount_channel_with_extra_model(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "31",
+                    "gpt-5.5,gpt-5.7-preview",
+                    "0",
+                    "100",
+                    self.module.DISCOUNT_TEXT_CHANNEL_TAG,
+                    "discount",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["gpt-5.5"], ["gpt-5.7-preview"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "discount"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        with self.assertRaisesRegex(RuntimeError, "discount group isolation violation"):
+            self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        self.assertIn("UPDATE channels SET status = 2 WHERE tag = 'xingren-discount-text'", sql)
+        self.assertIn("REGEXP BINARY", sql)
+        self.assertNotIn("SELECT 'discount', 'gpt-5.5', 31", sql)
+        self.assertNotIn("gpt-5.7-preview', 31", sql)
+
+    def test_sync_abilities_rejects_misgrouped_discount_channel(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [["31", "gpt-5.5", "0", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAG, "default"]]
+            if "SELECT model_name FROM models" in query:
+                return [["gpt-5.5"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "discount"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        with self.assertRaisesRegex(RuntimeError, "discount group isolation violation"):
+            self.module.sync_abilities()
+        sql = "\n".join(captured)
+        self.assertIn("UPDATE channels SET status = 2", sql)
+        self.assertIn("WHERE status <> 1", sql)
+        self.assertNotIn("'discount', 'gpt-5.5', 31", sql)
+
+    def test_sync_abilities_disables_nonisolated_channel_using_discount_group(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [["21", "gpt-5.5", "0", "100", "stable", "default,discount"]]
+            if "SELECT model_name FROM models" in query:
+                return [["gpt-5.5"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "discount"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        with self.assertRaisesRegex(RuntimeError, "disabled channel count: 1"):
+            self.module.sync_abilities()
+        sql = "\n".join(captured)
+        self.assertIn("FIND_IN_SET('discount'", sql)
+        self.assertNotIn("'default', 'gpt-5.5', 21", sql)
+        self.assertNotIn("'discount', 'gpt-5.5', 21", sql)
 
     def test_ensure_discount_image2_backing_model_uses_public_metadata(self) -> None:
         captured: list[str] = []

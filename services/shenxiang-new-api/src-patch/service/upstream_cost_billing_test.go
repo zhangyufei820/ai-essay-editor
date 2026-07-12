@@ -62,6 +62,19 @@ func TestApplyUpstreamCostBillingFallsBackWhenCostMissing(t *testing.T) {
 	require.Equal(t, 321, result.FinalQuota)
 }
 
+func TestApplyUpstreamCostBillingKeepsMarketplacePriceForDiscountGroup(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{UsingGroup: DiscountPricingGroupName}
+
+	quota, result := ApplyUpstreamCostBilling(relayInfo, &dto.Usage{
+		CostUSD: 9.99,
+	}, 321)
+
+	require.False(t, result.Applied)
+	require.Equal(t, "discount_group_static_pricing", result.FallbackReason)
+	require.Equal(t, 321, quota)
+	require.Equal(t, 321, result.FinalQuota)
+}
+
 func TestCopyResponsesCostFieldsPreservesTopLevelCost(t *testing.T) {
 	usage := &dto.Usage{}
 	response := &dto.OpenAIResponsesResponse{

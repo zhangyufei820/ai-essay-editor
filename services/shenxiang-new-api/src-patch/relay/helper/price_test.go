@@ -1,17 +1,39 @@
 package helper
 
 import (
+	"encoding/json"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
+	settingconfig "github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+type tieredRealtimeBillingRecorder struct {
+	preConsumedQuota int
+	reserveTargets   []int
+}
+
+func (recorder *tieredRealtimeBillingRecorder) Settle(int) error    { return nil }
+func (recorder *tieredRealtimeBillingRecorder) Refund(*gin.Context) {}
+func (recorder *tieredRealtimeBillingRecorder) NeedsRefund() bool   { return false }
+func (recorder *tieredRealtimeBillingRecorder) GetPreConsumedQuota() int {
+	return recorder.preConsumedQuota
+}
+func (recorder *tieredRealtimeBillingRecorder) Reserve(targetQuota int) error {
+	recorder.preConsumedQuota = targetQuota
+	recorder.reserveTargets = append(recorder.reserveTargets, targetQuota)
+	return nil
+}
 
 func TestModelPriceHelperUsesImageCNYFixedPrice(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -47,4 +69,98 @@ func TestHasModelBillingConfigAcceptsPublicDiscountImage2Alias(t *testing.T) {
 	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"`+service.InternalDiscountImage2ModelName+`":0.03}`))
 
 	require.True(t, HasModelBillingConfig(service.PublicDiscountImage2ModelName))
+}
+
+func TestHandleGroupRatioPinsDiscountMarketplaceRatio(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	originalGroupRatio := ratio_setting.GroupRatio2JSONString()
+	originalSpecialRatio := ratio_setting.GroupGroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatio))
+		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(originalSpecialRatio))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"discount":0.7}`))
+	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"vip":{"discount":0.3}}`))
+	ctx, _ := gin.CreateTestContext(nil)
+	relayInfo := &relaycommon.RelayInfo{
+		UserGroup:  "vip",
+		UsingGroup: service.DiscountPricingGroupName,
+	}
+
+	ratioInfo := HandleGroupRatio(ctx, relayInfo)
+
+	require.Equal(t, service.DiscountPricingGroupRatio, ratioInfo.GroupRatio)
+	require.False(t, ratioInfo.HasSpecialRatio)
+	require.Equal(t, float64(-1), ratioInfo.GroupSpecialRatio)
+}
+
+func TestModelPriceHelperChargesFivePercentOfMarketplaceFixedPrice(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	originalModelPrice := ratio_setting.ModelPrice2JSONString()
+	originalGroupRatio := ratio_setting.GroupRatio2JSONString()
+	originalQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(originalModelPrice))
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatio))
+		common.QuotaPerUnit = originalQuotaPerUnit
+	})
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"gpt-5.5":2}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"discount":0.9}`))
+	common.QuotaPerUnit = 500_000
+	ctx, _ := gin.CreateTestContext(nil)
+	relayInfo := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.5",
+		UsingGroup:      service.DiscountPricingGroupName,
+	}
+
+	priceData, err := ModelPriceHelper(ctx, relayInfo, 1, &types.TokenCountMeta{})
+
+	require.NoError(t, err)
+	require.True(t, priceData.UsePrice)
+	require.Equal(t, service.DiscountPricingGroupRatio, priceData.GroupRatioInfo.GroupRatio)
+	require.Equal(t, 50_000, priceData.QuotaToPreConsume)
+}
+
+func TestTieredRealtimeBillingUsesFrozenModelRatio(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	originalModelRatio := ratio_setting.ModelRatio2JSONString()
+	originalBillingModes, err := json.Marshal(billing_setting.GetBillingModeCopy())
+	require.NoError(t, err)
+	originalBillingExprs, err := json.Marshal(billing_setting.GetBillingExprCopy())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(originalModelRatio))
+		require.NoError(t, settingconfig.GlobalConfig.LoadFromDB(map[string]string{
+			"billing_setting.billing_mode": string(originalBillingModes),
+			"billing_setting.billing_expr": string(originalBillingExprs),
+		}))
+	})
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"gpt-5.5":2}`))
+	require.NoError(t, settingconfig.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_mode": `{"gpt-5.5":"tiered_expr"}`,
+		"billing_setting.billing_expr": `{"gpt-5.5":"tier(\"base\", p * 1 + c * 6)"}`,
+	}))
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	billing := &tieredRealtimeBillingRecorder{}
+	relayInfo := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.5",
+		UsingGroup:      service.DiscountPricingGroupName,
+		Billing:         billing,
+	}
+	priceData, err := ModelPriceHelper(ctx, relayInfo, 100, &types.TokenCountMeta{})
+	require.NoError(t, err)
+	require.Equal(t, 2.0, priceData.ModelRatio)
+	require.Equal(t, service.DiscountPricingGroupRatio, priceData.GroupRatioInfo.GroupRatio)
+
+	usage := &dto.RealtimeUsage{
+		TotalTokens: 100,
+		InputTokens: 100,
+		InputTokenDetails: dto.InputTokenDetails{
+			TextTokens: 100,
+		},
+	}
+	require.NoError(t, service.PreWssConsumeQuota(ctx, relayInfo, usage))
+	require.NoError(t, service.PreWssConsumeQuota(ctx, relayInfo, usage))
+	require.Equal(t, []int{10, 20}, billing.reserveTargets)
 }

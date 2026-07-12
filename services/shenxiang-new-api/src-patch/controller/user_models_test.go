@@ -82,6 +82,30 @@ func TestFilterPricingByUsableGroupsHidesSupplierExposedModels(t *testing.T) {
 	}, pricing)
 }
 
+func TestFilterPricingByUsableGroupsRemovesLegacyGroupMetadata(t *testing.T) {
+	pricing := filterPricingByUsableGroups([]model.Pricing{
+		{ModelName: "gpt-5.5", EnableGroup: []string{"default", "internal", "discount"}},
+		{ModelName: "gpt-5.4", EnableGroup: []string{"all"}},
+	}, map[string]string{
+		"default":  "原价",
+		"discount": "特价",
+	})
+
+	require.Equal(t, []model.Pricing{
+		{ModelName: "gpt-5.5", EnableGroup: []string{"default", "discount"}},
+		{ModelName: "gpt-5.4", EnableGroup: []string{"default"}},
+	}, pricing)
+}
+
+func TestPublicPricingGroupsDoesNotPromoteAllToDiscount(t *testing.T) {
+	groups := publicPricingGroups([]string{"all"}, map[string]string{
+		"default":  "原价",
+		"discount": "特价",
+	})
+
+	require.Equal(t, []string{"default"}, groups)
+}
+
 func TestFilterPricingVendorsHidesSupplierExposedVendors(t *testing.T) {
 	pricing := []model.Pricing{
 		{ModelName: "image 2电商商品图快速通道(1.5K)", VendorID: 1},
@@ -119,4 +143,12 @@ func TestRegistrationBonusQuotaForCNYDoesNotGrantWhenExchangeRateInvalid(t *test
 	}()
 
 	require.Equal(t, 0, registrationBonusQuotaForCNY(5))
+}
+
+func TestBuildInitialUserTokenUsesStablePublicGroup(t *testing.T) {
+	token := buildInitialUserToken(42, "new-user", "test-key")
+
+	require.Equal(t, 42, token.UserId)
+	require.Equal(t, "default", token.Group)
+	require.False(t, token.CrossGroupRetry)
 }

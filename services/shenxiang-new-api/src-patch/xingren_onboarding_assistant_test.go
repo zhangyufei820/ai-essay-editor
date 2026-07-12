@@ -24,3 +24,13 @@ func TestXingrenCodexModelRejectsUnknownAsciiModel(t *testing.T) {
 		t.Fatalf("xingrenCodexModel() = %q, want %q", got, xingrenCodexDefaultModel)
 	}
 }
+
+func TestXingrenCodexTokenGroupDefaultsLegacyUserGroup(t *testing.T) {
+	token := buildXingrenCodexUserToken(42, "test-key", "test-token", "gpt-5.5", "internal")
+	if token.Group != "default" {
+		t.Fatalf("token group = %q, want default", token.Group)
+	}
+	if token.CrossGroupRetry {
+		t.Fatal("new Codex user token must not enable cross-group retry")
+	}
+}

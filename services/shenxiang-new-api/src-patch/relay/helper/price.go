@@ -49,6 +49,10 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 		logger.LogDebug(ctx, "final group: %s", autoGroup)
 		relayInfo.UsingGroup = autoGroup.(string)
 	}
+	if service.IsDiscountPricingGroup(relayInfo) {
+		groupRatioInfo.GroupRatio = service.DiscountPricingGroupRatio
+		return groupRatioInfo
+	}
 	if service.IsGrok45PricingGroup(relayInfo) {
 		groupRatioInfo.GroupRatio = service.Grok45PricingGroupRatio
 		return groupRatioInfo
@@ -330,9 +334,11 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 	}
 	info.TieredBillingSnapshot = snapshot
 	info.BillingRequestInput = &requestInput
+	modelRatio, _, _ := ratio_setting.GetModelRatio(info.OriginModelName)
 
 	priceData := types.PriceData{
 		FreeModel:         freeModel,
+		ModelRatio:        modelRatio,
 		GroupRatioInfo:    groupRatioInfo,
 		QuotaToPreConsume: preConsumedQuota,
 	}

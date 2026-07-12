@@ -1,0 +1,84 @@
+package middleware
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+
+	"github.com/QuantumNous/new-api/service"
+	"github.com/gin-gonic/gin"
+)
+
+const maxTokenConfigurationBodyBytes = 1 << 20
+
+func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request == nil || c.Request.URL == nil ||
+			(c.Request.Method != http.MethodPost && c.Request.Method != http.MethodPut) ||
+			(c.Request.URL.Path != "/api/token" && c.Request.URL.Path != "/api/token/") {
+			c.Next()
+			return
+		}
+		if c.Request.Method == http.MethodPut && c.Query("status_only") != "" {
+			c.Next()
+			return
+		}
+
+		limitedBody := http.MaxBytesReader(c.Writer, c.Request.Body, maxTokenConfigurationBodyBytes)
+		body, err := io.ReadAll(limitedBody)
+		_ = limitedBody.Close()
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{
+				"success": false,
+				"message": "令牌配置请求过大",
+			})
+			return
+		}
+		request := map[string]json.RawMessage{}
+		if err := json.Unmarshal(body, &request); err != nil {
+			c.Request.Body = io.NopCloser(bytes.NewReader(body))
+			c.Request.ContentLength = int64(len(body))
+			c.Next()
+			return
+		}
+		if request == nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "令牌配置无效",
+			})
+			return
+		}
+		group := ""
+		if rawGroup, ok := request["group"]; ok && string(rawGroup) != "null" {
+			if err := json.Unmarshal(rawGroup, &group); err != nil {
+				c.Request.Body = io.NopCloser(bytes.NewReader(body))
+				c.Request.ContentLength = int64(len(body))
+				c.Next()
+				return
+			}
+		}
+		if group == "" {
+			group = "default"
+			request["group"] = json.RawMessage(`"default"`)
+		}
+		if !service.IsPublicTokenGroup(group) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "令牌只可选择原价或特价分组",
+			})
+			return
+		}
+		normalizedBody, err := json.Marshal(request)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "令牌配置无效",
+			})
+			return
+		}
+		c.Request.Body = io.NopCloser(bytes.NewReader(normalizedBody))
+		c.Request.ContentLength = int64(len(normalizedBody))
+		c.Next()
+	}
+}

@@ -543,7 +543,11 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		quotaType := model.SubscriptionQuotaTypeDefault
 		targetPlanId := 0
 		if MonthlyCardTextSupportsModel(relayInfo.OriginModelName) {
-			monthlyCardPlan, err := selectCurrentMonthlyCardTextDiscountPlan(relayInfo.UserId, preConsumedQuota)
+			monthlyCardPlan, err := selectCurrentMonthlyCardTextPlan(
+				relayInfo.UserId,
+				preConsumedQuota,
+				monthlyCardTextValueAppliesToModel(relayInfo),
+			)
 			if err != nil {
 				return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 			}
