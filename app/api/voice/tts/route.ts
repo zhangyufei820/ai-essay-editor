@@ -9,6 +9,7 @@ export const maxDuration = 90
 
 const VOICE_GATEWAY_URL = (process.env.VOICE_GATEWAY_URL || "http://voice-gateway:8080").replace(/\/+$/, "")
 const MAX_TEXT_LENGTH = 600
+const VOICE_GATEWAY_TIMEOUT_MS = 15_000
 
 function getPronunciationInstructions(text: string) {
   const isShortWord = /^[A-Za-z][A-Za-z'-]{0,30}$/.test(text.trim())
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch(`${VOICE_GATEWAY_URL}/voice/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(VOICE_GATEWAY_TIMEOUT_MS),
       body: JSON.stringify({
         text,
         voice: payload.voice,
