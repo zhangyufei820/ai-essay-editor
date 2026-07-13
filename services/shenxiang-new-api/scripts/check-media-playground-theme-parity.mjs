@@ -27,7 +27,7 @@ const requiredMarkers = {
   promptCopy: '复制提示词',
   promptClear: '清空提示词',
   openOriginal: '查看原图',
-  safeWindowOpen: 'noopener,noreferrer',
+  safeWindowOpen: ['noopener,noreferrer', 'noopener noreferrer'],
   gptImage2SizeMapping: 'GPT_IMAGE_2_SIZE_BY_RESOLUTION',
   responseFormatPayload: 'responseFormat',
   geminiImageConfig: 'imageConfig',
@@ -84,7 +84,10 @@ function findModels(text, regex) {
 }
 
 function missingMarkerErrors(label, text, marker) {
-  return text.includes(marker) ? [] : [`${label}: missing ${marker}`]
+  const acceptedMarkers = Array.isArray(marker) ? marker : [marker]
+  return acceptedMarkers.some((value) => text.includes(value))
+    ? []
+    : [`${label}: missing ${acceptedMarkers.join(' or ')}`]
 }
 
 function main() {
