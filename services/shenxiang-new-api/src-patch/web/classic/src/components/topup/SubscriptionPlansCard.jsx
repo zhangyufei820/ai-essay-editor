@@ -368,13 +368,18 @@ const SubscriptionPlansCard = ({
   const disableSubscriptionPreference = !hasActiveSubscription;
   const isSubscriptionPreference =
     billingPreference === 'subscription_first' ||
-    billingPreference === 'subscription_only';
+    billingPreference === 'subscription_only' ||
+    billingPreference === 'monthly_card_and_wallet';
   const displayBillingPreference =
     disableSubscriptionPreference && isSubscriptionPreference
       ? 'wallet_first'
       : billingPreference;
-  const subscriptionPreferenceLabel =
-    billingPreference === 'subscription_only' ? t('仅用订阅') : t('优先订阅');
+  let subscriptionPreferenceLabel = t('优先订阅');
+  if (billingPreference === 'subscription_only') {
+    subscriptionPreferenceLabel = t('仅用订阅');
+  } else if (billingPreference === 'monthly_card_and_wallet') {
+    subscriptionPreferenceLabel = t('月卡+余额');
+  }
 
   const planPurchaseCountMap = useMemo(() => {
     const map = new Map();
@@ -505,6 +510,13 @@ const SubscriptionPlansCard = ({
                       disabled: disableSubscriptionPreference,
                     },
                     { value: 'wallet_first', label: t('优先钱包') },
+                    {
+                      value: 'monthly_card_and_wallet',
+                      label: disableSubscriptionPreference
+                        ? `${t('月卡+余额')} (${t('无生效')})`
+                        : t('月卡+余额'),
+                      disabled: disableSubscriptionPreference,
+                    },
                     {
                       value: 'subscription_only',
                       label: disableSubscriptionPreference

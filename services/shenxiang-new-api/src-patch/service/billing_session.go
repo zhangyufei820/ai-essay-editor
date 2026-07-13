@@ -450,7 +450,7 @@ func (s *BillingSession) syncRelayInfo() {
 // NewBillingSession 工厂 — 根据计费偏好创建会话并处理回退
 // ---------------------------------------------------------------------------
 
-// NewBillingSession 根据用户计费偏好创建 BillingSession，处理 subscription_first / wallet_first 的回退。
+// NewBillingSession 根据用户计费偏好创建 BillingSession，处理订阅、钱包及月卡分流。
 func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preConsumedQuota int) (*BillingSession, *types.NewAPIError) {
 	if relayInfo == nil {
 		return nil, types.NewError(fmt.Errorf("relayInfo is nil"), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
@@ -606,6 +606,15 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	}
 
 	switch pref {
+	case "monthly_card_and_wallet":
+		hasMonthlyCard, err := getUserMonthlyCard()
+		if err != nil {
+			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+		}
+		if hasMonthlyCard && MonthlyCardChannelSupportsModel(relayInfo.OriginModelName) {
+			return trySubscription()
+		}
+		return tryWallet()
 	case "subscription_only":
 		return trySubscription()
 	case "wallet_only":

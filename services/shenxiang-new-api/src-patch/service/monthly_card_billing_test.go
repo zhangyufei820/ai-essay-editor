@@ -13,6 +13,138 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMonthlyCardAndWalletBillingPreferenceSplitsFunding(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	testCases := []struct {
+		name                 string
+		userID               int
+		planID               int
+		subscriptionID       int
+		userQuota            int
+		monthlyCard          bool
+		modelName            string
+		subscriptionTotal    int64
+		subscriptionUsed     int64
+		wantBillingSource    string
+		wantSubscriptionUsed int64
+		wantUserQuota        int
+		wantError            bool
+	}{
+		{
+			name:                 "uses_monthly_card_for_supported_openai_model",
+			userID:               1_101,
+			planID:               1_201,
+			subscriptionID:       1_301,
+			userQuota:            500,
+			monthlyCard:          true,
+			modelName:            "gpt-5.5",
+			subscriptionTotal:    1_000,
+			wantBillingSource:    BillingSourceSubscription,
+			wantSubscriptionUsed: 49,
+			wantUserQuota:        500,
+		},
+		{
+			name:                 "uses_wallet_for_model_outside_monthly_card_whitelist",
+			userID:               1_102,
+			planID:               1_202,
+			subscriptionID:       1_302,
+			userQuota:            500,
+			monthlyCard:          true,
+			modelName:            "claude-opus-4-6",
+			subscriptionTotal:    1_000,
+			wantBillingSource:    BillingSourceWallet,
+			wantSubscriptionUsed: 0,
+			wantUserQuota:        400,
+		},
+		{
+			name:                 "does_not_fall_back_to_wallet_when_monthly_card_quota_is_exhausted",
+			userID:               1_103,
+			planID:               1_203,
+			subscriptionID:       1_303,
+			userQuota:            500,
+			monthlyCard:          true,
+			modelName:            "gpt-5.5",
+			subscriptionTotal:    100,
+			subscriptionUsed:     100,
+			wantSubscriptionUsed: 100,
+			wantUserQuota:        500,
+			wantError:            true,
+		},
+		{
+			name:                 "does_not_use_non_monthly_subscription",
+			userID:               1_104,
+			planID:               1_204,
+			subscriptionID:       1_304,
+			userQuota:            500,
+			modelName:            "gpt-5.5",
+			subscriptionTotal:    1_000,
+			wantBillingSource:    BillingSourceWallet,
+			wantSubscriptionUsed: 0,
+			wantUserQuota:        400,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			truncate(t)
+			seedUser(t, testCase.userID, testCase.userQuota)
+			planTitle := "普通订阅"
+			planPrice := 100.0
+			if testCase.monthlyCard {
+				planTitle = "¥500 月卡"
+				planPrice = 500
+			}
+			require.NoError(t, model.DB.Create(&model.SubscriptionPlan{
+				Id:          testCase.planID,
+				Title:       planTitle,
+				PriceAmount: planPrice,
+				Currency:    "CNY",
+				Enabled:     true,
+				TotalAmount: testCase.subscriptionTotal,
+			}).Error)
+			require.NoError(t, model.DB.Create(&model.UserSubscription{
+				Id:                  testCase.subscriptionID,
+				UserId:              testCase.userID,
+				PlanId:              testCase.planID,
+				AmountTotal:         testCase.subscriptionTotal,
+				AmountUsed:          testCase.subscriptionUsed,
+				AllowWalletOverflow: true,
+				Status:              "active",
+				StartTime:           time.Now().Unix(),
+				EndTime:             time.Now().Add(30 * 24 * time.Hour).Unix(),
+			}).Error)
+
+			relayInfo := &relaycommon.RelayInfo{
+				UserId:          testCase.userID,
+				RequestId:       fmt.Sprintf("monthly-card-and-wallet-%d", testCase.userID),
+				OriginModelName: testCase.modelName,
+				IsPlayground:    true,
+			}
+			relayInfo.UserSetting.BillingPreference = "monthly_card_and_wallet"
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+			session, apiErr := NewBillingSession(ctx, relayInfo, 100)
+			if testCase.wantError {
+				require.Nil(t, session)
+				require.NotNil(t, apiErr)
+			} else {
+				require.NotNil(t, session)
+				require.Nil(t, apiErr)
+				assert.Equal(t, testCase.wantBillingSource, relayInfo.BillingSource)
+			}
+
+			var subscription model.UserSubscription
+			require.NoError(t, model.DB.First(&subscription, testCase.subscriptionID).Error)
+			assert.Equal(t, testCase.wantSubscriptionUsed, subscription.AmountUsed)
+
+			quota, err := model.GetUserQuota(testCase.userID, false)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.wantUserQuota, quota)
+		})
+	}
+}
+
 func TestMonthlyCardTextBillingQuotaUsesOnePointEightEquivalent(t *testing.T) {
 	assert.Equal(t, 0, MonthlyCardTextBillingQuota(0))
 	assert.Equal(t, 1, MonthlyCardTextBillingQuota(1))
