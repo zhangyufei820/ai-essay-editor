@@ -62,3 +62,39 @@ func TestResponseChunkDataWritesExpectedSSEFrame(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hello\"}\n\n", recorder.Body.String())
 }
+
+func TestStringDataReturnsClientWriteError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	context.Writer = &responseChunkWriteErrorWriter{ResponseWriter: context.Writer}
+
+	err := StringData(context, `{"choices":[{"delta":{"content":"hello"}}]}`)
+
+	require.ErrorIs(t, err, io.ErrClosedPipe)
+}
+
+func TestStringDataReturnsClientShortWrite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	context.Writer = &responseChunkShortWriteWriter{ResponseWriter: context.Writer}
+
+	err := StringData(context, `{"choices":[{"delta":{"content":"hello"}}]}`)
+
+	require.ErrorIs(t, err, io.ErrShortWrite)
+}
+
+func TestStringDataWritesExpectedSSEFrame(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	err := StringData(context, `{"choices":[{"delta":{"content":"hello"}}]}`)
+
+	require.NoError(t, err)
+	require.Equal(t, "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n", recorder.Body.String())
+}

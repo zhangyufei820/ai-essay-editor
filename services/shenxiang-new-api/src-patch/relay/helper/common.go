@@ -119,7 +119,13 @@ func StringData(c *gin.Context, str string) error {
 		return fmt.Errorf("request context done: %w", c.Request.Context().Err())
 	}
 
-	c.Render(-1, common.CustomEvent{Data: "data: " + str})
+	common.CustomEvent{}.WriteContentType(c.Writer)
+	eventData := "data: " + strings.ReplaceAll(str, "\r", "\\r") + "\n\n"
+	if written, err := c.Writer.WriteString(eventData); err != nil {
+		return fmt.Errorf("write stream data failed: %w", err)
+	} else if written != len(eventData) {
+		return fmt.Errorf("write stream data failed: %w", io.ErrShortWrite)
+	}
 	return FlushWriter(c)
 }
 
