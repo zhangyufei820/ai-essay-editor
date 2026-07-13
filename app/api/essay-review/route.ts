@@ -122,7 +122,7 @@ ${essay}
       model: model as any,
       system: ESSAY_REVIEW_PROMPT,
       prompt: userPrompt,
-      maxTokens: ESSAY_REVIEW_MAX_OUTPUT_TOKENS,
+      maxOutputTokens: ESSAY_REVIEW_MAX_OUTPUT_TOKENS,
       temperature: 0.7,
     })
 

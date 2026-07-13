@@ -76,6 +76,43 @@ describe("P0/P1 security audit guardrails", () => {
     expect(fs.existsSync(path.join(root, "app/api/payment/xunhupay/notify/route.ts"))).toBe(true)
   })
 
+  it("keeps entitlement linking and callbacks on verified, exact identities", () => {
+    const entitlements = read("lib/user-entitlements.ts")
+    const membership = read("app/api/user/membership/route.ts")
+    const difyChat = read("app/api/dify-chat/route.ts")
+    const xunhupayNotify = read("app/api/payment/xunhupay/notify/route.ts")
+
+    expect(entitlements).not.toContain("identity?.metadata")
+    expect(entitlements).not.toContain("listUsers(")
+    expect(entitlements).not.toContain('.like("phone", `%${phone}%`)')
+    expect(membership).not.toContain("user_metadata")
+    expect(membership).not.toContain("listUsers(")
+    expect(difyChat).toContain("resolveRelatedUserIds(userId, identity, supabase)")
+    expect(difyChat).not.toContain("resolveMembershipCandidateUserIds")
+    expect(xunhupayNotify.indexOf("verifyXunhupaySign(body)")).toBeLessThan(
+      xunhupayNotify.indexOf("grantPaymentCreditsOnce(supabase"),
+    )
+    expect(xunhupayNotify).not.toContain("checkIpRateLimit")
+  })
+
+  it("streams generated files and confines active SVG content", () => {
+    const route = read("app/api/codex-skill-files/[taskId]/[...path]/route.ts")
+    expect(route).toContain("upstream.body")
+    expect(route).not.toContain("upstream.arrayBuffer()")
+    expect(route).toContain("MAX_CODEX_FILE_BYTES")
+    expect(route).toContain('extension === ".svg"')
+    expect(route).toContain("sandbox; default-src 'none'")
+  })
+
+  it("cancels long-running browser polls when their components unmount", () => {
+    for (const file of ["app/tools/page.tsx", "components/chat/gpt-image2-chat-interface.tsx"]) {
+      const source = read(file)
+      expect(source).toContain("pollingCancelledRef")
+      expect(source).toContain("AbortController")
+      expect(source).toContain("controller.abort()")
+    }
+  })
+
   it("checkout page only offers wechat button", () => {
     const src = read("app/checkout/[productId]/page.tsx")
     expect(src).not.toMatch(/handlePayment\(["']alipay["']\)/)

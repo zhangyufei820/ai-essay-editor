@@ -107,7 +107,7 @@ async function generateSparkpage(input: {
       process.env.TOOLS_SPARKPAGE_MODEL || "gpt-5-mini",
     ) as any,
     prompt,
-    maxTokens: 6000,
+    maxOutputTokens: 6000,
     temperature: 0.5,
   })
 

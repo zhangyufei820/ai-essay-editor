@@ -2,8 +2,6 @@ import { isSubscribedUser, resolveMembershipStatus } from "@/lib/products"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
 
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
-const ADMIN_USERS_PAGE_SIZE = 1000
-const MAX_ADMIN_USER_PAGES = 100
 
 export type EntitlementIdentity = {
   email?: string | null
@@ -42,41 +40,18 @@ function normalizeEmail(value?: string | null): string | null {
 }
 
 function normalizePhone(value?: string | null): string | null {
-  const normalized = String(value || "").replace(/\D/g, "")
-  return normalized.length >= 6 ? normalized : null
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null
+  const digits = String(value || "").replace(/\D/g, "")
+  const normalized = /^86\d{11}$/.test(digits) ? digits.slice(2) : digits
+  return normalized.length >= 8 ? normalized : null
 }
 
 function collectIdentityContacts(identity?: EntitlementIdentity | null) {
   const emails = new Set<string>()
   const phones = new Set<string>()
-  const metadata = identity?.metadata || {}
-
-  const candidateEmails = [
-    identity?.email,
-    readString(metadata.email),
-    readString(metadata.mail),
-    readString(metadata.phone),
-    readString(metadata.mobile),
-  ]
-  const candidatePhones = [
-    identity?.phone,
-    readString(metadata.phone),
-    readString(metadata.mobile),
-    readString(metadata.phone_number),
-  ]
-
-  for (const value of candidateEmails) {
-    const email = normalizeEmail(value)
-    if (email) emails.add(email)
-  }
-  for (const value of candidatePhones) {
-    const phone = normalizePhone(value)
-    if (phone) phones.add(phone)
-  }
+  const email = normalizeEmail(identity?.email)
+  const phone = normalizePhone(identity?.phone)
+  if (email) emails.add(email)
+  if (phone) phones.add(phone)
 
   return { emails, phones }
 }
@@ -89,25 +64,14 @@ export async function resolveRelatedUserIds(
   const userIds = new Set<string>([userId])
   const { emails, phones } = collectIdentityContacts(identity)
 
-  const { data: currentProfile, error: currentProfileError } = await supabase
-    .from("user_profiles")
-    .select("email, phone")
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (!currentProfileError) {
-    const profileEmail = normalizeEmail(currentProfile?.email)
-    const profilePhone = normalizePhone(currentProfile?.phone)
-    if (profileEmail) emails.add(profileEmail)
-    if (profilePhone) phones.add(profilePhone)
-  }
-
   for (const email of emails) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("user_profiles")
       .select("user_id")
-      .ilike("email", email)
+      .eq("email", email)
       .limit(20)
+
+    if (error) throw error
 
     data?.forEach((profile: { user_id?: string | null }) => {
       if (profile.user_id) userIds.add(profile.user_id)
@@ -115,38 +79,17 @@ export async function resolveRelatedUserIds(
   }
 
   for (const phone of phones) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("user_profiles")
       .select("user_id")
-      .like("phone", `%${phone}%`)
+      .eq("phone", phone)
       .limit(20)
+
+    if (error) throw error
 
     data?.forEach((profile: { user_id?: string | null }) => {
       if (profile.user_id) userIds.add(profile.user_id)
     })
-  }
-
-  if (emails.size || phones.size) {
-    for (let page = 1; page <= MAX_ADMIN_USER_PAGES; page += 1) {
-      const { data: authData, error } = await supabase.auth.admin.listUsers({ page, perPage: ADMIN_USERS_PAGE_SIZE })
-      if (error) throw error
-      for (const user of authData?.users || []) {
-        const authEmail = normalizeEmail(user.email)
-        const authPhone = normalizePhone(user.phone)
-        const metaEmail = normalizeEmail(readString(user.user_metadata?.email))
-        const metaPhone = normalizePhone(readString(user.user_metadata?.phone) || readString(user.user_metadata?.mobile))
-
-        if (
-          (authEmail && emails.has(authEmail)) ||
-          (metaEmail && emails.has(metaEmail)) ||
-          (authPhone && phones.has(authPhone)) ||
-          (metaPhone && phones.has(metaPhone))
-        ) {
-          userIds.add(user.id)
-        }
-      }
-      if ((authData?.users || []).length < ADMIN_USERS_PAGE_SIZE) break
-    }
   }
 
   return {

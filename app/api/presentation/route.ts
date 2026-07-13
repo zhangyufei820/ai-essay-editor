@@ -45,7 +45,7 @@ async function generatePresentationOutline(content: string, template?: string) {
   const { text } = await generateText({
     model: openai(process.env.TOOLS_PRESENTATION_MODEL || "gpt-5-mini") as any,
     prompt: buildPresentationPrompt(content, template),
-    maxTokens: 4000,
+    maxOutputTokens: 4000,
     temperature: 0.4,
   })
 

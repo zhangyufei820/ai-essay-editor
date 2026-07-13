@@ -41,4 +41,8 @@ describe("generated file previews", () => {
     expect(shouldPreviewGeneratedFileLink("/tasks/task_abc123/files/final.pptx", "打开预览")).toBe(true)
     expect(shouldPreviewGeneratedFileLink("https://example.com/page", "普通链接")).toBe(false)
   })
+
+  it("never embeds generated SVG files as same-origin images", () => {
+    expect(getGeneratedFilePreviewKind("/tasks/task_abc123/files/untrusted.svg")).toBe("file")
+  })
 })

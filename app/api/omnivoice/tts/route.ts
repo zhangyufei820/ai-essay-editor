@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/verified-user"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
 import { createOmniTtsJob } from "@/lib/omnivoice-gateway-client"
+import { createOmniVoiceJobOwner, linkOmniVoiceJobMedia } from "@/lib/omnivoice-job-ownership"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -46,6 +47,17 @@ export async function POST(request: NextRequest) {
 
     if (!result.ok || !result.job) {
       return NextResponse.json({ error: result.error || "语音任务创建失败" }, { status: 502 })
+    }
+
+    const ownershipCreated = await createOmniVoiceJobOwner(result.job.job_id, auth.user!.id)
+    if (!ownershipCreated) {
+      return NextResponse.json({ error: "语音任务创建失败" }, { status: 502 })
+    }
+    if (result.job.filename) {
+      const mediaLinked = await linkOmniVoiceJobMedia(result.job.job_id, auth.user!.id, result.job.filename)
+      if (!mediaLinked) {
+        return NextResponse.json({ error: "语音任务创建失败" }, { status: 502 })
+      }
     }
 
     return NextResponse.json({ success: true, job: result.job })

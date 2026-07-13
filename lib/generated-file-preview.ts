@@ -96,11 +96,13 @@ export function getGeneratedFilePreviewUrl(value: string) {
 
 export function getGeneratedFilePreviewKind(value: string): "image" | "presentation" | "inline" | "file" {
   const previewUrl = getGeneratedFilePreviewUrl(value)
+  const extension = getGeneratedFileExtension(previewUrl)
+  if (extension === ".svg") return "file"
+
   const kind = getOpenClawAttachmentKind(previewUrl)
   if (kind === "image") return "image"
   if (kind === "ppt") return "presentation"
 
-  const extension = getGeneratedFileExtension(previewUrl)
   if (extension === ".html" || extension === ".htm") return "presentation"
   if (PREVIEWABLE_FILE_EXTENSIONS.has(extension)) return "inline"
   return "file"

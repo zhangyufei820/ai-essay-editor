@@ -42,13 +42,6 @@ export async function POST(request: NextRequest) {
   const supabase = getSupabaseAdmin()
   
   try {
-    // IP 限流：10次/分钟
-    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
-    const ip = getClientIP(request)
-    const limitResult = checkIpRateLimit(ip, 10)
-    if (!limitResult.allowed) {
-      return createRateLimitResponse(limitResult.retryAfter!)
-    }
     const contentType = request.headers.get('content-type') || ''
     const declaredLength = Number(request.headers.get("content-length") || 0)
     if (Number.isFinite(declaredLength) && declaredLength > XUNHUPAY_NOTIFY_MAX_BYTES) {

@@ -19,12 +19,10 @@ export async function POST(request: NextRequest) {
     let userId = auth.user!.id
 
     if (requestedUserId && requestedUserId !== userId) {
-      const membershipResponse = await checkMembership(userId, [
-        auth.user!.phone || '',
-        auth.user!.email || '',
-        typeof auth.user!.metadata?.phone === 'string' ? auth.user!.metadata.phone : '',
-        typeof auth.user!.metadata?.mobile === 'string' ? auth.user!.metadata.mobile : '',
-      ])
+      const membershipResponse = await checkMembership(userId, {
+        phone: auth.user!.phone || null,
+        email: auth.user!.email || null,
+      })
       const membership = await membershipResponse.json().catch(() => null)
       if (membership?.userId !== requestedUserId && !membership?.relatedUserIds?.includes(requestedUserId)) {
         return NextResponse.json({ error: "Cannot create referral code for another user" }, { status: 403 })

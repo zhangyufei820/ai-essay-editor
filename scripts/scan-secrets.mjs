@@ -17,6 +17,13 @@ const SECRET_PATTERNS = [
   { type: "OpenAI-compatible key", pattern: /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g },
   { type: "Dify application key", pattern: /\bapp-[A-Za-z0-9_-]{20,}\b/g },
   { type: "Supabase secret key", pattern: /\bsb_secret_[A-Za-z0-9_-]{20,}\b/g },
+  { type: "Stripe live key", pattern: /\b(?:sk|rk)_live_[A-Za-z0-9]{16,}\b/g },
+  { type: "Stripe webhook secret", pattern: /\bwhsec_[A-Za-z0-9]{20,}\b/g },
+  { type: "GitHub token", pattern: /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b/g },
+  { type: "AWS access key", pattern: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g },
+  { type: "Google API key", pattern: /\bAIza[0-9A-Za-z_-]{30,}\b/g },
+  { type: "Tencent Cloud secret id", pattern: /\bAKID[A-Za-z0-9]{28,}\b/g },
+  { type: "JWT", pattern: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
   { type: "private key", pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g },
 ]
 
