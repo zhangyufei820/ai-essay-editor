@@ -7,7 +7,7 @@ import {
 import { calculateSurveyQualityScore, submitSurveyResponse } from "@/lib/surveys"
 import { consumeWithTrialCredits } from "@/lib/trial-credits"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
-import { spendRealCredits } from "@/lib/credits"
+import { spendRealCredits } from "@/lib/real-credit-spending"
 
 jest.mock("@/lib/logger", () => ({
   logger: {
@@ -22,7 +22,7 @@ jest.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: jest.fn(),
 }))
 
-jest.mock("@/lib/credits", () => ({
+jest.mock("@/lib/real-credit-spending", () => ({
   spendRealCredits: jest.fn(),
 }))
 

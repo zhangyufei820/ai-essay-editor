@@ -10,6 +10,10 @@ jest.mock("@/lib/security/request", () => ({
   rejectUntrustedOrigin: jest.fn(() => null),
 }))
 
+jest.mock("@/lib/auth/verified-user", () => ({
+  requireUser: jest.fn(async () => ({ user: { id: "test-user" }, response: null })),
+}))
+
 const callEssayAiSuite = jest.fn()
 
 jest.mock("@/lib/essay-ai-suite-client", () => ({

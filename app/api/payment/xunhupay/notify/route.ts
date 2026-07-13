@@ -3,7 +3,20 @@ import { createClient } from "@supabase/supabase-js"
 import { verifyXunhupaySign } from "@/lib/xunhupay"
 import { getProductCredits, getProductPriceInCents, isCreditsProduct, isMembershipProduct, isPurchasableProduct } from "@/lib/products"
 import { logger } from "@/lib/logger"
-import { grantPaymentCreditsWithOptimisticRetry } from "@/lib/payment-credit-grant"
+import { grantPaymentCreditsOnce } from "@/lib/payment-credit-idempotency"
+
+const XUNHUPAY_NOTIFY_MAX_BYTES = 64 * 1024
+
+function parseNotificationBody(rawBody: string, contentType: string): Record<string, any> {
+  if (contentType.includes("application/json")) {
+    const parsed = JSON.parse(rawBody)
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+      throw new Error("invalid notification payload")
+    }
+    return parsed
+  }
+  return Object.fromEntries(new URLSearchParams(rawBody).entries())
+}
 
 // 🔥 使用 Service Role Key 创建管理员客户端（绕过所有 RLS）
 function getSupabaseAdmin() {
@@ -25,23 +38,6 @@ function parseOrderSnapshotAmountInCents(value: unknown): number | null {
   return Math.round(amount * 100)
 }
 
-async function restoreClaimedOrderToPending(supabase: any, orderNo: string, reason: string) {
-  const { error } = await supabase
-    .from("orders")
-    .update({
-      status: "pending",
-      updated_at: new Date().toISOString()
-    })
-    .eq("order_no", orderNo)
-    .eq("status", "paid")
-
-  if (error) {
-    logger.error("[xunhupay] restore pending failed", { orderNo, reason, error })
-  } else {
-    logger.warn("[xunhupay] restored order to pending", { orderNo, reason })
-  }
-}
-
 export async function POST(request: NextRequest) {
   const supabase = getSupabaseAdmin()
   
@@ -53,25 +49,16 @@ export async function POST(request: NextRequest) {
     if (!limitResult.allowed) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
-    // 支持多种请求格式（JSON 或 form-urlencoded）
     const contentType = request.headers.get('content-type') || ''
-    let body: Record<string, any>
-    
-    if (contentType.includes('application/json')) {
-      body = await request.json()
-    } else if (contentType.includes('application/x-www-form-urlencoded')) {
-      const formData = await request.formData()
-      body = Object.fromEntries(formData.entries())
-    } else {
-      // 尝试解析为 JSON，如果失败则尝试 form-urlencoded
-      const text = await request.text()
-      try {
-        body = JSON.parse(text)
-      } catch {
-        const params = new URLSearchParams(text)
-        body = Object.fromEntries(params.entries())
-      }
+    const declaredLength = Number(request.headers.get("content-length") || 0)
+    if (Number.isFinite(declaredLength) && declaredLength > XUNHUPAY_NOTIFY_MAX_BYTES) {
+      return new NextResponse("fail", { status: 413 })
     }
+    const rawBody = await request.text()
+    if (Buffer.byteLength(rawBody, "utf8") > XUNHUPAY_NOTIFY_MAX_BYTES) {
+      return new NextResponse("fail", { status: 413 })
+    }
+    const body = parseNotificationBody(rawBody, contentType)
     
     logger.info("[xunhupay] notify received", {
       trade_order_id: body.trade_order_id,
@@ -152,56 +139,28 @@ export async function POST(request: NextRequest) {
     }
     logger.info("[xunhupay] product verified", { orderNo, productId: order.product_id, credits, isPro, snapshotAmountInCents })
 
-    // 生产 orders 约束只允许 pending/paid/cancelled/refunded，直接用 paid 抢占 pending 订单。
-    // 这样重复回调会在权益入账前被原子挡住，避免重复加积分。
-    const { data: claimedOrder, error: claimOrderError } = await supabase
-      .from("orders")
-      .update({
-        status: "paid",
-        trade_no: tradeNo,
-        updated_at: new Date().toISOString()
-      })
-      .eq("order_no", orderNo)
-      .eq("status", "pending")
-      .select("id")
-      .maybeSingle()
-
-    if (claimOrderError || !claimedOrder) {
-      logger.error("[xunhupay] order claim failed", { orderNo, claimOrderError })
-      return new NextResponse("fail", { status: 200 })
-    }
-
-    const creditGrant = await grantPaymentCreditsWithOptimisticRetry(supabase, {
+    const creditGrant = await grantPaymentCreditsOnce(supabase, {
+      provider: "xunhupay",
+      eventId: String(tradeNo || orderNo),
+      referenceId: orderNo,
       orderNo,
       userId: order.user_id,
+      productId: order.product_id,
       credits,
       isPro,
+      description: `购买${order.product_name}获得${credits}积分`,
+      metadata: { trade_no: tradeNo || null },
     })
 
     if (!creditGrant.ok) {
-      logger.error("[xunhupay] credits grant failed", { orderNo, userId: order.user_id, reason: creditGrant.errorReason, error: creditGrant.error })
-      await restoreClaimedOrderToPending(supabase, orderNo, creditGrant.errorReason || "credits_grant_failed")
+      logger.error("[xunhupay] atomic credits grant failed", { orderNo, userId: order.user_id, error: creditGrant.error })
       return new NextResponse("fail", { status: 200 })
     }
 
     const balanceBefore = creditGrant.balanceBefore ?? 0
     const balanceAfter = creditGrant.balanceAfter ?? balanceBefore + credits
 
-    // 🔥 记录交易流水（可选，失败不影响主流程）
-    try {
-      await supabase.from("credit_transactions").insert({
-        user_id: order.user_id,
-        amount: credits,
-        type: "purchase",
-        description: `购买${order.product_name}获得${credits}积分`,
-        balance_before: balanceBefore,
-        balance_after: balanceAfter
-      })
-    } catch (txError) {
-      logger.warn("[xunhupay] transaction log failed", { orderNo, txError })
-    }
-
-    logger.info("[xunhupay] order processed", { orderNo })
+    logger.info("[xunhupay] order processed", { orderNo, duplicate: !creditGrant.applied, balanceBefore, balanceAfter })
     return new NextResponse("success", { status: 200 })
     
   } catch (error) {

@@ -726,12 +726,16 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       ? "banana-2-pro"
       : "gpt-image-2"
   const estimatedImageCost = calculatePreviewCost(billingPreviewModel) * count
+  const fetchCreditsRef = useRef<(uid: string) => Promise<void>>(async () => {})
+  const fetchChatSessionsRef = useRef<(uid: string) => Promise<void>>(async () => {})
+  const loadHistorySessionRef = useRef<(sid: string) => Promise<void>>(async () => {})
+
   useEffect(() => {
     const initUser = async () => {
       const { data: { user: verifiedUser } } = await supabase.auth.getUser()
       if (verifiedUser?.id) {
         setUserId(verifiedUser.id)
-        void fetchCredits(verifiedUser.id)
+        void fetchCreditsRef.current(verifiedUser.id)
         setAuthChecked(true)
         return
       }
@@ -756,7 +760,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
       if (hasVerifiedToken && storedUserId) {
         setUserId(storedUserId)
-        void fetchCredits(storedUserId)
+        void fetchCreditsRef.current(storedUserId)
       }
 
       setAuthChecked(true)
@@ -784,12 +788,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   }, [])
 
   useEffect(() => {
-    if (showHistorySidebar && userId) void fetchChatSessions(userId)
+    if (showHistorySidebar && userId) void fetchChatSessionsRef.current(userId)
   }, [showHistorySidebar, userId])
 
   useEffect(() => {
     if (!urlSessionId || urlSessionId === currentSessionIdRef.current) return
-    void loadHistorySession(urlSessionId)
+    void loadHistorySessionRef.current(urlSessionId)
   }, [urlSessionId])
 
   const fetchCredits = async (uid: string) => {
@@ -871,6 +875,10 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       setIsSubmitting(false)
     }
   }
+
+  fetchCreditsRef.current = fetchCredits
+  fetchChatSessionsRef.current = fetchChatSessions
+  loadHistorySessionRef.current = loadHistorySession
 
   const applyMode = (nextMode: ImageTaskMode) => {
     setMode(nextMode)
@@ -1282,13 +1290,16 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     }
   }
 
+  const submitImageTaskRef = useRef(submitImageTask)
+  submitImageTaskRef.current = submitImageTask
+
   useEffect(() => {
     if (!authChecked || !userId || hasAutoSubmittedRef.current) return
     if (!initialPrompt.trim() || !prompt.trim()) return
     if (mode === "image_edit" && editImages.length === 0) return
 
     hasAutoSubmittedRef.current = true
-    void submitImageTask()
+    void submitImageTaskRef.current()
   }, [authChecked, editImages.length, initialPrompt, mode, prompt, userId])
 
   const saveGeneration = async (cleanPrompt: string, nextResult: ImageResult) => {

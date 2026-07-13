@@ -123,7 +123,7 @@ export function EmptyState({ onSelectPrompt, onSuggestionClick, className }: Emp
                 "hover:bg-[var(--ink-50)] hover:border-[var(--ink-300)]"
               )}
             >
-              <span className="flex-1">"{p}"</span>
+              <span className="flex-1">“{p}”</span>
               <ChevronRight className="size-4 text-[var(--ink-400)] transition-transform duration-200 group-hover:translate-x-0.5" />
             </button>
           ))}

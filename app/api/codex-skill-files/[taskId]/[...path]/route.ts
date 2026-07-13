@@ -78,6 +78,11 @@ export async function GET(
     return new Response("Bad Request", { status: 400 })
   }
 
+  const fileToken = request.nextUrl.searchParams.get("token") || ""
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(fileToken)) {
+    return new Response("Not Found", { status: 404 })
+  }
+
   const apiKey = gatewayApiKey()
   if (!apiKey) {
     return new Response("File preview service is not configured", {
@@ -86,8 +91,12 @@ export async function GET(
     })
   }
 
-  const upstreamUrl = `${codexGatewayBaseUrl()}/tasks/${encodeURIComponent(taskId)}/files/${fileSegments.map(encodeURIComponent).join("/")}`
-  const upstream = await internalDifyFetch(upstreamUrl, {
+  const upstreamUrl = new URL(`${codexGatewayBaseUrl()}/tasks/${encodeURIComponent(taskId)}/files/${fileSegments.map(encodeURIComponent).join("/")}`)
+  upstreamUrl.searchParams.set("token", fileToken)
+  if (request.nextUrl.searchParams.get("download") === "1") {
+    upstreamUrl.searchParams.set("download", "1")
+  }
+  const upstream = await internalDifyFetch(upstreamUrl.toString(), {
     headers: {
       Authorization: `Bearer ${apiKey}`,
     },

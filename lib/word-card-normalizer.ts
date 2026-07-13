@@ -1,16 +1,7 @@
 import { getVocabOutputs, mergeVocabCardOutputAudio, parseFrontendWordCard } from "@/lib/vocab-card-workflow"
+import type { FrontendWordCard } from "@/lib/word-card-types"
 
-export type FrontendWordCard = {
-  schema_version: string
-  render_mode: string
-  status: string
-  word: string
-  hero: any
-  sections: any
-  quality: any
-  ui: any
-  card?: any
-}
+export type { FrontendWordCard } from "@/lib/word-card-types"
 
 export function safeJsonParse(value: unknown): any {
   if (!value) return null

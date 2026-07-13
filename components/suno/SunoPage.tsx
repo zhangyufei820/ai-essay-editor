@@ -301,13 +301,14 @@ function SongPlayer({
   const audioUrls = result?.audio_urls || []
   const imageUrl = result?.image_urls?.[current] || result?.image_urls?.[0] || ""
   const audioUrl = audioUrls[current] || ""
+  const audioUrlsKey = audioUrls.join("|")
   const ready = status === "ready" && audioUrl
   const visibleError = error || toFriendlyErrorMessage(result?.error)
 
   useEffect(() => {
     setCurrent(0)
     setPlaying(false)
-  }, [audioUrls.join("|")])
+  }, [audioUrlsKey])
 
   useEffect(() => {
     const audio = audioRef.current

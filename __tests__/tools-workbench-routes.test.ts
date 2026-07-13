@@ -43,6 +43,30 @@ describe("tools workbench route mappings", () => {
     expect(presentation).toContain("DIFY_PRESENTATION_API_KEY")
   })
 
+  it("requires authentication and bounds expensive tool inputs", () => {
+    const routes = [
+      "app/api/document-process/route.ts",
+      "app/api/presentation/route.ts",
+      "app/api/sparkpage/route.ts",
+      "app/api/web-search/route.ts",
+      "app/api/omnivoice/tts/route.ts",
+      "app/api/omnivoice/jobs/[jobId]/route.ts",
+    ].map(read)
+
+    for (const route of routes) {
+      expect(route).toContain("requireUser(")
+      expect(route).toContain("auth.response")
+    }
+    expect(routes[0]).toContain("MAX_DOCUMENT_BYTES")
+    expect(routes[0]).toContain("ALLOWED_DOCUMENT_EXTENSIONS")
+    expect(routes[1]).toContain("MAX_PRESENTATION_CONTENT_LENGTH")
+    expect(routes[2]).toContain("MAX_CONTEXT_JSON_LENGTH")
+    expect(routes[2]).not.toContain("input.provider")
+    expect(routes[2]).not.toContain("input.model")
+    expect(routes[3]).toContain("MAX_SEARCH_QUERY_LENGTH")
+    expect(routes[4]).toContain("MAX_TTS_TEXT_LENGTH")
+  })
+
   it("keeps all browser tool entries mapped to local API routes", () => {
     const page = read("app/tools/page.tsx")
 

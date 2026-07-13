@@ -39,14 +39,14 @@ function generateSign(params: Record<string, any>, appSecret: string): string {
 
 // 验证签名 - 支持多种签名格式
 export function verifyXunhupaySign(params: Record<string, any>): boolean {
-  // 迅虎支付回调中的签名字段可能是 hash 或 sign
-  const receivedSign = (params.hash || params.sign || "").toLowerCase()
+  const receivedSign = String(params.hash || params.sign || "").toLowerCase()
+  const appSecret = xunhupayConfig.appSecret
 
   const paramsWithoutSign = { ...params }
   delete paramsWithoutSign.sign
   delete paramsWithoutSign.hash
 
-  if (!receivedSign) {
+  if (!receivedSign || !appSecret) {
     logger.info("[xunhupay] verify", {
       fields: Object.keys(params).sort().join(","),
       hasSign: false,
@@ -56,16 +56,19 @@ export function verifyXunhupaySign(params: Record<string, any>): boolean {
     return false
   }
 
-  const calculatedSign = generateSign(paramsWithoutSign, xunhupayConfig.appSecret)
+  const calculatedSign = generateSign(paramsWithoutSign, appSecret)
+  const receivedBuffer = Buffer.from(receivedSign, "utf8")
+  const calculatedBuffer = Buffer.from(calculatedSign, "utf8")
+  const matches = receivedBuffer.length === calculatedBuffer.length && crypto.timingSafeEqual(receivedBuffer, calculatedBuffer)
 
   logger.info("[xunhupay] verify", {
     fields: Object.keys(params).sort().join(","),
     hasSign: Boolean(params.hash || params.sign),
     paramsForSignFields: Object.keys(paramsWithoutSign).sort().join(","),
-    result: receivedSign === calculatedSign,
+    result: matches,
   })
 
-  return receivedSign === calculatedSign
+  return matches
 }
 
 // 创建支付订单

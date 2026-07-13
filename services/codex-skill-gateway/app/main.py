@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import mimetypes
+import secrets
 import time
 from pathlib import Path
 from typing import AsyncIterator, Any
@@ -111,6 +112,10 @@ def get_task_file(request: Request, task_id: str, file_path: str) -> FileRespons
     task = store.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
+    provided_token = request.query_params.get("token", "")
+    expected_token = task.get("file_token")
+    if not isinstance(expected_token, str) or not secrets.compare_digest(provided_token, expected_token):
+        raise HTTPException(status_code=404, detail="File not found")
 
     workspace = settings.runs_dir / task_id
     workspace_root = workspace.resolve()
@@ -578,6 +583,7 @@ async def submit_task(request: RunRequest, allow_admin_intent: bool = False) -> 
     workspace = settings.runs_dir / task_id
     task = {
         "task_id": task_id,
+        "file_token": secrets.token_urlsafe(32),
         "skill_name": request.skill_name,
         "status": "queued",
         "mode": request.mode,

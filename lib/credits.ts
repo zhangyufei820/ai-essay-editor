@@ -1,11 +1,12 @@
 import { createClient } from "@supabase/supabase-js"
 import {
-  ASSUMED_PROVIDER_INPUT_VCOINS_PER_1M,
-  ASSUMED_PROVIDER_OUTPUT_VCOINS_PER_1M,
-  PRICING_VERSION,
-  TEXT_INPUT_CREDITS_PER_1K,
-  TEXT_OUTPUT_CREDITS_PER_1K,
-} from "@/lib/billing-config"
+  createBillingAuditMetadata,
+  enrichBillingMetadata,
+  type BillingAuditMetadata,
+} from "@/lib/billing-audit"
+import { spendRealCredits as spendRealCreditsDirect } from "@/lib/real-credit-spending"
+
+export { createBillingAuditMetadata, type BillingAuditInput, type BillingAuditMetadata } from "@/lib/billing-audit"
 
 export interface UserCredits {
   credits: number
@@ -20,53 +21,6 @@ export interface CreditTransaction {
   type: string
   description: string
   created_at: string
-}
-
-export interface BillingAuditMetadata {
-  userId?: string
-  actionType?: string
-  appId?: string | null
-  workflowId?: string | null
-  modelId?: string | null
-  feature?: "text" | "image2" | "image" | "suno" | string
-  requestedAppId?: string | null
-  requestedWorkflowId?: string | null
-  requestedModelId?: string | null
-  upstreamProvider?: string | null
-  upstreamModel?: string | null
-  upstreamGroup?: string | null
-  upstreamRequestId?: string | null
-  rawProviderMetadata?: Record<string, unknown> | null
-  pricingVersion?: string
-  usageSource?: string
-  rawUsageSource?: string
-  estimated?: boolean
-  promptTokens?: number
-  completionTokens?: number
-  totalTokens?: number
-  textInputCreditsPer1K?: number
-  textOutputCreditsPer1K?: number
-  chargedCredits?: number
-  balanceBefore?: number
-  balanceAfter?: number
-  assumedProviderInputVcoinsPer1M?: number
-  assumedProviderOutputVcoinsPer1M?: number
-  providerTotalPrice?: string | number | null
-  providerCurrency?: string | null
-  rawUsageJson?: Record<string, unknown> | null
-  finishReason?: string | null
-  latency?: number | null
-  timeToFirstToken?: number | null
-  conversationId?: string | null
-  messageId?: string | null
-  requestId?: string | null
-  createdAt?: string
-  description?: string
-  skipTrialBilling?: boolean
-}
-
-export type BillingAuditInput = BillingAuditMetadata & {
-  rawUsage?: Record<string, unknown> | null
 }
 
 export interface CreditSummary {
@@ -86,114 +40,6 @@ export function summarizeCreditTransactions(
     }
     return summary
   }, { total_earned: 0, total_spent: 0 })
-}
-
-function normalizeBillingUsageSource(source?: string, estimated?: boolean): string {
-  if (!source) return estimated ? "estimated" : "dify"
-  if (source === "fallback_total_as_output" || source === "no_output" || source === "fixed") return source
-  if (source === "estimated_from_output_text") return "estimated"
-  if (estimated) return "estimated"
-  return "dify"
-}
-
-function readRawProviderMetadata(metadata?: BillingAuditInput | null): Record<string, unknown> | null {
-  const fromRawUsage = metadata?.rawUsage
-  const provider = metadata?.rawProviderMetadata
-  if (fromRawUsage && Object.keys(fromRawUsage).length > 0) {
-    return {
-      ...(provider || {}),
-      usage: fromRawUsage,
-    }
-  }
-  return provider || null
-}
-
-export function createBillingAuditMetadata(input: BillingAuditInput): BillingAuditMetadata {
-  const rawUsage =
-    input.rawUsageJson ||
-    input.rawUsage ||
-    (input.rawProviderMetadata?.usage && typeof input.rawProviderMetadata.usage === "object"
-      ? input.rawProviderMetadata.usage as Record<string, unknown>
-      : null)
-  const rawProviderTotalPrice = input.providerTotalPrice ?? rawUsage?.total_price ?? rawUsage?.totalPrice ?? null
-  const providerTotalPrice =
-    typeof rawProviderTotalPrice === "string" || typeof rawProviderTotalPrice === "number"
-      ? rawProviderTotalPrice
-      : null
-  const providerCurrency = input.providerCurrency ?? (typeof rawUsage?.currency === "string" ? rawUsage.currency : null)
-  const finishReason =
-    input.finishReason ??
-    (typeof input.rawProviderMetadata?.finishReason === "string" ? input.rawProviderMetadata.finishReason : null)
-  const latency =
-    input.latency ??
-    (typeof input.rawProviderMetadata?.latency === "number" ? input.rawProviderMetadata.latency : null)
-  const timeToFirstToken =
-    input.timeToFirstToken ??
-    (typeof input.rawProviderMetadata?.timeToFirstToken === "number" ? input.rawProviderMetadata.timeToFirstToken : null)
-  const rawUsageSource = input.rawUsageSource || input.usageSource
-  const estimated = input.estimated ?? (
-    typeof input.rawProviderMetadata?.estimated === "boolean"
-      ? input.rawProviderMetadata.estimated
-      : undefined
-  )
-
-  return {
-    ...input,
-    actionType: input.actionType || input.feature || undefined,
-    appId: input.appId ?? input.requestedAppId ?? null,
-    workflowId: input.workflowId ?? input.requestedWorkflowId ?? null,
-    modelId: input.modelId ?? input.requestedModelId ?? null,
-    requestedAppId: input.requestedAppId ?? input.appId ?? null,
-    requestedWorkflowId: input.requestedWorkflowId ?? input.workflowId ?? null,
-    requestedModelId: input.requestedModelId ?? input.modelId ?? null,
-    rawProviderMetadata: readRawProviderMetadata(input),
-    pricingVersion: input.pricingVersion || PRICING_VERSION,
-    usageSource: normalizeBillingUsageSource(input.usageSource, estimated),
-    rawUsageSource,
-    estimated: estimated ?? false,
-    promptTokens: input.promptTokens ?? 0,
-    completionTokens: input.completionTokens ?? 0,
-    totalTokens: input.totalTokens ?? 0,
-    textInputCreditsPer1K: input.textInputCreditsPer1K ?? TEXT_INPUT_CREDITS_PER_1K,
-    textOutputCreditsPer1K: input.textOutputCreditsPer1K ?? TEXT_OUTPUT_CREDITS_PER_1K,
-    chargedCredits: input.chargedCredits ?? 0,
-    assumedProviderInputVcoinsPer1M: input.assumedProviderInputVcoinsPer1M ?? ASSUMED_PROVIDER_INPUT_VCOINS_PER_1M,
-    assumedProviderOutputVcoinsPer1M: input.assumedProviderOutputVcoinsPer1M ?? ASSUMED_PROVIDER_OUTPUT_VCOINS_PER_1M,
-    providerTotalPrice,
-    providerCurrency,
-    rawUsageJson: rawUsage || null,
-    finishReason,
-    latency,
-    timeToFirstToken,
-    conversationId: input.conversationId ?? null,
-    messageId: input.messageId ?? null,
-    requestId: input.requestId ?? input.upstreamRequestId ?? null,
-    createdAt: input.createdAt || new Date().toISOString(),
-    description: input.description,
-  }
-}
-
-function enrichBillingMetadata(
-  userId: string,
-  amount: number,
-  type: string,
-  description: string,
-  balanceBefore: number,
-  balanceAfter: number,
-  referenceId?: string,
-  billingMetadata?: BillingAuditMetadata,
-): BillingAuditMetadata {
-  return createBillingAuditMetadata({
-    ...(billingMetadata || {}),
-    userId: billingMetadata?.userId || userId,
-    actionType: billingMetadata?.actionType || type,
-    chargedCredits: billingMetadata?.chargedCredits ?? Math.abs(amount),
-    balanceBefore,
-    balanceAfter,
-    requestId: billingMetadata?.requestId || referenceId || null,
-    conversationId: billingMetadata?.conversationId || referenceId || null,
-    description: billingMetadata?.description || description,
-  })
 }
 
 // 🔥 使用 Service Role Key 创建管理员客户端（绕过所有 RLS）
@@ -355,67 +201,7 @@ export async function spendRealCredits(
   referenceId?: string,
   billingMetadata?: BillingAuditMetadata,
 ): Promise<boolean> {
-  const supabase = getSupabaseAdmin()
-  if (referenceId) {
-    console.log(`[积分系统] 扣费参考ID: ${referenceId}`)
-  }
-  if (billingMetadata) {
-    console.log("[Billing Audit] 用户扣费审计字段:", JSON.stringify(billingMetadata))
-  }
-
-  if (!Number.isInteger(amount) || amount <= 0) {
-    console.error(`[积分系统] 扣费金额非法 userId=${userId}, amount=${amount}, type=${type}`)
-    return false
-  }
-
-  // 检查积分是否足够
-  const credits = await getUserCredits(userId)
-  if (!credits || credits.credits < amount) {
-    console.error(`[积分系统] 扣除积分失败：余额不足 userId=${userId}, amount=${amount}, balance=${credits?.credits ?? "null"}, type=${type}`)
-    return false
-  }
-
-  const balanceBefore = credits.credits
-  const balanceAfter = credits.credits - amount
-
-  // 🔥 使用条件更新防止并发竞态：只有积分未变化时才扣费
-  const { data: updatedCreditRow, error: updateError } = await supabase
-    .from("user_credits")
-    .update({
-      credits: balanceAfter,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId)
-    .eq("credits", credits.credits)  // 🔥 关键：只有在积分未变时才更新
-    .gte("credits", amount)
-    .select("credits")
-    .maybeSingle()
-
-  if (updateError) {
-    console.error("[积分系统] 扣除积分失败:", updateError)
-    return false
-  }
-
-  if (!updatedCreditRow || updatedCreditRow.credits !== balanceAfter) {
-    console.error(`[积分系统] 扣除积分失败：并发条件更新未生效 userId=${userId}, amount=${amount}, expectedBefore=${credits.credits}, expectedAfter=${balanceAfter}, type=${type}`)
-    return false
-  }
-
-  // 记录交易
-  await recordTransaction(
-    supabase,
-    userId,
-    -amount,
-    type,
-    description,
-    balanceBefore,
-    balanceAfter,
-    referenceId,
-    billingMetadata,
-  )
-  
-  console.log(`[积分系统] 用户 ${userId} 消费 ${amount} 积分，余额: ${balanceAfter}`)
-  return true
+  return spendRealCreditsDirect(userId, amount, type, description, referenceId, billingMetadata)
 }
 
 // 消费积分：默认先使用共创体验 trial 额度，额度不足时再扣真实积分。

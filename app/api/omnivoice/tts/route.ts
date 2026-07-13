@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
 import { createOmniTtsJob } from "@/lib/omnivoice-gateway-client"
@@ -16,15 +17,21 @@ export async function POST(request: NextRequest) {
   const originRejection = rejectUntrustedOrigin(request)
   if (originRejection) return originRejection
 
+  const auth = await requireUser(request)
+  if (auth.response) return auth.response
+
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 30)
   if (!limitResult.allowed) return createRateLimitResponse(limitResult.retryAfter!)
 
   try {
     const body = await request.json()
-    const text = readText(body.text).slice(0, MAX_TTS_TEXT_LENGTH)
+    const text = readText(body.text)
     if (!text) {
       return NextResponse.json({ error: "请输入要转换成语音的文字" }, { status: 400 })
+    }
+    if (text.length > MAX_TTS_TEXT_LENGTH) {
+      return NextResponse.json({ error: "文字不能超过 1200 个字符" }, { status: 413 })
     }
 
     const speed = Number(body.speed)

@@ -15,7 +15,8 @@ import {
 } from "@/lib/products";
 import { createClient } from '@supabase/supabase-js'
 import { applyRateLimit } from "@/lib/rate-limit";
-import { requireUser } from "@/lib/auth/verified-user";
+import { requireLearningUserId } from "@/lib/learning-user";
+import { rejectUntrustedOrigin } from "@/lib/security/request";
 
 // 签名算法
 function gen_sign(params: any, appSecret: string) {
@@ -34,31 +35,26 @@ function gen_sign(params: any, appSecret: string) {
   return crypto.createHash("md5").update(stringSignTemp, "utf8").digest("hex").toLowerCase();
 }
 
-// 获取当前请求的基础URL
-function getBaseUrl(request: Request): string {
-  if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')) {
-    let url = process.env.NEXT_PUBLIC_APP_URL;
-    if (!url.includes('www.') && url.includes('shenxiang.school')) {
-      url = url.replace('https://', 'https://www.');
-    }
-    return url;
+function getBaseUrl(): string {
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.shenxiang.school"
+  const url = new URL(configuredUrl)
+  const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1"
+  if (url.protocol !== "https:" && !(isLocal && url.protocol === "http:")) {
+    throw new Error("支付回调地址必须使用 HTTPS")
   }
-  
-  const url = new URL(request.url);
-  const host = request.headers.get('host') || url.host;
-  const protocol = host.includes('localhost') ? 'http' : 'https';
-  
-  return `${protocol}://${host}`;
+  return url.origin
 }
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     const rateLimited = applyRateLimit(request, { keyPrefix: 'xunhupay-create', maxRequests: 10 });
     if (rateLimited) return rateLimited;
+    const originRejected = rejectUntrustedOrigin(request)
+    if (originRejected) return originRejected
 
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
-    const verifiedUserId = auth.user!.id
+    const userId = auth.userId!
 
     const APP_ID = process.env.XUNHUPAY_APPID;
     const APP_SECRET = process.env.XUNHUPAY_APPSECRET;
@@ -70,18 +66,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "支付服务未配置" }, { status: 503 });
     }
 
-    const baseUrl = getBaseUrl(request);
+    const baseUrl = getBaseUrl();
     console.log("🌐 当前基础URL:", baseUrl);
 
-    const { searchParams } = new URL(request.url);
-    const productId = searchParams.get("productId");
-    const requestedUserId = searchParams.get("userId");
-    const billing = searchParams.get("billing") || "monthly";
-
-    if (requestedUserId && requestedUserId !== verifiedUserId) {
-      return NextResponse.json({ error: "无权为该用户创建订单" }, { status: 403 });
-    }
-    const userId = verifiedUserId
+    const body = await request.json() as { productId?: unknown; billing?: unknown }
+    const productId = typeof body.productId === "string" ? body.productId.trim() : ""
+    const billing = body.billing === "annual" ? "annual" : "monthly"
 
     if (!productId) {
       return NextResponse.json({ error: "缺少产品ID" }, { status: 400 });
@@ -215,7 +205,7 @@ export async function GET(request: NextRequest) {
       total_fee: price,
       title: safeTitle,
       time: Math.floor(Date.now() / 1000).toString(),
-      nonce_str: Math.floor(Math.random() * 1000000).toString(),
+      nonce_str: crypto.randomBytes(16).toString("hex"),
       type: "WAP", 
       wap_url: baseUrl, 
       notify_url: `${baseUrl}/api/payment/xunhupay/notify`, 
@@ -223,7 +213,7 @@ export async function GET(request: NextRequest) {
 
     params.hash = gen_sign(params, APP_SECRET);
 
-    console.log("📤 请求迅虎支付参数:", params);
+    console.log("📤 正在创建迅虎支付订单:", { orderNo: tradeOrderId, productId, billing });
 
     // 3. 调用迅虎支付API获取真正的支付链接
     const formData = new URLSearchParams(params);
@@ -236,6 +226,7 @@ export async function GET(request: NextRequest) {
         "Accept": "application/json",
       },
       body: formData,
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -251,7 +242,7 @@ export async function GET(request: NextRequest) {
 
     // 4. 检查返回结果
     if (data.errcode !== 0) {
-      console.error("❌ 迅虎支付错误:", data);
+      console.error("❌ 迅虎支付错误:", { errcode: data?.errcode });
       return NextResponse.json({ 
         error: "支付创建失败",
         code: data.errcode

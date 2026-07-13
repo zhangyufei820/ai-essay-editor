@@ -141,7 +141,7 @@ class CodexRunner:
             return self._failed(task, started, "CODEX_EXEC_FAILED", message)
 
         result = redact(stdout.strip(), secret_values_for_redaction(self.settings))
-        result = self._append_artifact_preview_links(result, workspace, task_id)
+        result = self._append_artifact_preview_links(result, workspace, task_id, str(task.get("file_token", "")))
         (workspace / "result.md").write_text(result, encoding="utf-8")
         return {
             "status": "completed",
@@ -234,7 +234,7 @@ class CodexRunner:
 10. 生成 PPT、PDF、HTML、图片或文档时，请在回复里优先给前端可预览/可打开的结果，避免把本地文件路径作为第一入口。
 """
 
-    def _append_artifact_preview_links(self, result: str, workspace: Path, task_id: str) -> str:
+    def _append_artifact_preview_links(self, result: str, workspace: Path, task_id: str, file_token: str) -> str:
         artifacts = self._discover_artifacts(workspace)
         if not artifacts:
             return result
@@ -246,7 +246,8 @@ class CodexRunner:
             if self._artifact_already_linked(existing, task_id, rel):
                 continue
             label = "打开预览" if path.suffix.lower() in PRIMARY_PREVIEW_EXTENSIONS else "打开文件"
-            lines.append(f"- [{label}：{path.name}](/tasks/{task_id}/files/{self._quote_path(rel)})")
+            token_query = f"?token={quote(file_token, safe='')}" if file_token else ""
+            lines.append(f"- [{label}：{path.name}](/tasks/{task_id}/files/{self._quote_path(rel)}{token_query})")
 
         if len(lines) <= 3:
             return result
@@ -298,9 +299,8 @@ class CodexRunner:
     def _artifact_already_linked(self, result: str, task_id: str, rel_path: str) -> bool:
         encoded = self._quote_path(rel_path)
         return (
-            rel_path in result
-            or f"/tasks/{task_id}/files/{encoded}" in result
-            or f"/api/codex-skill-files/{task_id}/{encoded}" in result
+            f"/tasks/{task_id}/files/{encoded}?token=" in result
+            or f"/api/codex-skill-files/{task_id}/{encoded}?token=" in result
         )
 
     def _quote_path(self, rel_path: str) -> str:

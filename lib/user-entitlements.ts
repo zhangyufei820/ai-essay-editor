@@ -2,6 +2,8 @@ import { isSubscribedUser, resolveMembershipStatus } from "@/lib/products"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
 
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
+const ADMIN_USERS_PAGE_SIZE = 1000
+const MAX_ADMIN_USER_PAGES = 100
 
 export type EntitlementIdentity = {
   email?: string | null
@@ -125,21 +127,25 @@ export async function resolveRelatedUserIds(
   }
 
   if (emails.size || phones.size) {
-    const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 1000 })
-    for (const user of authData?.users || []) {
-      const authEmail = normalizeEmail(user.email)
-      const authPhone = normalizePhone(user.phone)
-      const metaEmail = normalizeEmail(readString(user.user_metadata?.email))
-      const metaPhone = normalizePhone(readString(user.user_metadata?.phone) || readString(user.user_metadata?.mobile))
+    for (let page = 1; page <= MAX_ADMIN_USER_PAGES; page += 1) {
+      const { data: authData, error } = await supabase.auth.admin.listUsers({ page, perPage: ADMIN_USERS_PAGE_SIZE })
+      if (error) throw error
+      for (const user of authData?.users || []) {
+        const authEmail = normalizeEmail(user.email)
+        const authPhone = normalizePhone(user.phone)
+        const metaEmail = normalizeEmail(readString(user.user_metadata?.email))
+        const metaPhone = normalizePhone(readString(user.user_metadata?.phone) || readString(user.user_metadata?.mobile))
 
-      if (
-        (authEmail && emails.has(authEmail)) ||
-        (metaEmail && emails.has(metaEmail)) ||
-        (authPhone && phones.has(authPhone)) ||
-        (metaPhone && phones.has(metaPhone))
-      ) {
-        userIds.add(user.id)
+        if (
+          (authEmail && emails.has(authEmail)) ||
+          (metaEmail && emails.has(metaEmail)) ||
+          (authPhone && phones.has(authPhone)) ||
+          (metaPhone && phones.has(metaPhone))
+        ) {
+          userIds.add(user.id)
+        }
       }
+      if ((authData?.users || []).length < ADMIN_USERS_PAGE_SIZE) break
     }
   }
 

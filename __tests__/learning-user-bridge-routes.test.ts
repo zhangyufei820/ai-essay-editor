@@ -28,4 +28,16 @@ describe("learning API user bridge", () => {
       expect(src).not.toMatch(/仅支持已同步的 Supabase 用户账号|教师账号未同步到 Supabase/)
     }
   })
+
+  it("paginates the Supabase auth directory instead of scanning only the first 1000 users", () => {
+    const src = fs.readFileSync(path.join(root, "lib/learning-user.ts"), "utf8")
+    const entitlements = fs.readFileSync(path.join(root, "lib/user-entitlements.ts"), "utf8")
+
+    expect(src).toContain("for (let page = 1; page <= MAX_ADMIN_USER_PAGES; page += 1)")
+    expect(src).toContain("listUsers({ page, perPage: ADMIN_USERS_PAGE_SIZE })")
+    expect(src).toContain("data.users.length < ADMIN_USERS_PAGE_SIZE")
+    expect(src).not.toContain("saveUserMapping")
+    expect(entitlements).toContain("listUsers({ page, perPage: ADMIN_USERS_PAGE_SIZE })")
+    expect(entitlements).toContain("page <= MAX_ADMIN_USER_PAGES")
+  })
 })
