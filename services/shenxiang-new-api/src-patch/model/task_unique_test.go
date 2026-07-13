@@ -12,6 +12,23 @@ func TestTaskPublicIDUniqueIndexDDLIsExplicit(t *testing.T) {
 	require.Equal(t, "CREATE UNIQUE INDEX ux_tasks_task_id ON tasks (task_id)", mysqlDDL)
 }
 
+func TestScanMySQLIndexColumnsPreservesNullableMetadata(t *testing.T) {
+	database := setupOAuthIdentitySQLiteDB(t)
+	rows, err := database.Raw(`SELECT 1 AS seq_in_index, 0 AS non_unique,
+		'task_id' AS column_name, NULL AS sub_part`).Rows()
+	require.NoError(t, err)
+	defer rows.Close()
+
+	columns, err := scanMySQLIndexColumns(rows)
+	require.NoError(t, err)
+	require.Len(t, columns, 1)
+	require.Equal(t, 1, columns[0].SeqInIndex)
+	require.Zero(t, columns[0].NonUnique)
+	require.Equal(t, "task_id", columns[0].ColumnName.String)
+	require.True(t, columns[0].ColumnName.Valid)
+	require.False(t, columns[0].SubPart.Valid)
+}
+
 func TestPostgresIndexMetadataQuerySupportsPostgres96(t *testing.T) {
 	require.NotContains(t, postgresIndexMetadataQuery, "indnkeyatts")
 	for _, field := range []string{"indnatts", "indisvalid", "indisready", "indislive"} {

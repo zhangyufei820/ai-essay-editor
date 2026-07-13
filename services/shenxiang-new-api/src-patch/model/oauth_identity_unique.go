@@ -413,12 +413,27 @@ type mysqlIndexColumn struct {
 }
 
 func loadMySQLIndexColumns(tableName string, indexName string) ([]mysqlIndexColumn, error) {
-	var columns []mysqlIndexColumn
-	err := DB.Raw(`SELECT seq_in_index, non_unique, column_name, sub_part
+	rows, err := DB.Raw(`SELECT seq_in_index, non_unique, column_name, sub_part
 		FROM information_schema.statistics
 		WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?
-		ORDER BY seq_in_index`, tableName, indexName).Scan(&columns).Error
-	return columns, err
+		ORDER BY seq_in_index`, tableName, indexName).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanMySQLIndexColumns(rows)
+}
+
+func scanMySQLIndexColumns(rows *sql.Rows) ([]mysqlIndexColumn, error) {
+	columns := make([]mysqlIndexColumn, 0)
+	for rows.Next() {
+		var column mysqlIndexColumn
+		if err := rows.Scan(&column.SeqInIndex, &column.NonUnique, &column.ColumnName, &column.SubPart); err != nil {
+			return nil, err
+		}
+		columns = append(columns, column)
+	}
+	return columns, rows.Err()
 }
 
 type postgresIndexMetadata struct {
