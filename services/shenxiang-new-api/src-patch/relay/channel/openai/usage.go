@@ -12,6 +12,7 @@ func applyUsagePostProcessing(info *relaycommon.RelayInfo, usage *dto.Usage, res
 		return
 	}
 	applyUsageCostPostProcessing(usage, responseBody)
+	usage.NormalizeCacheWriteTokens()
 
 	switch info.ChannelType {
 	case constant.ChannelTypeDeepSeek:

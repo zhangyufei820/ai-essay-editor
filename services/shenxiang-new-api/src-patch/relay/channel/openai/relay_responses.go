@@ -266,6 +266,7 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 		usage.TotalTokens = responsesResponse.Usage.TotalTokens
 		if responsesResponse.Usage.InputTokensDetails != nil {
 			usage.PromptTokensDetails.CachedTokens = responsesResponse.Usage.InputTokensDetails.CachedTokens
+			usage.PromptTokensDetails.CachedCreationTokens = responsesResponse.Usage.InputTokensDetails.GetCacheWriteTokens()
 		}
 	}
 	service.CopyResponsesCostFields(&usage, &responsesResponse)
@@ -329,6 +330,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 					}
 					if streamResponse.Response.Usage.InputTokensDetails != nil {
 						usage.PromptTokensDetails.CachedTokens = streamResponse.Response.Usage.InputTokensDetails.CachedTokens
+						usage.PromptTokensDetails.CachedCreationTokens = streamResponse.Response.Usage.InputTokensDetails.GetCacheWriteTokens()
 					}
 				}
 				service.CopyResponsesCostFields(usage, streamResponse.Response)

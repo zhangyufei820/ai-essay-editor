@@ -2297,6 +2297,14 @@ export function renderTieredModelPrice(opts) {
     cache_creation_tokens: cacheCreationTokens = 0,
     cache_creation_tokens_5m: cacheCreationTokens5m = 0,
     cache_creation_tokens_1h: cacheCreationTokens1h = 0,
+    image_input: imageInputTokens = 0,
+    image_output: imageOutputTokens = 0,
+    audio_input: audioInputTokens = 0,
+    audio_output: audioOutputTokens = 0,
+    claude: isClaude = false,
+    monthly_card_retail_quota: monthlyCardRetailQuota = 0,
+    monthly_card_billed_quota: monthlyCardBilledQuota = 0,
+    monthly_card_text_value_multiplier: monthlyCardTextValueMultiplier = 0,
   } = opts;
   let exprStr = '';
   try { exprStr = decodeFromBase64(exprB64); } catch { /* ignore */ }
@@ -2325,16 +2333,80 @@ export function renderTieredModelPrice(opts) {
       .filter((v) => v.group !== 'cache' || hasAnyCacheTokens)
       .map((v) => [v.field, v.label]);
 
+  const cacheCreateTokens = isClaude && cacheCreationTokens5m > 0
+      ? cacheCreationTokens5m
+      : cacheCreationTokens;
+  const inputTokensPricedSeparately =
+      (tier.cacheReadPrice > 0 ? cacheTokens : 0) +
+      (tier.cacheCreatePrice > 0 ? cacheCreateTokens : 0) +
+      (tier.cacheCreate1hPrice > 0 ? cacheCreationTokens1h : 0) +
+      (tier.imagePrice > 0 ? imageInputTokens : 0) +
+      (tier.audioInputPrice > 0 ? audioInputTokens : 0);
+  const outputTokensPricedSeparately =
+      (tier.imageOutputPrice > 0 ? imageOutputTokens : 0) +
+      (tier.audioOutputPrice > 0 ? audioOutputTokens : 0);
+  const tierTokenCounts = {
+    p: Math.max(inputTokens - inputTokensPricedSeparately, 0),
+    c: Math.max(completionTokens - outputTokensPricedSeparately, 0),
+    cr: cacheTokens,
+    cc: cacheCreateTokens,
+    cc1h: cacheCreationTokens1h,
+    img: imageInputTokens,
+    img_o: imageOutputTokens,
+    ai: audioInputTokens,
+    ao: audioOutputTokens,
+  };
+  const calculationLines = BILLING_PRICING_VARS
+      .filter((variable) => tier[variable.field] > 0 && tierTokenCounts[variable.key] > 0)
+      .map((variable) => {
+        const tokenCount = tierTokenCounts[variable.key];
+        const amount = (tokenCount / 1000000) * tier[variable.field] * gr;
+        return {
+          amount,
+          content: buildBillingText(
+              '{{label}}：{{tokens}} tokens / 1M tokens * {{symbol}}{{price}} * 分组倍率 {{ratio}} = {{amount}}',
+              {
+                label: i18next.t(variable.shortLabel),
+                tokens: tokenCount,
+                symbol,
+                price: formatBillingDisplayPrice(tier[variable.field], rate),
+                ratio: gr,
+                amount: renderDisplayAmountFromUsd(amount),
+              },
+          ),
+        };
+      });
+  const calculationTotal = calculationLines.reduce((total, line) => total + line.amount, 0);
+
   const lines = [
+    buildBillingText('结算策略：本地阶梯价，按本次记录的 token 结算'),
     buildBillingText('命中档位：{{tier}}', { tier: matchedTier || tier.label }),
     ...priceLines
         .filter(([field]) => tier[field] > 0)
         .map(([field, label]) =>
             buildBillingPriceText(`${label}：{{symbol}}{{price}} / 1M tokens`, { symbol, usdAmount: tier[field], rate }),
         ),
+    ...calculationLines.map((line) => line.content),
+    calculationLines.length > 0
+        ? buildBillingText('公式小计（取整前）：{{amount}}', {
+          amount: renderDisplayAmountFromUsd(calculationTotal),
+        })
+        : null,
+    monthlyCardRetailQuota > 0
+        ? buildBillingText('按量额度（取整后）：{{retail}} 额度', {
+          retail: monthlyCardRetailQuota,
+        })
+        : null,
+    monthlyCardRetailQuota > 0 && monthlyCardBilledQuota > 0 && monthlyCardTextValueMultiplier > 0
+        ? buildBillingText('月卡折算：ceil({{retail}} / {{multiplier}}) = {{billed}} 额度', {
+          retail: monthlyCardRetailQuota,
+          multiplier: monthlyCardTextValueMultiplier,
+          billed: monthlyCardBilledQuota,
+        })
+        : null,
   ];
 
-  return renderBillingArticle(lines);
+  return renderBillingArticle(lines.filter(Boolean));
 }
 
 export function renderTieredModelPriceSimple(opts) {

@@ -283,9 +283,30 @@ type OpenAIVideoResponse struct {
 type InputTokenDetails struct {
 	CachedTokens         int `json:"cached_tokens"`
 	CachedCreationTokens int `json:"cached_creation_tokens,omitempty"`
+	CacheWriteTokens     int `json:"cache_write_tokens,omitempty"`
 	TextTokens           int `json:"text_tokens"`
 	AudioTokens          int `json:"audio_tokens"`
 	ImageTokens          int `json:"image_tokens"`
+}
+
+func (details InputTokenDetails) GetCacheWriteTokens() int {
+	if details.CacheWriteTokens > 0 {
+		return details.CacheWriteTokens
+	}
+	return details.CachedCreationTokens
+}
+
+func (usage *Usage) NormalizeCacheWriteTokens() {
+	if usage == nil {
+		return
+	}
+	if cacheWriteTokens := usage.PromptTokensDetails.GetCacheWriteTokens(); cacheWriteTokens > 0 {
+		usage.PromptTokensDetails.CachedCreationTokens = cacheWriteTokens
+		return
+	}
+	if usage.InputTokensDetails != nil {
+		usage.PromptTokensDetails.CachedCreationTokens = usage.InputTokensDetails.GetCacheWriteTokens()
+	}
 }
 
 type OutputTokenDetails struct {

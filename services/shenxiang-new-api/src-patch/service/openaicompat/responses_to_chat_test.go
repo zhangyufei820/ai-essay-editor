@@ -84,3 +84,29 @@ func TestChatCompletionsResponseToResponsesResponseWrapsText(t *testing.T) {
 		t.Fatalf("content = %#v", got.Output[0].Content)
 	}
 }
+
+func TestResponsesResponseToChatCompletionsResponseCopiesCacheWriteTokens(t *testing.T) {
+	var response dto.OpenAIResponsesResponse
+	err := json.Unmarshal([]byte(`{
+		"id":"resp_test",
+		"object":"response",
+		"status":"completed",
+		"usage":{
+			"input_tokens":100,
+			"output_tokens":20,
+			"total_tokens":120,
+			"input_tokens_details":{"cached_tokens":70,"cache_write_tokens":15}
+		}
+	}`), &response)
+	if err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+
+	_, usage, err := ResponsesResponseToChatCompletionsResponse(&response, "resp_test")
+	if err != nil {
+		t.Fatalf("ResponsesResponseToChatCompletionsResponse returned error: %v", err)
+	}
+	if usage.PromptTokensDetails.CachedCreationTokens != 15 {
+		t.Fatalf("cache creation tokens = %d, want 15", usage.PromptTokensDetails.CachedCreationTokens)
+	}
+}
