@@ -532,6 +532,17 @@ describe("llm gateway reliability config", () => {
     expect(dockerfile).toContain("fetch('http://127.0.0.1:3000')")
   })
 
+  it("keeps the production Node runtime compatible with application dependencies", () => {
+    const dockerfile = fs.readFileSync(path.join(process.cwd(), "Dockerfile"), "utf8")
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+    ) as { engines?: { node?: string } }
+
+    expect(packageJson.engines?.node).toBe(">=22")
+    expect(dockerfile.match(/^FROM node:22 AS (?:builder|runner)$/gm)).toHaveLength(2)
+    expect(dockerfile).not.toMatch(/^FROM node:20\b/m)
+  })
+
   it("keeps hot aliases from ending in an all-cooldown single-family fallback group", () => {
     const config = loadConfig()
     const targets = fallbackMap(config)
