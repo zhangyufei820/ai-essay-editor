@@ -406,6 +406,32 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("claude-opus-4-8", sql)
         self.assertNotIn("seedance-2.0-cl-mini", sql)
 
+    def test_sync_user_claude_tokens_replaces_unrestricted_limits(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            self.assertIn("LOWER(TRIM(COALESCE(name, ''))) = 'claude'", query)
+            return [
+                ["201", "key-201", "", "0"],
+                ["202", "key-202", "claude-opus-4-6", "1"],
+            ]
+
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
+
+        result = self.module.sync_user_claude_tokens(
+            {"claude": ["claude-opus-4-6", "claude-sonnet-5"]}
+        )
+
+        sql = "\n".join(captured)
+        self.assertEqual(result, {"tokens_rewritten": 2, "token_caches_deleted": 2})
+        self.assertIn("WHERE id = '201'", sql)
+        self.assertIn("WHERE id = '202'", sql)
+        self.assertIn("model_limits_enabled = 1", sql)
+        self.assertIn("claude-opus-4-6,claude-sonnet-5", sql)
+        self.assertIn("CACHE:key-201,key-202", sql)
+
     def test_ensure_public_openai_text_models_uses_public_chat_metadata(self) -> None:
         captured: list[str] = []
         self.module.mysql_exec = captured.append

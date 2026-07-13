@@ -85,6 +85,33 @@ func TestEnforcePublicTokenGroupSelectionDefaultsEmptyGroupToStable(t *testing.T
 	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
+func TestEnforcePublicTokenGroupSelectionRestrictsClaudeTokenModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		request := struct {
+			ModelLimitsEnabled bool   `json:"model_limits_enabled"`
+			ModelLimits        string `json:"model_limits"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.True(t, request.ModelLimitsEnabled)
+		require.Equal(t, strings.Join(claudeUserTokenModels, ","), request.ModelLimits)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":" Claude ","model_limits_enabled":false,"model_limits":"gpt-5.5"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
 func TestEnforcePublicTokenGroupSelectionRejectsNullBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	called := false

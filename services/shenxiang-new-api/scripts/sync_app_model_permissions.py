@@ -23,6 +23,7 @@ TOKEN_PROFILES = {
 }
 USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 MONTHLY_CARD_TOKEN_NAMES = ("月卡专用 Key", "¥500 月卡专用")
+CLAUDE_USER_TOKEN_NAME = "claude"
 
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
@@ -1206,6 +1207,34 @@ def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
+def sync_user_claude_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
+    claude_models = ",".join(sanitize_token_models(profiles["claude"]))
+    token_rows = mysql(
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0) FROM tokens "
+        "WHERE deleted_at IS NULL AND LOWER(TRIM(COALESCE(name, ''))) = "
+        + sql_quote(CLAUDE_USER_TOKEN_NAME)
+        + ";"
+    )
+    token_updates: list[tuple[str, str]] = []
+    for token_id, token_key, raw_limits, raw_enabled in token_rows:
+        if raw_limits != claude_models or raw_enabled != "1":
+            token_updates.append((token_id, token_key))
+
+    statements = ["START TRANSACTION;"]
+    for token_id, _token_key in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits_enabled = 1, model_limits = "
+            + sql_quote(claude_models)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    caches_deleted = delete_token_caches([token_key for _token_id, token_key in token_updates])
+    return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
+
+
 def sync_abilities() -> None:
     groups = active_groups()
     channel_rows = mysql(
@@ -1555,6 +1584,7 @@ def main() -> int:
     sync_abilities()
     sync_tokens(profiles)
     codex_token_result = sync_user_codex_tokens(profiles)
+    claude_token_result = sync_user_claude_tokens(profiles)
     guard_result = enforce_gpt_image2_db_guard()
     env_changed = sync_codex_env(profiles)
     if env_changed or os.environ.get("SYNC_FORCE_CODEX_REFRESH") == "1":
@@ -1562,7 +1592,7 @@ def main() -> int:
     print(
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
-        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, gpt_image2_guard={guard_result}"
+        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, claude_token_sync={claude_token_result}, gpt_image2_guard={guard_result}"
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
         + f", retired_claude={retired_claude_result}"

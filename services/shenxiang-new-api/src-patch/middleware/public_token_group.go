@@ -5,12 +5,23 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
 
 const maxTokenConfigurationBodyBytes = 1 << 20
+
+const claudeUserTokenName = "claude"
+
+var claudeUserTokenModels = []string{
+	"claude-opus-4-6",
+	"claude-opus-4-7",
+	"claude-opus-4-8",
+	"claude-sonnet-4-6",
+	"claude-sonnet-5",
+}
 
 func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -64,6 +75,13 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 		}
 		if group == service.Grok45PricingGroupName {
 			request["cross_group_retry"] = json.RawMessage(`false`)
+		}
+		if rawName, ok := request["name"]; ok {
+			var name string
+			if json.Unmarshal(rawName, &name) == nil && strings.EqualFold(strings.TrimSpace(name), claudeUserTokenName) {
+				request["model_limits_enabled"] = json.RawMessage(`true`)
+				request["model_limits"] = json.RawMessage(`"` + strings.Join(claudeUserTokenModels, `,`) + `"`)
+			}
 		}
 		validationBody, err := json.Marshal(request)
 		if err != nil {
