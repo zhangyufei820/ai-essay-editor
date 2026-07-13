@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from redis import Redis
 
-from app.config import GROK_MODEL, GROK_TOKEN_GROUP, Settings, secret_values_for_redaction
+from app.config import GROK_MODEL, GROK_TOKEN_GROUP, GROK_TOKEN_NAME, Settings, secret_values_for_redaction
 from app.model_access import (
     IMAGE_BENEFIT_MODEL,
     SERVER_ALLOWED_MODELS_METADATA_KEY,
@@ -23,6 +23,10 @@ from app.security import public_error_message, redact
 
 logger = logging.getLogger(__name__)
 TOKEN_CONTRACT_VERSION = "contract-v2"
+
+PUBLIC_TOKEN_GROUPS = frozenset({"default", "discount"})
+DEFAULT_PUBLIC_TOKEN_GROUP = "default"
+
 
 class NewApiAuthError(RuntimeError):
     pass
@@ -149,7 +153,7 @@ class NewApiClient:
             "video": (self.settings.video_token_name, effective_models["video"], None),
         }
         if effective_models["grok"]:
-            profiles["grok"] = (self.settings.grok_token_name, effective_models["grok"], GROK_TOKEN_GROUP)
+            profiles["grok"] = (GROK_TOKEN_NAME, effective_models["grok"], GROK_TOKEN_GROUP)
         tokens = await self._list_tokens(client, headers)
         result: dict[str, str] = {}
         for mode, (name, models, token_group) in profiles.items():
@@ -297,7 +301,7 @@ class NewApiClient:
     ) -> str:
         models = self._token_contract_models(models, token_group)
         expected_models = ",".join(models)
-        expected_group = token_group if token_group is not None else str(user.get("group") or "")
+        expected_group = self._token_group_for_profile(user, token_group)
         models_digest = hashlib.sha256(f"{expected_models}\n{expected_group}".encode("utf-8")).hexdigest()[:24]
         cache_key = f"codex:auto-token:{user_id}:{token_name}:{models_digest}"
         cache_key += f":{TOKEN_CONTRACT_VERSION}"
@@ -376,7 +380,9 @@ class NewApiClient:
         token_group: str | None = None,
     ) -> int:
         models = self._token_contract_models(models, token_group)
-        resolved_group = token_group if token_group is not None else str(user.get("group") or "")
+        if token_group == GROK_TOKEN_GROUP:
+            token_name = GROK_TOKEN_NAME
+        resolved_group = self._token_group_for_profile(user, token_group)
         is_dedicated_grok = token_group == GROK_TOKEN_GROUP
         payload = {
             "name": token_name,
@@ -409,27 +415,28 @@ class NewApiClient:
         token_group: str | None = None,
     ) -> None:
         models = self._token_contract_models(models, token_group)
+        if token_group == GROK_TOKEN_GROUP:
+            token_name = GROK_TOKEN_NAME
         expected_models = ",".join(models)
-        expected_group = (
-            token_group
-            if token_group is not None
-            else str(user.get("group") or token.get("group") or "")
-        )
-        group_matches = token_group is None or str(token.get("group") or "") == expected_group
+        expected_group = self._token_group_for_profile(user, token_group)
+        expected_cross_group_retry = token_group is None
+        expected_expired_time = -1 if token_group == GROK_TOKEN_GROUP else int(token.get("expired_time") or -1)
+        expected_allow_ips = "" if token_group == GROK_TOKEN_GROUP else str(token.get("allow_ips") or "")
+        group_matches = str(token.get("group") or "") == expected_group
         contract_matches = (
             token.get("model_limits_enabled")
             and str(token.get("model_limits") or "") == expected_models
             and token.get("unlimited_quota")
             and group_matches
+            and bool(token.get("cross_group_retry")) == expected_cross_group_retry
+            and int(token.get("expired_time") or -1) == expected_expired_time
+            and str(token.get("allow_ips") or "") == expected_allow_ips
         )
         is_dedicated_grok = token_group == GROK_TOKEN_GROUP
         if is_dedicated_grok:
             contract_matches = bool(
                 contract_matches
                 and str(token.get("remain_quota")) == "0"
-                and str(token.get("expired_time")) == "-1"
-                and token.get("allow_ips") == ""
-                and token.get("cross_group_retry") is False
             )
         if contract_matches:
             return
@@ -437,13 +444,13 @@ class NewApiClient:
             "id": int(token["id"]),
             "name": token_name,
             "remain_quota": 0,
-            "expired_time": -1 if is_dedicated_grok else int(token.get("expired_time") or -1),
+            "expired_time": expected_expired_time,
             "unlimited_quota": True,
             "model_limits_enabled": True,
             "model_limits": expected_models,
-            "allow_ips": "" if is_dedicated_grok else token.get("allow_ips") or "",
+            "allow_ips": expected_allow_ips,
             "group": expected_group,
-            "cross_group_retry": not is_dedicated_grok,
+            "cross_group_retry": expected_cross_group_retry,
         }
         result = await self._put_json(client, "/api/token/", headers, payload)
         if not result.get("success", False):
@@ -462,6 +469,15 @@ class NewApiClient:
         if token_group == GROK_TOKEN_GROUP:
             return (GROK_MODEL,)
         return models
+
+    @staticmethod
+    def _token_group_for_profile(user: dict[str, Any], token_group: str | None) -> str:
+        if token_group is not None:
+            return str(token_group).strip()
+        user_group = str(user.get("group") or "").strip()
+        if user_group in PUBLIC_TOKEN_GROUPS:
+            return user_group
+        return DEFAULT_PUBLIC_TOKEN_GROUP
 
     async def _fetch_token_key(self, client: httpx.AsyncClient, headers: dict[str, str], token_id: Any) -> str:
         result = await self._post_json(client, f"/api/token/{int(token_id)}/key", headers, {})

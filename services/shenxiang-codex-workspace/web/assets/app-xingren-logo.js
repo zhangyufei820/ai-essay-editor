@@ -27,6 +27,7 @@ const state = {
   pendingSkillFileName: "",
   isRunning: false,
   activeView: "home",
+  reasoningEffort: "",
 };
 
 const roleOrder = [
@@ -300,7 +301,60 @@ function renderModelSelector() {
   const current = $("modelSelect").value || state.defaults.chat_main || "";
   const mode = currentMode();
   const role = roleForModel(current, mode);
-  $("modelChip").textContent = `${roleLabel(role)} · ${modeLabel(mode)}`;
+  renderReasoningControl(current, mode);
+  const effort = selectedReasoningEffort(current, mode);
+  const reasoningLabel = effort ? ` · 思考：${reasoningEffortLabel(effort)}` : "";
+  $("modelChip").textContent = `${roleLabel(role)} · ${modeLabel(mode)}${reasoningLabel}`;
+}
+
+function reasoningCapability(model, mode = currentMode()) {
+  const capabilities = modeConfig(mode).reasoning || {};
+  return capabilities[model] || null;
+}
+
+function selectedReasoningEffort(model, mode = currentMode()) {
+  const capability = reasoningCapability(model, mode);
+  if (!capability) return "";
+  const efforts = Array.isArray(capability.efforts) ? capability.efforts : [];
+  const fallback = capability.default || "medium";
+  return efforts.includes(state.reasoningEffort) ? state.reasoningEffort : fallback;
+}
+
+function reasoningEffortLabel(effort) {
+  return {
+    none: "无",
+    low: "低",
+    medium: "标准",
+    high: "高",
+    xhigh: "极高",
+  }[effort] || effort;
+}
+
+function renderReasoningControl(model, mode = currentMode()) {
+  const control = $("reasoningControl");
+  const select = $("reasoningEffortSelect");
+  const capability = reasoningCapability(model, mode);
+  if (!control || !select || !capability) {
+    if (control) control.hidden = true;
+    state.reasoningEffort = "";
+    return;
+  }
+  const efforts = Array.isArray(capability.efforts) ? capability.efforts : [];
+  if (!efforts.length) {
+    control.hidden = true;
+    state.reasoningEffort = "";
+    return;
+  }
+  state.reasoningEffort = selectedReasoningEffort(model, mode);
+  select.innerHTML = "";
+  for (const effort of efforts) {
+    const option = document.createElement("option");
+    option.value = effort;
+    option.textContent = `思考：${reasoningEffortLabel(effort)}`;
+    select.appendChild(option);
+  }
+  select.value = state.reasoningEffort;
+  control.hidden = false;
 }
 
 function renderModelChoices() {
@@ -434,7 +488,13 @@ function renderModeConsole() {
   const config = modeConfig(mode);
   if ($("modeTitle")) $("modeTitle").textContent = config.label || mode;
   if ($("modeDescription")) $("modeDescription").textContent = config.description || "";
-  if ($("billingHint")) $("billingHint").textContent = config.billing || "";
+  const model = $("modelSelect")?.value || "";
+  const reasoningBilling = selectedReasoningEffort(model, mode) ? config.reasoning_billing || "" : "";
+  if ($("billingHint")) {
+    $("billingHint").textContent = [config.billing || "", reasoningBilling]
+      .filter(Boolean)
+      .join(" ");
+  }
   if ($("taskInput")) $("taskInput").placeholder = placeholderForMode(mode);
   if ($("maskAttach")) $("maskAttach").style.display = mode === "image" ? "inline-flex" : "none";
 }
@@ -779,6 +839,7 @@ async function runTask() {
   const mode = currentMode();
   let selectedModel = normalizeCodexModel($("modelSelect").value || "");
   const role = roleForModel(selectedModel, mode);
+  const reasoningEffort = selectedReasoningEffort(selectedModel, mode);
   state.activeAssistant = appendMessage("assistant", "", true);
   state.activeContent = "";
   state.pendingAssistantText = "";
@@ -801,6 +862,7 @@ async function runTask() {
       [role]: selectedModel,
       ...(mode === "codex" ? { chat_main: selectedModel } : {}),
     },
+    ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     mode: "sync",
     files: [...state.files, state.maskFile].filter(Boolean).map(({ path, content }) => ({ path, content })),
     metadata: {
@@ -1537,7 +1599,15 @@ function bindEvents() {
     if (typeof picker.showPicker === "function") picker.showPicker();
     else picker.focus();
   });
-  $("modelSelect").addEventListener("change", renderModelSelector);
+  $("modelSelect").addEventListener("change", () => {
+    renderModelSelector();
+    renderModeConsole();
+  });
+  $("reasoningEffortSelect")?.addEventListener("change", (event) => {
+    state.reasoningEffort = event.target.value || "";
+    renderModelSelector();
+    renderModeConsole();
+  });
   document.querySelector(".mode-tabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-mode]");
     if (!button) return;

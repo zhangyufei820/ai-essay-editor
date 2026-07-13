@@ -21,6 +21,8 @@ var ErrInsufficientQuota = errors.New("insufficient user quota")
 
 const UserNameMaxLength = 20
 
+var ErrUserQuotaInsufficient = ErrInsufficientQuota
+
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
@@ -1157,6 +1159,10 @@ func DecreaseUserQuota(id int, quota int, db bool) (err error) {
 		return nil
 	}
 	return decreaseUserQuota(id, quota)
+}
+
+func DecreaseUserQuotaIfEnough(id int, quota int) error {
+	return TryDecreaseUserQuota(id, quota)
 }
 
 func decreaseUserQuota(id int, quota int) (err error) {

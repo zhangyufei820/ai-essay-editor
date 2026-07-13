@@ -67,6 +67,24 @@ func TestIsPublicTokenGroupRejectsLegacyAndAutoGroups(t *testing.T) {
 	require.False(t, IsPublicTokenGroup("auto"))
 }
 
+func TestPublicPricingGroupsRequireManagedGrokEntitlement(t *testing.T) {
+	originalGroups := setting.UserUsableGroups2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalGroups))
+	})
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{
+		"default":"原价稳定通道",
+		"discount":"特价临时通道",
+		"grok45":"Grok 4.5 专用通道"
+	}`))
+
+	require.NotContains(t, GetPublicPricingGroups("default", false), Grok45PricingGroupName)
+	require.Contains(t, GetPublicPricingGroups("default", true), Grok45PricingGroupName)
+	require.NotContains(t, GetPublicUserUsableGroups("default"), Grok45PricingGroupName)
+	require.False(t, IsPublicTokenGroup(Grok45PricingGroupName))
+	require.False(t, GroupInUserUsableGroups("default", Grok45PricingGroupName))
+}
+
 func TestNormalizePublicTokenGroupDefaultsLegacyAndAutoGroups(t *testing.T) {
 	require.Equal(t, "default", NormalizePublicTokenGroup("internal"))
 	require.Equal(t, "default", NormalizePublicTokenGroup("auto"))

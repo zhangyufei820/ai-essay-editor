@@ -29,6 +29,7 @@ from app.model_access import (
     mode_models_payload_from_metadata,
     mode_models_from_metadata,
 )
+from app.reasoning import reasoning_effort_for_model
 from app.security import contains_forbidden_runtime_action, normalize_sandbox, public_error_code, public_error_message, redact
 
 logger = logging.getLogger(__name__)
@@ -313,6 +314,9 @@ class CodexRunner:
         model = self._model_for_task(task)
         if model and "--model" in help_text:
             command.extend(["--model", model])
+        if reasoning_effort := self._reasoning_effort_for_task(task, model):
+            if "--config" in help_text:
+                command.extend(["--config", f'model_reasoning_effort="{reasoning_effort}"'])
         if json_events and "--json" in help_text:
             command.append("--json")
         if "--ephemeral" in help_text:
@@ -451,6 +455,8 @@ class CodexRunner:
             "messages": self._chat_fallback_messages(task),
             "stream": True,
         }
+        if reasoning_effort := self._reasoning_effort_for_task(task, model):
+            payload["reasoning_effort"] = reasoning_effort
         headers = {
             "Authorization": f"Bearer {user_api_key}",
             "Content-Type": "application/json",
@@ -683,6 +689,10 @@ class CodexRunner:
         if self._is_allowed_model_for_mode(task, candidate, mode):
             return candidate
         return self._fallback_model_for_mode(task, mode, self.settings.default_chat_model)
+
+    def _reasoning_effort_for_task(self, task: dict[str, Any], model: str) -> str | None:
+        request = task.get("request") if isinstance(task.get("request"), dict) else {}
+        return reasoning_effort_for_model(model, request.get("reasoning_effort"))
 
     def _is_codex_text_model(self, model: str) -> bool:
         return is_text_model(self.settings, model)

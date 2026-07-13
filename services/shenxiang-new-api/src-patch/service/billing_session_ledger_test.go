@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -375,11 +377,17 @@ func TestBillingSessionActiveReserveFailsClosedUntilLedgerConverges(t *testing.T
 			SELECT RAISE(FAIL, 'forced reserve convergence failure');
 		END
 	`).Error)
+	t.Cleanup(func() { model.DB.Exec("DROP TRIGGER IF EXISTS fail_reserve_applied_quota_update") })
 
 	reserveErr := session.Reserve(150)
-	require.EqualError(t, reserveErr, "billing reservation could not be confirmed")
+	var reserveAPIError *types.NewAPIError
+	require.ErrorAs(t, reserveErr, &reserveAPIError)
+	require.Equal(t, types.ErrorCodeUpdateDataError, reserveAPIError.GetErrorCode())
+	require.Equal(t, http.StatusInternalServerError, reserveAPIError.StatusCode)
 	reserveErr = session.Reserve(150)
-	require.EqualError(t, reserveErr, "billing reservation could not be confirmed")
+	require.ErrorAs(t, reserveErr, &reserveAPIError)
+	require.Equal(t, types.ErrorCodeUpdateDataError, reserveAPIError.GetErrorCode())
+	require.Equal(t, http.StatusInternalServerError, reserveAPIError.StatusCode)
 	require.Equal(t, 900, getUserQuota(t, userID))
 	require.Equal(t, 900, getTokenRemainQuota(t, tokenID))
 	session.Refund(nil)
@@ -449,6 +457,7 @@ func TestBillingSessionActiveRefundRemainsRetryableWhenIntentWriteFails(t *testi
 			SELECT RAISE(FAIL, 'forced refund outcome failure');
 		END
 	`).Error)
+	t.Cleanup(func() { model.DB.Exec("DROP TRIGGER IF EXISTS fail_billing_refund_outcome") })
 
 	session.Refund(nil)
 	require.True(t, session.NeedsRefund())
@@ -560,6 +569,41 @@ func TestBillingSessionSubscriptionReservationDoesNotDoubleCountPostDelta(t *tes
 			session.CompleteTaskBillingHandoff()
 		})
 	}
+}
+
+func TestBillingSessionActiveSubscriptionReserveOverLimitReturnsForbidden(t *testing.T) {
+	truncate(t)
+	t.Setenv("BILLING_LEDGER_MODE", string(model.BillingLedgerModeActive))
+	const userID, planID, subscriptionID = 242, 242, 242
+	seedUser(t, userID, 1000)
+	require.NoError(t, model.DB.Create(&model.SubscriptionPlan{
+		Id: planID, Title: "Ledger Reserve Limit", Enabled: true, TotalAmount: 120,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.UserSubscription{
+		Id: subscriptionID, UserId: userID, PlanId: planID, AmountTotal: 120,
+		Status: "active", StartTime: time.Now().Add(-time.Hour).Unix(), EndTime: time.Now().Add(time.Hour).Unix(),
+	}).Error)
+	relayInfo := &relaycommon.RelayInfo{
+		UserId: userID, RequestId: "active-subscription-reserve-limit", IsPlayground: true,
+		OriginModelName: "gpt-ledger-test",
+		UserSetting:     dto.UserSetting{BillingPreference: "subscription_only"},
+	}
+	session, apiErr := NewBillingSession(newBillingLedgerTestContext(), relayInfo, 100)
+	require.Nil(t, apiErr)
+
+	reserveErr := session.Reserve(150)
+	var reserveAPIError *types.NewAPIError
+	require.ErrorAs(t, reserveErr, &reserveAPIError)
+	require.Equal(t, types.ErrorCodeInsufficientUserQuota, reserveAPIError.GetErrorCode())
+	require.Equal(t, http.StatusForbidden, reserveAPIError.StatusCode)
+	var limitErr *model.SubscriptionLimitError
+	require.ErrorAs(t, reserveErr, &limitErr)
+	require.Equal(t, "daily", limitErr.Reason)
+
+	var subscription model.UserSubscription
+	require.NoError(t, model.DB.First(&subscription, subscriptionID).Error)
+	require.EqualValues(t, 100, subscription.AmountUsed)
+	session.Refund(nil)
 }
 
 func TestBillingSessionSubscriptionReplayUsesAppliedQuotaAsDisplayBaseline(t *testing.T) {

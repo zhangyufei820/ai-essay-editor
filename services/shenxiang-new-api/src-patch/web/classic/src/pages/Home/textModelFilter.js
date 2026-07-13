@@ -4,6 +4,14 @@ const MEDIA_MODEL_PATTERN =
 const DEFAULT_TEXT_MODEL = 'gpt-5.4-mini';
 const HIDDEN_TEXT_MODELS = new Set(['gpt-5.3-spark']);
 const GROK_TEXT_MODELS = new Set(['grok-4.5']);
+const DISCOUNT_TEXT_MODELS = new Set([
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.5',
+  'gpt-5.6-luna',
+  'gpt-5.6-terra',
+  'gpt-5.6-sol',
+]);
 
 const FALLBACK_TEXT_MODELS = [
   DEFAULT_TEXT_MODEL,
@@ -15,6 +23,23 @@ const FALLBACK_TEXT_MODELS = [
   'qwen3-max',
   'kimi-k2',
 ];
+
+const GPT_55_REASONING_EFFORT_OPTIONS = [
+  { label: '无', value: 'none' },
+  { label: '低', value: 'low' },
+  { label: '标准', value: 'medium' },
+  { label: '高', value: 'high' },
+  { label: '极高', value: 'xhigh' },
+];
+
+const REASONING_EFFORT_OPTIONS_BY_MODEL = new Map([
+  ['gpt-5.5', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.5-openai-compact', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.6', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.6-sol', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.6-terra', GPT_55_REASONING_EFFORT_OPTIONS],
+  ['gpt-5.6-luna', GPT_55_REASONING_EFFORT_OPTIONS],
+]);
 
 function isHiddenTextModel(modelName) {
   const name = String(modelName || '').trim().toLowerCase();
@@ -46,7 +71,21 @@ export function getDefaultTextModel(models = []) {
 
 export function getTextModelGroup(modelName) {
   const name = String(modelName || '').trim().toLowerCase();
-  return GROK_TEXT_MODELS.has(name) ? 'grok45' : '';
+  if (GROK_TEXT_MODELS.has(name)) return 'grok45';
+  if (DISCOUNT_TEXT_MODELS.has(name)) return 'discount';
+  return '';
+}
+
+export function getReasoningEffortOptions(modelName) {
+  return REASONING_EFFORT_OPTIONS_BY_MODEL.get(
+    String(modelName || '').trim().toLowerCase(),
+  ) || [];
+}
+
+export function getDefaultReasoningEffort(modelName) {
+  return getReasoningEffortOptions(modelName).find(
+    (option) => option.value === 'medium',
+  )?.value || '';
 }
 
 export { DEFAULT_TEXT_MODEL, FALLBACK_TEXT_MODELS };

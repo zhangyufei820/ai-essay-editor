@@ -495,6 +495,17 @@ func applyExactBillingSubscriptionDelta(tx *gorm.DB, subscriptionID int, delta i
 		return nil
 	}
 	if err := postConsumeUserSubscriptionDeltaWithEpochTx(tx, subscriptionID, delta, resetEpoch, record); err != nil {
+		if IsSubscriptionHardLimitError(err) {
+			return err
+		}
+		if delta > 0 {
+			switch {
+			case strings.HasPrefix(err.Error(), "subscription monthly used exceeds total"):
+				return &SubscriptionLimitError{Reason: "monthly"}
+			case strings.HasPrefix(err.Error(), "subscription used exceeds total"):
+				return &SubscriptionLimitError{Reason: "daily"}
+			}
+		}
 		return fmt.Errorf("%w: %v", ErrBillingOperationConflict, err)
 	}
 	return nil

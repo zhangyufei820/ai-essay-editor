@@ -8,15 +8,13 @@ import (
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
-const exactGrok45TokenBody = `{
+const managedGrok45TokenBody = `{
 	"id":17,
-	"name":"custom-grok-token-name",
+	"name":"星人 Grok 4.5 专用令牌",
 	"expired_time":-1,
 	"remain_quota":0,
 	"unlimited_quota":true,
@@ -27,29 +25,9 @@ const exactGrok45TokenBody = `{
 	"cross_group_retry":false
 }`
 
-func configureGrok45TokenEntitlements(t *testing.T) {
-	t.Helper()
-	originalGroups := setting.UserUsableGroups2JSONString()
-	specialGroups := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup
-	originalSpecialGroups := specialGroups.ReadAll()
-	t.Cleanup(func() {
-		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalGroups))
-		specialGroups.Clear()
-		specialGroups.AddAll(originalSpecialGroups)
-	})
-	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{
-		"default":"原价",
-		"discount":"特价",
-		"grok45":"Grok 4.5 专用通道"
-	}`))
-	specialGroups.Clear()
-	specialGroups.Set("restricted", map[string]string{"-:grok45": "不可用"})
-}
-
-func addAuthenticatedUserContext(engine *gin.Engine, userGroup string) {
+func addAuthenticatedUserContext(engine *gin.Engine) {
 	engine.Use(func(c *gin.Context) {
 		c.Set("id", 42)
-		c.Set("user_group", userGroup)
 		c.Next()
 	})
 }
@@ -63,11 +41,7 @@ func TestEnforcePublicTokenGroupSelectionRejectsLegacyGroup(t *testing.T) {
 		called = true
 		c.Status(http.StatusNoContent)
 	})
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/api/token/",
-		strings.NewReader(`{"group":"internal"}`),
-	)
+	request := httptest.NewRequest(http.MethodPost, "/api/token/", strings.NewReader(`{"group":"internal"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
@@ -89,11 +63,7 @@ func TestEnforcePublicTokenGroupSelectionPreservesBodyForController(t *testing.T
 		require.Equal(t, "discount", request.Group)
 		c.Status(http.StatusNoContent)
 	})
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/api/token/",
-		strings.NewReader(`{"group":"discount"}`),
-	)
+	request := httptest.NewRequest(http.MethodPost, "/api/token/", strings.NewReader(`{"group":"discount"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
@@ -116,11 +86,7 @@ func TestEnforcePublicTokenGroupSelectionDefaultsEmptyGroupToStable(t *testing.T
 		require.Equal(t, "default", request.Group)
 		c.Status(http.StatusNoContent)
 	})
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/api/token/",
-		strings.NewReader(`{"name":"test","group":""}`),
-	)
+	request := httptest.NewRequest(http.MethodPost, "/api/token/", strings.NewReader(`{"name":"test","group":""}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
@@ -138,11 +104,7 @@ func TestEnforcePublicTokenGroupSelectionRejectsNullBody(t *testing.T) {
 		called = true
 		c.Status(http.StatusNoContent)
 	})
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/api/token/",
-		strings.NewReader(`null`),
-	)
+	request := httptest.NewRequest(http.MethodPost, "/api/token/", strings.NewReader(`null`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
@@ -164,11 +126,7 @@ func TestEnforcePublicTokenGroupSelectionAllowsLegacyStatusOnlyUpdate(t *testing
 		require.Equal(t, "internal", request.Group)
 		c.Status(http.StatusNoContent)
 	})
-	request := httptest.NewRequest(
-		http.MethodPut,
-		"/api/token/?status_only=true",
-		strings.NewReader(`{"group":"internal"}`),
-	)
+	request := httptest.NewRequest(http.MethodPut, "/api/token/?status_only=true", strings.NewReader(`{"group":"internal"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
@@ -177,41 +135,56 @@ func TestEnforcePublicTokenGroupSelectionAllowsLegacyStatusOnlyUpdate(t *testing
 	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
-func TestEnforcePublicTokenGroupSelectionAllowsExactGrok45CreateAndUpdateWithCustomName(t *testing.T) {
-	configureGrok45TokenEntitlements(t)
+func TestEnforcePublicTokenGroupSelectionAllowsManagedGrok45Profile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	addAuthenticatedUserContext(engine)
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		request := struct {
+			Name            string `json:"name"`
+			Group           string `json:"group"`
+			ModelLimits     string `json:"model_limits"`
+			CrossGroupRetry bool   `json:"cross_group_retry"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.Equal(t, service.Grok45UserTokenName, request.Name)
+		require.Equal(t, service.Grok45PricingGroupName, request.Group)
+		require.Equal(t, service.Grok45ModelName, request.ModelLimits)
+		require.False(t, request.CrossGroupRetry)
+		c.Status(http.StatusNoContent)
+	})
+	body := strings.Replace(managedGrok45TokenBody, `"cross_group_retry":false`, `"cross_group_retry":true`, 1)
+	request := httptest.NewRequest(http.MethodPost, "/api/token/", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
 
-	for _, method := range []string{http.MethodPost, http.MethodPut} {
-		t.Run(method, func(t *testing.T) {
-			called := false
-			engine := gin.New()
-			addAuthenticatedUserContext(engine, "entitled")
-			engine.Use(EnforcePublicTokenGroupSelection())
-			engine.Handle(method, "/api/token/", func(c *gin.Context) {
-				request := struct {
-					Name  string `json:"name"`
-					Group string `json:"group"`
-				}{}
-				require.NoError(t, c.ShouldBindJSON(&request))
-				require.Equal(t, "custom-grok-token-name", request.Name)
-				require.Equal(t, service.Grok45PricingGroupName, request.Group)
-				called = true
-				c.Status(http.StatusNoContent)
-			})
-			request := httptest.NewRequest(method, "/api/token/", strings.NewReader(exactGrok45TokenBody))
-			request.Header.Set("Content-Type", "application/json")
-			recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, request)
 
-			engine.ServeHTTP(recorder, request)
-
-			require.Equal(t, http.StatusNoContent, recorder.Code)
-			require.True(t, called)
-		})
-	}
+	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
-func TestEnforcePublicTokenGroupSelectionRejectsUnauthenticatedGrok45Token(t *testing.T) {
-	configureGrok45TokenEntitlements(t)
+func TestEnforcePublicTokenGroupSelectionAllowsManagedGrok45ProfileUpdate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	engine := gin.New()
+	addAuthenticatedUserContext(engine)
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.PUT("/api/token/", func(c *gin.Context) {
+		called = true
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodPut, "/api/token/", strings.NewReader(managedGrok45TokenBody))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+	require.True(t, called)
+}
+
+func TestEnforcePublicTokenGroupSelectionRejectsUnauthenticatedGrok45Profile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	called := false
 	engine := gin.New()
@@ -220,7 +193,7 @@ func TestEnforcePublicTokenGroupSelectionRejectsUnauthenticatedGrok45Token(t *te
 		called = true
 		c.Status(http.StatusNoContent)
 	})
-	request := httptest.NewRequest(http.MethodPost, "/api/token/", strings.NewReader(exactGrok45TokenBody))
+	request := httptest.NewRequest(http.MethodPost, "/api/token/", strings.NewReader(managedGrok45TokenBody))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
@@ -230,44 +203,20 @@ func TestEnforcePublicTokenGroupSelectionRejectsUnauthenticatedGrok45Token(t *te
 	require.False(t, called)
 }
 
-func TestEnforcePublicTokenGroupSelectionRejectsGrok45WithoutEntitlement(t *testing.T) {
-	configureGrok45TokenEntitlements(t)
-	gin.SetMode(gin.TestMode)
-	called := false
-	engine := gin.New()
-	addAuthenticatedUserContext(engine, "restricted")
-	engine.Use(EnforcePublicTokenGroupSelection())
-	engine.POST("/api/token/", func(c *gin.Context) {
-		called = true
-		c.Status(http.StatusNoContent)
-	})
-	request := httptest.NewRequest(http.MethodPost, "/api/token/", strings.NewReader(exactGrok45TokenBody))
-	request.Header.Set("Content-Type", "application/json")
-	recorder := httptest.NewRecorder()
-
-	engine.ServeHTTP(recorder, request)
-
-	require.Equal(t, http.StatusForbidden, recorder.Code)
-	require.False(t, called)
-}
-
-func TestEnforcePublicTokenGroupSelectionRejectsInexactGrok45Contracts(t *testing.T) {
-	configureGrok45TokenEntitlements(t)
+func TestEnforcePublicTokenGroupSelectionRejectsNonExactGrok45Profile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tests := map[string]string{
-		"multiple models":      strings.Replace(exactGrok45TokenBody, `"grok-4.5"`, `"grok-4.5,gpt-5.5"`, 1),
-		"limits disabled":      strings.Replace(exactGrok45TokenBody, `"model_limits_enabled":true`, `"model_limits_enabled":false`, 1),
-		"limited quota":        strings.Replace(exactGrok45TokenBody, `"unlimited_quota":true`, `"unlimited_quota":false`, 1),
-		"nonzero quota":        strings.Replace(exactGrok45TokenBody, `"remain_quota":0`, `"remain_quota":1`, 1),
-		"finite expiration":    strings.Replace(exactGrok45TokenBody, `"expired_time":-1`, `"expired_time":3600`, 1),
-		"ip restriction":       strings.Replace(exactGrok45TokenBody, `"allow_ips":""`, `"allow_ips":"127.0.0.1"`, 1),
-		"cross-group fallback": strings.Replace(exactGrok45TokenBody, `"cross_group_retry":false`, `"cross_group_retry":true`, 1),
+		"custom name":     strings.Replace(managedGrok45TokenBody, service.Grok45UserTokenName, "custom", 1),
+		"multiple models": strings.Replace(managedGrok45TokenBody, service.Grok45ModelName, service.Grok45ModelName+",gpt-5.5", 1),
+		"limited quota":   strings.Replace(managedGrok45TokenBody, `"unlimited_quota":true`, `"unlimited_quota":false`, 1),
+		"finite expiry":   strings.Replace(managedGrok45TokenBody, `"expired_time":-1`, `"expired_time":3600`, 1),
+		"ip restriction":  strings.Replace(managedGrok45TokenBody, `"allow_ips":""`, `"allow_ips":"127.0.0.1"`, 1),
 	}
 	for name, body := range tests {
 		t.Run(name, func(t *testing.T) {
 			called := false
 			engine := gin.New()
-			addAuthenticatedUserContext(engine, "entitled")
+			addAuthenticatedUserContext(engine)
 			engine.Use(EnforcePublicTokenGroupSelection())
 			engine.POST("/api/token/", func(c *gin.Context) {
 				called = true
@@ -294,11 +243,7 @@ func TestEnforcePublicTokenGroupSelectionDoesNotInspectOtherRoutes(t *testing.T)
 		called = true
 		c.Status(http.StatusNoContent)
 	})
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/api/user/reset",
-		strings.NewReader(`{"group":"internal"}`),
-	)
+	request := httptest.NewRequest(http.MethodPost, "/api/user/reset", strings.NewReader(`{"group":"internal"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 

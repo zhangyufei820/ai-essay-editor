@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -518,6 +519,184 @@ func TestPlaygroundWalletBillingSessionRefundsUserQuotaWithoutTokenQuota(t *test
 
 	session.Refund(nil)
 	assert.Equal(t, initQuota, getUserQuota(t, userID))
+}
+
+func TestBillingSessionActiveBaselineAtomicallyRejectsConcurrentWalletOverdraft(t *testing.T) {
+	truncate(t)
+	t.Setenv("BILLING_LEDGER_MODE", string(model.BillingLedgerModeActive))
+
+	const userID = 35
+	const initialQuota = 100
+	const reserveTarget = 80
+	seedUser(t, userID, initialQuota)
+
+	results := make(chan *types.NewAPIError, 2)
+	var waitGroup sync.WaitGroup
+	for index := 0; index < 2; index++ {
+		waitGroup.Add(1)
+		go func(requestIndex int) {
+			defer waitGroup.Done()
+			_, apiErr := NewBillingSession(newBillingLedgerTestContext(), &relaycommon.RelayInfo{
+				UserId:          userID,
+				RequestId:       fmt.Sprintf("concurrent-wallet-%d", requestIndex),
+				IsPlayground:    true,
+				OriginModelName: "gpt-ledger-test",
+				UserSetting: dto.UserSetting{
+					BillingPreference: "wallet_only",
+				},
+			}, reserveTarget)
+			results <- apiErr
+		}(index)
+	}
+	waitGroup.Wait()
+	close(results)
+
+	successes := 0
+	insufficient := 0
+	for apiErr := range results {
+		if apiErr == nil {
+			successes++
+			continue
+		}
+		assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
+		assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+		insufficient++
+	}
+
+	assert.Equal(t, 1, successes)
+	assert.Equal(t, 1, insufficient)
+	assert.Equal(t, initialQuota-reserveTarget, getUserQuota(t, userID))
+}
+
+func TestBillingSessionActiveBaselineAtomicallyRejectsConcurrentSubscriptionOverdraft(t *testing.T) {
+	truncate(t)
+	t.Setenv("BILLING_LEDGER_MODE", string(model.BillingLedgerModeActive))
+
+	const userID = 36
+	const planID = 36
+	const subscriptionID = 36
+	const totalQuota = 100
+	const reserveTarget = 80
+	seedUser(t, userID, 0)
+	require.NoError(t, model.DB.Create(&model.SubscriptionPlan{
+		Id:                 planID,
+		Title:              "test subscription",
+		Currency:           "CNY",
+		Enabled:            true,
+		TotalAmount:        totalQuota,
+		MonthlyAmountTotal: totalQuota,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.UserSubscription{
+		Id:                 subscriptionID,
+		UserId:             userID,
+		PlanId:             planID,
+		AmountTotal:        totalQuota,
+		MonthlyAmountTotal: totalQuota,
+		Status:             "active",
+		StartTime:          time.Now().Unix(),
+		EndTime:            time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}).Error)
+
+	results := make(chan *types.NewAPIError, 2)
+	var waitGroup sync.WaitGroup
+	for index := 0; index < 2; index++ {
+		waitGroup.Add(1)
+		go func(requestIndex int) {
+			defer waitGroup.Done()
+			_, apiErr := NewBillingSession(newBillingLedgerTestContext(), &relaycommon.RelayInfo{
+				UserId:          userID,
+				RequestId:       fmt.Sprintf("concurrent-subscription-%d", requestIndex),
+				IsPlayground:    true,
+				OriginModelName: "gpt-ledger-test",
+				UserSetting: dto.UserSetting{
+					BillingPreference: "subscription_only",
+				},
+			}, reserveTarget)
+			results <- apiErr
+		}(index)
+	}
+	waitGroup.Wait()
+	close(results)
+
+	successes := 0
+	insufficient := 0
+	for apiErr := range results {
+		if apiErr == nil {
+			successes++
+			continue
+		}
+		assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
+		assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+		insufficient++
+	}
+
+	assert.Equal(t, 1, successes)
+	assert.Equal(t, 1, insufficient)
+	var subscription model.UserSubscription
+	require.NoError(t, model.DB.First(&subscription, subscriptionID).Error)
+	assert.Equal(t, int64(reserveTarget), subscription.AmountUsed)
+	assert.Equal(t, int64(reserveTarget), subscription.MonthlyAmountUsed)
+}
+
+func TestRefundSubscriptionPreConsumeRollsBackQuotaWhenRecordUpdateFails(t *testing.T) {
+	epoch := time.Now().Add(-time.Minute).Unix()
+	isolationDB, err := gorm.Open(
+		sqlite.Open("file:refund_subscription_atomicity?mode=memory&cache=shared"),
+		&gorm.Config{},
+	)
+	require.NoError(t, err)
+	sqlDB, err := isolationDB.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(2)
+
+	originalDB := model.DB
+	model.DB = isolationDB
+	t.Cleanup(func() {
+		model.DB = originalDB
+		require.NoError(t, sqlDB.Close())
+	})
+
+	require.NoError(t, isolationDB.AutoMigrate(
+		&model.UserSubscription{},
+		&model.SubscriptionPreConsumeRecord{},
+	))
+	require.NoError(t, isolationDB.Create(&model.UserSubscription{
+		Id:                 37,
+		UserId:             37,
+		AmountTotal:        100,
+		AmountUsed:         80,
+		MonthlyAmountTotal: 100,
+		MonthlyAmountUsed:  80,
+		Status:             "active",
+		StartTime:          epoch,
+		EndTime:            time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}).Error)
+	require.NoError(t, isolationDB.Create(&model.SubscriptionPreConsumeRecord{
+		RequestId:          "refund-atomicity",
+		UserId:             37,
+		UserSubscriptionId: 37,
+		PreConsumed:        40,
+		ResetEpoch:         epoch,
+		Status:             "consumed",
+	}).Error)
+	require.NoError(t, isolationDB.Exec(`
+		CREATE TRIGGER fail_subscription_refund_record_update
+		BEFORE UPDATE OF status ON subscription_pre_consume_records
+		WHEN NEW.status = 'refunded'
+		BEGIN
+			SELECT RAISE(ABORT, 'forced refund record update failure');
+		END;
+	`).Error)
+
+	require.Error(t, model.RefundSubscriptionPreConsume("refund-atomicity"))
+
+	var subscription model.UserSubscription
+	require.NoError(t, isolationDB.First(&subscription, 37).Error)
+	assert.Equal(t, int64(80), subscription.AmountUsed)
+	assert.Equal(t, int64(80), subscription.MonthlyAmountUsed)
+	var record model.SubscriptionPreConsumeRecord
+	require.NoError(t, isolationDB.Where("request_id = ?", "refund-atomicity").First(&record).Error)
+	assert.Equal(t, "consumed", record.Status)
 }
 
 func TestBillingSessionSettlementRejectsMissingDurableOperation(t *testing.T) {

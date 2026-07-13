@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"context"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -33,6 +35,25 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 	return filtered
 }
 
+func pinManagedGrok45Pricing(pricing []model.Pricing) []model.Pricing {
+	for index := range pricing {
+		if pricing[index].ModelName != service.Grok45ModelName ||
+			!common.StringsContains(pricing[index].EnableGroup, service.Grok45PricingGroupName) {
+			continue
+		}
+		cacheRatio := service.Grok45CacheReadRatio
+		pricing[index].QuotaType = 0
+		pricing[index].ModelRatio = service.Grok45ModelRatioForExchangeRate(operation_setting.USDExchangeRate)
+		pricing[index].ModelPrice = 0
+		pricing[index].CompletionRatio = service.Grok45CompletionRatio
+		pricing[index].CacheRatio = &cacheRatio
+		pricing[index].CreateCacheRatio = nil
+		pricing[index].BillingMode = ""
+		pricing[index].BillingExpr = ""
+	}
+	return pricing
+}
+
 func publicPricingGroups(enableGroups []string, usableGroups map[string]string) []string {
 	allGroups := common.StringsContains(enableGroups, "all")
 	visibleGroups := make([]string, 0, 3)
@@ -45,18 +66,6 @@ func publicPricingGroups(enableGroups []string, usableGroups map[string]string) 
 		}
 	}
 	return visibleGroups
-}
-
-func getPricingUsableGroups(userGroup string, authenticated bool) map[string]string {
-	usableGroups := service.GetPublicUserUsableGroups(userGroup)
-	if !authenticated {
-		return usableGroups
-	}
-	allGroups := service.GetUserUsableGroups(userGroup)
-	if description, ok := allGroups[service.Grok45PricingGroupName]; ok {
-		usableGroups[service.Grok45PricingGroupName] = description
-	}
-	return usableGroups
 }
 
 func getPricingGroupRatios(userGroup string, usableGroups map[string]string) map[string]float64 {
@@ -145,18 +154,30 @@ func GetPricing(c *gin.Context) {
 	pricing := model.GetPricing()
 	userId, exists := c.Get("id")
 	var group string
-	authenticated := false
+	authenticatedUserID := 0
 	if exists {
-		if id, ok := userId.(int); ok && id > 0 {
-			user, err := model.GetUserCache(id)
+		if parsedUserID, ok := userId.(int); ok {
+			authenticatedUserID = parsedUserID
+		}
+		if authenticatedUserID > 0 {
+			user, err := model.GetUserCache(authenticatedUserID)
 			if err == nil {
 				group = user.Group
-				authenticated = true
 			}
 		}
 	}
-	usableGroup := getPricingUsableGroups(group, authenticated)
+
+	parent := context.Background()
+	if c.Request != nil {
+		parent = c.Request.Context()
+	}
+	managedGrok45Visible, err := managedGrok45PricingVisible(parent, authenticatedUserID)
+	if err != nil {
+		common.SysLog("failed to resolve managed Grok pricing visibility: " + err.Error())
+	}
+	usableGroup := service.GetPublicPricingGroups(group, managedGrok45Visible)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
+	pricing = pinManagedGrok45Pricing(pricing)
 	groupRatio := getPricingGroupRatios(group, usableGroup)
 
 	c.JSON(200, gin.H{

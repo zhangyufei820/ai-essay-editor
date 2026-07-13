@@ -62,7 +62,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		},
 		{
 			Mode:   "grok",
-			Name:   "星人 Grok 4.5 测试令牌",
+			Name:   Grok45AdminTokenName,
 			Models: []string{Grok45ModelName},
 			Group:  Grok45PricingGroupName,
 		},
@@ -157,9 +157,9 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 	if err != nil {
 		return result, err
 	}
-	if result.Updated > 0 {
+	if result.Created > 0 || result.Updated > 0 {
 		if err := model.InvalidateUserTokensCache(userID); err != nil {
-			common.SysLog(fmt.Sprintf("failed to invalidate system token cache for user %d: %v", userID, err))
+			return result, fmt.Errorf("failed to invalidate system token cache for user %d: %w", userID, err)
 		}
 	}
 	return result, nil

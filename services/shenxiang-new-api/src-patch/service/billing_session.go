@@ -444,7 +444,7 @@ func (s *BillingSession) Reserve(targetQuota int) error {
 	}
 	if err := model.ProcessBillingOperationInline(s.operationKey); err != nil {
 		common.SysLog("billing ledger reservation could not be confirmed: " + err.Error())
-		return errors.New("billing reservation could not be confirmed")
+		return billingLedgerAPIError(err)
 	}
 	return nil
 }

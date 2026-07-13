@@ -54,7 +54,9 @@ import {
 import { Link } from 'react-router-dom';
 import { API, copy } from '../../helpers';
 import {
+  getDefaultReasoningEffort,
   getDefaultTextModel,
+  getReasoningEffortOptions,
   getTextModelGroup,
   toTextModelOptions,
 } from './textModelFilter';
@@ -124,6 +126,15 @@ const starterPrompts = [
 const CHAT_HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const CHAT_HISTORY_LIMIT = 30;
 const CHAT_HISTORY_STORAGE_PREFIX = 'aiphui-home-chat-history:v1';
+const DISCOUNT_GROUP = 'discount';
+const DEFAULT_GROUP = 'default';
+const DISCOUNT_PRICING_LABEL = '特价 0.05x';
+const DEFAULT_PRICING_LABEL = '原价 1x';
+const DISCOUNT_FALLBACK_HEADER = 'X-Aiphui-Discount-Fallback';
+const DISCOUNT_FALLBACK_REQUEST_HEADER =
+  'X-Aiphui-Discount-Fallback-Request';
+const PRICING_GROUP_HEADER = 'X-Aiphui-Pricing-Group';
+const DISCOUNT_FALLBACK_MAX_COMPLETION_TOKENS = 4096;
 
 function createConversationId() {
   return `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -260,11 +271,18 @@ function sanitizeHistoryText(value, maxLength = 6000) {
   return `${text.slice(0, maxLength)}\n...[内容较长，已自动节选]`;
 }
 
+function normalizePricingLabel(value) {
+  return value === DISCOUNT_PRICING_LABEL || value === DEFAULT_PRICING_LABEL
+    ? value
+    : '';
+}
+
 function sanitizeHistoryMessage(message) {
   if (!message || (message.role !== 'user' && message.role !== 'assistant')) return null;
   if (message.pending) return null;
   const displayContent = sanitizeHistoryText(message.displayContent || message.content, 1200);
   const apiContent = sanitizeHistoryText(message.apiContent || displayContent, 4000);
+  const pricingLabel = normalizePricingLabel(message.pricingLabel);
   return {
     id: message.id || `${message.role}-${Date.now()}`,
     role: message.role,
@@ -275,6 +293,7 @@ function sanitizeHistoryMessage(message) {
     attachments: Array.isArray(message.attachments)
       ? message.attachments.map(({ content, dataUrl, ...file }) => file)
       : [],
+    ...(pricingLabel ? { pricingLabel } : {}),
   };
 }
 
@@ -463,15 +482,84 @@ function extractAssistantDelta(payload) {
   return '';
 }
 
+function getResponsePricingMetadata(response) {
+  const fallbackHeader = response?.headers?.get(DISCOUNT_FALLBACK_HEADER) || '';
+  const pricingGroup = String(
+    response?.headers?.get(PRICING_GROUP_HEADER) || '',
+  )
+    .trim()
+    .toLowerCase();
+  return {
+    fallbackAttempted: fallbackHeader.trim() === '1',
+    pricingGroup,
+  };
+}
+
+function getPricingLabel(group) {
+  if (group === DISCOUNT_GROUP) return DISCOUNT_PRICING_LABEL;
+  if (group === DEFAULT_GROUP) return DEFAULT_PRICING_LABEL;
+  return '';
+}
+
 async function readResponseError(response) {
   const text = await response.text();
-  if (!text) return `请求失败：${response.status}`;
+  let payload = null;
   try {
-    const payload = JSON.parse(text);
-    return payload?.error?.message || payload?.message || text;
+    payload = text ? JSON.parse(text) : null;
   } catch {
-    return text;
+    payload = null;
   }
+  const message =
+    payload?.error?.message ||
+    payload?.message ||
+    text ||
+    `请求失败：${response.status}`;
+  const data = payload || { message };
+  const metadata = getResponsePricingMetadata(response);
+  const error = new Error(message);
+  error.name = 'ChatResponseError';
+  error.status = response.status;
+  error.code = payload?.error?.code ?? payload?.code ?? '';
+  error.data = data;
+  error.fallbackAttempted = metadata.fallbackAttempted;
+  error.pricingGroup = metadata.pricingGroup;
+  error.response = {
+    status: response.status,
+    data,
+    headers: response.headers,
+  };
+  return error;
+}
+
+function isExplicitDiscountGroupAccessDenied(error) {
+  return /(?:无权访问该分组|無權存取該分組|no permission to access this group)/i.test(
+    String(error?.message || ''),
+  );
+}
+
+function shouldFallbackDiscountRequest(error, { signal, hasVisibleOutput }) {
+  if (
+    signal?.aborted ||
+    hasVisibleOutput ||
+    error?.fallbackAttempted ||
+    error?.pricingGroup === DEFAULT_GROUP
+  ) {
+    return false;
+  }
+
+  const status = Number(error?.status || error?.response?.status || 0);
+  const code = String(error?.code || error?.data?.error?.code || '')
+    .trim()
+    .toLowerCase();
+  if (status === 503 && code === 'model_not_found') return true;
+  // Legacy distributor responses may omit access_denied, so the exact localized group-denial text remains mandatory.
+  const isGroupAccessCode =
+    !code || code === 'access_denied' || code === 'new_api_error';
+  return (
+    status === 403 &&
+    isGroupAccessCode &&
+    isExplicitDiscountGroupAccessDenied(error)
+  );
 }
 
 async function readStreamingResponse(response, onText) {
@@ -735,6 +823,7 @@ const TextWorkbench = ({ isMobile }) => {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelError, setModelError] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  const [reasoningEffort, setReasoningEffort] = useState('');
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -753,6 +842,16 @@ const TextWorkbench = ({ isMobile }) => {
   const displayName = user?.username || user?.display_name || user?.email || '已登录用户';
   const modelOptions = useMemo(() => toTextModelOptions(models), [models]);
   const activeModel = selectedModel || getDefaultTextModel(models);
+  const activeModelGroup = getTextModelGroup(activeModel);
+  const reasoningEffortOptions = useMemo(
+    () => getReasoningEffortOptions(activeModel),
+    [activeModel],
+  );
+  const activeReasoningEffort = reasoningEffortOptions.some(
+    (option) => option.value === reasoningEffort,
+  )
+    ? reasoningEffort
+    : getDefaultReasoningEffort(activeModel);
   const historyStorageKey = useMemo(() => getHistoryStorageKey(user), [user]);
   const canOrganize = input.trim() || attachments.length > 0;
   const hasConversation = messages.some((message) => message.role === 'user' || message.role === 'assistant');
@@ -766,6 +865,14 @@ const TextWorkbench = ({ isMobile }) => {
   useEffect(() => {
     setUser(getStoredUser());
   }, []);
+
+  useEffect(
+    () => () => {
+      requestControllerRef.current?.abort();
+      requestControllerRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     const stored = readStoredConversations(historyStorageKey);
@@ -823,6 +930,18 @@ const TextWorkbench = ({ isMobile }) => {
       })
       .finally(() => setModelsLoading(false));
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    const defaultEffort = getDefaultReasoningEffort(activeModel);
+    setReasoningEffort((currentEffort) => {
+      if (!defaultEffort) return '';
+      return reasoningEffortOptions.some(
+        (option) => option.value === currentEffort,
+      )
+        ? currentEffort
+        : defaultEffort;
+    });
+  }, [activeModel, reasoningEffortOptions]);
 
   useEffect(() => {
     if (threadRef.current) {
@@ -957,6 +1076,10 @@ const TextWorkbench = ({ isMobile }) => {
     appendUserMessage = true,
     assistantMessageId = '',
   }) => {
+    const initialModelGroup = activeModelGroup;
+    let effectivePricingLabel = getPricingLabel(initialModelGroup);
+    let hasVisibleOutput = false;
+    let fallbackWarningShown = false;
     const nextConversationId = currentConversationId || createConversationId();
     if (!currentConversationId) {
       setCurrentConversationId(nextConversationId);
@@ -983,6 +1106,7 @@ const TextWorkbench = ({ isMobile }) => {
                 title: activeModel,
                 content: '正在思考...',
                 pending: true,
+                pricingLabel: effectivePricingLabel,
               }
             : message,
         );
@@ -997,6 +1121,7 @@ const TextWorkbench = ({ isMobile }) => {
           title: activeModel,
           content: '正在思考...',
           pending: true,
+          pricingLabel: effectivePricingLabel,
         },
       ];
     });
@@ -1017,10 +1142,31 @@ const TextWorkbench = ({ isMobile }) => {
                 title: activeModel,
                 content,
                 pending,
+                pricingLabel: effectivePricingLabel,
               }
             : message,
         ),
       );
+    };
+
+    const markOriginalPriceFallback = () => {
+      effectivePricingLabel = DEFAULT_PRICING_LABEL;
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === pendingId
+            ? {
+                ...message,
+                pricingLabel: effectivePricingLabel,
+              }
+            : message,
+        ),
+      );
+      if (!fallbackWarningShown) {
+        fallbackWarningShown = true;
+        Toast.warning(
+          '特价通道暂不可用，已切换至原价 1x；成功回复按原价计费。',
+        );
+      }
     };
 
     const controller = new AbortController();
@@ -1035,31 +1181,78 @@ const TextWorkbench = ({ isMobile }) => {
       };
       if (userId) headers['New-Api-User'] = userId;
 
-      const modelGroup = getTextModelGroup(activeModel);
-      const response = await fetch('/pg/chat/completions', {
-        method: 'POST',
-        headers,
-        credentials: 'same-origin',
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: activeModel,
-          ...(modelGroup ? { group: modelGroup } : {}),
-          stream: true,
-          messages: [
-            ...history,
-            {
-              role: 'user',
-              content: userRequestContent,
-            },
-          ],
-        }),
-      });
+      const requestChatResponse = (group, fallbackRequest = false) =>
+        fetch('/pg/chat/completions', {
+          method: 'POST',
+          headers: {
+            ...headers,
+            ...(fallbackRequest
+              ? { [DISCOUNT_FALLBACK_REQUEST_HEADER]: '1' }
+              : {}),
+          },
+          credentials: 'same-origin',
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: activeModel,
+            ...(activeReasoningEffort
+              ? { reasoning_effort: activeReasoningEffort }
+              : {}),
+            ...(group ? { group } : {}),
+            ...(initialModelGroup === DISCOUNT_GROUP
+              ? {
+                  max_completion_tokens:
+                    DISCOUNT_FALLBACK_MAX_COMPLETION_TOKENS,
+                }
+              : {}),
+            stream: true,
+            messages: [
+              ...history,
+              {
+                role: 'user',
+                content: userRequestContent,
+              },
+            ],
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error(await readResponseError(response));
+      let response = await requestChatResponse(initialModelGroup);
+      let responseError = response.ok
+        ? null
+        : await readResponseError(response);
+      const initialResponseMetadata = getResponsePricingMetadata(response);
+      const backendUsedFallback =
+        initialModelGroup === DISCOUNT_GROUP &&
+        (initialResponseMetadata.fallbackAttempted ||
+          initialResponseMetadata.pricingGroup === DEFAULT_GROUP);
+
+      if (backendUsedFallback) {
+        markOriginalPriceFallback();
       }
 
+      if (
+        responseError &&
+        initialModelGroup === DISCOUNT_GROUP &&
+        shouldFallbackDiscountRequest(responseError, {
+          signal: controller.signal,
+          hasVisibleOutput,
+        })
+      ) {
+        response = await requestChatResponse(DEFAULT_GROUP, true);
+        const frontendFallbackMetadata = getResponsePricingMetadata(response);
+        if (
+          response.ok ||
+          frontendFallbackMetadata.fallbackAttempted ||
+          frontendFallbackMetadata.pricingGroup === DEFAULT_GROUP
+        ) {
+          markOriginalPriceFallback();
+        }
+        responseError = response.ok ? null : await readResponseError(response);
+      }
+
+      if (responseError) throw responseError;
+
       const answer = await readStreamingResponse(response, (nextText) => {
+        hasVisibleOutput ||= Boolean(nextText?.trim());
         updateAssistantMessage(nextText || '正在回复...', true);
       });
       if (!answer.trim()) throw new Error('模型没有返回可展示的内容。');
@@ -1072,7 +1265,9 @@ const TextWorkbench = ({ isMobile }) => {
               ? {
                   ...message,
                   title: activeModel,
-                  content: (message.content || '').trim() || '已停止生成。',
+                  content: hasVisibleOutput
+                    ? (message.content || '').trim() || '已停止生成。'
+                    : '已停止生成。',
                   pending: false,
                 }
               : message,
@@ -1092,6 +1287,7 @@ const TextWorkbench = ({ isMobile }) => {
                 title: activeModel,
                 content: `这次没有完成：${message}`,
                 pending: false,
+                pricingLabel: effectivePricingLabel,
               }
             : item,
         ),
@@ -1382,7 +1578,10 @@ const TextWorkbench = ({ isMobile }) => {
                   className={`sx-gpt-message sx-gpt-message-${message.role}`}
                   key={message.id || `${message.role}-${index}`}
                 >
-                  <div className='sx-gpt-message-name'>{message.title}</div>
+                  <div className='sx-gpt-message-name'>
+                    {message.title}
+                    {message.pricingLabel ? ` · ${message.pricingLabel}` : ''}
+                  </div>
                   <div className={message.pending ? 'sx-gpt-bubble is-pending' : 'sx-gpt-bubble'}>
                     {message.role === 'assistant' ? (
                       <MarkdownContent content={message.content} />
@@ -1485,16 +1684,35 @@ const TextWorkbench = ({ isMobile }) => {
               }}
             />
 
-            <Select
-              className='sx-gpt-model-select'
-              value={selectedModel}
-              loading={modelsLoading}
-              disabled={!isLoggedIn || modelsLoading || isSubmitting}
-              optionList={modelOptions}
-              placeholder={modelsLoading ? '模型' : '选择模型'}
-              onChange={(value) => setSelectedModel(value)}
-              style={{ width: isMobile ? 116 : 178 }}
-            />
+            <div
+              className={
+                reasoningEffortOptions.length
+                  ? 'sx-gpt-model-controls has-reasoning'
+                  : 'sx-gpt-model-controls'
+              }
+            >
+              <Select
+                className='sx-gpt-model-select'
+                value={selectedModel}
+                loading={modelsLoading}
+                disabled={!isLoggedIn || modelsLoading || isSubmitting}
+                optionList={modelOptions}
+                placeholder={modelsLoading ? '模型' : '选择模型'}
+                onChange={(value) => setSelectedModel(value)}
+                style={{ width: isMobile ? 116 : 178 }}
+              />
+              {reasoningEffortOptions.length ? (
+                <Select
+                  className='sx-gpt-reasoning-select'
+                  value={activeReasoningEffort}
+                  disabled={!isLoggedIn || modelsLoading || isSubmitting}
+                  optionList={reasoningEffortOptions}
+                  aria-label='思考强度'
+                  onChange={(value) => setReasoningEffort(value)}
+                  style={{ width: isMobile ? 116 : 126 }}
+                />
+              ) : null}
+            </div>
 
             <Button
               className={isSubmitting ? 'sx-gpt-send is-stop' : 'sx-gpt-send'}
@@ -1519,6 +1737,18 @@ const TextWorkbench = ({ isMobile }) => {
               </button>
             ))}
           </div>
+          {activeModelGroup === DISCOUNT_GROUP ? (
+            <div className='sx-gpt-message-name' role='note'>
+              OpenAI 特价模型优先按 0.05x；特价通道不可用且尚未输出时自动切换原价
+              1x，回复会标明实际倍率。
+            </div>
+          ) : null}
+          {activeReasoningEffort ? (
+            <div className='sx-gpt-reasoning-note' role='note'>
+              思考强度：{reasoningEffortOptions.find((option) => option.value === activeReasoningEffort)?.label}；推理
+              Token 按所选模型的输出价与当前分组倍率结算，强度越高可能消耗更多。
+            </div>
+          ) : null}
         </div>
       </main>
     </section>

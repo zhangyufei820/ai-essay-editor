@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
@@ -73,26 +72,23 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 				})
 				return
 			}
-			userGroup := c.GetString("user_group")
-			if userGroup == "" || !service.UserCanUseGrok45PricingGroup(userGroup) {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-					"success": false,
-					"message": "令牌分组不可用",
-				})
-				return
-			}
-			var token model.Token
-			if err := json.Unmarshal(body, &token); err != nil || !service.IsExactGrok45TokenConfiguration(&token) {
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"message": "专用令牌配置无效",
-				})
-				return
-			}
-		} else if !service.IsPublicTokenGroup(group) {
+			request["cross_group_retry"] = json.RawMessage(`false`)
+		}
+		validationBody, err := json.Marshal(request)
+		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"message": "令牌只可选择原价或特价分组",
+				"message": "令牌配置无效",
+			})
+			return
+		}
+		managedGrokProfile := service.Grok45UserTokenProfile{}
+		managedGrokProfileAllowed := json.Unmarshal(validationBody, &managedGrokProfile) == nil &&
+			service.IsManagedGrok45UserTokenProfile(managedGrokProfile)
+		if !service.IsPublicTokenGroup(group) && !managedGrokProfileAllowed {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "令牌分组或专用令牌配置无效",
 			})
 			return
 		}
