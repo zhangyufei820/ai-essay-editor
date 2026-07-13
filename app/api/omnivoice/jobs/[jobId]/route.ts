@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/verified-user"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
 import { getOmniTtsJob } from "@/lib/omnivoice-gateway-client"
+import { isOmniVoiceJobId, isOmniVoiceJobOwner, linkOmniVoiceJobMedia } from "@/lib/omnivoice-job-ownership"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -21,13 +22,20 @@ export async function GET(request: NextRequest, context: Context) {
   if (!limitResult.allowed) return createRateLimitResponse(limitResult.retryAfter!)
 
   const { jobId } = await context.params
-  if (!jobId) {
-    return NextResponse.json({ error: "缺少语音任务 ID" }, { status: 400 })
+  if (!isOmniVoiceJobId(jobId) || !await isOmniVoiceJobOwner(jobId, auth.user!.id)) {
+    return NextResponse.json({ error: "语音任务不存在" }, { status: 404 })
   }
 
   const result = await getOmniTtsJob(jobId)
   if (!result.ok || !result.job) {
     return NextResponse.json({ error: result.error || "语音任务查询失败" }, { status: 502 })
+  }
+
+  if (result.job.filename) {
+    const mediaLinked = await linkOmniVoiceJobMedia(jobId, auth.user!.id, result.job.filename)
+    if (!mediaLinked) {
+      return NextResponse.json({ error: "语音任务查询失败" }, { status: 502 })
+    }
   }
 
   return NextResponse.json({ success: true, job: result.job })

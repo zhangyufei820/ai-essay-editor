@@ -8,6 +8,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const DEFAULT_CODEX_SKILL_GATEWAY_URL = "http://codex-gateway:8000"
+const MAX_CODEX_FILE_BYTES = 100 * 1024 * 1024
 
 const MIME_TYPES: Record<string, string> = {
   ".csv": "text/csv; charset=utf-8",
@@ -61,6 +62,20 @@ function safeFilePath(segments: string[]) {
   return filePath
 }
 
+function limitResponseBody(body: ReadableStream<Uint8Array>) {
+  let receivedBytes = 0
+  return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      receivedBytes += chunk.byteLength
+      if (receivedBytes > MAX_CODEX_FILE_BYTES) {
+        controller.error(new Error("Generated file exceeds the streaming limit"))
+        return
+      }
+      controller.enqueue(chunk)
+    },
+  }))
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ taskId?: string; path?: string[] }> },
@@ -109,15 +124,35 @@ export async function GET(
     })
   }
 
-  const bytes = await upstream.arrayBuffer()
+  if (!upstream.body) {
+    return new Response("File preview unavailable", {
+      status: 502,
+      headers: { "Cache-Control": "private, no-store" },
+    })
+  }
+
+  const contentLengthHeader = upstream.headers.get("content-length")
+  const declaredLength = contentLengthHeader === null ? null : Number(contentLengthHeader)
+  if (declaredLength !== null && Number.isFinite(declaredLength) && declaredLength > MAX_CODEX_FILE_BYTES) {
+    await upstream.body.cancel().catch(() => undefined)
+    return new Response("File too large", {
+      status: 413,
+      headers: { "Cache-Control": "private, no-store" },
+    })
+  }
+
   const extension = path.extname(filePath).toLowerCase()
-  const disposition = request.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline"
+  const disposition = extension === ".svg" || request.nextUrl.searchParams.get("download") === "1"
+    ? "attachment"
+    : "inline"
   const headers: Record<string, string> = {
     "Content-Type": MIME_TYPES[extension] || upstream.headers.get("content-type") || "application/octet-stream",
     "Content-Disposition": contentDisposition(filePath, disposition),
-    "Content-Length": String(bytes.byteLength),
     "Cache-Control": "private, max-age=300",
     "X-Content-Type-Options": "nosniff",
+  }
+  if (declaredLength !== null && Number.isFinite(declaredLength) && declaredLength >= 0) {
+    headers["Content-Length"] = String(declaredLength)
   }
   if (extension === ".html" || extension === ".htm") {
     headers["Content-Security-Policy"] = [
@@ -127,7 +162,9 @@ export async function GET(
       "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
       "font-src 'self' data: https://cdn.jsdelivr.net",
     ].join("; ")
+  } else if (extension === ".svg") {
+    headers["Content-Security-Policy"] = "sandbox; default-src 'none'"
   }
 
-  return new Response(bytes, { headers })
+  return new Response(limitResponseBody(upstream.body), { headers })
 }

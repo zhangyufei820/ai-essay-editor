@@ -260,7 +260,7 @@ describe("chat message guards", () => {
     expect(component).not.toContain("下载")
     expect(enhancedMarkdown).toContain("shouldPreviewGeneratedFileLink")
     expect(messageBubble).toContain("shouldPreviewGeneratedFileLink")
-    expect(route).toContain('request.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline"')
+    expect(route).toContain('extension === ".svg" || request.nextUrl.searchParams.get("download") === "1"')
     expect(route).toContain("Content-Disposition")
   })
 

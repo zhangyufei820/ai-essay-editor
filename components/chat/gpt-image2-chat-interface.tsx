@@ -299,7 +299,20 @@ async function readResponseJson(response: Response) {
   }
 }
 
-const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+function waitForPolling(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      window.clearTimeout(timer)
+      reject(new DOMException("Polling cancelled", "AbortError"))
+    }
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    if (signal.aborted) onAbort()
+    else signal.addEventListener("abort", onAbort, { once: true })
+  })
+}
 
 function extractMarkdownImageUrls(content: string) {
   return Array.from(content.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g), (match) => match[1])
@@ -671,6 +684,18 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const hasAutoSubmittedRef = useRef(false)
   const editImagesRef = useRef<SelectedImage[]>([])
   const maskImageRef = useRef<SelectedImage | null>(null)
+  const pollingCancelledRef = useRef(false)
+  const pollingControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    pollingCancelledRef.current = false
+    return () => {
+      pollingCancelledRef.current = true
+      const controller = pollingControllerRef.current
+      if (controller) controller.abort()
+      pollingControllerRef.current = null
+    }
+  }, [])
 
   const currentInputsWithoutUrls = useMemo(
     () => ({
@@ -1034,38 +1059,54 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   async function pollImageTask(taskId: string, requestId: string, pollToken?: string) {
     const startedAt = Date.now()
     const maxWaitMs = 10 * 60 * 1000
+    const previousController = pollingControllerRef.current
+    if (previousController) previousController.abort()
+    const controller = new AbortController()
+    pollingControllerRef.current = controller
 
-    while (Date.now() - startedAt < maxWaitMs) {
-      await wait(5_000)
-      setSubmitStage("图片仍在生成，正在检查结果")
+    try {
+      while (Date.now() - startedAt < maxWaitMs) {
+        await waitForPolling(5_000, controller.signal)
+        if (pollingCancelledRef.current || controller.signal.aborted) {
+          throw new DOMException("Polling cancelled", "AbortError")
+        }
+        setSubmitStage("图片仍在生成，正在检查结果")
 
-      const params = new URLSearchParams({
-        imageTaskId: taskId,
-        requestId,
-      })
-      const response = await fetch(`${API_BASE}/api/dify-chat?${params.toString()}`, {
-        headers: {
-          ...(await getVerifiedAuthHeaders()),
-          "X-Request-Id": requestId,
-          ...(pollToken ? { "X-Image-Task-Poll-Token": pollToken } : {}),
-        },
-      })
-      const payload = await readResponseJson(response)
+        const params = new URLSearchParams({
+          imageTaskId: taskId,
+          requestId,
+        })
+        const authHeaders = await getVerifiedAuthHeaders()
+        if (pollingCancelledRef.current || controller.signal.aborted) {
+          throw new DOMException("Polling cancelled", "AbortError")
+        }
+        const response = await fetch(`${API_BASE}/api/dify-chat?${params.toString()}`, {
+          headers: {
+            ...authHeaders,
+            "X-Request-Id": requestId,
+            ...(pollToken ? { "X-Image-Task-Poll-Token": pollToken } : {}),
+          },
+          signal: controller.signal,
+        })
+        const payload = await readResponseJson(response)
 
-      if (response.ok && payload?.status === "succeeded") {
-        return payload.result
+        if (response.ok && payload?.status === "succeeded") {
+          return payload.result
+        }
+
+        if (payload?.status === "running") continue
+
+        const elapsedSuffix =
+          typeof payload?.elapsedMs === "number"
+            ? ` (${Math.max(1, Math.round(payload.elapsedMs / 1000))}s)`
+            : ""
+        throw new Error(buildImageTaskError(payload, response.status, requestId, taskId) + elapsedSuffix)
       }
 
-      if (payload?.status === "running") continue
-
-      const elapsedSuffix =
-        typeof payload?.elapsedMs === "number"
-          ? ` (${Math.max(1, Math.round(payload.elapsedMs / 1000))}s)`
-          : ""
-      throw new Error(buildImageTaskError(payload, response.status, requestId, taskId) + elapsedSuffix)
+      throw new Error("timeout")
+    } finally {
+      if (pollingControllerRef.current === controller) pollingControllerRef.current = null
     }
-
-    throw new Error("timeout")
   }
 
   const optimizePrompt = async () => {
@@ -1252,6 +1293,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
               : ""
       }
 
+      if (pollingCancelledRef.current) return
       if (imageUrls.length === 0 && !sourceText) {
         throw new Error("upstream_error: empty image result")
       }
@@ -1268,11 +1310,13 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
       await saveGeneration(cleanPrompt, nextResult)
 
+      if (pollingCancelledRef.current) return
       setPrompt("")
       toast.success("图片任务已完成")
       if (userId) void fetchCredits(userId)
       refreshCredits()
     } catch (error) {
+      if (pollingCancelledRef.current || (error instanceof Error && error.name === "AbortError")) return
       if (error instanceof Error && error.name === "SurveyRequiredError") {
         handleSurveyRequired(workspaceModel === "gpt-image-2" ? "高质量图像" : "图像生成")
         setShowLongRunningHint(false)
@@ -1285,8 +1329,10 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       toast.error(message)
     } finally {
       longRunningTimers.forEach((timer) => window.clearTimeout(timer))
-      setIsSubmitting(false)
-      setSubmitStage("")
+      if (!pollingCancelledRef.current) {
+        setIsSubmitting(false)
+        setSubmitStage("")
+      }
     }
   }
 

@@ -28,7 +28,7 @@ import {
 } from "@/lib/billing"
 import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 import { requireUser } from "@/lib/auth/verified-user"
-import { getUserEntitlementSummary } from "@/lib/user-entitlements"
+import { getUserEntitlementSummary, resolveRelatedUserIds } from "@/lib/user-entitlements"
 import { isConfiguredAdminUser } from "@/lib/admin-auth"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
@@ -628,7 +628,7 @@ async function resolveActiveMembershipStatus(
   userId: string,
   identity: MembershipIdentity = {},
 ): Promise<string | null> {
-  const candidateUserIds = await resolveMembershipCandidateUserIds(supabase, userId, identity)
+  const { userIds: candidateUserIds } = await resolveRelatedUserIds(userId, identity, supabase)
 
   const { data, error } = await supabase
     .from("orders")
@@ -664,80 +664,6 @@ async function resolveActiveMembershipStatus(
     ? creditData.find((row) => resolveMembershipStatus({ is_pro: row?.is_pro }))
     : null
   return resolveMembershipStatus({ is_pro: subscribedCredit?.is_pro })
-}
-
-function normalizeContactEmail(email?: string | null): string | null {
-  const normalized = email?.trim().toLowerCase()
-  return normalized || null
-}
-
-function normalizeContactPhone(phone?: string | null): string | null {
-  const normalized = String(phone || "").replace(/\D/g, "")
-  return normalized.length >= 6 ? normalized : null
-}
-
-async function resolveMembershipCandidateUserIds(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  userId: string,
-  identity: MembershipIdentity,
-): Promise<string[]> {
-  const candidates = new Set<string>([userId])
-  const emails = new Set<string>()
-  const phones = new Set<string>()
-
-  const authEmail = normalizeContactEmail(identity.email)
-  const authPhone = normalizeContactPhone(identity.phone)
-  if (authEmail) emails.add(authEmail)
-  if (authPhone) phones.add(authPhone)
-
-  const { data: currentProfile, error: currentProfileError } = await supabase
-    .from("user_profiles")
-    .select("email, phone")
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (currentProfileError) {
-    console.warn("[会员权限] 查询当前用户资料失败:", currentProfileError.message)
-  } else {
-    const profileEmail = normalizeContactEmail(currentProfile?.email)
-    const profilePhone = normalizeContactPhone(currentProfile?.phone)
-    if (profileEmail) emails.add(profileEmail)
-    if (profilePhone) phones.add(profilePhone)
-  }
-
-  for (const email of emails) {
-    const { data, error } = await supabase
-      .from("user_profiles")
-      .select("user_id")
-      .ilike("email", email)
-      .limit(10)
-
-    if (error) {
-      console.warn("[会员权限] 按邮箱关联用户失败:", error.message)
-      continue
-    }
-    data?.forEach((profile) => {
-      if (typeof profile?.user_id === "string" && profile.user_id) candidates.add(profile.user_id)
-    })
-  }
-
-  for (const phone of phones) {
-    const { data, error } = await supabase
-      .from("user_profiles")
-      .select("user_id")
-      .like("phone", `%${phone}%`)
-      .limit(10)
-
-    if (error) {
-      console.warn("[会员权限] 按手机号关联用户失败:", error.message)
-      continue
-    }
-    data?.forEach((profile) => {
-      if (typeof profile?.user_id === "string" && profile.user_id) candidates.add(profile.user_id)
-    })
-  }
-
-  return [...candidates]
 }
 
 function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {

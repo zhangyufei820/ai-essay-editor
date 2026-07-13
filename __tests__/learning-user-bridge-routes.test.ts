@@ -29,15 +29,18 @@ describe("learning API user bridge", () => {
     }
   })
 
-  it("paginates the Supabase auth directory instead of scanning only the first 1000 users", () => {
+  it("uses a persistent exact bridge instead of scanning the Supabase auth directory", () => {
     const src = fs.readFileSync(path.join(root, "lib/learning-user.ts"), "utf8")
     const entitlements = fs.readFileSync(path.join(root, "lib/user-entitlements.ts"), "utf8")
+    const migration = fs.readFileSync(path.join(root, "scripts/026_auth_user_bridges.sql"), "utf8")
 
-    expect(src).toContain("for (let page = 1; page <= MAX_ADMIN_USER_PAGES; page += 1)")
-    expect(src).toContain("listUsers({ page, perPage: ADMIN_USERS_PAGE_SIZE })")
-    expect(src).toContain("data.users.length < ADMIN_USERS_PAGE_SIZE")
-    expect(src).not.toContain("saveUserMapping")
-    expect(entitlements).toContain("listUsers({ page, perPage: ADMIN_USERS_PAGE_SIZE })")
-    expect(entitlements).toContain("page <= MAX_ADMIN_USER_PAGES")
+    expect(src).toContain('.from("auth_user_bridges")')
+    expect(src).toContain('const AUTHING_PROVIDER = "authing"')
+    expect(src).toContain("provider: AUTHING_PROVIDER")
+    expect(src).not.toContain("listUsers(")
+    expect(entitlements).not.toContain("listUsers(")
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS public.auth_user_bridges")
+    expect(migration).toContain("raw_user_meta_data->>'authing_user_id'")
+    expect(migration).toContain("REVOKE ALL ON public.auth_user_bridges")
   })
 })

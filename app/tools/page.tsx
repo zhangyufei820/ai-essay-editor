@@ -129,6 +129,21 @@ async function readResponseJson(response: Response) {
   }
 }
 
+function waitForPolling(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      window.clearTimeout(timer)
+      reject(new DOMException("Polling cancelled", "AbortError"))
+    }
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    if (signal.aborted) onAbort()
+    else signal.addEventListener("abort", onAbort, { once: true })
+  })
+}
+
 async function readReversePromptStream(
   response: Response,
   onProgress: (event: { progress?: unknown; stage?: unknown }) => void,
@@ -346,11 +361,23 @@ export default function ToolsPage() {
   const ocrCameraRef = useRef<HTMLInputElement | null>(null)
   const ocrUploadRef = useRef<HTMLInputElement | null>(null)
   const reverseImageRef = useRef<HTMLInputElement | null>(null)
+  const pollingCancelledRef = useRef(false)
+  const pollingControllerRef = useRef<AbortController | null>(null)
 
   const selectedReverseModel = useMemo(
     () => reverseModelOptions.find((option) => option.value === reverseTargetModel) || reverseModelOptions[0],
     [reverseTargetModel],
   )
+
+  useEffect(() => {
+    pollingCancelledRef.current = false
+    return () => {
+      pollingCancelledRef.current = true
+      const controller = pollingControllerRef.current
+      if (controller) controller.abort()
+      pollingControllerRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -437,27 +464,43 @@ export default function ToolsPage() {
   async function pollImageTask(taskId: string, requestId: string) {
     const startedAt = Date.now()
     const maxWaitMs = 10 * 60 * 1000
+    const previousController = pollingControllerRef.current
+    if (previousController) previousController.abort()
+    const controller = new AbortController()
+    pollingControllerRef.current = controller
 
-    while (Date.now() - startedAt < maxWaitMs) {
-      await new Promise((resolve) => window.setTimeout(resolve, 5000))
-      setReverseStage("图片仍在生成，正在检查结果")
-      setReverseProgress((current) => Math.min(94, Math.max(current + 2, 72)))
+    try {
+      while (Date.now() - startedAt < maxWaitMs) {
+        await waitForPolling(5000, controller.signal)
+        if (pollingCancelledRef.current || controller.signal.aborted) {
+          throw new DOMException("Polling cancelled", "AbortError")
+        }
+        setReverseStage("图片仍在生成，正在检查结果")
+        setReverseProgress((current) => Math.min(94, Math.max(current + 2, 72)))
 
-      const response = await fetch(`/api/dify-chat?imageTaskId=${encodeURIComponent(taskId)}&requestId=${encodeURIComponent(requestId)}`, {
-        headers: {
-          ...(await getVerifiedAuthHeaders()),
-          "X-Request-Id": requestId,
-        },
-      })
-      const payload = await readResponseJson(response)
+        const authHeaders = await getVerifiedAuthHeaders()
+        if (pollingCancelledRef.current || controller.signal.aborted) {
+          throw new DOMException("Polling cancelled", "AbortError")
+        }
+        const response = await fetch(`/api/dify-chat?imageTaskId=${encodeURIComponent(taskId)}&requestId=${encodeURIComponent(requestId)}`, {
+          headers: {
+            ...authHeaders,
+            "X-Request-Id": requestId,
+          },
+          signal: controller.signal,
+        })
+        const payload = await readResponseJson(response)
 
-      if (response.ok && payload?.status === "succeeded") return payload.result
-      if (payload?.status === "running") continue
+        if (response.ok && payload?.status === "succeeded") return payload.result
+        if (payload?.status === "running") continue
 
-      throw new Error(typeof payload?.error === "string" ? payload.error : `service_error:${response.status}`)
+        throw new Error(typeof payload?.error === "string" ? payload.error : `service_error:${response.status}`)
+      }
+
+      throw new Error("timeout")
+    } finally {
+      if (pollingControllerRef.current === controller) pollingControllerRef.current = null
     }
-
-    throw new Error("timeout")
   }
 
   async function runReversePrompt(event: FormEvent<HTMLFormElement>) {
@@ -510,6 +553,7 @@ export default function ToolsPage() {
       setReverseProgress(100)
       setReverseStage("提示词已生成，可以继续生成图像")
     } catch (error) {
+      if (pollingCancelledRef.current || (error instanceof Error && error.name === "AbortError")) return
       if (error instanceof Error && error.name === "SurveyRequiredError") {
         handleSurveyRequired("图像提示词反推")
         setResult({ title: "图像提示词反推", content: "请先完成今日问卷，完成后可继续反推提示词。" })
@@ -523,7 +567,7 @@ export default function ToolsPage() {
       setReverseProgress(0)
       setReverseStage("")
     } finally {
-      setBusy(null)
+      if (!pollingCancelledRef.current) setBusy(null)
     }
   }
 
@@ -780,6 +824,7 @@ export default function ToolsPage() {
       return
     }
 
+    let controller: AbortController | null = null
     try {
       setBusy("tts")
       setTtsJob(null)
@@ -807,9 +852,19 @@ export default function ToolsPage() {
       setTtsJob(payload.job)
       setResult({ title: "文字转语音", content: "语音任务已创建，正在生成音频..." })
 
+      const previousController = pollingControllerRef.current
+      if (previousController) previousController.abort()
+      controller = new AbortController()
+      pollingControllerRef.current = controller
       for (let attempt = 0; attempt < TTS_POLL_MAX_ATTEMPTS; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, attempt < 3 ? 1500 : 5000))
-        const jobResponse = await fetch(`/api/omnivoice/jobs/${encodeURIComponent(payload.job.job_id)}`, { headers: authHeaders })
+        await waitForPolling(attempt < 3 ? 1500 : 5000, controller.signal)
+        if (pollingCancelledRef.current || controller.signal.aborted) {
+          throw new DOMException("Polling cancelled", "AbortError")
+        }
+        const jobResponse = await fetch(`/api/omnivoice/jobs/${encodeURIComponent(payload.job.job_id)}`, {
+          headers: authHeaders,
+          signal: controller.signal,
+        })
         const jobPayload = await jobResponse.json().catch(() => ({}))
         if (!jobResponse.ok || !jobPayload.job) continue
 
@@ -829,10 +884,12 @@ export default function ToolsPage() {
 
       setResult({ title: "文字转语音", content: "语音仍在生成中。任务已提交到服务器，请稍后点击生成语音重试或联系管理员查询任务 ID。" })
     } catch (error) {
+      if (pollingCancelledRef.current || (error instanceof Error && error.name === "AbortError")) return
       if (error instanceof Error && error.message === "AUTH_REQUIRED") return
       setResult({ title: "文字转语音", content: "语音任务创建失败，请稍后重试。" })
     } finally {
-      setBusy(null)
+      if (controller && pollingControllerRef.current === controller) pollingControllerRef.current = null
+      if (!pollingCancelledRef.current) setBusy(null)
     }
   }
 

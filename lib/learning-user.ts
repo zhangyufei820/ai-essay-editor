@@ -1,12 +1,12 @@
 import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { NextRequest } from "next/server"
-import { getSupabaseAdmin } from "@/lib/supabase-admin"
+
 import { requireUser, type VerifiedUser } from "@/lib/auth/verified-user"
+import { getSupabaseAdmin } from "@/lib/supabase-admin"
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const ADMIN_USERS_PAGE_SIZE = 1000
-const MAX_ADMIN_USER_PAGES = 100
+const AUTHING_PROVIDER = "authing"
 
 export function isSupabaseUuid(value: string | null | undefined) {
   return Boolean(value && UUID_PATTERN.test(value))
@@ -20,26 +20,21 @@ function syntheticEmailForUser(userId: string) {
   return `authing-${userId}@users.shenxiang.local`
 }
 
-async function findBridgedUser(supabase: SupabaseClient, verifiedUser: VerifiedUser) {
-  const syntheticEmail = syntheticEmailForUser(verifiedUser.id).toLowerCase()
+async function findBridgedUserId(supabase: SupabaseClient, providerUserId: string) {
+  const { data, error } = await supabase
+    .from("auth_user_bridges")
+    .select("supabase_user_id")
+    .eq("provider", AUTHING_PROVIDER)
+    .eq("provider_user_id", providerUserId)
+    .maybeSingle()
 
-  for (let page = 1; page <= MAX_ADMIN_USER_PAGES; page += 1) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: ADMIN_USERS_PAGE_SIZE })
-    if (error) throw error
-    const match = data.users.find((user) => (
-      user.email?.toLowerCase() === syntheticEmail ||
-      user.user_metadata?.authing_user_id === verifiedUser.id
-    ))
-    if (match) return match
-    if (data.users.length < ADMIN_USERS_PAGE_SIZE) return null
-  }
-
-  throw new Error("学习用户目录超过可安全扫描范围")
+  if (error) throw error
+  return typeof data?.supabase_user_id === "string" ? data.supabase_user_id : null
 }
 
-async function saveAuthingProfile(supabase: SupabaseClient, user: VerifiedUser) {
+async function saveAuthingProfile(supabase: SupabaseClient, supabaseUserId: string, user: VerifiedUser) {
   const payload = {
-    user_id: user.id,
+    user_id: supabaseUserId,
     email: user.email || syntheticEmailForUser(user.id),
     phone: user.phone || null,
     nickname: user.email || user.phone || "学习用户",
@@ -49,19 +44,33 @@ async function saveAuthingProfile(supabase: SupabaseClient, user: VerifiedUser) 
     .from("user_profiles")
     .upsert(payload, { onConflict: "user_id" })
 
-  if (error) {
-    console.warn("[LearningUser] 保存 Authing/Supabase 映射失败:", error.message)
-  }
+  if (error) throw error
+}
+
+async function saveBridge(supabase: SupabaseClient, providerUserId: string, supabaseUserId: string) {
+  const { error } = await supabase
+    .from("auth_user_bridges")
+    .insert({
+      provider: AUTHING_PROVIDER,
+      provider_user_id: providerUserId,
+      supabase_user_id: supabaseUserId,
+    })
+
+  if (!error) return supabaseUserId
+
+  const concurrentUserId = await findBridgedUserId(supabase, providerUserId)
+  if (concurrentUserId) return concurrentUserId
+  throw error
 }
 
 export async function resolveLearningUserId(user: VerifiedUser): Promise<string> {
   if (isSupabaseUuid(user.id)) return user.id
 
   const supabase = getSupabaseAdmin()
-  const existingUser = await findBridgedUser(supabase, user)
-  if (existingUser?.id) {
-    await saveAuthingProfile(supabase, user)
-    return existingUser.id
+  const existingUserId = await findBridgedUserId(supabase, user.id)
+  if (existingUserId) {
+    await saveAuthingProfile(supabase, existingUserId, user)
+    return existingUserId
   }
 
   const syntheticEmail = syntheticEmailForUser(user.id)
@@ -78,11 +87,16 @@ export async function resolveLearningUserId(user: VerifiedUser): Promise<string>
     },
   })
 
-  if (error) throw error
+  if (error) {
+    const concurrentUserId = await findBridgedUserId(supabase, user.id)
+    if (concurrentUserId) return concurrentUserId
+    throw error
+  }
   if (!data.user?.id) throw new Error("创建学习用户失败")
 
-  await saveAuthingProfile(supabase, user)
-  return data.user.id
+  const bridgedUserId = await saveBridge(supabase, user.id, data.user.id)
+  await saveAuthingProfile(supabase, bridgedUserId, user)
+  return bridgedUserId
 }
 
 export async function requireLearningUserId(request: NextRequest) {

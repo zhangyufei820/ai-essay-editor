@@ -160,8 +160,7 @@ describe('credits helpers', () => {
 
     expect(routeSource).toContain('.from("orders")')
     expect(routeSource).toContain('.in("product_id", MEMBERSHIP_PRODUCT_IDS)')
-    expect(routeSource).toContain('resolveMembershipCandidateUserIds')
-    expect(routeSource).toContain('.from("user_profiles")')
+    expect(routeSource).toContain('resolveRelatedUserIds(userId, identity, supabase)')
     expect(routeSource).toContain('.in("user_id", candidateUserIds)')
     expect(routeSource).toContain('.from("user_credits")')
     expect(routeSource).toContain('.select("is_pro")')
@@ -269,19 +268,21 @@ describe('credits helpers', () => {
     expect(metadata.createdAt).toEqual(expect.any(String))
   })
 
-  it('keeps server-side credit spending guarded by conditional atomic update', () => {
+  it('keeps server-side credit spending and its audit row in one database transaction', () => {
     const source = [
       readFileSync(path.join(process.cwd(), 'lib/credits.ts'), 'utf8'),
       readFileSync(path.join(process.cwd(), 'lib/real-credit-spending.ts'), 'utf8'),
     ].join('\n')
+    const migration = readFileSync(path.join(process.cwd(), 'scripts/025_atomic_real_credit_spending.sql'), 'utf8')
 
     expect(source).toContain('export async function spendCredits')
     expect(source).toContain('!Number.isInteger(amount) || amount <= 0')
-    expect(source).toContain('.eq("credits", balanceBefore)')
-    expect(source).toContain('.gte("credits", amount)')
-    expect(source).toContain('.select("credits")')
-    expect(source).toContain('.maybeSingle()')
-    expect(source).toContain('recordRealCreditTransaction(')
+    expect(source).toContain('supabase.rpc("spend_real_credits_atomic"')
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION public.spend_real_credits_atomic')
+    expect(migration).toContain('FOR UPDATE')
+    expect(migration).toContain('INSERT INTO public.credit_transactions')
+    expect(migration).toContain('SECURITY DEFINER')
+    expect(migration).toContain('REVOKE ALL ON FUNCTION public.spend_real_credits_atomic')
   })
 
   it('routes public spendCredits through trial-first consumption', async () => {
