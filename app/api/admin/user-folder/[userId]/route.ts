@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { requireUser } from "@/lib/auth/verified-user"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { requireLearningUserId } from "@/lib/learning-user"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -20,15 +20,17 @@ function getAdminUserIds() {
   )
 }
 
-async function canViewUserFolder(viewerId: string, targetUserId: string) {
-  if (getAdminUserIds().has(viewerId)) return true
-  if (!isUuid(viewerId) || !isUuid(targetUserId)) return false
+async function canViewUserFolder(verifiedViewerId: string, learningViewerId: string, targetUserId: string) {
+  const adminUserIds = getAdminUserIds()
+  if (adminUserIds.has(verifiedViewerId) || adminUserIds.has(learningViewerId)) return true
+  if (!isUuid(learningViewerId) || !isUuid(targetUserId)) return false
 
   const { data, error } = await getSupabaseAdmin()
     .from("teacher_students")
     .select("id")
-    .eq("teacher_id", viewerId)
+    .eq("teacher_id", learningViewerId)
     .eq("student_id", targetUserId)
+    .not("student_consented_at", "is", null)
     .maybeSingle()
 
   if (error) {
@@ -44,7 +46,7 @@ export async function GET(
   context: { params: Promise<{ userId: string }> | { userId: string } },
 ) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
 
     const params = await context.params
@@ -53,8 +55,9 @@ export async function GET(
       return NextResponse.json({ error: "目标用户 ID 格式错误" }, { status: 400 })
     }
 
-    const viewerId = auth.user!.id
-    if (!(await canViewUserFolder(viewerId, targetUserId))) {
+    const verifiedViewerId = auth.auth.user!.id
+    const learningViewerId = auth.userId!
+    if (!(await canViewUserFolder(verifiedViewerId, learningViewerId, targetUserId))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

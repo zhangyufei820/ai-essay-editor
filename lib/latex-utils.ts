@@ -300,6 +300,16 @@ export function correctLatex(latex: string): LaTeXCorrectionResult {
 // KaTeX 默认宏（可扩展）
 const DEFAULT_MACROS: Record<string, string> = {}
 
+export function escapeLatexErrorHtml(value: unknown) {
+  const text = typeof value === "string" ? value : ""
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
 /**
  * 带纠错的 KaTeX 渲染
  *
@@ -352,7 +362,9 @@ export function renderLatexWithCorrection(
     }
   } catch (e) {
     console.error("[LaTeX] 渲染失败:", e)
-    return `<span class="latex-error" style="color:#B71C1C;font-size:0.9em">${latex.slice(0, 50)}${latex.length > 50 ? "..." : ""}</span>`
+    const preview = typeof latex === "string" ? latex.slice(0, 50) : ""
+    const suffix = typeof latex === "string" && latex.length > 50 ? "..." : ""
+    return `<span class="latex-error" style="color:#B71C1C;font-size:0.9em">${escapeLatexErrorHtml(preview)}${suffix}</span>`
   }
 }
 
@@ -369,7 +381,7 @@ export function safeRenderLatex(
     return { html, hadError: false }
   } catch {
     return {
-      html: `<span class="latex-error">${latex}</span>`,
+      html: `<span class="latex-error">${escapeLatexErrorHtml(latex)}</span>`,
       hadError: true,
     }
   }

@@ -28,7 +28,7 @@ export const LATEX_MACROS: Record<string, string> = {
   "\\全等": "\\cong",
 }
 
-import { renderLatexWithCorrection } from "./latex-utils"
+import { escapeLatexErrorHtml, renderLatexWithCorrection } from "./latex-utils"
 
 /**
  * 渲染 LaTeX 为 HTML 字符串（已集成自动纠错）
@@ -38,6 +38,6 @@ export function renderLatex(text: string, displayMode: boolean): string {
     return renderLatexWithCorrection(text, displayMode, LATEX_MACROS)
   } catch (e) {
     console.error("KaTeX render error:", e)
-    return text
+    return `<span class="latex-error">${escapeLatexErrorHtml(text)}</span>`
   }
 }

@@ -36,6 +36,9 @@ describe("P0/P1 security audit guardrails", () => {
     expect(otpStore).not.toContain("code: ${code}")
     expect(otpStore).not.toContain("code: ${data.code}")
     expect(verifyOtp).not.toContain("redirectUrl:")
+    expect(verifyOtp).not.toContain("email=${normalizedEmail}")
+    expect(verifyOtp).not.toContain("${userId}")
+    expect(verifyOtp).not.toContain("console.error(\"[v0] 验证异常:\", error)")
     expect(verifyOtp).toContain("verifyOtp")
   })
 
@@ -124,6 +127,41 @@ describe("P0/P1 security audit guardrails", () => {
     const src = read("app/share/[id]/page.tsx")
     expect(src).toContain("DOMPurify.sanitize")
     expect(src).not.toMatch(/printWindow\.document\.write\([^)]*htmlContent\)/)
+  })
+
+  it("sanitizes every KaTeX HTML sink and escapes error fallbacks", () => {
+    const renderer = read("components/chat/UltimateRenderer.tsx")
+    const latexUtils = read("lib/latex-utils.ts")
+
+    expect(renderer.match(/dangerouslySetInnerHTML/g)).toHaveLength(2)
+    expect(renderer.match(/sanitizeLatexHtml\(renderLatex/g)).toHaveLength(2)
+    expect(latexUtils).toContain("escapeLatexErrorHtml(preview)")
+    expect(latexUtils).toContain("escapeLatexErrorHtml(latex)")
+  })
+
+  it("sanitizes the final PDF export HTML sink", () => {
+    const pdfExport = read("lib/chat-pdf-export.ts")
+
+    expect(pdfExport).toContain("reportRoot.innerHTML = DOMPurify.sanitize")
+    expect(pdfExport).toContain("style.textContent = chatPdfStyles")
+    expect(pdfExport).not.toContain('reportRoot.innerHTML = `<style>')
+  })
+
+  it("requires student consent before teacher access", () => {
+    const studentsRoute = read("app/api/teacher/students/route.ts")
+    const folderRoute = read("app/api/admin/user-folder/[userId]/route.ts")
+    const migration = read("supabase/migrations/010_teacher_student_consent.sql")
+
+    expect(studentsRoute).toContain('action === "create_invite"')
+    expect(studentsRoute).toContain('action !== "accept_invite"')
+    expect(studentsRoute).toContain("verifyTeacherStudentInvite")
+    expect(studentsRoute).toContain("student_consented_at: new Date().toISOString()")
+    expect(studentsRoute).not.toContain("listUsers(")
+    expect(studentsRoute).not.toContain("student_email")
+    expect(folderRoute).toContain('.not("student_consented_at", "is", null)')
+    expect(migration).toContain("ADD COLUMN IF NOT EXISTS student_consented_at")
+    expect(migration).toContain('DROP POLICY IF EXISTS "Teachers manage own class"')
+    expect(migration).not.toMatch(/FOR (?:INSERT|UPDATE|ALL)/)
   })
 
   it("share creation sends verified auth and surfaces server errors in chat", () => {

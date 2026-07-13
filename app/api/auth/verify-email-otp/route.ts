@@ -23,12 +23,12 @@ export async function POST(request: NextRequest) {
     const normalizedEmail = email.toLowerCase()
     const normalizedCode = code.trim()
 
-    console.log(`[v0] 验证请求: email=${normalizedEmail}`)
+    console.log("[EmailOTP] 收到验证请求")
 
     const otpData = emailOTPStore.get(normalizedEmail)
 
     if (!otpData) {
-      console.log(`[v0] 验证失败: 验证码不存在`)
+      console.log("[EmailOTP] 验证码不存在或已过期")
       return NextResponse.json({ error: "验证码不存在或已过期" }, { status: 400 })
     }
 
@@ -40,19 +40,19 @@ export async function POST(request: NextRequest) {
 
     // 验证码不匹配
     if (otpData.code !== normalizedCode) {
-      console.log(`[v0] 验证码不匹配: email=${normalizedEmail}`)
+      console.log("[EmailOTP] 验证码不匹配")
       emailOTPStore.incrementAttempts(normalizedEmail)
       return NextResponse.json({ error: "验证码错误" }, { status: 400 })
     }
 
-    console.log(`[v0] 验证码匹配成功`)
+    console.log("[EmailOTP] 验证码匹配成功")
 
     // 🔥 使用 Admin API 直接创建/登录用户，无需发送第二封邮件
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error("[v0] 缺少 Supabase 配置")
+      console.error("[EmailOTP] 缺少 Supabase 配置")
       return NextResponse.json({ error: "服务配置错误" }, { status: 500 })
     }
 
@@ -72,10 +72,10 @@ export async function POST(request: NextRequest) {
     if (existingUser) {
       // 用户已存在，直接获取 ID
       userId = existingUser.id
-      console.log(`[v0] 用户已存在: ${userId}`)
+      console.log("[EmailOTP] 用户已存在")
     } else {
       // 创建新用户（自动确认邮箱）
-      console.log(`[v0] 创建新用户: ${normalizedEmail}`)
+      console.log("[EmailOTP] 创建新用户")
       
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: normalizedEmail,
@@ -87,12 +87,12 @@ export async function POST(request: NextRequest) {
       })
 
       if (createError) {
-        console.error("[v0] 创建用户失败:", createError)
+        console.error("[EmailOTP] 创建用户失败:", createError.message)
         return NextResponse.json({ error: "创建用户失败，请稍后重试" }, { status: 500 })
       }
 
       userId = newUser.user?.id
-      console.log(`[v0] 新用户创建成功: ${userId}`)
+      console.log("[EmailOTP] 新用户创建成功")
       
       // 🎁 给新用户发放注册积分（如果需要）
       if (userId) {
@@ -101,22 +101,22 @@ export async function POST(request: NextRequest) {
           
           // 1. 初始化新人积分。getUserCredits 会为缺失记录创建 1000 积分且 is_pro=false。
           await getUserCredits(userId)
-          console.log(`[v0] 新用户积分初始化成功`)
+          console.log("[EmailOTP] 新用户积分初始化成功")
           
           // 2. 为新用户创建推荐码
           await createUserReferralCode(userId)
-          console.log(`[v0] 新用户推荐码创建成功`)
+          console.log("[EmailOTP] 新用户推荐码创建成功")
 
           if (referralCode) {
             const referralSuccess = await handleReferralSignup(userId, referralCode)
             if (referralSuccess) {
-              console.log(`[v0] 新用户推荐奖励处理成功`)
+              console.log("[EmailOTP] 新用户推荐奖励处理成功")
             } else {
-              console.warn(`[v0] 新用户推荐奖励处理失败`)
+              console.warn("[EmailOTP] 新用户推荐奖励处理失败")
             }
           }
         } catch (creditsError) {
-          console.error("[v0] 积分或推荐码处理失败:", creditsError)
+          console.error("[EmailOTP] 积分或推荐码处理失败:", creditsError instanceof Error ? creditsError.message : "unknown error")
           // 不影响登录流程
         }
       }
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (linkError) {
-      console.error("[v0] 生成登录链接失败:", linkError)
+      console.error("[EmailOTP] 生成登录链接失败:", linkError.message)
       return NextResponse.json({ error: "登录失败，请重试" }, { status: 500 })
     }
 
@@ -148,20 +148,20 @@ export async function POST(request: NextRequest) {
     })
 
     if (verifyError) {
-      console.error("[v0] 服务端建立会话失败:", verifyError.message)
+      console.error("[EmailOTP] 服务端建立会话失败:", verifyError.message)
       return NextResponse.json({ error: "登录失败，请重试" }, { status: 500 })
     }
 
     emailOTPStore.delete(normalizedEmail)
-    console.log(`[v0] 验证成功，已建立 httpOnly 会话`)
+    console.log("[EmailOTP] 验证成功，已建立 httpOnly 会话")
 
     return NextResponse.json({
       success: true,
       message: "验证成功",
       needsEmailConfirmation: false,
     })
-  } catch (error: any) {
-    console.error("[v0] 验证异常:", error)
+  } catch (error: unknown) {
+    console.error("[EmailOTP] 验证异常:", error instanceof Error ? error.message : "unknown error")
     return NextResponse.json({ error: "验证失败，请稍后重试" }, { status: 500 })
   }
 }

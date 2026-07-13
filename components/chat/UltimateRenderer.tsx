@@ -14,6 +14,7 @@ import React, { useMemo, memo, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
+import { sanitizeLatexHtml } from "@/lib/latex-html-sanitizer"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import katex from "katex"
 
@@ -37,7 +38,7 @@ interface UltimateRendererProps {
 
 // Inline math renderer
 const MathInline = memo(function MathInline({ formula }: { formula: string }) {
-  const html = useMemo(() => renderLatex(formula, false), [formula])
+  const html = useMemo(() => sanitizeLatexHtml(renderLatex(formula, false)), [formula])
   return (
     <span
       dangerouslySetInnerHTML={{ __html: html }}
@@ -48,7 +49,7 @@ const MathInline = memo(function MathInline({ formula }: { formula: string }) {
 
 // Block math renderer
 const MathBlock = memo(function MathBlock({ formula }: { formula: string }) {
-  const html = useMemo(() => renderLatex(formula, true), [formula])
+  const html = useMemo(() => sanitizeLatexHtml(renderLatex(formula, true)), [formula])
   return (
     <div
       dangerouslySetInnerHTML={{ __html: html }}

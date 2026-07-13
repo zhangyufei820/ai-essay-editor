@@ -400,14 +400,20 @@ function collectChatPdfSafeBreaks(reportRoot: HTMLDivElement, canvasScale: numbe
 
 export async function exportChatContentToPDF(raw: string, options?: { title?: string; filenamePrefix?: string }) {
   let reportRoot: HTMLDivElement | null = null
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+  const [{ default: DOMPurify }, { default: html2canvas }, { jsPDF }] = await Promise.all([
+    import("isomorphic-dompurify"),
     import("html2canvas"),
     import("jspdf"),
   ])
 
   try {
     reportRoot = document.createElement("div")
-    reportRoot.innerHTML = `<style>${chatPdfStyles}</style>${buildChatPdfDocumentHtml(raw, { title: options?.title })}`
+    reportRoot.innerHTML = DOMPurify.sanitize(buildChatPdfDocumentHtml(raw, { title: options?.title }), {
+      USE_PROFILES: { html: true, mathMl: true, svg: true },
+    })
+    const style = document.createElement("style")
+    style.textContent = chatPdfStyles
+    reportRoot.prepend(style)
     Object.assign(reportRoot.style, {
       position: "fixed",
       left: "0",

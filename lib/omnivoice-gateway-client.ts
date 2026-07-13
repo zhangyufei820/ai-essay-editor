@@ -1,5 +1,5 @@
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
-import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
+import { hasInternalAiDetailText, sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export type OmniVoiceInfo = {
   voice_id: string
@@ -48,7 +48,26 @@ function absolutizeAudioUrl(audioUrl: string | null | undefined) {
 }
 
 function publicVoiceError(value: unknown, fallback = "语音服务暂时不可用，请稍后重试。") {
+  if (hasInternalAiDetailText(value)) return fallback
   return sanitizePublicAiError(typeof value === "string" ? value : "", fallback)
+}
+
+function publicVoiceInfo(voice: OmniVoiceInfo, index: number): OmniVoiceInfo | null {
+  const voiceId = typeof voice.voice_id === "string" ? voice.voice_id.trim() : ""
+  if (!/^[a-z0-9_-]{1,80}$/i.test(voiceId) || hasInternalAiDetailText(voiceId)) return null
+
+  const rawName = typeof voice.name === "string" ? voice.name.trim() : ""
+  const rawDescription = typeof voice.description === "string" ? voice.description.trim() : ""
+  return {
+    ...voice,
+    voice_id: voiceId,
+    name: !rawName || hasInternalAiDetailText(rawName)
+      ? index === 0 ? "沈翔智学标准音色" : `沈翔智学标准音色 ${index + 1}`
+      : rawName,
+    description: rawDescription && !hasInternalAiDetailText(rawDescription)
+      ? rawDescription
+      : undefined,
+  }
 }
 
 function extractMediaFilename(audioUrl: string) {
@@ -76,7 +95,11 @@ export async function listOmniVoices() {
   if (!response.ok) {
     return { ok: false, voices: [] as OmniVoiceInfo[], error: publicVoiceError(payload.error?.message, "音色列表暂时不可用，请稍后重试。") }
   }
-  return { ok: true, voices: (payload.voices || []).filter((voice) => voice.enabled !== false), error: null }
+  const voices = (payload.voices || [])
+    .filter((voice) => voice.enabled !== false)
+    .map(publicVoiceInfo)
+    .filter((voice): voice is OmniVoiceInfo => Boolean(voice))
+  return { ok: true, voices, error: null }
 }
 
 export async function createOmniTtsJob(input: {

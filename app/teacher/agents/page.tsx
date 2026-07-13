@@ -71,6 +71,13 @@ type Student = {
   } | null
 }
 
+type TeacherBinding = {
+  teacher_id: string
+  class_name?: string | null
+  joined_at?: string | null
+  student_consented_at?: string | null
+}
+
 function templateLabel(value: string) {
   return TEMPLATES.find((item) => item.value === value)?.label || value
 }
@@ -82,6 +89,7 @@ function subjectLabel(value?: string | null) {
 export default function TeacherAgentsPage() {
   const [agents, setAgents] = useState<TeacherAgent[]>([])
   const [students, setStudents] = useState<Student[]>([])
+  const [teachers, setTeachers] = useState<TeacherBinding[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [studentSubmitting, setStudentSubmitting] = useState(false)
@@ -97,11 +105,9 @@ export default function TeacherAgentsPage() {
     topics: "",
     custom_prompt: "",
   })
-  const [studentForm, setStudentForm] = useState({
-    student_email: "",
-    student_id: "",
-    class_name: "",
-  })
+  const [inviteClassName, setInviteClassName] = useState("")
+  const [generatedInviteCode, setGeneratedInviteCode] = useState("")
+  const [receivedInviteCode, setReceivedInviteCode] = useState("")
 
   const selectedTemplate = useMemo(
     () => TEMPLATES.find((item) => item.value === form.template) || TEMPLATES[0],
@@ -123,6 +129,7 @@ export default function TeacherAgentsPage() {
       if (!studentsResponse.ok) throw new Error(studentsPayload?.error || "学生管理暂不可用")
       setAgents(agentsPayload.agents || [])
       setStudents(studentsPayload.students || [])
+      setTeachers(studentsPayload.teachers || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : "教师平台暂不可用")
     } finally {
@@ -179,10 +186,34 @@ export default function TeacherAgentsPage() {
     await loadData()
   }
 
-  async function bindStudent(event: FormEvent<HTMLFormElement>) {
+  async function createStudentInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!studentForm.student_email.trim() && !studentForm.student_id.trim()) {
-      setMessage("请填写学生邮箱或 Supabase 用户 ID")
+    try {
+      setStudentSubmitting(true)
+      setMessage(null)
+      const response = await fetch("/api/teacher/students", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await getVerifiedAuthHeaders()),
+        },
+        body: JSON.stringify({ action: "create_invite", class_name: inviteClassName }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload?.error || "生成邀请码失败")
+      setGeneratedInviteCode(payload.invite_code || "")
+      setMessage("邀请码已生成，15 分钟内有效；请让学生登录后主动接受")
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "生成邀请码失败")
+    } finally {
+      setStudentSubmitting(false)
+    }
+  }
+
+  async function acceptStudentInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!receivedInviteCode.trim()) {
+      setMessage("请输入教师提供的邀请码")
       return
     }
     try {
@@ -194,15 +225,15 @@ export default function TeacherAgentsPage() {
           "Content-Type": "application/json",
           ...(await getVerifiedAuthHeaders()),
         },
-        body: JSON.stringify(studentForm),
+        body: JSON.stringify({ action: "accept_invite", invite_code: receivedInviteCode.trim() }),
       })
       const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload?.error || "绑定学生失败")
-      setStudentForm({ student_email: "", student_id: "", class_name: "" })
-      setMessage("学生已绑定")
+      if (!response.ok) throw new Error(payload?.error || "接受邀请失败")
+      setReceivedInviteCode("")
+      setMessage("已授权教师查看学习进度；你可以随时撤销")
       await loadData()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "绑定学生失败")
+      setMessage(err instanceof Error ? err.message : "接受邀请失败")
     } finally {
       setStudentSubmitting(false)
     }
@@ -226,6 +257,30 @@ export default function TeacherAgentsPage() {
     await loadData()
   }
 
+  async function revokeTeacher(teacherId: string) {
+    const response = await fetch("/api/teacher/students", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        ...(await getVerifiedAuthHeaders()),
+      },
+      body: JSON.stringify({ teacher_id: teacherId }),
+    })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}))
+      setMessage(payload?.error || "撤销授权失败")
+      return
+    }
+    setMessage("教师授权已撤销")
+    await loadData()
+  }
+
+  function copyInviteCode() {
+    if (!generatedInviteCode) return
+    navigator.clipboard?.writeText(generatedInviteCode)
+    setMessage("学生邀请码已复制")
+  }
+
   function copyShare(code?: string | null) {
     if (!code) return
     const url = `${window.location.origin}/chat?agent=${code}`
@@ -241,7 +296,7 @@ export default function TeacherAgentsPage() {
             <p className="text-sm font-medium text-[var(--ink-700)] dark:text-[var(--ink-200)]">教师平台</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl font-[var(--font-display)]">自主创建 AI 智能体</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-500)]">
-              使用四大模板或自定义 Prompt 创建教学智能体，一键生成分享码，并绑定学生查看学习进度和资料夹。
+              使用四大模板或自定义 Prompt 创建教学智能体；师生绑定必须由学生登录后主动授权。
             </p>
           </div>
           <Button variant="outline" onClick={loadData}>
@@ -381,15 +436,37 @@ export default function TeacherAgentsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                <form className="grid gap-3 md:grid-cols-[1fr_1fr_140px_auto]" onSubmit={bindStudent}>
-                  <Input value={studentForm.student_email} onChange={(event) => setStudentForm((value) => ({ ...value, student_email: event.target.value }))} placeholder="学生邮箱" />
-                  <Input value={studentForm.student_id} onChange={(event) => setStudentForm((value) => ({ ...value, student_id: event.target.value }))} placeholder="或学生 UUID" />
-                  <Input value={studentForm.class_name} onChange={(event) => setStudentForm((value) => ({ ...value, class_name: event.target.value }))} placeholder="班级" />
-                  <Button type="submit" disabled={studentSubmitting}>
-                    {studentSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                    绑定
-                  </Button>
-                </form>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <form className="space-y-3 rounded-[var(--radius-soft)] border border-[var(--paper-200)] p-4" onSubmit={createStudentInvite}>
+                    <div>
+                      <div className="font-medium">教师：邀请学生</div>
+                      <p className="mt-1 text-xs leading-5 text-[var(--ink-500)]">生成 15 分钟有效的邀请码，学生接受后才会建立绑定。</p>
+                    </div>
+                    <Input value={inviteClassName} maxLength={100} onChange={(event) => setInviteClassName(event.target.value)} placeholder="班级（可选）" />
+                    <Button type="submit" disabled={studentSubmitting} className="w-full">
+                      {studentSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                      生成学生邀请码
+                    </Button>
+                    {generatedInviteCode ? (
+                      <div className="space-y-2">
+                        <Input value={generatedInviteCode} readOnly aria-label="学生邀请码" />
+                        <Button type="button" variant="outline" className="w-full" onClick={copyInviteCode}>复制邀请码</Button>
+                      </div>
+                    ) : null}
+                  </form>
+
+                  <form className="space-y-3 rounded-[var(--radius-soft)] border border-[var(--paper-200)] p-4" onSubmit={acceptStudentInvite}>
+                    <div>
+                      <div className="font-medium">学生：接受教师邀请</div>
+                      <p className="mt-1 text-xs leading-5 text-[var(--ink-500)]">接受后教师可查看学习进度；授权可以随时撤销。</p>
+                    </div>
+                    <Input value={receivedInviteCode} onChange={(event) => setReceivedInviteCode(event.target.value)} placeholder="粘贴教师邀请码" />
+                    <Button type="submit" variant="outline" disabled={studentSubmitting} className="w-full">
+                      {studentSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                      接受并授权
+                    </Button>
+                  </form>
+                </div>
 
                 {students.length ? (
                   <div className="grid gap-3 lg:grid-cols-2">
@@ -408,9 +485,7 @@ export default function TeacherAgentsPage() {
                             <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)]/50 p-2"><div className="font-semibold">{student.progress?.total_xp || 0}</div><div className="text-xs text-[var(--ink-500)]">XP</div></div>
                             <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)]/50 p-2"><div className="font-semibold">{student.progress?.current_streak || 0}</div><div className="text-xs text-[var(--ink-500)]">连续</div></div>
                           </div>
-                          <Button asChild size="sm" variant="outline" className="w-full">
-                            <Link href={`/teacher/students/${student.student_id}`}>查看进度和资料夹</Link>
-                          </Button>
+                          <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] px-3 py-2 text-center text-xs text-[var(--ink-500)]">学生已主动授权</div>
                         </CardContent>
                       </Card>
                     ))}
@@ -418,6 +493,21 @@ export default function TeacherAgentsPage() {
                 ) : (
                   <div className="rounded-[var(--radius-sharp)] border border-dashed py-10 text-center text-sm text-[var(--ink-500)]">还没有绑定学生。</div>
                 )}
+
+                {teachers.length ? (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">我已授权的教师</div>
+                    {teachers.map((teacher) => (
+                      <div key={teacher.teacher_id} className="flex items-center justify-between gap-3 rounded-[var(--radius-soft)] border border-[var(--paper-200)] p-3 text-sm">
+                        <div className="min-w-0">
+                          <div className="truncate">教师 {teacher.teacher_id}</div>
+                          <div className="mt-1 text-xs text-[var(--ink-500)]">{teacher.class_name || "未填写班级"}</div>
+                        </div>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => revokeTeacher(teacher.teacher_id)}>撤销授权</Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </div>
