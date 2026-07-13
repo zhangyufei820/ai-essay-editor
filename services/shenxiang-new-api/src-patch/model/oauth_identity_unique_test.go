@@ -30,6 +30,25 @@ func TestUserOAuthIdentityMySQLDDLUses57CompatibleGeneratedColumns(t *testing.T)
 	require.Equal(t, "github_id_binary = BINARY ?", predicate)
 }
 
+func TestScanMySQLGeneratedColumnPreservesMetadata(t *testing.T) {
+	database := setupOAuthIdentitySQLiteDB(t)
+	row := database.Raw(`SELECT 'STORED GENERATED' AS extra,
+		'nullif(binary github_id, '''')' AS generation_expression,
+		'varbinary(764)' AS column_type`).Row()
+
+	column, exists, err := scanMySQLGeneratedColumn(row)
+	require.NoError(t, err)
+	require.True(t, exists)
+	require.Equal(t, "STORED GENERATED", column.Extra)
+	require.Equal(t, "nullif(binary github_id, '')", column.GenerationExpression)
+	require.Equal(t, "varbinary(764)", column.ColumnType)
+
+	missingRow := database.Raw(`SELECT 'x', 'y', 'z' WHERE 1 = 0`).Row()
+	_, exists, err = scanMySQLGeneratedColumn(missingRow)
+	require.NoError(t, err)
+	require.False(t, exists)
+}
+
 func TestUserOAuthIdentityPartialIndexDDLExcludesEmptyButNotSoftDeletedRows(t *testing.T) {
 	identity := userOAuthIdentityDefinitions[0]
 	for _, dialect := range []string{"sqlite", "postgres"} {

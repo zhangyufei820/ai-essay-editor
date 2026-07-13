@@ -265,31 +265,47 @@ func userOAuthIdentityGeneratedColumnDDL(identity userOAuthIdentityDefinition) s
 	)
 }
 
-func ensureMySQLUserOAuthIdentityNormalizedColumn(identity userOAuthIdentityDefinition) error {
-	type mysqlGeneratedColumn struct {
-		Extra                string `gorm:"column:extra"`
-		GenerationExpression string `gorm:"column:generation_expression"`
-		ColumnType           string `gorm:"column:column_type"`
-	}
-	var column mysqlGeneratedColumn
-	result := DB.Raw(`SELECT extra, generation_expression, column_type
+type mysqlGeneratedColumn struct {
+	Extra                string
+	GenerationExpression string
+	ColumnType           string
+}
+
+func loadMySQLGeneratedColumn(tableName string, columnName string) (mysqlGeneratedColumn, bool, error) {
+	row := DB.Raw(`SELECT extra, generation_expression, column_type
 		FROM information_schema.columns
-		WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = ?`, identity.NormalizedColumn).Scan(&column)
-	if result.Error != nil {
-		return result.Error
+		WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`, tableName, columnName).Row()
+	return scanMySQLGeneratedColumn(row)
+}
+
+func scanMySQLGeneratedColumn(row *sql.Row) (mysqlGeneratedColumn, bool, error) {
+	var column mysqlGeneratedColumn
+	err := row.Scan(&column.Extra, &column.GenerationExpression, &column.ColumnType)
+	if errors.Is(err, sql.ErrNoRows) {
+		return mysqlGeneratedColumn{}, false, nil
 	}
-	if result.RowsAffected == 0 {
+	if err != nil {
+		return mysqlGeneratedColumn{}, false, err
+	}
+	return column, true, nil
+}
+
+func ensureMySQLUserOAuthIdentityNormalizedColumn(identity userOAuthIdentityDefinition) error {
+	column, exists, err := loadMySQLGeneratedColumn("users", identity.NormalizedColumn)
+	if err != nil {
+		return err
+	}
+	if !exists {
 		if err := DB.Exec(userOAuthIdentityGeneratedColumnDDL(identity)).Error; err != nil {
-			var retry mysqlGeneratedColumn
-			retryResult := DB.Raw(`SELECT extra, generation_expression, column_type
-				FROM information_schema.columns
-				WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = ?`, identity.NormalizedColumn).Scan(&retry)
-			if retryResult.Error != nil || retryResult.RowsAffected == 0 {
+			column, exists, _ = loadMySQLGeneratedColumn("users", identity.NormalizedColumn)
+			if !exists {
 				return fmt.Errorf("create OAuth identity normalized column %s failed", identity.NormalizedColumn)
 			}
-			column = retry
 		} else {
-			return ensureMySQLUserOAuthIdentityNormalizedColumn(identity)
+			column, exists, err = loadMySQLGeneratedColumn("users", identity.NormalizedColumn)
+			if err != nil || !exists {
+				return fmt.Errorf("OAuth identity normalized column %s was not created", identity.NormalizedColumn)
+			}
 		}
 	}
 	normalizedExtra := strings.ToLower(column.Extra)

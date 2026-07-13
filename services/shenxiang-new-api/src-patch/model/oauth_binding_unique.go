@@ -104,17 +104,8 @@ func userOAuthBindingIndexDDL(dialect string) (string, error) {
 }
 
 func ensureMySQLUserOAuthBindingBinaryColumn() error {
-	type mysqlGeneratedColumn struct {
-		Extra                string `gorm:"column:extra"`
-		GenerationExpression string `gorm:"column:generation_expression"`
-		ColumnType           string `gorm:"column:column_type"`
-	}
 	load := func() (mysqlGeneratedColumn, bool, error) {
-		var column mysqlGeneratedColumn
-		result := DB.Raw(`SELECT extra, generation_expression, column_type
-			FROM information_schema.columns
-			WHERE table_schema = DATABASE() AND table_name = 'user_oauth_bindings' AND column_name = ?`, userOAuthBindingBinaryColumnName).Scan(&column)
-		return column, result.RowsAffected == 1, result.Error
+		return loadMySQLGeneratedColumn("user_oauth_bindings", userOAuthBindingBinaryColumnName)
 	}
 	column, exists, err := load()
 	if err != nil {
