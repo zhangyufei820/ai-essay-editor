@@ -123,10 +123,19 @@
     "typescript": "^5"
   },
   "overrides": {
+    "@babel/core@7.28.5": "7.29.7",
     "@authing/guard-shim-react": "4.5.54",
     "@authing/react-ui-components": "4.5.54",
     "authing-js-sdk": "4.23.55",
     "axios": "1.18.1",
+    "brace-expansion@1.1.12": "1.1.14",
+    "handlebars@4.7.8": "4.7.9",
+    "js-yaml@3.14.2": "3.15.0",
+    "js-yaml@4.1.1": "5.2.1",
+    "minimatch@3.1.2": "3.1.5",
+    "minimatch@9.0.5": "9.0.7",
+    "picomatch@2.3.1": "2.3.2",
+    "picomatch@4.0.3": "4.0.5",
     "postcss": "8.5.18",
     "sm-crypto": "0.4.0"
   }
