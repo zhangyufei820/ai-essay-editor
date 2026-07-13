@@ -45,6 +45,7 @@ const WATCH_EVENT_NAMES = [
 ]
 
 const RUNTIME_FLAG_KEYS = ["campaignEnabled", "consumptionEnabled", "autoPromptEnabled"] as const
+const MONITOR_HTTP_TIMEOUT_MS = 10_000
 
 const CREDIT_CONSUMPTION_REFERENCE_PREFIXES = [
   "chat_",
@@ -194,6 +195,7 @@ async function notifyWebhook(incident: MonitorIncidentDraft, autoActionTaken: st
   try {
     await fetch(webhookUrl, {
       method: "POST",
+      signal: AbortSignal.timeout(MONITOR_HTTP_TIMEOUT_MS),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         severity: incident.severity,
@@ -227,7 +229,10 @@ async function recentHealthFailures(): Promise<number> {
 async function checkHealth(checks: Record<string, unknown>, incidents: MonitorIncidentDraft[]) {
   const baseUrl = process.env.FREE_TRIAL_MONITOR_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://shenxiang.school"
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/health`, { cache: "no-store" })
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(MONITOR_HTTP_TIMEOUT_MS),
+    })
     checks.health = { ok: response.ok, status: response.status }
     if (!response.ok) {
       const failures = await recentHealthFailures()
@@ -255,7 +260,10 @@ async function checkRuntimeFlagsEndpoint(checks: Record<string, unknown>, incide
   const url = `${baseUrl.replace(/\/$/, "")}/api/free-trial/runtime-flags`
 
   try {
-    const response = await fetch(url, { cache: "no-store" })
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(MONITOR_HTTP_TIMEOUT_MS),
+    })
     const contentType = response.headers.get("content-type") || ""
     let payload: Record<string, unknown> | null = null
 

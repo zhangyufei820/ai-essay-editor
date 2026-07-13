@@ -1,14 +1,15 @@
-import { promises as fs } from "fs"
 import path from "path"
 import { NextRequest } from "next/server"
 
 import { requireUser } from "@/lib/auth/verified-user"
+import { buildLocalFileResponse } from "@/lib/local-file-response"
 import { verifySignedOpenClawMediaPath } from "@/lib/openclaw-media-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const MEDIA_ROOT = process.env.OPENCLAW_MEDIA_ROOT || "/openclaw-media"
+const MAX_OPENCLAW_MEDIA_BYTES = 100 * 1024 * 1024
 
 const MIME_TYPES: Record<string, string> = {
   ".csv": "text/csv; charset=utf-8",
@@ -46,8 +47,8 @@ function resolveMediaPath(segments: string[]) {
     return null
   }
 
-  const root = path.resolve(MEDIA_ROOT)
-  const filePath = path.resolve(root, ...segments)
+  const root = path.resolve(/* turbopackIgnore: true */ MEDIA_ROOT)
+  const filePath = path.resolve(/* turbopackIgnore: true */ root, ...segments)
   if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
     return null
   }
@@ -88,30 +89,24 @@ export async function GET(
     })
   }
 
-  try {
-    const stat = await fs.stat(filePath)
-    if (!stat.isFile()) {
-      return new Response("Not Found", { status: 404 })
-    }
-
-    const bytes = await fs.readFile(filePath)
-    const contentType = MIME_TYPES[path.extname(filePath).toLowerCase()]
-    if (!contentType) {
-      return new Response("Unsupported Media Type", { status: 415 })
-    }
-    const extension = path.extname(filePath).toLowerCase()
-    const disposition = request.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline"
-
-    return new Response(bytes, {
-      headers: {
-        "Content-Type": contentType,
-        "Content-Disposition": contentDisposition(filePath, disposition),
-        "Content-Length": String(stat.size),
-        "Cache-Control": "private, max-age=3600",
-        "X-Content-Type-Options": "nosniff",
-      },
-    })
-  } catch {
-    return new Response("Not Found", { status: 404 })
+  const extension = path.extname(filePath).toLowerCase()
+  const contentType = MIME_TYPES[extension]
+  if (!contentType) {
+    return new Response("Unsupported Media Type", { status: 415 })
   }
+  const disposition = extension === ".svg" || request.nextUrl.searchParams.get("download") === "1"
+    ? "attachment"
+    : "inline"
+
+  return buildLocalFileResponse({
+    filePath,
+    contentType,
+    maxBytes: MAX_OPENCLAW_MEDIA_BYTES,
+    rangeHeader: request.headers.get("range"),
+    headers: {
+      "Content-Disposition": contentDisposition(filePath, disposition),
+      "Cache-Control": "private, max-age=3600",
+      ...(extension === ".svg" ? { "Content-Security-Policy": "sandbox; default-src 'none'" } : {}),
+    },
+  })
 }

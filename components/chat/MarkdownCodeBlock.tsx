@@ -1,11 +1,22 @@
 "use client"
 
 import { memo, useState } from "react"
+import dynamic from "next/dynamic"
 import { Check } from "lucide-react"
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { IconCopy } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
+
+const HighlightedCode = dynamic(
+  () => import("@/components/chat/HighlightedCode").then((module) => module.HighlightedCode),
+  {
+    ssr: false,
+    loading: () => (
+      <pre className="m-0 overflow-x-auto bg-[var(--ink-900)] p-4 font-mono text-[0.84rem] leading-relaxed text-[var(--paper-100)]">
+        <code>代码高亮加载中…</code>
+      </pre>
+    ),
+  },
+)
 
 type MarkdownCodeBlockProps = {
   code: string
@@ -116,30 +127,7 @@ export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
           {copied ? "已复制" : "复制"}
         </button>
       </div>
-      <SyntaxHighlighter
-        style={oneDark}
-        language={detectedLanguage}
-        PreTag="div"
-        customStyle={{
-          margin: 0,
-          padding: "1rem",
-          backgroundColor: "var(--ink-900)",
-          color: "var(--paper-100)",
-          fontSize: "0.84rem",
-          lineHeight: 1.68,
-          borderRadius: 0,
-        }}
-        codeTagProps={{
-          style: {
-            fontFamily: "var(--font-mono-v2), SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace",
-            color: "inherit",
-          },
-        }}
-        showLineNumbers={false}
-        wrapLongLines
-      >
-        {codeString}
-      </SyntaxHighlighter>
+      <HighlightedCode code={codeString} language={detectedLanguage} />
     </div>
   )
 })

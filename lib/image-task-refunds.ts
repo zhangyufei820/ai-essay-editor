@@ -32,6 +32,8 @@ type GatewayTaskState = {
   error?: string
 }
 
+const IMAGE_TASK_QUERY_TIMEOUT_MS = 15_000
+
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -77,6 +79,7 @@ async function readGatewayTask(upstreamTaskId: string): Promise<GatewayTaskState
 
   try {
     const response = await fetch(`${gatewayUrl}/api/image/tasks/${encodeURIComponent(upstreamTaskId)}`, {
+      signal: AbortSignal.timeout(IMAGE_TASK_QUERY_TIMEOUT_MS),
       headers: gatewayToken
         ? {
             "x-gateway-token": gatewayToken,

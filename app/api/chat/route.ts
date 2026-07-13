@@ -25,6 +25,8 @@ export const maxDuration = 60
 const CHAT_MODEL: ModelType = "standard"
 const MIN_REQUIRED_CREDITS = getMinimumRequiredCredits(CHAT_MODEL)
 const CHAT_MAX_OUTPUT_TOKENS = getMaxOutputTokensForModel(CHAT_MODEL)
+const ESSAY_GRADE_TIMEOUT_MS = 55_000
+const DIFY_STREAM_TIMEOUT_MS = 15 * 60 * 1000
 
 type ChatRequestBody = {
   messages: any[]
@@ -343,6 +345,7 @@ export async function POST(req: NextRequest) {
     if (isEssayCorrectionRequest) {
       const essayGradeResponse = await fetch(`${req.url.replace("/api/chat", "/api/essay-grade")}`, {
         method: "POST",
+        signal: AbortSignal.timeout(ESSAY_GRADE_TIMEOUT_MS),
         headers: {
           "Content-Type": "application/json",
           ...(req.headers.get("authorization") ? { Authorization: req.headers.get("authorization")! } : {}),
@@ -439,6 +442,7 @@ export async function POST(req: NextRequest) {
 
     const response = await fetch(`${customConfig.baseURL}/chat-messages`, {
       method: "POST",
+      signal: AbortSignal.timeout(DIFY_STREAM_TIMEOUT_MS),
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${customConfig.apiKey}`,

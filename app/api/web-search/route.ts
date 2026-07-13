@@ -7,6 +7,7 @@ import { rejectUntrustedOrigin } from "@/lib/security/request"
 export const maxDuration = 60
 
 const MAX_SEARCH_QUERY_LENGTH = 500
+const TAVILY_TIMEOUT_MS = 15_000
 
 type SearchResult = {
   title: string
@@ -25,6 +26,7 @@ async function searchWithTavily(query: string, maxResults: number): Promise<Sear
 
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
+    signal: AbortSignal.timeout(TAVILY_TIMEOUT_MS),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,

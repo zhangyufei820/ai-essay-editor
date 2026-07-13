@@ -89,4 +89,31 @@ describe("critical API timeout guards", () => {
     expect(source).toContain("isTransientPersistenceError")
     expect(source).not.toContain("for (const file of files) {\n        try {")
   })
+
+  it("bounds remaining server-side HTTP calls without changing their business flow", () => {
+    const cases = [
+      ["lib/image-task-refunds.ts", "IMAGE_TASK_QUERY_TIMEOUT_MS"],
+      ["lib/free-trial-monitor.ts", "MONITOR_HTTP_TIMEOUT_MS"],
+      ["app/api/web-search/route.ts", "TAVILY_TIMEOUT_MS"],
+      ["lib/xunhupay.ts", "XUNHUPAY_QUERY_TIMEOUT_MS"],
+      ["app/api/voice/stt/route.ts", "VOICE_STT_TIMEOUT_MS"],
+    ] as const
+
+    for (const [file, timeoutName] of cases) {
+      const source = read(file)
+      expect(source).toContain(timeoutName)
+      expect(source).toContain(`signal: AbortSignal.timeout(${timeoutName})`)
+    }
+  })
+
+  it("bounds legacy chat upstreams while preserving the metered response path", () => {
+    const source = read("app/api/chat/route.ts")
+
+    expect(source).toContain("ESSAY_GRADE_TIMEOUT_MS")
+    expect(source).toContain("DIFY_STREAM_TIMEOUT_MS")
+    expect(source).toContain("signal: AbortSignal.timeout(ESSAY_GRADE_TIMEOUT_MS)")
+    expect(source).toContain("signal: AbortSignal.timeout(DIFY_STREAM_TIMEOUT_MS)")
+    expect(source).toContain("createMeteredStreamResponse(essayGradeResponse")
+    expect(source).toContain("createMeteredStreamResponse(response")
+  })
 })

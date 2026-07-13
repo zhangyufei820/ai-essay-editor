@@ -181,25 +181,6 @@ const nextConfig = {
           },
         ],
       },
-      // Next 图片优化接口没有文件扩展名，Cloudflare 默认不一定按静态资源处理。
-      // 这里给 CDN 明确的边缘缓存信号；本地营销图会尽量直接走 /images 静态路径。
-      {
-        source: '/_next/image',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-          {
-            key: 'CDN-Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-          {
-            key: 'Cloudflare-CDN-Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
-      },
     ]
   },
 }

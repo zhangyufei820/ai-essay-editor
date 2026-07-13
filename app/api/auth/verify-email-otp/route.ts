@@ -4,9 +4,12 @@ import { emailOTPStore } from "@/lib/email-otp-store"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { handleReferralSignup } from "@/lib/credits"
 import { createServerClient } from "@/lib/supabase/server"
+import { findAuthUserIdByEmail } from "@/lib/auth/find-user-by-email"
+import { logger } from "@/lib/logger"
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function POST(request: NextRequest) {
-  // IP 限流：10次/分钟
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 10)
   if (!limitResult.allowed) {
@@ -14,72 +17,70 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { email, code, referralCode } = await request.json()
+    const body: unknown = await request.json()
+    const email = typeof body === "object" && body !== null && "email" in body
+      ? (body as { email?: unknown }).email
+      : undefined
+    const code = typeof body === "object" && body !== null && "code" in body
+      ? (body as { code?: unknown }).code
+      : undefined
+    const referralCodeValue = typeof body === "object" && body !== null && "referralCode" in body
+      ? (body as { referralCode?: unknown }).referralCode
+      : undefined
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
+    const normalizedCode = typeof code === "string" ? code.trim() : ""
+    const referralCode = typeof referralCodeValue === "string" && referralCodeValue.length <= 100
+      ? referralCodeValue.trim()
+      : ""
 
-    if (!email || !code) {
-      return NextResponse.json({ error: "缺少必要参数" }, { status: 400 })
+    if (!normalizedEmail || normalizedEmail.length > 254 || !EMAIL_PATTERN.test(normalizedEmail) || !/^\d{6}$/.test(normalizedCode)) {
+      return NextResponse.json({ error: "邮箱或验证码格式不正确" }, { status: 400 })
     }
 
-    const normalizedEmail = email.toLowerCase()
-    const normalizedCode = code.trim()
-
-    console.log("[EmailOTP] 收到验证请求")
-
-    const otpData = emailOTPStore.get(normalizedEmail)
-
-    if (!otpData) {
-      console.log("[EmailOTP] 验证码不存在或已过期")
-      return NextResponse.json({ error: "验证码不存在或已过期" }, { status: 400 })
+    let verificationResult
+    try {
+      verificationResult = await emailOTPStore.verify(normalizedEmail, normalizedCode)
+    } catch {
+      logger.error("[email-otp] durable challenge verification unavailable")
+      return NextResponse.json({ error: "验证码服务暂不可用，请稍后重试" }, { status: 503 })
     }
 
-    // 检查尝试次数
-    if (otpData.attempts >= 5) {
-      emailOTPStore.delete(normalizedEmail)
+    if (verificationResult === "too_many_attempts") {
       return NextResponse.json({ error: "验证次数过多，请重新获取验证码" }, { status: 400 })
     }
-
-    // 验证码不匹配
-    if (otpData.code !== normalizedCode) {
-      console.log("[EmailOTP] 验证码不匹配")
-      emailOTPStore.incrementAttempts(normalizedEmail)
+    if (verificationResult === "expired" || verificationResult === "missing") {
+      return NextResponse.json({ error: "验证码不存在或已过期" }, { status: 400 })
+    }
+    if (verificationResult !== "valid") {
       return NextResponse.json({ error: "验证码错误" }, { status: 400 })
     }
 
-    console.log("[EmailOTP] 验证码匹配成功")
-
-    // 🔥 使用 Admin API 直接创建/登录用户，无需发送第二封邮件
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error("[EmailOTP] 缺少 Supabase 配置")
+      logger.error("[email-otp] Supabase configuration unavailable")
       return NextResponse.json({ error: "服务配置错误" }, { status: 500 })
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
-        persistSession: false
-      }
+        persistSession: false,
+      },
     })
 
-    // 检查用户是否已存在
-    const { data: existingUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers()
-    
     let userId: string | undefined
-    const existingUser = existingUsers?.users.find(u => u.email === normalizedEmail)
-    
-    if (existingUser) {
-      // 用户已存在，直接获取 ID
-      userId = existingUser.id
-      console.log("[EmailOTP] 用户已存在")
-    } else {
-      // 创建新用户（自动确认邮箱）
-      console.log("[EmailOTP] 创建新用户")
-      
+    try {
+      userId = await findAuthUserIdByEmail(supabaseAdmin, normalizedEmail)
+    } catch {
+      logger.error("[email-otp] auth user lookup unavailable")
+      return NextResponse.json({ error: "登录服务暂不可用，请稍后重试" }, { status: 503 })
+    }
+
+    if (!userId) {
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: normalizedEmail,
-        email_confirm: true, // 🔥 自动确认邮箱，无需再发确认邮件
+        email_confirm: true,
         user_metadata: {
           display_name: normalizedEmail.split("@")[0],
           ...(referralCode ? { referral_code: referralCode } : {}),
@@ -87,52 +88,50 @@ export async function POST(request: NextRequest) {
       })
 
       if (createError) {
-        console.error("[EmailOTP] 创建用户失败:", createError.message)
-        return NextResponse.json({ error: "创建用户失败，请稍后重试" }, { status: 500 })
-      }
-
-      userId = newUser.user?.id
-      console.log("[EmailOTP] 新用户创建成功")
-      
-      // 🎁 给新用户发放注册积分（如果需要）
-      if (userId) {
         try {
-          const { getUserCredits, createUserReferralCode } = await import("@/lib/credits")
-          
-          // 1. 初始化新人积分。getUserCredits 会为缺失记录创建 1000 积分且 is_pro=false。
-          await getUserCredits(userId)
-          console.log("[EmailOTP] 新用户积分初始化成功")
-          
-          // 2. 为新用户创建推荐码
-          await createUserReferralCode(userId)
-          console.log("[EmailOTP] 新用户推荐码创建成功")
+          userId = await findAuthUserIdByEmail(supabaseAdmin, normalizedEmail)
+        } catch {
+          userId = undefined
+        }
+        if (!userId) {
+          logger.error("[email-otp] user creation failed", { code: createError.code })
+          return NextResponse.json({ error: "创建用户失败，请稍后重试" }, { status: 500 })
+        }
+      } else {
+        userId = newUser.user?.id
 
-          if (referralCode) {
-            const referralSuccess = await handleReferralSignup(userId, referralCode)
-            if (referralSuccess) {
-              console.log("[EmailOTP] 新用户推荐奖励处理成功")
-            } else {
-              console.warn("[EmailOTP] 新用户推荐奖励处理失败")
+        if (userId) {
+          try {
+            const { getUserCredits, createUserReferralCode } = await import("@/lib/credits")
+
+            // getUserCredits 会为缺失记录创建 1000 积分且 is_pro=false。
+            await getUserCredits(userId)
+            await createUserReferralCode(userId)
+
+            if (referralCode) {
+              await handleReferralSignup(userId, referralCode)
             }
+          } catch (creditsError) {
+            logger.error("[email-otp] post-signup initialization failed", { error: creditsError })
           }
-        } catch (creditsError) {
-          console.error("[EmailOTP] 积分或推荐码处理失败:", creditsError instanceof Error ? creditsError.message : "unknown error")
-          // 不影响登录流程
         }
       }
     }
 
-    // 🔥 生成登录链接（Magic Link），直接在当前窗口完成登录
+    if (!userId) {
+      return NextResponse.json({ error: "登录失败，请重试" }, { status: 500 })
+    }
+
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: "magiclink",
       email: normalizedEmail,
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.shenxiang.school'}/auth/callback`,
-      }
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || "https://www.shenxiang.school"}/auth/callback`,
+      },
     })
 
     if (linkError) {
-      console.error("[EmailOTP] 生成登录链接失败:", linkError.message)
+      logger.error("[email-otp] session link generation failed", { code: linkError.code })
       return NextResponse.json({ error: "登录失败，请重试" }, { status: 500 })
     }
 
@@ -148,20 +147,18 @@ export async function POST(request: NextRequest) {
     })
 
     if (verifyError) {
-      console.error("[EmailOTP] 服务端建立会话失败:", verifyError.message)
+      logger.error("[email-otp] server session establishment failed", { code: verifyError.code })
       return NextResponse.json({ error: "登录失败，请重试" }, { status: 500 })
     }
 
-    emailOTPStore.delete(normalizedEmail)
-    console.log("[EmailOTP] 验证成功，已建立 httpOnly 会话")
-
+    logger.info("[email-otp] session established")
     return NextResponse.json({
       success: true,
       message: "验证成功",
       needsEmailConfirmation: false,
     })
   } catch (error: unknown) {
-    console.error("[EmailOTP] 验证异常:", error instanceof Error ? error.message : "unknown error")
+    logger.error("[email-otp] verification request failed", { error })
     return NextResponse.json({ error: "验证失败，请稍后重试" }, { status: 500 })
   }
 }

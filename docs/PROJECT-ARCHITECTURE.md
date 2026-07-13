@@ -6,7 +6,7 @@
 
 ## 一句话架构
 
-沈翔智学是一个运行在 Docker 自托管环境中的 Next.js 16 App Router 应用，通过 OpenResty / 1Panel 管理的反向代理暴露 `shenxiang.school` 系列域名；应用侧负责页面、API Routes、鉴权同步、支付/积分/会员、Dify 工作流调用、图片代理、TTS 和分享奖励；外部依赖包括 Cloudflare、COS/CDN、Dify、Supabase、迅虎支付、语音供应商和 GPT Image Provider。
+沈翔智学是一个运行在 Docker 自托管环境中的 Next.js 16 App Router 应用，通过 OpenResty / 1Panel 管理的反向代理暴露 `shenxiang.school` 系列域名；应用侧负责页面、API Routes、鉴权同步、支付/积分/会员、Dify 工作流调用、图片代理、TTS 和分享奖励；外部依赖包括 Cloudflare、Dify、Supabase、迅虎支付、语音供应商和 GPT Image Provider。主站文件上传和 AI 文件访问走 Dify/内部网关直连，不使用 COS SDK。
 
 ## 架构图
 
@@ -15,17 +15,15 @@ flowchart TD
   U["用户浏览器"] --> CF["Cloudflare / DNS / TLS / CDN"]
   CF --> WWW["www.shenxiang.school"]
   CF --> API["api.shenxiang.school"]
-  CF --> CDN["cdn.shenxiang.school"]
 
   WWW --> RP["服务器反向代理层<br/>OpenResty / 1Panel 管理"]
   API --> RP
-  CDN --> COS["静态资源 / 图片 CDN / COS"]
 
   RP --> NEXT["Docker: shenxiang-nextjs<br/>Next.js 16 App Router<br/>127.0.0.1:3000"]
 
   NEXT --> PAGES["前端页面<br/>首页 / Chat / Pricing / Help / Settings / Icon Lab"]
   NEXT --> ICONS["自研 SVG 图标系统<br/>Feature Icons / Interface Icons"]
-  NEXT --> MW["middleware.ts<br/>CORS / 安全头 / API 预检"]
+  NEXT --> MW["proxy.ts<br/>CORS / 安全头 / API 预检"]
 
   NEXT --> APIROUTES["Next API Routes"]
   APIROUTES --> CHAT["/api/dify-chat<br/>文本 / OpenClaw / GPT Image 路由"]
@@ -59,7 +57,6 @@ flowchart TD
 
 - `www.shenxiang.school`：用户访问的主站页面。
 - `api.shenxiang.school`：API 入口。
-- `cdn.shenxiang.school`：静态资源、图片 CDN、COS 访问入口。
 - Cloudflare 负责 DNS、TLS 和 CDN。
 - OpenResty / 1Panel 反向代理负责把请求转发到 Docker 内的 Next.js 服务。
 
@@ -71,7 +68,7 @@ flowchart TD
 - 页面：`app/**/page.tsx`
 - 组件：`components/**`
 - 通用逻辑：`lib/**`
-- 中间件：`middleware.ts`
+- 请求代理：`proxy.ts`
 
 ### API Routes 层
 
@@ -129,7 +126,7 @@ flowchart TD
 
 ### 静态资源 / 图片层
 
-- CDN/COS 负责静态资源和图片。
+- Next.js 静态资源由主站发布链路提供；上传文件和 AI 文件通过 Dify/内部网关引用，主站不配置或调用 COS。
 - `/api/image-proxy` 负责图片代理和私网 URL 防护。
 - OpenClaw/GPT Image 相关图片链路必须保持 Token 鉴权和私网地址保护。
 
@@ -143,7 +140,7 @@ flowchart TD
 | 通用组件 | `components/ui/**` | UI 基础组件 |
 | 首页/营销页 | `components/home/**` | 首页模块 |
 | 图标系统 | `components/icons/**` | 自研 SVG 图标 |
-| 鉴权 | `lib/auth-user.ts`, `lib/auth/**`, `middleware.ts` | 用户身份与中间件 |
+| 鉴权 | `lib/auth-user.ts`, `lib/auth/**`, `proxy.ts` | 用户身份与请求代理 |
 | Dify | `lib/dify-workflow-client.ts`, `lib/internal-dify-fetch.ts` | Dify 调用 |
 | 支付/权益 | `lib/billing.ts`, `lib/stripe.ts`, `lib/wechat-pay.ts`, `lib/xunhupay.ts` | 支付和会员权益 |
 | Supabase | `lib/supabase/**`, `lib/supabase.ts` | Supabase 客户端/服务端 |

@@ -2269,7 +2269,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             }
 
             // ============================================
-            // ✅ 上传：统一走 /api/dify-upload → Dify → 腾讯云 COS
+            // 上传统一走 /api/dify-upload → Dify，消息只保存 Dify/网关文件引用
             // ============================================
             console.log("📤 [Upload] 上传文件:", fileToUpload.name, (fileToUpload.size / 1024 / 1024).toFixed(2) + "MB")
 

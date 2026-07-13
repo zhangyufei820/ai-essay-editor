@@ -17,6 +17,8 @@ export const xunhupayConfig: XunhupayConfig = {
   returnUrl: (process.env.NEXT_PUBLIC_APP_URL || "") + "/payment/success",
 }
 
+const XUNHUPAY_QUERY_TIMEOUT_MS = 15_000
+
 // 生成签名 (MD5) - 迅虎支付标准格式
 function generateSign(params: Record<string, any>, appSecret: string): string {
   // 按照key排序并拼接（排除空值和hash字段）
@@ -132,6 +134,8 @@ export async function queryXunhupayOrder(outTradeNo: string) {
     .map((key) => `${key}=${encodeURIComponent(paramsWithSign[key as keyof typeof paramsWithSign])}`)
     .join("&")
 
-  const response = await fetch(`https://api.xunhupay.com/payment/query?${queryString}`)
+  const response = await fetch(`https://api.xunhupay.com/payment/query?${queryString}`, {
+    signal: AbortSignal.timeout(XUNHUPAY_QUERY_TIMEOUT_MS),
+  })
   return response.json()
 }

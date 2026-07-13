@@ -32,6 +32,10 @@ yarn-error.log*
 
 # Vercel
 .vercel
+.vercel-rebuild
+
+# Process output
+nohup.out
 
 # TypeScript
 *.tsbuildinfo

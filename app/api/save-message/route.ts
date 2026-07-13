@@ -2,8 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { createHash } from "crypto"
 import { requireUser } from "@/lib/auth/verified-user"
-import { isCosConfigured } from "@/lib/cos"
-import { uploadBase64File } from "@/lib/storage"
 import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
 import { isOperationTimeoutError, withTimeout } from "@/lib/server-timeout"
 
@@ -170,11 +168,7 @@ async function persistUploadedFileMetadata({
 
       const saveOne = async () => {
         const storageUrl = resolveUploadedFileStorageUrl(record, fileData)
-          || (fileData
-            ? isCosConfigured()
-              ? await uploadBase64File(fileData, String(record.name || "upload.bin"), String(record.type || "application/octet-stream"), userId)
-              : createInlineFileReference(record, fileData)
-            : null)
+          || (fileData ? createInlineFileReference(record, fileData) : null)
 
         if (!storageUrl) return
 

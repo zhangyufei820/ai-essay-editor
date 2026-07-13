@@ -8,7 +8,7 @@ import { Suspense, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Camera, ChevronDown, ChevronLeft, FileImage, Image as ImageIcon, Loader2, Trash2, Wand2, X } from "lucide-react"
 import { IconAllInOne, IconCopy, IconExportPdf, IconHistory, IconInkDot, IconSealCheck } from "@/components/icons/v2"
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
 
 import { ModelLogo } from "@/components/ModelLogo"
@@ -65,10 +65,18 @@ function isAcceptedImageFile(file: File) {
   return ACCEPTED_IMAGE_TYPES.includes(file.type) || [".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif"].includes(extension)
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+let supabaseClient: SupabaseClient | undefined
+
+function getSupabaseClient() {
+  if (supabaseClient) return supabaseClient
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("SUPABASE_CLIENT_UNAVAILABLE")
+  }
+  supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+  return supabaseClient
+}
 
 type UploadKind = "edit" | "mask"
 
@@ -757,7 +765,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   useEffect(() => {
     const initUser = async () => {
-      const { data: { user: verifiedUser } } = await supabase.auth.getUser()
+      const { data: { user: verifiedUser } } = await getSupabaseClient().auth.getUser()
       if (verifiedUser?.id) {
         setUserId(verifiedUser.id)
         void fetchCreditsRef.current(verifiedUser.id)
@@ -861,7 +869,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       setErrorMessage("")
       setResult(null)
 
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("chat_messages")
         .select("role, content, created_at")
         .eq("session_id", sid)
@@ -1359,6 +1367,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         ? nextResult.imageUrls.map((url) => `![Generated Image](${url})`).join("\n\n")
         : nextResult.sourceText
 
+      const supabase = getSupabaseClient()
       const { data: existing } = await supabase.from("chat_sessions").select("id").eq("id", sid).maybeSingle()
 
       if (!existing) {

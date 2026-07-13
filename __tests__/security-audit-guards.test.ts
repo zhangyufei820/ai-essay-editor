@@ -38,8 +38,8 @@ describe("P0/P1 security audit guardrails", () => {
     expect(otpStore).not.toContain("code: ${code}")
     expect(otpStore).not.toContain("code: ${data.code}")
     expect(otpStore).not.toContain("console.")
-    expect(otpStore).toContain("globalThis.otpStoreInstance = otpStore")
-    expect(otpStore).toContain("globalThis.otpStoreCleanupInterval = cleanupInterval")
+    expect(otpStore).toContain("upsert_email_otp_challenge")
+    expect(otpStore).toContain("verify_email_otp_challenge")
     expect(sendOtp).not.toContain("devCode")
     expect(sendOtp).not.toContain("response.text()")
     expect(sendOtp).toContain("AbortSignal.timeout(RESEND_TIMEOUT_MS)")
@@ -57,6 +57,7 @@ describe("P0/P1 security audit guardrails", () => {
     expect(fs.existsSync(path.join(root, "app/api/debug/orders/route.ts"))).toBe(false)
     expect(read("app/api/openclaw-media-sign/[...path]/route.ts")).toContain("requireUser(request)")
     expect(read("app/api/openclaw-media/[...path]/route.ts")).toContain("verifySignedOpenClawMediaPath(mediaPath, exp, sig, auth.user.id)")
+    expect(read("app/slides/[...path]/route.ts")).toContain("requireUser(request)")
     expect(read("lib/openclaw-media-server.ts")).not.toContain("process.env.SUPABASE_SERVICE_ROLE_KEY ||")
   })
 
@@ -66,7 +67,11 @@ describe("P0/P1 security audit guardrails", () => {
     expect(read("app/api/voice/tts/route.ts")).toContain("AbortSignal.timeout(VOICE_GATEWAY_TIMEOUT_MS)")
     expect(read("app/auth/callback/route.ts")).toContain("safeInternalRedirectPath")
     expect(read("app/login/page.tsx")).toContain("safeInternalRedirectPath")
-    expect(read("lib/cos.ts")).toContain("assertAllowedSourceUrl(sourceUrl)")
+    expect(fs.existsSync(path.join(root, "lib/cos.ts"))).toBe(false)
+    expect(fs.existsSync(path.join(root, "lib/storage.ts"))).toBe(false)
+    expect(read("package.json")).not.toContain("cos-nodejs-sdk-v5")
+    expect(read("package-lock.json")).not.toContain("cos-nodejs-sdk-v5")
+    expect(read("app/api/save-message/route.ts")).not.toMatch(/@\/lib\/(cos|storage)/)
   })
 
   it("hardens P1 security configuration and user feedback plumbing", () => {
@@ -116,6 +121,16 @@ describe("P0/P1 security audit guardrails", () => {
     expect(route).toContain("MAX_CODEX_FILE_BYTES")
     expect(route).toContain('extension === ".svg"')
     expect(route).toContain("sandbox; default-src 'none'")
+  })
+
+  it("keeps runtime-mounted files outside the standalone trace", () => {
+    for (const file of [
+      "app/slides/[...path]/route.ts",
+      "app/api/openclaw-media/[...path]/route.ts",
+      "lib/local-file-response.ts",
+    ]) {
+      expect(read(file)).toContain("turbopackIgnore: true")
+    }
   })
 
   it("cancels long-running browser polls when their components unmount", () => {

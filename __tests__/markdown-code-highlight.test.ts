@@ -9,10 +9,14 @@ describe("markdown code highlighting", () => {
     const enhancedMarkdown = read("components/chat/EnhancedMarkdown.tsx")
     const messageBubble = read("components/chat/MessageBubble.tsx")
     const codeBlock = read("components/chat/MarkdownCodeBlock.tsx")
+    const highlightedCode = read("components/chat/HighlightedCode.tsx")
 
     expect(enhancedMarkdown).toContain("MarkdownCodeBlock")
     expect(messageBubble).toContain("MarkdownCodeBlock")
-    expect(codeBlock).toContain("Prism as SyntaxHighlighter")
+    expect(codeBlock).toContain("dynamic(")
+    expect(codeBlock).not.toContain("react-syntax-highlighter")
+    expect(highlightedCode).toContain("PrismLight as SyntaxHighlighter")
+    expect(highlightedCode).toContain("registerLanguage")
     expect(codeBlock).toContain("inferCodeLanguage")
   })
 

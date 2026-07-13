@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server"
 
-const otpSet = jest.fn()
+const otpSet = jest.fn(() => true)
 const otpDelete = jest.fn()
 const otpCanSend = jest.fn(() => true)
 
@@ -60,7 +60,8 @@ describe("POST /api/auth/send-email-otp", () => {
     expect(json).toEqual({ error: "邮件发送失败" })
     expect(otpSet).toHaveBeenCalledWith("student@example.com", expect.stringMatching(/^\d{6}$/), 5 * 60 * 1000)
     expect(otpDelete).toHaveBeenCalledWith("student@example.com")
-    expect(errorSpy).toHaveBeenCalledWith("Resend API 请求失败", { status: 502 })
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('"message":"[email-otp] provider request failed"'))
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('"status":502'))
     expect(JSON.stringify(errorSpy.mock.calls)).not.toContain("provider-secret-details")
   })
 

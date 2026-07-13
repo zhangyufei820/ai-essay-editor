@@ -2,7 +2,7 @@ import { updateSession } from "@/lib/supabase/middleware"
 import { applyCorsHeaders } from "@/lib/cors"
 import type { NextRequest } from "next/server"
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isApiRoute = pathname.startsWith("/api/")
 

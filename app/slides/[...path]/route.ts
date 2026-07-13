@@ -2,10 +2,14 @@ import { promises as fs } from "fs"
 import path from "path"
 import { NextRequest } from "next/server"
 
+import { requireUser } from "@/lib/auth/verified-user"
+import { buildLocalFileResponse } from "@/lib/local-file-response"
+
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const WORKSPACE_ROOT = process.env.OPENCLAW_WORKSPACE_ROOT || "/openclaw-workspace"
+const MAX_OPENCLAW_SLIDE_BYTES = 100 * 1024 * 1024
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -45,8 +49,8 @@ function resolveWorkspaceAssetPath(segments: string[]) {
     return null
   }
 
-  const root = path.resolve(WORKSPACE_ROOT)
-  const filePath = path.resolve(root, ...segments)
+  const root = path.resolve(/* turbopackIgnore: true */ WORKSPACE_ROOT)
+  const filePath = path.resolve(/* turbopackIgnore: true */ root, ...segments)
   if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
     return null
   }
@@ -73,7 +77,7 @@ async function findWorkspaceAssetPath(segments: string[]) {
     }
 
     try {
-      const stat = await fs.stat(candidatePath)
+      const stat = await fs.stat(/* turbopackIgnore: true */ candidatePath)
       if (stat.isFile()) {
         return candidatePath
       }
@@ -89,6 +93,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path?: string[] }> },
 ) {
+  const auth = await requireUser(request)
+  if (auth.response) return auth.response
+
   const { path: assetPath = [] } = await params
   const filePath = await findWorkspaceAssetPath(assetPath)
 
@@ -96,14 +103,13 @@ export async function GET(
     return new Response("Not Found", { status: 404 })
   }
 
-  const bytes = await fs.readFile(filePath)
   const extension = path.extname(filePath).toLowerCase()
-  const disposition = request.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline"
+  const disposition = extension === ".svg" || request.nextUrl.searchParams.get("download") === "1"
+    ? "attachment"
+    : "inline"
   const headers: Record<string, string> = {
-    "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
     "Content-Disposition": contentDisposition(filePath, disposition),
-    "Content-Length": String(bytes.length),
-    "Cache-Control": "public, max-age=300",
+    "Cache-Control": "private, max-age=300",
     "X-Content-Type-Options": "nosniff",
   }
   if (extension === ".html" || extension === ".htm") {
@@ -114,9 +120,15 @@ export async function GET(
       "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
       "font-src 'self' data: https://cdn.jsdelivr.net",
     ].join("; ")
+  } else if (extension === ".svg") {
+    headers["Content-Security-Policy"] = "sandbox; default-src 'none'"
   }
 
-  return new Response(bytes, {
+  return buildLocalFileResponse({
+    filePath,
+    contentType: MIME_TYPES[extension] || "application/octet-stream",
+    maxBytes: MAX_OPENCLAW_SLIDE_BYTES,
+    rangeHeader: request.headers.get("range"),
     headers,
   })
 }

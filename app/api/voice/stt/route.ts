@@ -8,6 +8,7 @@ export const maxDuration = 120
 
 const VOICE_GATEWAY_URL = (process.env.VOICE_GATEWAY_URL || "http://voice-gateway:8080").replace(/\/+$/, "")
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024
+const VOICE_STT_TIMEOUT_MS = 110_000
 const ALLOWED_AUDIO_TYPES = new Set([
   "audio/webm",
   "audio/mpeg",
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch(`${VOICE_GATEWAY_URL}/voice/stt`, {
       method: "POST",
       body: upstreamForm,
+      signal: AbortSignal.timeout(VOICE_STT_TIMEOUT_MS),
     })
 
     const payload = await response.json().catch(() => ({}))
