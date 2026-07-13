@@ -48,6 +48,9 @@ func HasTextOutputSent(ctx *gin.Context) bool {
 	if ctx == nil {
 		return false
 	}
+	if ctx.GetBool("responses_stream_output_tracking") {
+		return ctx.GetBool("response_stream_output_sent")
+	}
 	if ctx.Writer != nil && (ctx.Writer.Written() || ctx.Writer.Size() > 0) {
 		return true
 	}
@@ -426,6 +429,10 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			MonthlyCardTextValueMultiplierForRelayInfo(relayInfo),
 		))
 	}
+	missingUsageAfterOutput := summary.TotalTokens == 0 &&
+		(upstreamCostBilling == nil || !upstreamCostBilling.Applied) &&
+		responseStreamOutputSent
+	settledBillingQuota := billingQuota
 
 	if summary.WebSearchCallCount > 0 {
 		extraContent = append(extraContent, fmt.Sprintf("Web Search 调用 %d 次，调用花费 %s", summary.WebSearchCallCount, decimal.NewFromFloat(summary.WebSearchPrice).Mul(decimal.NewFromInt(int64(summary.WebSearchCallCount))).Div(decimal.NewFromInt(1000)).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).String()))
@@ -444,8 +451,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 
 	if summary.TotalTokens == 0 && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
-		if responseStreamOutputSent {
-			extraContent = append(extraContent, "已向用户输出内容但上游没有返回计费信息，本次按 0 扣费并记录审计")
+		if missingUsageAfterOutput {
+			extraContent = append(extraContent, "已向用户成功输出内容但未取得上游最终计费信息，保留预扣并记录待对账")
 		} else {
 			extraContent = append(extraContent, "未向用户输出有效内容，上游没有返回计费信息，本次按 0 扣费并返还预扣")
 		}
@@ -454,12 +461,21 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		model.UpdateUsageStats(relayInfo.UserId, relayInfo.ChannelId, billingQuota)
 	}
 
-	if err := SettleBilling(ctx, relayInfo, retailQuota); err != nil {
-		logger.LogError(ctx, "error settling billing: "+err.Error())
+	var settleErr error
+	if missingUsageAfterOutput {
+		settledBillingQuota, settleErr = SettleBillingAtPreConsumedQuota(ctx, relayInfo)
+	} else {
+		settleErr = SettleBilling(ctx, relayInfo, retailQuota)
+	}
+	if settleErr != nil {
+		logger.LogError(ctx, "error settling billing: "+settleErr.Error())
+	}
+	if missingUsageAfterOutput && settledBillingQuota != 0 {
+		model.UpdateUsageStats(relayInfo.UserId, relayInfo.ChannelId, settledBillingQuota)
 	}
 	if callback, ok := ctx.Get("playground_image_billing_capture"); ok {
 		if capture, ok := callback.(func(int, *relaycommon.RelayInfo)); ok {
-			capture(billingQuota, relayInfo)
+			capture(settledBillingQuota, relayInfo)
 		}
 	}
 
@@ -496,23 +512,32 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if responseCompletedSeen {
 		other["response_completed_seen"] = true
 	}
+	if ctx.GetBool("response_stream_usage_drain_attempted") {
+		other["upstream_usage_drain_attempted"] = true
+	}
+	if ctx.GetBool("response_stream_usage_drain_timed_out") {
+		other["upstream_usage_drain_timed_out"] = true
+	}
 	if summary.TotalTokens == 0 && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
-		other["billing_settlement"] = "preconsume_refund_no_usage"
 		other["zero_usage"] = true
-		other["empty_output"] = !responseStreamOutputSent
-		other["refund_reason"] = TextEmptyOutputRetryReason
-		other["failure_kind"] = "text_no_effective_output"
-		other["retry_attempted"] = ctx.GetBool(textEmptyOutputRetryKey)
-		if retryReason := strings.TrimSpace(ctx.GetString("text_empty_output_retry_reason")); retryReason != "" {
-			other["retry_reason"] = retryReason
-		}
-		if responseStreamOutputSent {
-			other["billing_settlement"] = "zero_usage_after_output_review"
-			other["empty_output"] = false
-			other["refund_reason"] = "upstream_missing_usage_after_output"
-			other["failure_kind"] = "text_missing_usage_after_output"
-		}
 		other["pre_consumed_quota"] = relayInfo.FinalPreConsumedQuota
+		if missingUsageAfterOutput {
+			other["billing_settlement"] = "preconsume_retained_missing_usage_after_output"
+			other["empty_output"] = false
+			other["failure_kind"] = "text_missing_usage_after_output"
+			other["missing_usage_after_output"] = true
+			other["charged_quota"] = settledBillingQuota
+			other["retry_attempted"] = ctx.GetBool(textEmptyOutputRetryKey)
+		} else {
+			other["billing_settlement"] = "preconsume_refund_no_usage"
+			other["empty_output"] = true
+			other["refund_reason"] = TextEmptyOutputRetryReason
+			other["failure_kind"] = "text_no_effective_output"
+			other["retry_attempted"] = ctx.GetBool(textEmptyOutputRetryKey)
+			if retryReason := strings.TrimSpace(ctx.GetString("text_empty_output_retry_reason")); retryReason != "" {
+				other["retry_reason"] = retryReason
+			}
+		}
 	}
 	if summary.ImageTokens != 0 {
 		other["image"] = true
@@ -572,7 +597,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	InjectUpstreamCostBillingInfo(other, upstreamCostBilling)
-	InjectMonthlyCardTextBillingInfo(other, relayInfo, retailQuota, billingQuota)
+	if !missingUsageAfterOutput {
+		InjectMonthlyCardTextBillingInfo(other, relayInfo, retailQuota, billingQuota)
+	}
 	attachQuotaSaturation(ctx, relayInfo, other)
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
@@ -581,7 +608,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		CompletionTokens: summary.CompletionTokens,
 		ModelName:        logModel,
 		TokenName:        summary.TokenName,
-		Quota:            billingQuota,
+		Quota:            settledBillingQuota,
 		Content:          logContent,
 		TokenId:          relayInfo.TokenId,
 		UseTimeSeconds:   int(summary.UseTimeSeconds),

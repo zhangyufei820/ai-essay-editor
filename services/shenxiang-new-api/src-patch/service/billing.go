@@ -95,3 +95,26 @@ func ChargeBillingAdjustment(relayInfo *relaycommon.RelayInfo, purpose string, q
 	}
 	return charger.ChargeAdjustment(purpose, quota)
 }
+
+func SettleBillingAtPreConsumedQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) (int, error) {
+	if relayInfo == nil {
+		return 0, fmt.Errorf("relay info is nil")
+	}
+	if relayInfo.Billing == nil {
+		preConsumedQuota := relayInfo.FinalPreConsumedQuota
+		return preConsumedQuota, SettleBilling(ctx, relayInfo, preConsumedQuota)
+	}
+
+	preConsumedQuota := relayInfo.Billing.GetPreConsumedQuota()
+	if err := relayInfo.Billing.Settle(preConsumedQuota); err != nil {
+		return preConsumedQuota, err
+	}
+	if preConsumedQuota != 0 {
+		if relayInfo.BillingSource == BillingSourceSubscription {
+			checkAndSendSubscriptionQuotaNotify(relayInfo)
+		} else {
+			checkAndSendQuotaNotify(relayInfo, 0, preConsumedQuota)
+		}
+	}
+	return preConsumedQuota, nil
+}
