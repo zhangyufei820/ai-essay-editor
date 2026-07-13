@@ -64,7 +64,6 @@ const reverseModelOptions: Array<{ value: ReverseTargetModel; label: string }> =
 type VoiceOption = {
   voice_id: string
   name: string
-  language?: string
   description?: string
 }
 
@@ -77,8 +76,13 @@ type VoiceJob = {
   voice_id?: string | null
 }
 
-const TTS_POLL_MAX_ATTEMPTS = 150
-const TTS_POLL_SLOW_HINT_AFTER_ATTEMPTS = 12
+const TTS_VOICES: VoiceOption[] = [
+  {
+    voice_id: "coral",
+    name: "沈翔智学标准音色",
+    description: "适合课堂讲解、作文讲评与学习朗读",
+  },
+]
 const IMAGE_UPLOAD_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
 const DOCUMENT_UPLOAD_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
@@ -347,8 +351,7 @@ export default function ToolsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [sparkQuery, setSparkQuery] = useState("")
   const [ttsText, setTtsText] = useState("")
-  const [ttsVoices, setTtsVoices] = useState<VoiceOption[]>([])
-  const [ttsVoiceId, setTtsVoiceId] = useState("")
+  const [ttsVoiceId, setTtsVoiceId] = useState(TTS_VOICES[0].voice_id)
   const [ttsJob, setTtsJob] = useState<VoiceJob | null>(null)
   const [reverseImageFile, setReverseImageFile] = useState<File | null>(null)
   const [reverseImagePreview, setReverseImagePreview] = useState("")
@@ -380,28 +383,17 @@ export default function ToolsPage() {
   }, [])
 
   useEffect(() => {
-    let mounted = true
-    fetch("/api/omnivoice/voices")
-      .then((response) => response.json())
-      .then((payload) => {
-        if (!mounted || !Array.isArray(payload.voices)) return
-        setTtsVoices(payload.voices)
-        setTtsVoiceId((current) => current || payload.voices[0]?.voice_id || "")
-      })
-      .catch(() => {
-        if (mounted) setTtsVoices([])
-      })
-
-    return () => {
-      mounted = false
-    }
-  }, [])
-
-  useEffect(() => {
     return () => {
       if (reverseImagePreview) URL.revokeObjectURL(reverseImagePreview)
     }
   }, [reverseImagePreview])
+
+  useEffect(() => {
+    const audioUrl = ttsJob?.audio_url
+    return () => {
+      if (audioUrl?.startsWith("blob:")) URL.revokeObjectURL(audioUrl)
+    }
+  }, [ttsJob?.audio_url])
 
   useEffect(() => {
     if (busy !== "reverse" && busy !== "reverse-generate") return
@@ -824,71 +816,43 @@ export default function ToolsPage() {
       return
     }
 
-    let controller: AbortController | null = null
     try {
       setBusy("tts")
       setTtsJob(null)
       const authHeaders = await getRequiredToolAuthHeaders("文字转语音")
-      const response = await fetch("/api/omnivoice/tts", {
+      const response = await fetch("/api/voice/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           text: ttsText,
-          voice_id: ttsVoiceId || undefined,
-          language: "zh-CN",
-          emotion: "friendly",
+          voice: ttsVoiceId,
+          format: "mp3",
+          instructions: "Speak in natural, clear Mandarin Chinese at a moderate pace.",
         }),
       })
-      const payload = await response.json().catch(() => ({}))
       if (response.status === 401) {
         handleStaleToolAuth("文字转语音")
         return
       }
-      if (!response.ok || !payload.job?.job_id) {
-        setResult({ title: "文字转语音", content: payload.error || "语音任务创建失败" })
+      if (!response.ok) {
+        const payload = await readResponseJson(response)
+        const message = typeof payload?.error === "string" ? payload.error : "语音生成失败，请稍后重试。"
+        setTtsJob({ job_id: "direct", status: "failed", progress: 1, error: message })
+        setResult({ title: "文字转语音", content: message })
         return
       }
 
-      setTtsJob(payload.job)
-      setResult({ title: "文字转语音", content: "语音任务已创建，正在生成音频..." })
-
-      const previousController = pollingControllerRef.current
-      if (previousController) previousController.abort()
-      controller = new AbortController()
-      pollingControllerRef.current = controller
-      for (let attempt = 0; attempt < TTS_POLL_MAX_ATTEMPTS; attempt += 1) {
-        await waitForPolling(attempt < 3 ? 1500 : 5000, controller.signal)
-        if (pollingCancelledRef.current || controller.signal.aborted) {
-          throw new DOMException("Polling cancelled", "AbortError")
-        }
-        const jobResponse = await fetch(`/api/omnivoice/jobs/${encodeURIComponent(payload.job.job_id)}`, {
-          headers: authHeaders,
-          signal: controller.signal,
-        })
-        const jobPayload = await jobResponse.json().catch(() => ({}))
-        if (!jobResponse.ok || !jobPayload.job) continue
-
-        setTtsJob(jobPayload.job)
-        if (jobPayload.job.status === "running" && attempt === TTS_POLL_SLOW_HINT_AFTER_ATTEMPTS) {
-          setResult({ title: "文字转语音", content: "语音服务首次准备可能需要几分钟，系统仍在生成，请不要关闭页面。" })
-        }
-        if (jobPayload.job.status === "succeeded" && jobPayload.job.audio_url) {
-          setResult({ title: "文字转语音", content: "语音已生成，可在左侧播放器试听。" })
-          return
-        }
-        if (jobPayload.job.status === "failed") {
-          setResult({ title: "文字转语音", content: jobPayload.job.error || "语音生成失败" })
-          return
-        }
-      }
-
-      setResult({ title: "文字转语音", content: "语音仍在生成中。任务已提交到服务器，请稍后点击生成语音重试或联系管理员查询任务 ID。" })
+      const audio = await response.blob()
+      if (!audio.size) throw new Error("EMPTY_AUDIO")
+      const audioUrl = URL.createObjectURL(audio)
+      setTtsJob({ job_id: "direct", status: "succeeded", progress: 1, audio_url: audioUrl, voice_id: ttsVoiceId })
+      setResult({ title: "文字转语音", content: "语音已生成，可在左侧播放器试听。" })
     } catch (error) {
       if (pollingCancelledRef.current || (error instanceof Error && error.name === "AbortError")) return
       if (error instanceof Error && error.message === "AUTH_REQUIRED") return
-      setResult({ title: "文字转语音", content: "语音任务创建失败，请稍后重试。" })
+      setTtsJob({ job_id: "direct", status: "failed", progress: 1, error: "语音生成失败，请稍后重试。" })
+      setResult({ title: "文字转语音", content: "语音生成失败，请稍后重试。" })
     } finally {
-      if (controller && pollingControllerRef.current === controller) pollingControllerRef.current = null
       if (!pollingCancelledRef.current) setBusy(null)
     }
   }
@@ -1142,13 +1106,11 @@ export default function ToolsPage() {
                       onChange={(event) => setTtsVoiceId(event.target.value)}
                       className="h-10 w-full rounded-[var(--radius-soft)] border border-[var(--paper-300)] bg-[var(--paper-50)] px-3 text-sm text-[var(--ink-800)] outline-none focus:border-[var(--ink-500)]"
                     >
-                      {ttsVoices.length ? ttsVoices.map((voice) => (
+                      {TTS_VOICES.map((voice) => (
                         <option key={voice.voice_id} value={voice.voice_id}>
                           {voice.name}{voice.description ? ` - ${voice.description}` : ""}
                         </option>
-                      )) : (
-                        <option value="">正在加载音色...</option>
-                      )}
+                      ))}
                     </select>
                   </div>
                   <Button type="submit" disabled={busy === "tts" || !ttsText.trim()}>

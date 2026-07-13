@@ -50,6 +50,7 @@ describe("P0/P1 security audit guardrails", () => {
   it("uses safer cache, redirect, and remote-fetch defaults", () => {
     expect(read("app/api/tts/route.ts")).toContain('"Cache-Control": "private, no-store"')
     expect(read("app/api/voice/tts/route.ts")).toContain('"Cache-Control": "private, no-store"')
+    expect(read("app/api/voice/tts/route.ts")).toContain("AbortSignal.timeout(VOICE_GATEWAY_TIMEOUT_MS)")
     expect(read("app/auth/callback/route.ts")).toContain("safeInternalRedirectPath")
     expect(read("app/login/page.tsx")).toContain("safeInternalRedirectPath")
     expect(read("lib/cos.ts")).toContain("assertAllowedSourceUrl(sourceUrl)")
