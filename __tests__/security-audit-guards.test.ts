@@ -30,11 +30,21 @@ describe("P0/P1 security audit guardrails", () => {
 
   it("does not leak OTPs or magic links to logs or responses", () => {
     const otpStore = read("lib/email-otp-store.ts")
+    const sendOtp = read("app/api/auth/send-email-otp/route.ts")
     const verifyOtp = read("app/api/auth/verify-email-otp/route.ts")
+    const emailLogin = read("app/auth/email-login/page.tsx")
 
     expect(otpStore).not.toContain("JSON.stringify([...otpStore.entries()])")
     expect(otpStore).not.toContain("code: ${code}")
     expect(otpStore).not.toContain("code: ${data.code}")
+    expect(otpStore).not.toContain("console.")
+    expect(otpStore).toContain("globalThis.otpStoreInstance = otpStore")
+    expect(otpStore).toContain("globalThis.otpStoreCleanupInterval = cleanupInterval")
+    expect(sendOtp).not.toContain("devCode")
+    expect(sendOtp).not.toContain("response.text()")
+    expect(sendOtp).toContain("AbortSignal.timeout(RESEND_TIMEOUT_MS)")
+    expect(sendOtp).toContain("emailOTPStore.delete(normalizedEmail)")
+    expect(emailLogin).not.toContain("devCode")
     expect(verifyOtp).not.toContain("redirectUrl:")
     expect(verifyOtp).not.toContain("email=${normalizedEmail}")
     expect(verifyOtp).not.toContain("${userId}")

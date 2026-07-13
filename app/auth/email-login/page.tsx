@@ -32,7 +32,6 @@ export default function EmailLoginPage() {
   const [error, setError] = useState("")
   const [otpSent, setOtpSent] = useState(false)
   const [countdown, setCountdown] = useState(0)
-  const [devCode, setDevCode] = useState<string | null>(null)
 
   useEffect(() => {
     if (countdown > 0) {
@@ -67,9 +66,6 @@ export default function EmailLoginPage() {
 
       setOtpSent(true)
       setCountdown(60)
-      if (data.devCode) {
-        setDevCode(data.devCode)
-      }
     } catch (err: any) {
       setError(err.message || "发送失败，请重试")
     } finally {
@@ -122,19 +118,6 @@ export default function EmailLoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {devCode && (
-              <Alert className="bg-yellow-50 border-yellow-300">
-                <IconInkDot className="h-4 w-4 text-yellow-600" />
-                <AlertDescription className="text-sm">
-                  <div className="font-semibold text-yellow-800 mb-1">开发模式</div>
-                  <div className="text-yellow-700">
-                    您的验证码是：
-                    <span className="font-mono font-bold text-xl ml-2 text-yellow-900">{devCode}</span>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="otp">6位验证码</Label>
@@ -175,7 +158,6 @@ export default function EmailLoginPage() {
                     setOtpSent(false)
                     setOtp("")
                     setError("")
-                    setDevCode(null)
                   }}
                   className="text-sm"
                 >

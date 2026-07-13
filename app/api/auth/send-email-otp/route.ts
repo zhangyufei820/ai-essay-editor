@@ -3,28 +3,21 @@ import { randomInt } from "crypto"
 import { emailOTPStore } from "@/lib/email-otp-store"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 
+const RESEND_TIMEOUT_MS = 15_000
+
 // 生成6位数字验证码
 function generateOTP(): string {
   return randomInt(100000, 1000000).toString()
 }
 
-// 发送邮件（开发模式直接返回验证码，生产模式使用 Resend）
-async function sendOTPEmail(email: string, code: string): Promise<{ success: boolean; devCode?: string }> {
-  const isDev = process.env.NODE_ENV === "development"
-
-  if (isDev) {
-    // 开发模式：直接返回验证码
-    console.log(`[开发模式] 验证码: ${code}`)
-    return { success: true, devCode: code }
-  }
-
-  // 生产模式：使用 Resend 发送邮件
+// 使用 Resend 发送邮件
+async function sendOTPEmail(email: string, code: string): Promise<boolean> {
   try {
     const resendApiKey = process.env.RESEND_API_KEY
 
     if (!resendApiKey) {
-      console.warn("未配置 RESEND_API_KEY，生产环境拒绝发送验证码")
-      return { success: false }
+      console.warn("未配置 RESEND_API_KEY，拒绝发送验证码")
+      return false
     }
 
     const response = await fetch("https://api.resend.com/emails", {
@@ -48,17 +41,18 @@ async function sendOTPEmail(email: string, code: string): Promise<{ success: boo
           </div>
         `,
       }),
+      signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
     })
 
     if (!response.ok) {
-      console.error("Resend API 错误:", await response.text())
-      return { success: false }
+      console.error("Resend API 请求失败", { status: response.status })
+      return false
     }
 
-    return { success: true }
-  } catch (error) {
-    console.error("发送邮件失败:", error)
-    return { success: false }
+    return true
+  } catch {
+    console.error("Resend API 请求异常")
+    return false
   }
 }
 
@@ -71,13 +65,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { email } = await request.json()
+    const body: unknown = await request.json()
+    const email = typeof body === "object" && body !== null && "email" in body
+      ? (body as { email?: unknown }).email
+      : undefined
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!normalizedEmail || normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return NextResponse.json({ error: "邮箱格式不正确" }, { status: 400 })
     }
-
-    const normalizedEmail = email.toLowerCase()
 
     if (!emailOTPStore.canSend(normalizedEmail)) {
       return NextResponse.json({ error: "请等待60秒后再试" }, { status: 429 })
@@ -90,19 +86,19 @@ export async function POST(request: NextRequest) {
     emailOTPStore.set(normalizedEmail, code, 5 * 60 * 1000)
 
     // 发送邮件
-    const emailResult = await sendOTPEmail(normalizedEmail, code)
+    const emailSent = await sendOTPEmail(normalizedEmail, code)
 
-    if (!emailResult.success && !emailResult.devCode) {
+    if (!emailSent) {
+      emailOTPStore.delete(normalizedEmail)
       return NextResponse.json({ error: "邮件发送失败" }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
       message: "验证码已发送到您的邮箱",
-      devCode: emailResult.devCode, // 仅开发模式返回
     })
-  } catch (error: any) {
-    console.error("发送验证码失败:", error)
+  } catch {
+    console.error("发送验证码请求处理异常")
     return NextResponse.json({ error: "发送失败，请稍后重试" }, { status: 500 })
   }
 }
