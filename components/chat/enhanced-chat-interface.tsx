@@ -1469,6 +1469,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }
 
   // 🔥 当打开历史会话侧边栏时，重新获取会话列表
+  const fetchCreditsRef = useRef<(uid: string) => Promise<void>>(async () => {})
+  const hydrateVerifiedUserRef = useRef<() => Promise<boolean>>(async () => false)
+  const recoverPendingTasksRef = useRef<(uid: string) => Promise<void>>(async () => {})
+
   useEffect(() => {
     console.log("📋 [侧边栏] useEffect触发: showHistorySidebar=", showHistorySidebar, "userId=", userId || "空")
     if (showHistorySidebar && userId) {
@@ -1513,9 +1517,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           if (verifiedUser.user_metadata?.avatar_url) setUserAvatar(verifiedUser.user_metadata.avatar_url)
           const displayName = verifiedUser.phone || verifiedUser.email || verifiedUser.user_metadata?.name || "用户"
           setUserDisplayName(displayName)
-          fetchCredits(verifiedUser.id)
+          fetchCreditsRef.current(verifiedUser.id)
           fetchChatSessions(verifiedUser.id)
-          recoverPendingTasks(verifiedUser.id)
+          recoverPendingTasksRef.current(verifiedUser.id)
           return
         }
 
@@ -1543,7 +1547,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           console.warn("⚠️ [用户初始化] localStorage 中无 currentUser")
         }
 
-        const hydrated = await hydrateVerifiedUserFromApi()
+        const hydrated = await hydrateVerifiedUserRef.current()
         if (hydrated) {
           setAuthResolved(true)
           return
@@ -1552,9 +1556,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         if (hasVerifiedToken && storedUserId) {
           setUserId(storedUserId)
           setAuthResolved(true)
-          fetchCredits(storedUserId)
+          fetchCreditsRef.current(storedUserId)
           fetchChatSessions(storedUserId)
-          recoverPendingTasks(storedUserId)
+          recoverPendingTasksRef.current(storedUserId)
           return
         }
 
@@ -1661,6 +1665,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }
 
+  fetchCreditsRef.current = fetchCredits
+  hydrateVerifiedUserRef.current = hydrateVerifiedUserFromApi
+  recoverPendingTasksRef.current = recoverPendingTasks
+
   const shouldRequireEssaySurvey = useCallback((status: TrialSurveyStatus | null) => {
     return Boolean(
       status?.active_grant_id &&
@@ -1716,13 +1724,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const isAuthenticated = Boolean(userId)
   const isAuthPending = !authResolved
 
+  const loadHistorySessionRef = useRef<(sid: string) => Promise<void>>(async () => {})
+
   useEffect(() => {
     if (urlSessionId && urlSessionId !== currentSessionId) {
       // URL 导航（非手动点击），由 loadHistorySession 中的 initialModel 决定模型
       isManualSessionSwitchRef.current = false
-      loadHistorySession(urlSessionId)
+      void loadHistorySessionRef.current(urlSessionId)
     }
-  }, [urlSessionId])
+  }, [currentSessionId, urlSessionId])
 
   const prevUrlAgentRef = useRef<string | null>(null)
 
@@ -1754,7 +1764,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       lastUsedModelRef.current = initialModel
       setSelectedModel(initialModel)
     }
-  }, [initialModel, urlSessionId])
+  }, [initialModel, selectedModel, setSelectedModel, urlSessionId])
 
   // 🔥 当 urlSessionId 为空时（新建对话），恢复用户上次使用的模型或默认模型
   useEffect(() => {
@@ -1763,7 +1773,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       logger.debug(`🔄 [新建对话模型恢复] ${selectedModel} → ${lastUsedModelRef.current}`)
       setSelectedModel(lastUsedModelRef.current)
     }
-  }, [initialModel, urlAgent, urlSessionId])
+  }, [initialModel, selectedModel, setSelectedModel, urlAgent, urlSessionId])
 
   const loadHistorySession = async (sid: string) => {
     logger.debug(`📂 [loadHistorySession] 开始加载会话: ${sid}`)
@@ -1820,6 +1830,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       useSelectedModelStore.getState().markUrlNavigation()
     }
   }
+
+  loadHistorySessionRef.current = loadHistorySession
 
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -3085,6 +3097,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }
 
+  const onSubmitRef = useRef(onSubmit)
+  onSubmitRef.current = onSubmit
+
   const saveProblemAsMistake = async (question: string, answer: string, assistantMessageId: string) => {
     const cleanQuestion = question.trim()
     const cleanAnswer = answer.trim()
@@ -3152,7 +3167,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
 
       const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent
-      onSubmit(fakeEvent, {
+      onSubmitRef.current(fakeEvent, {
         content: lastUserMessage.content,
         files: lastUserMessage.files,
       })
@@ -3160,7 +3175,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
     window.addEventListener("regenerate-last-message", handleRegenerate)
     return () => window.removeEventListener("regenerate-last-message", handleRegenerate)
-  }, [isLoading, messages, onSubmit])
+  }, [isLoading, messages])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(e as unknown as React.FormEvent) }

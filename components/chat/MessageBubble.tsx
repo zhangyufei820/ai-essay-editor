@@ -768,7 +768,7 @@ const MessageBubble = memo(function MessageBubble({
     },
     onSaveMistake,
     onGenerateSimilar,
-  }), [essayReviewArtifact, onCopy, onGenerateSimilar, onSaveMistake, onShare, publicContent, templateType])
+  }), [essayReviewArtifact, onCopy, onGenerateSimilar, onSaveMistake, onShare, publicContent])
 
   return (
     <motion.div

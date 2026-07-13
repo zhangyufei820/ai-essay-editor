@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { callEssayAiSuite, type DocumentExtractResult } from "@/lib/essay-ai-suite-client"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
@@ -6,6 +7,9 @@ import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export const runtime = "nodejs"
 export const maxDuration = 120
+
+const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
+const ALLOWED_DOCUMENT_EXTENSIONS = new Set([".csv", ".doc", ".docx", ".json", ".md", ".pdf", ".txt"])
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   return Buffer.from(buffer).toString("base64")
@@ -25,6 +29,11 @@ function isTextLike(file: File) {
   )
 }
 
+function fileExtension(name: string) {
+  const dotIndex = name.lastIndexOf(".")
+  return dotIndex >= 0 ? name.slice(dotIndex).toLowerCase() : ""
+}
+
 function toPublicDocumentResult(result: DocumentExtractResult) {
   const { provider: _provider, error, ...publicResult } = result
   return {
@@ -36,6 +45,9 @@ function toPublicDocumentResult(result: DocumentExtractResult) {
 export async function POST(req: NextRequest) {
   const originRejection = rejectUntrustedOrigin(req)
   if (originRejection) return originRejection
+
+  const auth = await requireUser(req)
+  if (auth.response) return auth.response
 
   const contentType = req.headers.get("content-type") || ""
   if (!contentType.toLowerCase().includes("multipart/form-data")) {
@@ -69,6 +81,12 @@ export async function POST(req: NextRequest) {
         { error: "未上传文件", code: "DOCUMENT_FILE_REQUIRED" },
         { status: 400 },
       )
+    }
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      return NextResponse.json({ error: "文件不能超过 20MB", code: "DOCUMENT_FILE_TOO_LARGE" }, { status: 413 })
+    }
+    if (!ALLOWED_DOCUMENT_EXTENSIONS.has(fileExtension(file.name))) {
+      return NextResponse.json({ error: "暂不支持该文件格式", code: "DOCUMENT_FILE_UNSUPPORTED" }, { status: 415 })
     }
 
     const body = isTextLike(file)

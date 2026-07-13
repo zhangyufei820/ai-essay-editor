@@ -191,7 +191,8 @@ function mapToolImageError(error: unknown) {
     raw.includes("上游额度不足") ||
     raw.includes("余额不足") ||
     raw.includes("充值") ||
-    lower.includes("service_balance_exhausted") ||
+        lower.includes("service_balance_exhausted") ||
+        lower.includes("upstream_balance_exhausted") ||
     lower.includes("balance has run out") ||
     lower.includes("recharge") ||
     lower.includes("insufficient balance") ||
@@ -231,7 +232,7 @@ function handleSurveyRequired(featureName: string) {
 }
 
 function buildToolsLoginRedirect() {
-  return `/login?redirect=${encodeURIComponent("/tools#image-prompt-reverse")}`
+  return `/login?redirect=${encodeURIComponent("/tools")}`
 }
 
 function buildImageGenerationInputs(targetModel: ReverseTargetModel) {
@@ -418,7 +419,7 @@ export default function ToolsPage() {
     if (headers.Authorization) return headers
 
     clearStoredAuthState()
-    setResult({ title: featureName, content: "登录状态已过期，请重新登录后再使用图像工具。" })
+    setResult({ title: featureName, content: "登录状态已过期，请重新登录后再使用该工具。" })
     setReverseProgress(0)
     setReverseStage("")
     router.push(buildToolsLoginRedirect())
@@ -427,7 +428,7 @@ export default function ToolsPage() {
 
   function handleStaleToolAuth(featureName: string) {
     clearStoredAuthState()
-    setResult({ title: featureName, content: "登录状态已过期，请重新登录后再使用图像工具。" })
+    setResult({ title: featureName, content: "登录状态已过期，请重新登录后再使用该工具。" })
     setReverseProgress(0)
     setReverseStage("")
     router.push(buildToolsLoginRedirect())
@@ -633,9 +634,17 @@ export default function ToolsPage() {
       setBusy("document")
       const formData = new FormData()
       formData.append("file", documentFile)
-      const response = await fetch("/api/document-process", { method: "POST", body: formData })
+      const authHeaders = await getRequiredToolAuthHeaders("文档处理")
+      const response = await fetch("/api/document-process", { method: "POST", headers: authHeaders, body: formData })
       const payload = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        handleStaleToolAuth("文档处理")
+        return
+      }
       setResult({ title: "文档处理结果", content: response.ok ? payload : payload.error || "文档处理失败" })
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") return
+      setResult({ title: "文档处理", content: "文档处理失败，请稍后重试。" })
     } finally {
       setBusy(null)
     }
@@ -652,9 +661,10 @@ export default function ToolsPage() {
     try {
       setBusy("ocr")
       const uploadedImage = ocrFile ? await readFileAsDataUrl(ocrFile) : null
+      const authHeaders = await getRequiredToolAuthHeaders("图片 OCR")
       const response = await fetch("/api/ocr", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           images: [
             ...images,
@@ -663,7 +673,14 @@ export default function ToolsPage() {
         }),
       })
       const payload = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        handleStaleToolAuth("图片 OCR")
+        return
+      }
       setResult({ title: "OCR 识别结果", content: response.ok ? payload.text || payload : payload.error || "OCR 失败" })
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") return
+      setResult({ title: "图片 OCR", content: "OCR 处理失败，请稍后重试。" })
     } finally {
       setBusy(null)
     }
@@ -678,13 +695,21 @@ export default function ToolsPage() {
 
     try {
       setBusy("presentation")
+      const authHeaders = await getRequiredToolAuthHeaders("演示文稿")
       const response = await fetch("/api/presentation", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ content: presentationContent, template: "classroom" }),
       })
       const payload = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        handleStaleToolAuth("演示文稿")
+        return
+      }
       setResult({ title: "演示文稿结果", content: response.ok ? payload.presentation || payload : payload.error || "生成失败" })
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") return
+      setResult({ title: "演示文稿", content: "演示文稿生成失败，请稍后重试。" })
     } finally {
       setBusy(null)
     }
@@ -699,13 +724,21 @@ export default function ToolsPage() {
 
     try {
       setBusy("search")
+      const authHeaders = await getRequiredToolAuthHeaders("网页搜索")
       const response = await fetch("/api/web-search", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ query: searchQuery, maxResults: 5 }),
       })
       const payload = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        handleStaleToolAuth("网页搜索")
+        return
+      }
       setResult({ title: "网页搜索结果", content: response.ok ? payload.results || payload : payload.error || "搜索失败" })
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") return
+      setResult({ title: "网页搜索", content: "网页搜索失败，请稍后重试。" })
     } finally {
       setBusy(null)
     }
@@ -720,13 +753,21 @@ export default function ToolsPage() {
 
     try {
       setBusy("spark")
+      const authHeaders = await getRequiredToolAuthHeaders("综合报告")
       const response = await fetch("/api/sparkpage", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ query: sparkQuery }),
       })
       const payload = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        handleStaleToolAuth("综合报告")
+        return
+      }
       setResult({ title: "综合报告结果", content: response.ok ? payload.sparkpage || payload : payload.error || "生成失败" })
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") return
+      setResult({ title: "综合报告", content: "综合报告生成失败，请稍后重试。" })
     } finally {
       setBusy(null)
     }
@@ -742,9 +783,10 @@ export default function ToolsPage() {
     try {
       setBusy("tts")
       setTtsJob(null)
+      const authHeaders = await getRequiredToolAuthHeaders("文字转语音")
       const response = await fetch("/api/omnivoice/tts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           text: ttsText,
           voice_id: ttsVoiceId || undefined,
@@ -753,6 +795,10 @@ export default function ToolsPage() {
         }),
       })
       const payload = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        handleStaleToolAuth("文字转语音")
+        return
+      }
       if (!response.ok || !payload.job?.job_id) {
         setResult({ title: "文字转语音", content: payload.error || "语音任务创建失败" })
         return
@@ -763,7 +809,7 @@ export default function ToolsPage() {
 
       for (let attempt = 0; attempt < TTS_POLL_MAX_ATTEMPTS; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, attempt < 3 ? 1500 : 5000))
-        const jobResponse = await fetch(`/api/omnivoice/jobs/${encodeURIComponent(payload.job.job_id)}`)
+        const jobResponse = await fetch(`/api/omnivoice/jobs/${encodeURIComponent(payload.job.job_id)}`, { headers: authHeaders })
         const jobPayload = await jobResponse.json().catch(() => ({}))
         if (!jobResponse.ok || !jobPayload.job) continue
 
@@ -782,6 +828,9 @@ export default function ToolsPage() {
       }
 
       setResult({ title: "文字转语音", content: "语音仍在生成中。任务已提交到服务器，请稍后点击生成语音重试或联系管理员查询任务 ID。" })
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") return
+      setResult({ title: "文字转语音", content: "语音任务创建失败，请稍后重试。" })
     } finally {
       setBusy(null)
     }

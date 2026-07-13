@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server"
 
-import { addCredits } from "@/lib/credits"
-import { getProductCredits } from "@/lib/products"
+import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { grantPaymentCreditsOnce } from "@/lib/payment-credit-idempotency"
+import { isSupabaseUuid } from "@/lib/learning-user"
+import { getProductCredits, getProductPriceInCents, isMembershipProduct } from "@/lib/products"
 import { stripe } from "@/lib/stripe"
 
 export const runtime = "nodejs"
@@ -38,8 +40,9 @@ export async function POST(request: NextRequest) {
   const userId = session.client_reference_id || session.metadata?.userId || ""
   const productId = session.metadata?.productId || ""
   const credits = getProductCredits(productId)
+  const expectedAmountInCents = getProductPriceInCents(productId)
 
-  if (!userId || !productId || credits <= 0) {
+  if (!isSupabaseUuid(userId) || !productId || credits <= 0 || expectedAmountInCents === null) {
     console.error("[StripeWebhook] Missing session metadata", {
       sessionId: session.id,
       hasUserId: Boolean(userId),
@@ -49,17 +52,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 })
   }
 
-  const success = await addCredits(
-    userId,
-    credits,
-    "purchase",
-    `Stripe 支付成功，购买 ${productId}，到账 ${credits} 积分`,
-    session.id,
-  )
+  if (
+    session.payment_status !== "paid" ||
+    session.amount_total !== expectedAmountInCents ||
+    session.currency?.toLowerCase() !== "cny"
+  ) {
+    console.error("[StripeWebhook] Payment details did not match checkout", {
+      eventId: event.id,
+      sessionId: session.id,
+      paymentStatus: session.payment_status,
+      amountTotal: session.amount_total,
+      expectedAmountInCents,
+      currency: session.currency,
+    })
+    return NextResponse.json({ error: "Invalid payment details" }, { status: 400 })
+  }
 
-  if (!success) {
+  const grant = await grantPaymentCreditsOnce(getSupabaseAdmin(), {
+    provider: "stripe",
+    eventId: event.id,
+    referenceId: session.id,
+    userId,
+    productId,
+    credits,
+    isPro: isMembershipProduct(productId),
+    description: `Stripe 支付成功，购买 ${productId}，到账 ${credits} 积分`,
+    metadata: { stripeEventType: event.type },
+  })
+
+  if (!grant.ok) {
+    console.error("[StripeWebhook] Atomic credit grant failed", {
+      eventId: event.id,
+      sessionId: session.id,
+    })
     return NextResponse.json({ error: "Failed to grant credits" }, { status: 500 })
   }
 
-  return NextResponse.json({ received: true })
+  return NextResponse.json({ received: true, duplicate: !grant.applied })
 }

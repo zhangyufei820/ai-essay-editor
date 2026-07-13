@@ -1,4 +1,4 @@
-import type { FrontendWordCard } from "@/lib/word-card-normalizer"
+import type { FrontendWordCard } from "@/lib/word-card-types"
 
 const VOCAB_LEVELS = new Set(["primary", "middle", "high", "cet4", "cet6", "postgraduate", "ielts", "toefl", "general"])
 const VOCAB_STYLES = new Set(["minimal", "colorful", "academic", "comic", "exam", "story", "root"])

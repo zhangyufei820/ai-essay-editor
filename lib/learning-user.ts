@@ -5,6 +5,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin"
 import { requireUser, type VerifiedUser } from "@/lib/auth/verified-user"
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const ADMIN_USERS_PAGE_SIZE = 1000
+const MAX_ADMIN_USER_PAGES = 100
 
 export function isSupabaseUuid(value: string | null | undefined) {
   return Boolean(value && UUID_PATTERN.test(value))
@@ -18,22 +20,24 @@ function syntheticEmailForUser(userId: string) {
   return `authing-${userId}@users.shenxiang.local`
 }
 
-async function findUserByEmail(supabase: SupabaseClient, email?: string | null) {
-  if (!email) return null
-  const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  if (error) throw error
-  return data.users.find((user) => user.email?.toLowerCase() === email.toLowerCase()) || null
+async function findBridgedUser(supabase: SupabaseClient, verifiedUser: VerifiedUser) {
+  const syntheticEmail = syntheticEmailForUser(verifiedUser.id).toLowerCase()
+
+  for (let page = 1; page <= MAX_ADMIN_USER_PAGES; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: ADMIN_USERS_PAGE_SIZE })
+    if (error) throw error
+    const match = data.users.find((user) => (
+      user.email?.toLowerCase() === syntheticEmail ||
+      user.user_metadata?.authing_user_id === verifiedUser.id
+    ))
+    if (match) return match
+    if (data.users.length < ADMIN_USERS_PAGE_SIZE) return null
+  }
+
+  throw new Error("学习用户目录超过可安全扫描范围")
 }
 
-async function findUserByAuthingProfile(supabase: SupabaseClient, verifiedUser: VerifiedUser) {
-  const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  if (error) throw error
-  return data.users.find((supabaseUser) => {
-    return supabaseUser.user_metadata?.authing_user_id === verifiedUser.id
-  }) || null
-}
-
-async function saveUserMapping(supabase: SupabaseClient, user: VerifiedUser, supabaseUserId: string) {
+async function saveAuthingProfile(supabase: SupabaseClient, user: VerifiedUser) {
   const payload = {
     user_id: user.id,
     email: user.email || syntheticEmailForUser(user.id),
@@ -54,19 +58,13 @@ export async function resolveLearningUserId(user: VerifiedUser): Promise<string>
   if (isSupabaseUuid(user.id)) return user.id
 
   const supabase = getSupabaseAdmin()
+  const existingUser = await findBridgedUser(supabase, user)
+  if (existingUser?.id) {
+    await saveAuthingProfile(supabase, user)
+    return existingUser.id
+  }
+
   const syntheticEmail = syntheticEmailForUser(user.id)
-  const existingByEmail = await findUserByEmail(supabase, syntheticEmail)
-  if (existingByEmail?.id) {
-    await saveUserMapping(supabase, user, existingByEmail.id)
-    return existingByEmail.id
-  }
-
-  const existingByMetadata = await findUserByAuthingProfile(supabase, user)
-  if (existingByMetadata?.id) {
-    await saveUserMapping(supabase, user, existingByMetadata.id)
-    return existingByMetadata.id
-  }
-
   const { data, error } = await supabase.auth.admin.createUser({
     email: syntheticEmail,
     email_confirm: true,
@@ -83,7 +81,7 @@ export async function resolveLearningUserId(user: VerifiedUser): Promise<string>
   if (error) throw error
   if (!data.user?.id) throw new Error("创建学习用户失败")
 
-  await saveUserMapping(supabase, user, data.user.id)
+  await saveAuthingProfile(supabase, user)
   return data.user.id
 }
 

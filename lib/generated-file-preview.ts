@@ -36,6 +36,23 @@ function encodePathSegments(value: string) {
     .join("/")
 }
 
+function splitReference(value: string) {
+  const cleaned = cleanReferencePath(value)
+  const queryIndex = cleaned.indexOf("?")
+  if (queryIndex < 0) return { filePath: cleaned, query: "" }
+
+  const params = new URLSearchParams(cleaned.slice(queryIndex + 1))
+  const publicParams = new URLSearchParams()
+  const token = params.get("token")
+  if (token) publicParams.set("token", token)
+  if (params.get("download") === "1") publicParams.set("download", "1")
+  const query = publicParams.toString()
+  return {
+    filePath: cleaned.slice(0, queryIndex),
+    query: query ? `?${query}` : "",
+  }
+}
+
 function getUrlPathname(value: string) {
   if (!value) return ""
   if (value.startsWith("data:") || value.startsWith("blob:")) return value
@@ -59,7 +76,8 @@ export function getGeneratedFileExtension(value: string) {
 }
 
 export function toPublicCodexSkillFileUrl(taskId: string, filePath: string) {
-  return `${publicBaseUrl()}/api/codex-skill-files/${encodeURIComponent(taskId)}/${encodePathSegments(cleanReferencePath(filePath))}`
+  const reference = splitReference(filePath)
+  return `${publicBaseUrl()}/api/codex-skill-files/${encodeURIComponent(taskId)}/${encodePathSegments(reference.filePath)}${reference.query}`
 }
 
 export function rewriteGeneratedFileReferences(text: string) {

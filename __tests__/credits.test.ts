@@ -270,15 +270,18 @@ describe('credits helpers', () => {
   })
 
   it('keeps server-side credit spending guarded by conditional atomic update', () => {
-    const source = readFileSync(path.join(process.cwd(), 'lib/credits.ts'), 'utf8')
+    const source = [
+      readFileSync(path.join(process.cwd(), 'lib/credits.ts'), 'utf8'),
+      readFileSync(path.join(process.cwd(), 'lib/real-credit-spending.ts'), 'utf8'),
+    ].join('\n')
 
     expect(source).toContain('export async function spendCredits')
     expect(source).toContain('!Number.isInteger(amount) || amount <= 0')
-    expect(source).toContain('.eq("credits", credits.credits)')
+    expect(source).toContain('.eq("credits", balanceBefore)')
     expect(source).toContain('.gte("credits", amount)')
     expect(source).toContain('.select("credits")')
     expect(source).toContain('.maybeSingle()')
-    expect(source).toContain('recordTransaction(')
+    expect(source).toContain('recordRealCreditTransaction(')
   })
 
   it('routes public spendCredits through trial-first consumption', async () => {

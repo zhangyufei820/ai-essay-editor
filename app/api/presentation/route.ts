@@ -1,11 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { generateText } from "ai"
 import { openai } from "@ai-sdk/openai"
+import { requireUser } from "@/lib/auth/verified-user"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { callToolsDifyChat } from "@/lib/tools-dify-client"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
 
 export const maxDuration = 90
+
+const MAX_PRESENTATION_CONTENT_LENGTH = 20_000
 
 function buildPresentationPrompt(content: string, template?: string) {
   return `请把下面素材整理成一份可直接制作 PPT 的演示文稿大纲。
@@ -54,6 +57,9 @@ export async function POST(req: NextRequest) {
     const originRejection = rejectUntrustedOrigin(req)
     if (originRejection) return originRejection
 
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
+
     const ip = getClientIP(req)
     const limitResult = checkIpRateLimit(ip, 30)
     if (!limitResult.allowed) {
@@ -63,6 +69,9 @@ export async function POST(req: NextRequest) {
     const { content, template } = await req.json()
     if (!content || typeof content !== "string" || !content.trim()) {
       return NextResponse.json({ error: "内容不能为空" }, { status: 400 })
+    }
+    if (content.length > MAX_PRESENTATION_CONTENT_LENGTH) {
+      return NextResponse.json({ error: "内容不能超过 20000 个字符" }, { status: 413 })
     }
 
     const outline = await generatePresentationOutline(content.trim(), typeof template === "string" ? template : undefined)

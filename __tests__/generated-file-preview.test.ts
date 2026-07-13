@@ -22,6 +22,13 @@ describe("generated file previews", () => {
     ).toContain("https://www.shenxiang.school/api/codex-skill-files/task_abc123/deck/final.pptx")
   })
 
+  it("preserves Codex file capability tokens while rewriting URLs", () => {
+    const token = "abcdefghijklmnopqrstuvwxyz_ABCDEFG-1234567890"
+    expect(
+      rewriteGeneratedFileReferences(`/tasks/task_abc123/files/deck/final.pptx?token=${token}`),
+    ).toBe(`https://www.shenxiang.school/api/codex-skill-files/task_abc123/deck/final.pptx?token=${token}`)
+  })
+
   it("prefers same-name HTML previews for presentation files", () => {
     expect(getGeneratedFilePreviewUrl("https://www.shenxiang.school/slides/final.pptx")).toBe(
       "https://www.shenxiang.school/slides/final.html",

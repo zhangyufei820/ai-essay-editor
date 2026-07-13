@@ -1,11 +1,16 @@
 import { generateText } from "ai"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { NextResponse, type NextRequest } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { callToolsDifyChat } from "@/lib/tools-dify-client"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
 
 export const maxDuration = 90
+
+const MAX_SPARK_QUERY_LENGTH = 2_000
+const MAX_CONTEXT_ITEMS = 20
+const MAX_CONTEXT_JSON_LENGTH = 100_000
 
 const xaiProvider = createOpenAI({
   name: "xai",
@@ -70,8 +75,6 @@ async function generateSparkpage(input: {
   query: string
   searchResults?: unknown[]
   documents?: unknown[]
-  provider?: string
-  model?: string
 }) {
   const prompt = buildSparkpagePrompt(input.query, input.searchResults, input.documents)
   const difyKey = process.env.DIFY_SPARKPAGE_API_KEY || ""
@@ -99,7 +102,10 @@ async function generateSparkpage(input: {
   }
 
   const { text } = await generateText({
-    model: resolveLanguageModel(input.provider || "openai", input.model || "gpt-5-mini") as any,
+    model: resolveLanguageModel(
+      process.env.TOOLS_SPARKPAGE_PROVIDER === "xai" ? "xai" : "openai",
+      process.env.TOOLS_SPARKPAGE_MODEL || "gpt-5-mini",
+    ) as any,
     prompt,
     maxTokens: 6000,
     temperature: 0.5,
@@ -113,25 +119,36 @@ export async function POST(req: NextRequest) {
     const originRejection = rejectUntrustedOrigin(req)
     if (originRejection) return originRejection
 
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
+
     const ip = getClientIP(req)
     const limitResult = checkIpRateLimit(ip, 30)
     if (!limitResult.allowed) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
 
-    const { query, searchResults, documents, provider, model } = await req.json()
+    const { query, searchResults, documents } = await req.json()
     const cleanQuery = typeof query === "string" ? query.trim() : ""
 
     if (!cleanQuery) {
       return NextResponse.json({ error: "查询内容不能为空" }, { status: 400 })
+    }
+    if (cleanQuery.length > MAX_SPARK_QUERY_LENGTH) {
+      return NextResponse.json({ error: "查询内容不能超过 2000 个字符" }, { status: 413 })
+    }
+    const contextItems = [searchResults, documents].filter(Array.isArray) as unknown[][]
+    if (
+      contextItems.some((items) => items.length > MAX_CONTEXT_ITEMS) ||
+      contextItems.some((items) => JSON.stringify(items).length > MAX_CONTEXT_JSON_LENGTH)
+    ) {
+      return NextResponse.json({ error: "附加资料过多，请精简后重试" }, { status: 413 })
     }
 
     const result = await generateSparkpage({
       query: cleanQuery,
       searchResults: Array.isArray(searchResults) ? searchResults : undefined,
       documents: Array.isArray(documents) ? documents : undefined,
-      provider: typeof provider === "string" ? provider : undefined,
-      model: typeof model === "string" ? model : undefined,
     })
 
     return NextResponse.json({

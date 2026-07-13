@@ -1,9 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { callToolsDifyChat } from "@/lib/tools-dify-client"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
 
 export const maxDuration = 60
+
+const MAX_SEARCH_QUERY_LENGTH = 500
 
 type SearchResult = {
   title: string
@@ -74,6 +77,9 @@ export async function POST(req: NextRequest) {
     const originRejection = rejectUntrustedOrigin(req)
     if (originRejection) return originRejection
 
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
+
     const ip = getClientIP(req)
     const limitResult = checkIpRateLimit(ip, 30)
     if (!limitResult.allowed) {
@@ -86,6 +92,9 @@ export async function POST(req: NextRequest) {
 
     if (!cleanQuery) {
       return NextResponse.json({ error: "查询内容不能为空" }, { status: 400 })
+    }
+    if (cleanQuery.length > MAX_SEARCH_QUERY_LENGTH) {
+      return NextResponse.json({ error: "查询内容不能超过 500 个字符" }, { status: 413 })
     }
 
     const results = await searchWithTavily(cleanQuery, limit)

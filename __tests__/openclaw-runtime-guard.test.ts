@@ -10,7 +10,8 @@ describe("OpenClaw runtime guard", () => {
     expect(result.allowed).toBe(false)
     if (!result.allowed) {
       expect(result.code).toBe("OPENCLAW_FORBIDDEN_RUNTIME_ACTION")
-      expect(result.message).toContain("OpenClaw 普通用户不能")
+      expect(result.message).toContain("高级创作普通用户不能")
+      expect(result.message).not.toContain("OpenClaw")
     }
   })
 

@@ -1,4 +1,5 @@
-import { spendRealCredits, type BillingAuditMetadata } from "@/lib/credits"
+import type { BillingAuditMetadata } from "@/lib/billing-audit"
+import { spendRealCredits } from "@/lib/real-credit-spending"
 import { recordCampaignEvent } from "@/lib/campaign-events"
 import { getActiveTrialGrant, getUserTrialStatus, grantFreeTrial, hasPaidMembership, type FreeTrialGrant } from "@/lib/free-trial"
 import { getAllRuntimeFlags, isRuntimeConsumptionEnabled } from "@/lib/free-trial-runtime-config"

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
 import { getOmniTtsJob } from "@/lib/omnivoice-gateway-client"
@@ -11,6 +12,9 @@ type Context = { params: Promise<{ jobId: string }> }
 export async function GET(request: NextRequest, context: Context) {
   const originRejection = rejectUntrustedOrigin(request)
   if (originRejection) return originRejection
+
+  const auth = await requireUser(request)
+  if (auth.response) return auth.response
 
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 60)

@@ -99,11 +99,13 @@ function CheckoutFlow({ productId }: { productId: string }) {
           return
       }
 
-      const apiUrl = `/api/payment/xunhupay/create?productId=${productId}&type=wechat&billing=${billing}`
-      console.log("正在请求:", apiUrl);
-      
-      const res = await fetch(apiUrl, {
-        headers: await getVerifiedAuthHeaders(),
+      const res = await fetch("/api/payment/xunhupay/create", {
+        method: "POST",
+        headers: {
+          ...(await getVerifiedAuthHeaders()),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ productId, billing }),
       })
       const data = await res.json()
       

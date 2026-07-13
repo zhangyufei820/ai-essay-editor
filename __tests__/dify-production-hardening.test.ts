@@ -12,6 +12,7 @@ const approvedGatewayModels = [
   "沈翔通用文本",
   "沈翔图像识别",
 ]
+const describeProduction = process.env.RUN_DIFY_PRODUCTION_TESTS === "1" ? describe : describe.skip
 
 function runNodeScript(script: string, args: string[] = []) {
   return execFileSync("node", [script, ...args], {
@@ -30,7 +31,7 @@ function parseFirstJsonObject(stdout: string) {
   return JSON.parse(stdout.slice(start, end + 1))
 }
 
-describe("production dify hardening guards", () => {
+describeProduction("production dify hardening guards", () => {
   it("keeps every non-exempt realtime Dify app on the approved gateway aliases", () => {
     const payload = parseFirstJsonObject(runNodeScript(remapScriptPath))
 
