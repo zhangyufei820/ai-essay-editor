@@ -43,7 +43,8 @@ RUN --mount=type=secret,id=next_server_actions_encryption_key,required=true \
     fi && \
     SERVER_ACTIONS_KEY="$(cat /run/secrets/next_server_actions_encryption_key)" && \
     echo "Building Next.js deployment ${BUILD_ID}" && \
-    NEXT_BUILD_ID="$BUILD_ID" DEPLOYMENT_VERSION="$BUILD_ID" NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$SERVER_ACTIONS_KEY" npm run build
+    NEXT_BUILD_ID="$BUILD_ID" DEPLOYMENT_VERSION="$BUILD_ID" NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$SERVER_ACTIONS_KEY" npm run build && \
+    printf '%s\n' "$BUILD_ID" > /app/.next/deployment-version
 
 # ========== 生产阶段 ==========
 FROM node:20 AS runner
@@ -79,7 +80,7 @@ RUN mkdir -p /app/.next/standalone/.next/cache/images && \
     ln -s /app/public /app/.next/standalone/public
 
 # 运行时创建缓存目录（overlay 文件系统需要启动时可写）
-RUN echo '#!/bin/sh\nmkdir -p /app/.next/standalone/.next/cache/images /app/.next/standalone/.next/cache/fetch-cache\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+RUN echo '#!/bin/sh\nmkdir -p /app/.next/standalone/.next/cache/images /app/.next/standalone/.next/cache/fetch-cache\nif [ -z "${DEPLOYMENT_VERSION:-}" ] && [ -r /app/.next/deployment-version ]; then\n  export DEPLOYMENT_VERSION="$(cat /app/.next/deployment-version)"\nfi\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # 启动命令 - 使用 ENTRYPOINT 覆盖默认 CMD
 ENTRYPOINT ["/entrypoint.sh"]
