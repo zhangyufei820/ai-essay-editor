@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 
 MCP_SCOPE = "xingren.agent"
 MCP_PROTOCOL_VERSION = "2025-03-26"
+PUBLIC_MEDIA_MODEL_ALIASES = {"特价 image-2": "geek2api-image-2"}
+
+
+def resolved_media_model(model: str) -> str:
+    return PUBLIC_MEDIA_MODEL_ALIASES.get(model, model)
 
 
 def public_base(settings: Settings) -> str:
@@ -349,6 +354,7 @@ async def _ask(settings: Settings, user: UserContext, prompt: str) -> dict[str, 
 async def _generate_image(settings: Settings, user: UserContext, prompt: str, size: str, model: str, authorization_store: AgentAuthorizationStore) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
     allowed_models = tuple((user.allowed_models_by_mode or {}).get("image") or settings.image_allowed_models)
+    model = resolved_media_model(model)
     if model and model not in allowed_models:
         return safe_mcp_error("所选图像模型当前不可用。请先查看可用模型后再选择。")
     request = WorkspaceRunRequest(user_query=prompt, model_role="image_generation", task_type="agent_image", model_config={"image_generation": model}, params={"size": size, "n": 1}, metadata={"server_allowed_models_by_mode": {"image": list(allowed_models)}})
@@ -375,7 +381,7 @@ async def _generate_video(
     authorization_store: AgentAuthorizationStore,
 ) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
-    model = str(arguments.get("model") or "")
+    model = resolved_media_model(str(arguments.get("model") or ""))
     allowed_models = tuple((user.allowed_models_by_mode or {}).get("video") or settings.video_allowed_models)
     if model and model not in allowed_models:
         return safe_mcp_error("所选视频模型当前不可用。请先查看可用模型后再选择。")
