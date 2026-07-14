@@ -33,7 +33,7 @@ from app.agent_mcp import (
     mcp_tools,
     public_base,
 )
-from app.config import GROK_MODEL, ensure_codex_config, ensure_directories, get_settings, secret_values_for_redaction
+from app.config import GROK_MODEL, Settings, ensure_codex_config, ensure_directories, get_settings, secret_values_for_redaction
 from app.codex_runner import CodexRunner
 from app.models import (
     AdminRunRequest,
@@ -404,14 +404,21 @@ def codex_connection() -> HTMLResponse:
     return codex_connection_page()
 
 
+def is_allowed_browser_origin(origin: str, target_settings: Settings) -> bool:
+    if not origin:
+        return True
+    codex_base = public_base(target_settings)
+    public_root = codex_base.removesuffix("/codex").rstrip("/")
+    return origin.rstrip("/") in {codex_base, public_root}
+
+
 @app.post("/agent/codex/connection-code")
 @app.post("/codex/agent/codex/connection-code")
 async def create_codex_connection_code(
     request: Request,
     user: UserContext = Depends(require_codex_user),
 ) -> JSONResponse:
-    origin = request.headers.get("origin", "")
-    if origin and origin.rstrip("/") != public_base(settings):
+    if not is_allowed_browser_origin(request.headers.get("origin", ""), settings):
         raise HTTPException(status_code=403, detail="请求无效")
     code = agent_authorization_store().issue_codex_connection_code(user)
     return JSONResponse({"connection_code": code}, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
@@ -423,8 +430,7 @@ async def revoke_codex_connection_code(
     request: Request,
     user: UserContext = Depends(require_codex_user),
 ) -> JSONResponse:
-    origin = request.headers.get("origin", "")
-    if origin and origin.rstrip("/") != public_base(settings):
+    if not is_allowed_browser_origin(request.headers.get("origin", ""), settings):
         raise HTTPException(status_code=403, detail="请求无效")
     agent_authorization_store().revoke_codex_connection_code(user)
     return JSONResponse({"disconnected": True}, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})

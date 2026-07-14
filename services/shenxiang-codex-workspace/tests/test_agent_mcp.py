@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from app.agent_mcp import AgentAuthorizationStore, _is_safe_redirect_uri, _pkce_valid, authorization_page, codex_connection_page, mcp_tools, safe_mcp_error
 from app.config import Settings
+from app.main import is_allowed_browser_origin
 from app.security import UserContext
 
 
@@ -110,3 +111,11 @@ def test_codex_connection_page_uses_the_public_connection_code_endpoint():
 
     assert 'fetch("/codex/agent/codex/connection-code"' in page
     assert "fetch('./connection-code'" not in page
+
+
+def test_connection_code_allows_only_the_public_site_origin():
+    settings = Settings(public_base_url="https://api.aiphui.top/codex")
+
+    assert is_allowed_browser_origin("https://api.aiphui.top", settings)
+    assert is_allowed_browser_origin("https://api.aiphui.top/codex", settings)
+    assert not is_allowed_browser_origin("https://other.example", settings)
