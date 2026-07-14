@@ -111,6 +111,10 @@ def test_codex_connection_page_uses_the_public_connection_code_endpoint():
 
     assert 'fetch("/codex/agent/codex/connection-code"' in page
     assert "fetch('./connection-code'" not in page
+    assert "打开 Codex 的设置" in page
+    assert "https://api.aiphui.top/codex/mcp" in page
+    assert "Authorization" in page
+    assert "不要填写 Bearer 令牌环境变量" in page
 
 
 def test_connection_code_allows_only_the_public_site_origin():
