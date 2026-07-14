@@ -674,6 +674,7 @@ function showIntegrations(activate = true) {
         <p>系统已经为你的账户自动准备四类 Key。Codex、图像工坊和视频工坊会自动使用；需要接入 Dify、Cherry Studio、Claude Code 或其他客户端时，只复制对应用途的 Key。</p>
       </div>
       <div class="integration-actions">
+        <a href="/codex/agent" target="_blank" rel="noopener noreferrer">连接 Agent（无需 Key）</a>
         <button type="button" id="refreshProvisionKeys">刷新四类 Key</button>
         <a href="/codex/docs/third-party-api-keys" target="_blank" rel="noopener noreferrer">打开详细教程</a>
         <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/latest" target="_blank" rel="noopener noreferrer">下载 Codex++</a>

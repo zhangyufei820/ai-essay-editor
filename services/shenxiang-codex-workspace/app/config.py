@@ -78,6 +78,9 @@ class Settings:
     fast_path_chat_first_delta_timeout_seconds: int = 6
     fast_path_max_output_tokens: int = 1200
     codex_exec_sandbox: str = "danger-full-access"
+    mcp_access_token_seconds: int = 3600
+    mcp_refresh_token_seconds: int = 60 * 60 * 24 * 30
+    mcp_authorization_code_seconds: int = 300
     log_level: str = "INFO"
 
 
@@ -143,6 +146,9 @@ def get_settings() -> Settings:
         fast_path_chat_first_delta_timeout_seconds=_env_int("FAST_PATH_CHAT_FIRST_DELTA_TIMEOUT_SECONDS", 6),
         fast_path_max_output_tokens=_env_int("FAST_PATH_MAX_OUTPUT_TOKENS", 1200),
         codex_exec_sandbox=os.getenv("CODEX_EXEC_SANDBOX", "danger-full-access"),
+        mcp_access_token_seconds=_env_int("MCP_ACCESS_TOKEN_SECONDS", 3600),
+        mcp_refresh_token_seconds=_env_int("MCP_REFRESH_TOKEN_SECONDS", 60 * 60 * 24 * 30),
+        mcp_authorization_code_seconds=_env_int("MCP_AUTHORIZATION_CODE_SECONDS", 300),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
     )
 

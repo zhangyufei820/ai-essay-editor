@@ -10,15 +10,28 @@ import shutil
 import time
 from pathlib import Path
 from typing import Any, AsyncIterator
+from urllib.parse import parse_qs
 from uuid import uuid4
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Header, Request
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from redis import ConnectionPool, Redis
 
 from app import __version__
+from app.agent_mcp import (
+    MCP_PROTOCOL_VERSION,
+    AgentAuthorizationStore,
+    authorization_page,
+    authorization_server,
+    call_agent_tool,
+    mcp_endpoint,
+    mcp_failure,
+    mcp_response,
+    mcp_tools,
+    public_base,
+)
 from app.config import GROK_MODEL, ensure_codex_config, ensure_directories, get_settings, secret_values_for_redaction
 from app.codex_runner import CodexRunner
 from app.models import (
@@ -294,6 +307,10 @@ def task_queue() -> RedisTaskQueue:
     return RedisTaskQueue(redis_client())
 
 
+def agent_authorization_store() -> AgentAuthorizationStore:
+    return AgentAuthorizationStore(redis_client(), settings)
+
+
 async def require_codex_user(
     request: Request,
     credentials=Depends(optional_new_api_user),
@@ -369,9 +386,165 @@ def third_party_api_keys_doc() -> HTMLResponse:
     return HTMLResponse(markdown_document_html("星人 API 第三方客户端接入教程", markdown))
 
 
+@app.get("/agent", response_class=HTMLResponse)
+@app.get("/codex/agent", response_class=HTMLResponse)
+@app.get("/docs/agent-connect", response_class=HTMLResponse)
+@app.get("/codex/docs/agent-connect", response_class=HTMLResponse)
+def agent_connect_doc() -> HTMLResponse:
+    doc_path = Path(__file__).resolve().parents[1] / "docs" / "agent-connect.md"
+    if not doc_path.exists():
+        return HTMLResponse("<h1>连接 Agent</h1><p>文档暂未发布。</p>", status_code=404)
+    return HTMLResponse(markdown_document_html("连接你的 Agent", doc_path.read_text(encoding="utf-8")))
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": settings.service_name, "version": settings.version}
+
+
+@app.get("/.well-known/oauth-protected-resource")
+@app.get("/.well-known/oauth-protected-resource/mcp")
+def mcp_protected_resource_metadata() -> dict[str, Any]:
+    return {
+        "resource": mcp_endpoint(settings),
+        "authorization_servers": [authorization_server(settings)],
+        "scopes_supported": ["xingren.agent"],
+        "bearer_methods_supported": ["header"],
+    }
+
+
+@app.get("/.well-known/oauth-authorization-server")
+def mcp_authorization_metadata() -> dict[str, Any]:
+    base = public_base(settings)
+    return {
+        "issuer": base,
+        "authorization_endpoint": f"{base}/oauth/authorize",
+        "token_endpoint": f"{base}/oauth/token",
+        "registration_endpoint": f"{base}/oauth/register",
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "scopes_supported": ["xingren.agent"],
+    }
+
+
+@app.post("/oauth/register")
+async def register_agent_client(request: Request) -> dict[str, Any]:
+    try:
+        payload = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="客户端注册信息无效") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="客户端注册信息无效")
+    return agent_authorization_store().register_client(payload)
+
+
+@app.get("/oauth/authorize", response_class=HTMLResponse)
+def authorize_agent_connection(
+    response_type: str = "",
+    client_id: str = "",
+    redirect_uri: str = "",
+    state: str = "",
+    scope: str = "",
+    code_challenge: str = "",
+    code_challenge_method: str = "S256",
+) -> HTMLResponse:
+    request_id = agent_authorization_store().start_authorization(
+        {
+            "response_type": response_type,
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "scope": scope,
+            "code_challenge": code_challenge,
+            "code_challenge_method": code_challenge_method,
+        }
+    )
+    details = agent_authorization_store().authorization_details(request_id) or {}
+    return authorization_page(
+        request_id,
+        str(details.get("client_name") or "我的 Agent"),
+        str(details.get("redirect_uri") or ""),
+    )
+
+
+@app.post("/oauth/authorize/approve")
+async def approve_agent_connection(
+    request: Request,
+    user: UserContext = Depends(require_codex_user),
+) -> dict[str, str]:
+    origin = request.headers.get("origin", "")
+    if origin and origin.rstrip("/") != public_base(settings):
+        raise HTTPException(status_code=403, detail="授权请求来源无效")
+    try:
+        payload = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="授权请求无效") from exc
+    request_id = str(payload.get("request_id") or "") if isinstance(payload, dict) else ""
+    if not request_id:
+        raise HTTPException(status_code=400, detail="授权请求无效")
+    redirect = agent_authorization_store().approve_authorization(request_id, user)
+    return {"redirect_to": str(redirect.headers["location"])}
+
+
+@app.post("/oauth/token")
+async def agent_token(request: Request) -> JSONResponse:
+    raw = (await request.body()).decode("utf-8", errors="replace")
+    values = {key: items[-1] for key, items in parse_qs(raw, keep_blank_values=True).items() if items}
+    if not values:
+        try:
+            payload = await request.json()
+        except ValueError:
+            payload = {}
+        values = {str(key): str(value) for key, value in payload.items()} if isinstance(payload, dict) else {}
+    store = agent_authorization_store()
+    grant_type = values.get("grant_type", "")
+    if grant_type == "authorization_code":
+        tokens = store.exchange_code(values.get("code", ""), values.get("code_verifier", ""), values.get("client_id", ""), values.get("redirect_uri", ""))
+    elif grant_type == "refresh_token":
+        tokens = store.refresh(values.get("refresh_token", ""), values.get("client_id", ""))
+    else:
+        raise HTTPException(status_code=400, detail="不支持的授权方式")
+    return JSONResponse(tokens, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
+
+
+@app.post("/mcp")
+async def agent_mcp(request: Request) -> JSONResponse:
+    authorization = request.headers.get("authorization", "")
+    if not authorization.lower().startswith("bearer "):
+        return JSONResponse(
+            {"error": "authorization_required"},
+            status_code=401,
+            headers={"WWW-Authenticate": f'Bearer resource_metadata="{public_base(settings)}/.well-known/oauth-protected-resource/mcp"'},
+        )
+    user = agent_authorization_store().access_user(authorization[7:].strip())
+    if user is None:
+        return JSONResponse(
+            {"error": "authorization_required"},
+            status_code=401,
+            headers={"WWW-Authenticate": f'Bearer resource_metadata="{public_base(settings)}/.well-known/oauth-protected-resource/mcp"'},
+        )
+    try:
+        payload = await request.json()
+    except ValueError:
+        return mcp_failure(None, -32700, "请求格式无效")
+    if not isinstance(payload, dict):
+        return mcp_failure(None, -32600, "请求格式无效")
+    request_id = payload.get("id")
+    method = str(payload.get("method") or "")
+    params = payload.get("params") if isinstance(payload.get("params"), dict) else {}
+    if method == "initialize":
+        return mcp_response(request_id, {"protocolVersion": MCP_PROTOCOL_VERSION, "capabilities": {"tools": {}}, "serverInfo": {"name": "xingren-agent", "version": settings.version}})
+    if method == "notifications/initialized":
+        return JSONResponse({}, status_code=202)
+    if method == "tools/list":
+        return mcp_response(request_id, {"tools": mcp_tools()})
+    if method == "tools/call":
+        name = str(params.get("name") or "")
+        arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+        return mcp_response(request_id, await call_agent_tool(settings, user, name, arguments))
+    return mcp_failure(request_id, -32601, "不支持的 Agent 请求")
 
 
 @app.get("/api/bootstrap", dependencies=[Depends(require_codex_user)])
