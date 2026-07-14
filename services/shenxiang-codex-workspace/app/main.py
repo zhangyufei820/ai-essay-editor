@@ -994,12 +994,13 @@ def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple
             "billing": "按文本 Token 计费，仅限 Grok 4.5。",
         }
     public_root = settings.public_base_url.removesuffix("/codex").rstrip("/")
+    public_api_base_url = f"{public_root}/v1"
     claude_base_url = f"{public_root}/claude"
     profiles = [
         {
             "mode": "codex",
             "usage": "对话、代码、普通 OpenAI-compatible 客户端",
-            "base_url": f"{settings.new_api_base_url}",
+            "base_url": public_api_base_url,
             "endpoint": "/v1/chat/completions",
         },
         {
@@ -1011,13 +1012,13 @@ def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple
         {
             "mode": "image",
             "usage": "图像生成、图像编辑、第三方生图客户端",
-            "base_url": f"{settings.new_api_base_url}",
+            "base_url": public_api_base_url,
             "endpoint": "/v1/images/generations 或 /v1/images/edits",
         },
         {
             "mode": "video",
             "usage": "视频生成、图生视频、第三方视频工作流",
-            "base_url": f"{settings.new_api_base_url}",
+            "base_url": public_api_base_url,
             "endpoint": "按模型文档使用视频生成接口",
         },
     ]
@@ -1027,7 +1028,7 @@ def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple
             {
                 "mode": "grok",
                 "usage": "Grok 4.5 文本对话和代码任务",
-                "base_url": f"{settings.new_api_base_url}",
+                "base_url": public_api_base_url,
                 "endpoint": "/v1/chat/completions",
             },
         )

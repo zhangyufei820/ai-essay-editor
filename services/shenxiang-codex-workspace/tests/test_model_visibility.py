@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 
 from app.config import (
     GROK_MODEL,
@@ -632,6 +633,21 @@ def test_provision_profiles_hide_grok_without_visible_entitlement() -> None:
     profiles = provision_key_profiles({"codex": "sk-codex", "grok": "sk-grok"})
 
     assert all(profile["mode"] != "grok" for profile in profiles)
+
+
+def test_provision_profiles_never_expose_an_internal_service_address(monkeypatch) -> None:
+    import app.main as workspace_main
+
+    monkeypatch.setattr(
+        workspace_main,
+        "settings",
+        replace(Settings(), new_api_base_url="http://internal-service:3000/v1", public_base_url="https://api.aiphui.top/codex"),
+    )
+
+    profiles = workspace_main.provision_key_profiles({"codex": "sk-codex", "image": "sk-image", "video": "sk-video"})
+
+    assert all(profile["base_url"] != "http://internal-service:3000/v1" for profile in profiles)
+    assert {profile["base_url"] for profile in profiles if profile["mode"] != "claude"} == {"https://api.aiphui.top/v1"}
 
 
 def test_provision_profiles_expose_dedicated_grok_key_when_entitled() -> None:

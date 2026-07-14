@@ -6,7 +6,7 @@ from dataclasses import replace
 import pytest
 from fastapi import HTTPException
 
-from app.agent_mcp import AgentAuthorizationStore, _is_safe_redirect_uri, _pkce_valid, authorization_page, mcp_tools, safe_mcp_error
+from app.agent_mcp import AgentAuthorizationStore, _is_safe_redirect_uri, _pkce_valid, authorization_page, codex_connection_page, mcp_tools, safe_mcp_error
 from app.config import Settings
 from app.security import UserContext
 
@@ -103,3 +103,10 @@ def test_codex_connection_code_is_rotated_and_revocable():
 
     store.revoke_codex_connection_code(user)
     assert store.access_user(second_code) is None
+
+
+def test_codex_connection_page_uses_the_public_connection_code_endpoint():
+    page = codex_connection_page().body.decode()
+
+    assert 'fetch("/codex/agent/codex/connection-code"' in page
+    assert "fetch('./connection-code'" not in page
