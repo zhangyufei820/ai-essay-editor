@@ -4,7 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const { callTool, generateImage, readConfig, saveConfig, toolDefinitions, workspaceFile } = require("../src/main");
+const { callTool, generateImage, readConfig, safeApiError, saveConfig, toolDefinitions, workspaceFile } = require("../src/main");
 
 test("exposes only the generation and edit tools", () => {
   assert.deepEqual(toolDefinitions().map((tool) => tool.name), ["xingren_generate_image", "xingren_edit_image"]);
@@ -47,4 +47,10 @@ test("returns a normal MCP tool response", async () => {
     formatResult: async () => "图片已生成：https://cdn.example.com/image.png",
   });
   assert.deepEqual(response, { content: [{ type: "text", text: "图片已生成：https://cdn.example.com/image.png" }] });
+});
+
+test("never includes an upstream error message in a user-visible error", () => {
+  const secretEndpoint = "https://private.example.invalid/path";
+  assert.equal(safeApiError(500, { error: { message: secretEndpoint } }), "图片服务暂时不可用，请稍后重试。");
+  assert.equal(safeApiError(400, { error: { message: secretEndpoint } }), "图片请求暂时无法完成。请检查图片描述或稍后重试。");
 });

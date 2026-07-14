@@ -223,6 +223,21 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         self.assertEqual(str(raised.exception), "production MySQL query failed")
         self.assertNotIn(secret, str(raised.exception))
 
+    def test_mysql_reads_json_without_batch_escaping(self) -> None:
+        environment = {
+            "MYSQL_ROOT_PASSWORD": "fake-database-password",
+            "MYSQL_DATABASE": "new-api",
+        }
+        with mock.patch.dict(self.module.os.environ, environment, clear=True), mock.patch.object(
+            self.module.subprocess,
+            "check_output",
+            return_value=b'billing_setting.billing_expr\t{"model":"line\\nvalue"}\n',
+        ) as check_output:
+            rows = self.module.mysql("SELECT `key`, `value` FROM options")
+
+        self.assertEqual(rows, [["billing_setting.billing_expr", '{"model":"line\\nvalue"}']])
+        self.assertIn("--raw", check_output.call_args.args[0])
+
 
 if __name__ == "__main__":
     unittest.main()

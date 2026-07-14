@@ -219,6 +219,7 @@ def mysql(query: str) -> list[list[str]]:
         "shenxiang-new-api-mysql",
         "mysql",
         "--default-character-set=utf8mb4",
+        "--raw",
         "-uroot",
         "-N",
         "-B",
