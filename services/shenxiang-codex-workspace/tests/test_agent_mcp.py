@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import hashlib
 import json
 from dataclasses import replace
@@ -8,6 +9,7 @@ from fastapi import HTTPException
 
 from app.agent_mcp import AgentAuthorizationStore, _is_safe_redirect_uri, _pkce_valid, authorization_page, codex_connection_page, media_models_message, mcp_tools, resolved_media_model, safe_mcp_error
 from app.config import Settings
+from app import main
 from app.main import is_allowed_browser_origin
 from app.security import UserContext
 
@@ -107,6 +109,22 @@ def test_video_artifacts_use_an_opaque_expiring_reference(tmp_path):
 
     assert store.artifact_path(token) == artifact
     assert store.artifact_path("invalid") is None
+
+
+def test_image_artifact_response_uses_its_actual_media_type(monkeypatch, tmp_path):
+    image = tmp_path / "generated.png"
+    image.write_bytes(b"png")
+
+    class FakeStore:
+        def artifact_path(self, token):
+            return image if token == "artifact-token" else None
+
+    monkeypatch.setattr(main, "agent_authorization_store", lambda: FakeStore())
+
+    response = asyncio.run(main.agent_artifact("artifact-token"))
+
+    assert response.media_type == "image/png"
+    assert response.headers["content-disposition"] == 'inline; filename="generated.png"'
 
 
 def test_codex_connection_code_is_rotated_and_revocable():

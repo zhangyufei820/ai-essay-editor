@@ -441,7 +441,7 @@ async def agent_artifact(artifact_token: str) -> FileResponse:
     path = agent_authorization_store().artifact_path(artifact_token)
     if path is None:
         raise HTTPException(status_code=404, detail="文件不存在或已过期")
-    return FileResponse(path, filename="xingren-generated-video.mp4", headers={"Cache-Control": "no-store"})
+    return FileResponse(path, filename=path.name, content_disposition_type="inline", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/health")
