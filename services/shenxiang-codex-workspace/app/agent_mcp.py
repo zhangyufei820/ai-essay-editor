@@ -292,9 +292,10 @@ def codex_connection_page() -> HTMLResponse:
 def mcp_tools() -> list[dict[str, Any]]:
     return [
         {"name": "xingren_connection_status", "description": "检查星人工具是否已经连接。用户第一次使用或说连接不上时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
+        {"name": "xingren_list_media_models", "description": "列出当前账户可用的图像和视频模型。用户问能用哪些模型、想先选模型或第一次生成图片视频时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
         {"name": "xingren_ask", "description": "向星人助手提问、写作或分析。仅在用户明确需要文字结果时调用。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "用户的问题或任务"}}, "required": ["prompt"], "additionalProperties": False}},
-        {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "size": {"type": "string", "enum": ["960x960", "1024x1024", "1536x1024", "1024x1536"]}}, "required": ["prompt"], "additionalProperties": False}},
-        {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15}}, "required": ["prompt"], "additionalProperties": False}},
+        {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。先用 xingren_list_media_models 查看模型；model 只能填写列表中图像模型，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "model": {"type": "string", "description": "可选的图像模型名称"}, "size": {"type": "string", "enum": ["960x960", "1024x1024", "1536x1024", "1024x1536"]}}, "required": ["prompt"], "additionalProperties": False}},
+        {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。先用 xingren_list_media_models 查看模型；model 只能填写列表中视频模型，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "model": {"type": "string", "description": "可选的视频模型名称"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15}}, "required": ["prompt"], "additionalProperties": False}},
     ]
 
 
@@ -307,6 +308,10 @@ async def call_agent_tool(
 ) -> dict[str, Any]:
     if name == "xingren_connection_status":
         return {"content": [{"type": "text", "text": "已连接。文本、图片和视频工具都可以直接使用。"}]}
+    if name == "xingren_list_media_models":
+        image_models = list((user.allowed_models_by_mode or {}).get("image") or settings.image_allowed_models)
+        video_models = list((user.allowed_models_by_mode or {}).get("video") or settings.video_allowed_models)
+        return {"content": [{"type": "text", "text": f"可用图像模型：{', '.join(image_models) or '暂无'}\n可用视频模型：{', '.join(video_models) or '暂无'}\n请告诉我：用哪一个模型生成什么内容。"}]}
     prompt = str(arguments.get("prompt") or "").strip()
     if not prompt or len(prompt) > 8000:
         return safe_mcp_error("请提供不超过 8000 字的任务说明。")
@@ -314,7 +319,7 @@ async def call_agent_tool(
         if name == "xingren_ask":
             return await _ask(settings, user, prompt)
         if name == "xingren_generate_image":
-            return await _generate_image(settings, user, prompt, str(arguments.get("size") or "1024x1024"))
+            return await _generate_image(settings, user, prompt, str(arguments.get("size") or "1024x1024"), str(arguments.get("model") or ""))
         if name == "xingren_generate_video":
             return await _generate_video(settings, user, prompt, arguments, authorization_store)
         return safe_mcp_error("该工具暂不可用。")
@@ -341,9 +346,12 @@ async def _ask(settings: Settings, user: UserContext, prompt: str) -> dict[str, 
     return {"content": [{"type": "text", "text": text or "暂时没有生成内容，请稍后重试。"}]}
 
 
-async def _generate_image(settings: Settings, user: UserContext, prompt: str, size: str) -> dict[str, Any]:
+async def _generate_image(settings: Settings, user: UserContext, prompt: str, size: str, model: str) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
-    request = WorkspaceRunRequest(user_query=prompt, model_role="image_generation", task_type="agent_image", params={"size": size, "n": 1})
+    allowed_models = tuple((user.allowed_models_by_mode or {}).get("image") or settings.image_allowed_models)
+    if model and model not in allowed_models:
+        return safe_mcp_error("所选图像模型当前不可用。请先查看可用模型后再选择。")
+    request = WorkspaceRunRequest(user_query=prompt, model_role="image_generation", task_type="agent_image", model_config={"image_generation": model}, params={"size": size, "n": 1}, metadata={"server_allowed_models_by_mode": {"image": list(allowed_models)}})
     image_key = (user.api_keys or {}).get("image") or user.api_key
     image_user = UserContext(api_key=image_key, user_id=user.user_id, key_hint=user.key_hint, allowed_models_by_mode=user.allowed_models_by_mode)
     await generate_media(settings, request, image_user, {"task_id": task_id, "workspace": str(settings.runs_dir / "mcp" / user.user_id / task_id)}, "image")
@@ -367,11 +375,17 @@ async def _generate_video(
     authorization_store: AgentAuthorizationStore,
 ) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
+    model = str(arguments.get("model") or "")
+    allowed_models = tuple((user.allowed_models_by_mode or {}).get("video") or settings.video_allowed_models)
+    if model and model not in allowed_models:
+        return safe_mcp_error("所选视频模型当前不可用。请先查看可用模型后再选择。")
     request = WorkspaceRunRequest(
         user_query=prompt,
         model_role="video_generation",
         task_type="agent_video",
+        model_config={"video_generation": model},
         params={"duration_seconds": arguments.get("duration_seconds") or 8},
+        metadata={"server_allowed_models_by_mode": {"video": list(allowed_models)}},
     )
     video_key = (user.api_keys or {}).get("video") or user.api_key
     video_user = UserContext(api_key=video_key, user_id=user.user_id, key_hint=user.key_hint, allowed_models_by_mode=user.allowed_models_by_mode)

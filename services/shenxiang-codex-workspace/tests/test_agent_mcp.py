@@ -60,6 +60,7 @@ def test_pkce_and_public_tool_contract_are_strict():
     assert not _pkce_valid("wrong", challenge)
     assert [tool["name"] for tool in mcp_tools()] == [
         "xingren_connection_status",
+        "xingren_list_media_models",
         "xingren_ask",
         "xingren_generate_image",
         "xingren_generate_video",
