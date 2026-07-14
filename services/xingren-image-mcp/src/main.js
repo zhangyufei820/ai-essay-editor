@@ -176,8 +176,8 @@ function safeApiError(status, responseBody) {
   if (status === 401) return "图像令牌无效。请重新运行安装命令并粘贴正确的图像生成令牌。";
   if (status === 403) return "此图像令牌没有该模型权限，或图像额度不足。请到星人 API 控制台检查。";
   if (status === 429) return "请求过于频繁，请稍等一分钟后再试。";
-  const message = typeof responseBody?.error?.message === "string" ? responseBody.error.message : "服务暂时不可用，请稍后重试。";
-  return `图片生成失败（${status}）：${message.slice(0, 240)}`;
+  if (status >= 500) return "图片服务暂时不可用，请稍后重试。";
+  return "图片请求暂时无法完成。请检查图片描述或稍后重试。";
 }
 
 async function imageRequest(endpoint, apiKey, body) {
@@ -195,7 +195,49 @@ async function imageRequest(endpoint, apiKey, body) {
     return payload;
   } catch (error) {
     if (error.name === "AbortError") throw new Error("图片生成等待超过 2 分钟，请稍后重试。");
-    throw error;
+    if (typeof error.message === "string" && error.message.startsWith("图片")) throw error;
+    throw new Error("图片服务暂时不可用，请稍后重试。");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function saveImageBuffer(buffer, workingDirectory) {
+  if (buffer.length === 0 || buffer.length > 20 * 1024 * 1024) {
+    throw new Error("图片结果无效，请稍后重试。");
+  }
+  const outputDirectory = path.join(workingDirectory, "generated-images");
+  await fs.mkdir(outputDirectory, { recursive: true });
+  const outputPath = path.join(outputDirectory, `xingren-image-${Date.now()}.png`);
+  await fs.writeFile(outputPath, buffer);
+  return `图片已生成并保存到：${outputPath}`;
+}
+
+async function downloadGeneratedImage(url) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error("图片结果无效，请稍后重试。");
+  }
+  if (parsedUrl.protocol !== "https:") {
+    throw new Error("图片结果无效，请稍后重试。");
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(parsedUrl, { signal: controller.signal });
+    const contentType = response.headers.get("content-type") || "";
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (!response.ok || !contentType.startsWith("image/") || contentLength > 20 * 1024 * 1024) {
+      throw new Error("图片结果无效，请稍后重试。");
+    }
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("图片结果下载超时，请稍后重试。");
+    if (error.message === "图片结果无效，请稍后重试。") throw error;
+    throw new Error("图片结果下载失败，请稍后重试。");
   } finally {
     clearTimeout(timeout);
   }
@@ -204,14 +246,10 @@ async function imageRequest(endpoint, apiKey, body) {
 async function formatResult(payload, workingDirectory) {
   const image = payload?.data?.[0];
   if (typeof image?.url === "string") {
-    return `图片已生成：${image.url}`;
+    return saveImageBuffer(await downloadGeneratedImage(image.url), workingDirectory);
   }
   if (typeof image?.b64_json === "string") {
-    const outputDirectory = path.join(workingDirectory, "generated-images");
-    await fs.mkdir(outputDirectory, { recursive: true });
-    const outputPath = path.join(outputDirectory, `xingren-image-${Date.now()}.png`);
-    await fs.writeFile(outputPath, Buffer.from(image.b64_json, "base64"));
-    return `图片已生成并保存到：${outputPath}`;
+    return saveImageBuffer(Buffer.from(image.b64_json, "base64"), workingDirectory);
   }
   throw new Error("图像服务没有返回可用图片，请稍后重试。");
 }
@@ -279,4 +317,4 @@ function runServer() {
   });
 }
 
-module.exports = { callTool, configPath, editImage, formatResult, generateImage, imageRequest, install, readConfig, runServer, saveConfig, setup, toolDefinitions, workspaceFile };
+module.exports = { callTool, configPath, downloadGeneratedImage, editImage, formatResult, generateImage, imageRequest, install, readConfig, runServer, safeApiError, saveConfig, saveImageBuffer, setup, toolDefinitions, workspaceFile };
