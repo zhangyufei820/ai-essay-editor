@@ -1,0 +1,19 @@
+{
+  "name": "@xingren/codex-image-mcp",
+  "version": "0.1.0",
+  "description": "Use Xingren image-generation credits from local Codex.",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "commonjs",
+  "bin": {
+    "xingren-image-mcp": "bin/xingren-image-mcp.js"
+  },
+  "scripts": {
+    "test": "node --test test/**/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
