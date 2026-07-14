@@ -7,7 +7,8 @@ from dataclasses import replace
 import pytest
 from fastapi import HTTPException
 
-from app.agent_mcp import AgentAuthorizationStore, _is_safe_redirect_uri, _pkce_valid, authorization_page, codex_connection_page, media_models_message, mcp_tools, resolved_media_model, safe_mcp_error
+from app.agent_mcp import AgentAuthorizationStore, _generate_image, _is_safe_redirect_uri, _pkce_valid, authorization_page, codex_connection_page, image_size_for_options, media_models_message, mcp_tools, resolved_media_model, safe_mcp_error
+from app.media_catalog import canonical_allowed_media_models
 from app.config import Settings
 from app import main
 from app.main import is_allowed_browser_origin
@@ -88,6 +89,49 @@ def test_media_model_selection_accepts_only_public_website_names():
     assert resolved_media_model("特价 image-2", "image") == "geek2api-image-2"
     assert resolved_media_model("Seedance 2.0 CL Mini", "video") == "seedance-2.0-cl-mini"
     assert resolved_media_model("geek2api-image-2", "image") is None
+
+
+def test_public_media_permission_name_is_normalized_for_generation():
+    assert canonical_allowed_media_models("image", ("特价 image-2",)) == ("geek2api-image-2",)
+
+
+def test_image_size_options_support_explicit_vertical_2k_output():
+    assert image_size_for_options("", "2K", "9:16") == "1152x2048"
+    assert image_size_for_options("1024x1536", "4K", "9:16") == "1024x1536"
+
+
+def test_public_model_permission_generates_with_its_canonical_model_and_size(monkeypatch, tmp_path):
+    captured = {}
+
+    async def fake_generate_media(_settings, request, _user, task, _media_type):
+        captured["request"] = request
+        output = tmp_path / "mcp" / "user-1" / task["task_id"] / "outputs"
+        output.mkdir(parents=True)
+        (output / "image.png").write_bytes(b"png")
+
+    class FakeStore:
+        def issue_artifact(self, _user, _path):
+            return "artifact-token"
+
+    monkeypatch.setattr("app.agent_mcp.generate_media", fake_generate_media)
+    response = asyncio.run(
+        _generate_image(
+            replace(Settings(), runs_dir=tmp_path),
+            UserContext(api_key="sk-test", user_id="user-1", key_hint="agent", allowed_models_by_mode={"image": ("特价 image-2",)}),
+            "生成一张竖版海报",
+            "",
+            "特价 image-2",
+            FakeStore(),
+            resolution="2K",
+            aspect_ratio="9:16",
+        )
+    )
+
+    request = captured["request"]
+    assert request.model_roles.image_generation == "geek2api-image-2"
+    assert request.metadata["server_allowed_models_by_mode"]["image"] == ["geek2api-image-2"]
+    assert request.params["size"] == "1152x2048"
+    assert response["content"][0]["type"] == "resource_link"
 
 
 def test_authorization_page_escapes_client_values():

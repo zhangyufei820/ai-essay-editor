@@ -43,6 +43,11 @@ def resolve_public_media_model(name: str, mode: str) -> str | None:
     return None
 
 
+def canonical_allowed_media_models(mode: str, allowed_models: Iterable[str]) -> tuple[str, ...]:
+    allowed = set(str(model or "").strip() for model in allowed_models)
+    return tuple(item.model for item in public_models_for_mode(mode) if item.model in allowed or item.name in allowed)
+
+
 def available_public_models(mode: str, allowed_models: Iterable[str]) -> tuple[PublicMediaModel, ...]:
     allowed = set(str(model or "").strip() for model in allowed_models)
     return tuple(item for item in public_models_for_mode(mode) if item.model in allowed or item.name in allowed)
