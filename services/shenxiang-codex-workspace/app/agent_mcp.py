@@ -319,7 +319,7 @@ async def call_agent_tool(
         if name == "xingren_ask":
             return await _ask(settings, user, prompt)
         if name == "xingren_generate_image":
-            return await _generate_image(settings, user, prompt, str(arguments.get("size") or "1024x1024"), str(arguments.get("model") or ""))
+            return await _generate_image(settings, user, prompt, str(arguments.get("size") or "1024x1024"), str(arguments.get("model") or ""), authorization_store)
         if name == "xingren_generate_video":
             return await _generate_video(settings, user, prompt, arguments, authorization_store)
         return safe_mcp_error("该工具暂不可用。")
@@ -346,7 +346,7 @@ async def _ask(settings: Settings, user: UserContext, prompt: str) -> dict[str, 
     return {"content": [{"type": "text", "text": text or "暂时没有生成内容，请稍后重试。"}]}
 
 
-async def _generate_image(settings: Settings, user: UserContext, prompt: str, size: str, model: str) -> dict[str, Any]:
+async def _generate_image(settings: Settings, user: UserContext, prompt: str, size: str, model: str, authorization_store: AgentAuthorizationStore) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
     allowed_models = tuple((user.allowed_models_by_mode or {}).get("image") or settings.image_allowed_models)
     if model and model not in allowed_models:
@@ -360,11 +360,11 @@ async def _generate_image(settings: Settings, user: UserContext, prompt: str, si
     if not files:
         return safe_mcp_error("图片已生成，但暂时无法安全交付，请稍后重试。")
     image = files[0]
-    content = image.read_bytes()
-    if not content or len(content) > 20 * 1024 * 1024:
+    if not image.stat().st_size or image.stat().st_size > 20 * 1024 * 1024:
         return safe_mcp_error("图片结果无效，请稍后重试。")
     mime_type = "image/png" if image.suffix.lower() == ".png" else "image/jpeg" if image.suffix.lower() in {".jpg", ".jpeg"} else "image/webp"
-    return {"content": [{"type": "image", "data": base64.b64encode(content).decode("ascii"), "mimeType": mime_type}, {"type": "text", "text": "图片已生成。"}]}
+    artifact_token = authorization_store.issue_artifact(user, image)
+    return {"content": [{"type": "resource_link", "uri": f"{public_base(settings)}/agent/artifacts/{artifact_token}", "name": "生成的图片", "mimeType": mime_type}, {"type": "text", "text": "图片已生成。请打开生成的图片进行预览或下载。"}]}
 
 
 async def _generate_video(
