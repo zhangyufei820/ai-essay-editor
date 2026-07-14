@@ -1735,6 +1735,7 @@ function imageTaskToResult(
       fallbackModel ||
       '',
   ).trim();
+  const metadata = item.metadata || item.Metadata || {};
   return {
     id: `image-${task.task_id}`,
     kind: 'image',
@@ -1757,6 +1758,8 @@ function imageTaskToResult(
     revisedPrompt,
     displayPrompt: firstPromptText(revisedPrompt, originalPrompt),
     taskId: task.task_id,
+    actualSize: firstPromptText(metadata.actual_size),
+    requestedSize: firstPromptText(metadata.effective_size, metadata.requested_size),
     status: 'ready',
     cacheStatus: 'ready',
     createdAt: Date.now(),
@@ -2785,6 +2788,10 @@ const MediaPlayground = () => {
     mode === 'image'
       ? imagePixelSizeForModel(imageModel, imageRatioValue, resolution, customImageSize)
       : '';
+  const inspectorImagePixelLabel =
+    inspectorResult?.actualSize ||
+    inspectorResult?.requestedSize ||
+    imagePixelLabel;
   const imageDisplayRatio =
     mode === 'image' &&
     isGptImage2Model(imageModel) &&
@@ -5346,7 +5353,7 @@ const MediaPlayground = () => {
                     </div>
                     <div>
                       <span>规格</span>
-                      <strong>{inspectorResult.kind === 'image' ? imagePixelLabel : outputSpec}</strong>
+                      <strong>{inspectorResult.kind === 'image' ? inspectorImagePixelLabel : outputSpec}</strong>
                     </div>
                     <div>
                       <span>格式</span>

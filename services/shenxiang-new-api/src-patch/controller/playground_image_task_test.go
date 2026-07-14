@@ -2,11 +2,16 @@ package controller
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -120,6 +125,50 @@ func TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInter
 	require.Equal(t, "geek2api-image-2", payload["model"])
 	require.Equal(t, "2K", payload["resolution"])
 	require.NotContains(t, payload, "display_model")
+}
+
+func TestCacheFirstPlaygroundImageTaskResultRejectsMismatchedImageSize(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	root := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", root)
+
+	var imageBytes bytes.Buffer
+	require.NoError(t, png.Encode(&imageBytes, image.NewRGBA(image.Rect(0, 0, 1024, 768))))
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/pg/images/tasks/task-size-mismatch", nil)
+	ctx.Set("id", 7)
+
+	item, err := cacheFirstPlaygroundImageTaskResult(
+		ctx,
+		&model.Task{TaskID: "task-size-mismatch"},
+		&playgroundImageTaskPayload{
+			Metadata: map[string]interface{}{
+				"effective_size": "2048x1536",
+			},
+		},
+		&dto.ImageResponse{Data: []dto.ImageData{{B64Json: base64.StdEncoding.EncodeToString(imageBytes.Bytes())}}},
+	)
+
+	require.Nil(t, item)
+	require.EqualError(t, err, "生成结果尺寸未达到所选规格，请重新生成。")
+	entries, readErr := os.ReadDir(filepath.Join(root, "u-7"))
+	require.NoError(t, readErr)
+	require.Empty(t, entries)
+}
+
+func TestPlaygroundImageTaskResultHasSizeMismatchRequiresExactRequestedSize(t *testing.T) {
+	require.True(t, playgroundImageTaskResultHasSizeMismatch(&playgroundMediaItem{
+		Metadata: map[string]interface{}{
+			"effective_size":            "2048x1536",
+			"requested_actual_mismatch": true,
+		},
+	}))
+	require.False(t, playgroundImageTaskResultHasSizeMismatch(&playgroundMediaItem{
+		Metadata: map[string]interface{}{
+			"effective_size":            "auto",
+			"requested_actual_mismatch": true,
+		},
+	}))
 }
 
 func TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName(t *testing.T) {
