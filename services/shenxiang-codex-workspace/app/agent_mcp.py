@@ -34,7 +34,7 @@ def mcp_endpoint(settings: Settings) -> str:
 
 
 def authorization_server(settings: Settings) -> str:
-    return public_base(settings)
+    return f"{public_base(settings)}/oauth"
 
 
 def safe_mcp_error(message: str = "服务暂时不可用，请稍后重试。") -> dict[str, Any]:

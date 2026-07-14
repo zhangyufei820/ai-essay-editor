@@ -402,6 +402,7 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": settings.service_name, "version": settings.version}
 
 
+@app.get("/oauth/protected-resource")
 @app.get("/.well-known/oauth-protected-resource")
 @app.get("/.well-known/oauth-protected-resource/mcp")
 def mcp_protected_resource_metadata() -> dict[str, Any]:
@@ -413,6 +414,7 @@ def mcp_protected_resource_metadata() -> dict[str, Any]:
     }
 
 
+@app.get("/oauth/.well-known/oauth-authorization-server")
 @app.get("/.well-known/oauth-authorization-server")
 def mcp_authorization_metadata() -> dict[str, Any]:
     base = public_base(settings)
@@ -516,14 +518,14 @@ async def agent_mcp(request: Request) -> JSONResponse:
         return JSONResponse(
             {"error": "authorization_required"},
             status_code=401,
-            headers={"WWW-Authenticate": f'Bearer resource_metadata="{public_base(settings)}/.well-known/oauth-protected-resource/mcp"'},
+            headers={"WWW-Authenticate": f'Bearer resource_metadata="{public_base(settings)}/oauth/protected-resource"'},
         )
     user = agent_authorization_store().access_user(authorization[7:].strip())
     if user is None:
         return JSONResponse(
             {"error": "authorization_required"},
             status_code=401,
-            headers={"WWW-Authenticate": f'Bearer resource_metadata="{public_base(settings)}/.well-known/oauth-protected-resource/mcp"'},
+            headers={"WWW-Authenticate": f'Bearer resource_metadata="{public_base(settings)}/oauth/protected-resource"'},
         )
     try:
         payload = await request.json()
