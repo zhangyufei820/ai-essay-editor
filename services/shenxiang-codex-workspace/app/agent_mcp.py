@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import secrets
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import uuid4
@@ -124,7 +125,7 @@ class AgentAuthorizationStore:
             "api_keys": {
                 mode: key
                 for mode, key in (user.api_keys or {"codex": user.api_key, "image": user.api_key}).items()
-                if mode in {"codex", "image"} and key
+                if mode in {"codex", "image", "video"} and key
             },
             "api_key": user.api_key,
             "allowed_models_by_mode": {key: list(value) for key, value in (user.allowed_models_by_mode or {}).items()},
@@ -178,6 +179,30 @@ class AgentAuthorizationStore:
             allowed_models_by_mode={str(key): tuple(map(str, value)) for key, value in allowed.items() if isinstance(value, list)},
         )
 
+    def issue_artifact(self, user: UserContext, file_path: Path) -> str:
+        root = (self.settings.runs_dir / "mcp" / user.user_id).resolve()
+        target = file_path.resolve()
+        if root not in target.parents or not target.is_file():
+            raise ValueError("生成文件无效")
+        token = secrets.token_urlsafe(32)
+        self._set_json(
+            f"mcp:artifact:{_hash(token)}",
+            {"user_id": user.user_id, "path": str(target)},
+            self.settings.mcp_access_token_seconds,
+        )
+        return token
+
+    def artifact_path(self, token: str) -> Path | None:
+        record = self._get_json(f"mcp:artifact:{_hash(token)}")
+        if not record:
+            return None
+        user_id = str(record.get("user_id") or "")
+        path = Path(str(record.get("path") or "")).resolve()
+        root = (self.settings.runs_dir / "mcp" / user_id).resolve()
+        if not user_id or root not in path.parents or not path.is_file():
+            return None
+        return path
+
     def _issue_tokens(self, user: dict[str, Any], client_id: str) -> dict[str, Any]:
         access_token = secrets.token_urlsafe(32)
         refresh_token = secrets.token_urlsafe(40)
@@ -217,18 +242,28 @@ class AgentAuthorizationStore:
 def authorization_page(request_id: str, client_name: str, redirect_uri: str) -> HTMLResponse:
     safe_name = client_name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     callback_host = (urlparse(redirect_uri).hostname or "此 Agent").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    html = f"""<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>连接 Agent</title><style>body{{font:16px system-ui;max-width:520px;margin:10vh auto;padding:24px;color:#172033}}button{{background:#2558d9;color:#fff;border:0;border-radius:10px;padding:13px 18px;font-size:16px;cursor:pointer}}.card{{border:1px solid #dce2ef;border-radius:16px;padding:28px;box-shadow:0 12px 30px #dce2ef}}</style><main class=\"card\"><h1>连接你的 Agent</h1><p><strong>{safe_name}</strong> 将获得调用星人文本和图片工具的权限。</p><p>完成后会返回到：<strong>{callback_host}</strong></p><p>不会看到你的账户 Key，也不能管理账户。</p><button id=\"approve\">确认连接</button><p id=\"message\"></p></main><script>document.querySelector('#approve').onclick=async()=>{{const message=document.querySelector('#message');const uid=localStorage.getItem('uid')||(()=>{{try{{return JSON.parse(localStorage.getItem('user')||'{{}}').id||''}}catch{{return ''}}}})();if(!uid){{message.textContent='请先登录星人 API 控制台，再回到本页。';return}}message.textContent='正在连接…';const res=await fetch('./approve',{{method:'POST',credentials:'include',headers:{{'X-New-Api-User':uid,'Content-Type':'application/json'}},body:JSON.stringify({{request_id:{json.dumps(request_id)}}})}});const data=await res.json().catch(()=>({{}}));if(res.ok&&data.redirect_to)location.assign(data.redirect_to);else message.textContent=data.detail||'连接暂时无法完成，请稍后重试。'}};</script></html>"""
+    html = f"""<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>连接 Agent</title><style>body{{font:16px system-ui;max-width:520px;margin:10vh auto;padding:24px;color:#172033}}button{{background:#2558d9;color:#fff;border:0;border-radius:10px;padding:13px 18px;font-size:16px;cursor:pointer}}.card{{border:1px solid #dce2ef;border-radius:16px;padding:28px;box-shadow:0 12px 30px #dce2ef}}</style><main class=\"card\"><h1>连接你的 Agent</h1><p><strong>{safe_name}</strong> 将获得调用星人文本、图片和视频工具的权限。</p><p>完成后会返回到：<strong>{callback_host}</strong></p><p>不会看到你的账户 Key，也不能管理账户。</p><button id=\"approve\">确认连接</button><p id=\"message\"></p></main><script>document.querySelector('#approve').onclick=async()=>{{const message=document.querySelector('#message');const uid=localStorage.getItem('uid')||(()=>{{try{{return JSON.parse(localStorage.getItem('user')||'{{}}').id||''}}catch{{return ''}}}})();if(!uid){{message.textContent='请先登录星人 API 控制台，再回到本页。';return}}message.textContent='正在连接…';const res=await fetch('./approve',{{method:'POST',credentials: 'include',headers:{{'X-New-Api-User':uid,'Content-Type':'application/json'}},body:JSON.stringify({{request_id:{json.dumps(request_id)}}})}});const data=await res.json().catch(()=>({{}}));if(res.ok&&data.redirect_to)location.assign(data.redirect_to);else message.textContent=data.detail||'连接暂时无法完成，请稍后重试。'}};</script></html>"""
     return HTMLResponse(html, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY"})
 
 
 def mcp_tools() -> list[dict[str, Any]]:
     return [
+        {"name": "xingren_connection_status", "description": "检查星人工具是否已经连接。用户第一次使用或说连接不上时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
         {"name": "xingren_ask", "description": "向星人助手提问、写作或分析。仅在用户明确需要文字结果时调用。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "用户的问题或任务"}}, "required": ["prompt"], "additionalProperties": False}},
         {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "size": {"type": "string", "enum": ["960x960", "1024x1024", "1536x1024", "1024x1536"]}}, "required": ["prompt"], "additionalProperties": False}},
+        {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15}}, "required": ["prompt"], "additionalProperties": False}},
     ]
 
 
-async def call_agent_tool(settings: Settings, user: UserContext, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+async def call_agent_tool(
+    settings: Settings,
+    user: UserContext,
+    name: str,
+    arguments: dict[str, Any],
+    authorization_store: AgentAuthorizationStore,
+) -> dict[str, Any]:
+    if name == "xingren_connection_status":
+        return {"content": [{"type": "text", "text": "已连接。文本、图片和视频工具都可以直接使用。"}]}
     prompt = str(arguments.get("prompt") or "").strip()
     if not prompt or len(prompt) > 8000:
         return safe_mcp_error("请提供不超过 8000 字的任务说明。")
@@ -237,6 +272,8 @@ async def call_agent_tool(settings: Settings, user: UserContext, name: str, argu
             return await _ask(settings, user, prompt)
         if name == "xingren_generate_image":
             return await _generate_image(settings, user, prompt, str(arguments.get("size") or "1024x1024"))
+        if name == "xingren_generate_video":
+            return await _generate_video(settings, user, prompt, arguments, authorization_store)
         return safe_mcp_error("该工具暂不可用。")
     except MediaGenerationError as exc:
         return safe_mcp_error(redact(str(exc), secret_values_for_redaction(settings, user.api_key)))
@@ -277,6 +314,36 @@ async def _generate_image(settings: Settings, user: UserContext, prompt: str, si
         return safe_mcp_error("图片结果无效，请稍后重试。")
     mime_type = "image/png" if image.suffix.lower() == ".png" else "image/jpeg" if image.suffix.lower() in {".jpg", ".jpeg"} else "image/webp"
     return {"content": [{"type": "image", "data": base64.b64encode(content).decode("ascii"), "mimeType": mime_type}, {"type": "text", "text": "图片已生成。"}]}
+
+
+async def _generate_video(
+    settings: Settings,
+    user: UserContext,
+    prompt: str,
+    arguments: dict[str, Any],
+    authorization_store: AgentAuthorizationStore,
+) -> dict[str, Any]:
+    task_id = f"mcp_{uuid4().hex}"
+    request = WorkspaceRunRequest(
+        user_query=prompt,
+        model_role="video_generation",
+        task_type="agent_video",
+        params={"duration_seconds": arguments.get("duration_seconds") or 8},
+    )
+    video_key = (user.api_keys or {}).get("video") or user.api_key
+    video_user = UserContext(api_key=video_key, user_id=user.user_id, key_hint=user.key_hint, allowed_models_by_mode=user.allowed_models_by_mode)
+    await generate_media(settings, request, video_user, {"task_id": task_id, "workspace": str(settings.runs_dir / "mcp" / user.user_id / task_id)}, "video")
+    output_dir = settings.runs_dir / "mcp" / user.user_id / task_id / "outputs"
+    files = sorted(path for path in output_dir.glob("*") if path.is_file())
+    if not files:
+        return safe_mcp_error("视频已生成，但暂时无法安全交付，请稍后重试。")
+    artifact_token = authorization_store.issue_artifact(user, files[0])
+    return {
+        "content": [
+            {"type": "resource_link", "uri": f"{public_base(settings)}/agent/artifacts/{artifact_token}", "name": "生成的视频", "mimeType": "video/mp4"},
+            {"type": "text", "text": "视频已生成。请打开生成的视频进行预览或下载。"},
+        ]
+    }
 
 
 def mcp_response(request_id: Any, result: dict[str, Any]) -> JSONResponse:

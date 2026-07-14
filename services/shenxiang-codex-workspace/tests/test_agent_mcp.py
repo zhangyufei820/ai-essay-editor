@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+from dataclasses import replace
 
 import pytest
 from fastapi import HTTPException
@@ -56,7 +57,12 @@ def test_pkce_and_public_tool_contract_are_strict():
     verifier, challenge = verifier_and_challenge()
     assert _pkce_valid(verifier, challenge)
     assert not _pkce_valid("wrong", challenge)
-    assert [tool["name"] for tool in mcp_tools()] == ["xingren_ask", "xingren_generate_image"]
+    assert [tool["name"] for tool in mcp_tools()] == [
+        "xingren_connection_status",
+        "xingren_ask",
+        "xingren_generate_image",
+        "xingren_generate_video",
+    ]
     visible = json.dumps(safe_mcp_error("https://private.invalid/error"), ensure_ascii=False)
     assert "供应商" not in visible
     assert "private.invalid" not in visible
@@ -67,3 +73,17 @@ def test_authorization_page_escapes_client_values():
     assert "&lt;Agent&gt;" in page
     assert "<Agent>" not in page
     assert "agent.example" in page
+
+
+def test_video_artifacts_use_an_opaque_expiring_reference(tmp_path):
+    settings = replace(Settings(), runs_dir=tmp_path)
+    store = AgentAuthorizationStore(FakeRedis(), settings)
+    user = UserContext(api_key="sk-test", user_id="user-1", key_hint="agent")
+    artifact = tmp_path / "mcp" / "user-1" / "task-1" / "outputs" / "video.mp4"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"video")
+
+    token = store.issue_artifact(user, artifact)
+
+    assert store.artifact_path(token) == artifact
+    assert store.artifact_path("invalid") is None

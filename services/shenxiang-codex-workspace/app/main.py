@@ -397,6 +397,14 @@ def agent_connect_doc() -> HTMLResponse:
     return HTMLResponse(markdown_document_html("连接你的 Agent", doc_path.read_text(encoding="utf-8")))
 
 
+@app.get("/agent/artifacts/{artifact_token}")
+async def agent_artifact(artifact_token: str) -> FileResponse:
+    path = agent_authorization_store().artifact_path(artifact_token)
+    if path is None:
+        raise HTTPException(status_code=404, detail="文件不存在或已过期")
+    return FileResponse(path, filename="xingren-generated-video.mp4", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": settings.service_name, "version": settings.version}
@@ -545,7 +553,7 @@ async def agent_mcp(request: Request) -> JSONResponse:
     if method == "tools/call":
         name = str(params.get("name") or "")
         arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
-        return mcp_response(request_id, await call_agent_tool(settings, user, name, arguments))
+        return mcp_response(request_id, await call_agent_tool(settings, user, name, arguments, agent_authorization_store()))
     return mcp_failure(request_id, -32601, "不支持的 Agent 请求")
 
 
