@@ -17,6 +17,7 @@ from app.media_tools import (
     detect_media_kind,
     generate_image,
     generate_video,
+    normalize_mcp_media_request,
 )
 from app.models import WorkspaceFile, WorkspaceRunRequest
 from app.security import UserContext
@@ -569,6 +570,42 @@ def test_mcp_image_payload_forwards_nested_image_configuration():
     assert payload["responseFormat"]["image"] == {"aspectRatio": "9:16", "imageSize": "2K"}
     assert payload["generationConfig"]["imageConfig"] == {"aspectRatio": "9:16", "imageSize": "2K"}
     assert payload["extra_body"]["google"]["image_config"] == {"aspect_ratio": "9:16", "image_size": "2K"}
+
+
+def test_mcp_normalization_keeps_ecommerce_auto_output_valid():
+    request = WorkspaceRunRequest(
+        user_query="生成一张商品主图。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "image 2电商商品图快速通道(1.5K)"},
+    )
+
+    normalized = normalize_mcp_media_request(
+        request,
+        "image",
+        "image 2电商商品图快速通道(1.5K)",
+    )
+    payload = build_mcp_image_payload(normalized, "image 2电商商品图快速通道(1.5K)")
+
+    assert payload["size"] == "auto"
+    assert payload["resolution"] == "auto"
+
+
+def test_mcp_grok_payload_keeps_supported_non_pixel_aspect_ratio():
+    request = WorkspaceRunRequest(
+        user_query="生成一张超宽横版封面。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "grok-imagine-image"},
+        params={"aspect_ratio": "20:9", "resolution": "1k", "response_format": "b64_json", "n": 2},
+    )
+
+    payload = build_mcp_image_payload(request, "grok-imagine-image")
+
+    assert payload["aspect_ratio"] == "20:9"
+    assert payload["resolution"] == "1k"
+    assert payload["response_format"] == "b64_json"
+    assert "size" not in payload
 
 
 def test_mcp_image_rejects_unsupported_specification_before_network(monkeypatch):

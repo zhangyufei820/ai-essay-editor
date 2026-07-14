@@ -401,6 +401,8 @@ def _image_ratio_from_size(size: str) -> tuple[str, str]:
 def _image_options(request: WorkspaceRunRequest, capability: ImageModelCapability) -> tuple[str, str]:
     params = _media_params(request)
     explicit_size = _string_param(params, "size")
+    if capability.family == "ecommerce_image" and explicit_size.casefold() == "auto":
+        explicit_size = ""
     size_ratio, size_resolution = _image_ratio_from_size(explicit_size) if explicit_size else ("", "")
     if explicit_size and not size_ratio:
         _unsupported_media_spec()
