@@ -2739,6 +2739,19 @@ const MediaPlayground = () => {
   const visibleGroupOptions = mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
   const defaultNegativePrompt = defaultNegativePromptForMode(mode);
   const activeNegativePrompt = negativePromptEnabled ? negativePrompt.trim() : '';
+  const visibleResults = useMemo(() => {
+    const sorted = [...results].sort((left, right) => {
+      const leftTime = Number(left.createdAt || 0);
+      const rightTime = Number(right.createdAt || 0);
+      return resultSort === 'oldest' ? leftTime - rightTime : rightTime - leftTime;
+    });
+    return sorted;
+  }, [results, resultSort]);
+  const inspectorResult = useMemo(
+    () =>
+      visibleResults.find((item) => selectedResultIds.includes(item.id)) || null,
+    [selectedResultIds, visibleResults],
+  );
 
   useEffect(() => {
     if (mode !== 'video' || models.length === 0 || isVideoModelAllowed(videoModel)) return;
@@ -4040,19 +4053,6 @@ const MediaPlayground = () => {
     setResults((prev) => prev.filter((item) => item.id !== id));
     setSelectedResultIds((prev) => prev.filter((item) => item !== id));
   };
-  const visibleResults = useMemo(() => {
-    const sorted = [...results].sort((left, right) => {
-      const leftTime = Number(left.createdAt || 0);
-      const rightTime = Number(right.createdAt || 0);
-      return resultSort === 'oldest' ? leftTime - rightTime : rightTime - leftTime;
-    });
-    return sorted;
-  }, [results, resultSort]);
-  const inspectorResult = useMemo(
-    () =>
-      visibleResults.find((item) => selectedResultIds.includes(item.id)) || null,
-    [selectedResultIds, visibleResults],
-  );
   const inspectorResultPreview = inspectorResult
     ? getPreviewURLs(inspectorResult)[0] || ''
     : '';
