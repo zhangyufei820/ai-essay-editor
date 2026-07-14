@@ -450,7 +450,58 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:57321/backend/status -Body 
 3. `ANTHROPIC_MODEL` 是否是 `cc-native-sonnet-fast` 这类 Claude Code 模型。
 4. 终端重新打开后，之前的 export 会失效，需要重新设置，或写入 shell 配置文件。
 
-## 十三、安全提醒
+## 十三、在本地 Codex 里直接生成图片（推荐）
+
+适用场景：你想在自己的 Codex 里直接说“帮我生成一张图片”，并使用自己的星人图像额度。
+
+只需做一次安装：
+
+1. 打开终端。Windows 请打开 PowerShell；macOS 请打开“终端”。
+2. 从 `https://api.aiphui.top/codex/` → `第三方接入` 复制 **星人图像生成令牌**。
+3. 复制下面整条命令到终端并按回车：
+
+```bash
+npx -y @xingren/codex-image-mcp install
+```
+
+如果终端提示找不到 `npx`，请先安装 [Node.js 长期支持版](https://nodejs.org/)，安装后重新打开终端再执行这条命令。
+
+4. 终端提示时粘贴图像生成令牌并按回车。粘贴内容不会显示出来，这是正常的。
+5. 看到“安装完成”后，完全退出并重新打开 Codex。
+6. 在 Codex 对话框直接输入：
+
+```text
+帮我生成一张课程封面图：一位中学生在书桌前学习，明亮现代插画风，横版，无文字。
+```
+
+第一次生成会消耗图像额度。安装程序只把令牌保存在你的电脑上，不会把它写进项目、聊天内容或截图。
+
+### 想修改现有图片
+
+先把原图放进当前项目文件夹。然后在 Codex 里输入：
+
+```text
+修改项目里的 poster.png：把背景改成傍晚校园，人物、姿势和文字都不要变。
+```
+
+目前编辑图片只支持 PNG，单张原图和遮罩图片都不能超过 4MB。
+
+### 安装后没看到图像工具
+
+在 Codex 对话框输入 `/mcp`。如果看到 `xingren-image`，说明已连接；重新打开一个对话后再试。
+
+如果终端提示“没有找到 Codex 命令”，请先安装 Codex CLI，或者在 Codex 桌面端打开 `设置 → MCP servers → Add server`，填写：
+
+```text
+名称：xingren-image
+类型：STDIO
+命令：npx
+参数：-y @xingren/codex-image-mcp
+```
+
+然后重新打开 Codex。令牌已经在第 3 步保存好了，不需要再次粘贴。
+
+## 十四、安全提醒
 
 - 不要把 API Key 发给别人。
 - 不要把 API Key 截图发到群里。
