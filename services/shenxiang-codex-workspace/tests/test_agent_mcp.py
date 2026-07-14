@@ -115,6 +115,10 @@ def test_codex_connection_page_uses_the_public_connection_code_endpoint():
     assert "https://api.aiphui.top/codex/mcp" in page
     assert "Authorization" in page
     assert "不要填写 Bearer 令牌环境变量" in page
+    assert "复制填写值" in page
+    assert "已经显示的那一行标头" in page
+    assert "不要点击“添加标头”" in page
+    assert "Bearer ${data.connection_code}" in page
 
 
 def test_connection_code_allows_only_the_public_site_origin():
