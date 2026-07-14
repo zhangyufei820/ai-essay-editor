@@ -19,7 +19,7 @@ from app.main import (
 )
 from app.models import WorkspaceRunRequest
 from app.new_api_client import NewApiAuthError, NewApiClient
-from app.model_access import IMAGE_BENEFIT_MODEL, split_visible_models, supported_image_models, supported_video_models
+from app.model_access import IMAGE_BENEFIT_MODEL, split_visible_models
 from app.security import UserContext
 
 
@@ -94,8 +94,8 @@ def test_effective_mode_models_preserves_explicit_empty_permissions() -> None:
     assert result["codex"] == ()
     assert result["grok"] == ()
     assert result["claude"] == ("claude-opus-4-8",)
-    assert set(result["image"]) == set(supported_image_models(Settings()))
-    assert set(result["video"]) == set(supported_video_models(Settings()))
+    assert result["image"] == ()
+    assert result["video"] == ("seedance-2.0",)
 
 
 def test_resolve_mode_models_keeps_empty_visible_models_when_endpoint_succeeds() -> None:
@@ -110,8 +110,81 @@ def test_resolve_mode_models_keeps_empty_visible_models_when_endpoint_succeeds()
 
     assert result["codex"] == ()
     assert result["claude"] == ()
-    assert set(result["image"]) == set(supported_image_models(Settings()))
-    assert set(result["video"]) == set(supported_video_models(Settings()))
+    assert result["image"] == ()
+    assert result["video"] == ()
+
+
+def test_resolve_mode_models_fails_closed_for_media_when_live_directory_is_unavailable() -> None:
+    client = NewApiClient(Settings())
+
+    async def run() -> dict[str, tuple[str, ...]]:
+        client._load_visible_models = lambda *_args, **_kwargs: asyncio.sleep(0, result=None)  # type: ignore[method-assign]
+        client._has_image_benefit_access = lambda *_args, **_kwargs: asyncio.sleep(0, result=True)  # type: ignore[method-assign]
+        return await client.resolve_mode_models(
+            object(),
+            {},
+            "user-1",
+            {
+                "metadata": {
+                    "server_allowed_models_by_mode": {
+                        "codex": ["gpt-5.5"],
+                        "image": ["gpt-image-2-4K"],
+                        "video": ["seedance-2.0-dj-fast"],
+                    }
+                }
+            },
+        )  # type: ignore[arg-type]
+
+    result = asyncio.run(run())
+
+    assert result["codex"] == ("gpt-5.5",)
+    assert result["image"] == ()
+    assert result["video"] == ()
+
+
+def test_ensure_mode_tokens_skips_empty_media_profiles() -> None:
+    client = NewApiClient(Settings())
+    calls: dict[str, tuple[str, ...]] = {}
+
+    async def run() -> dict[str, str]:
+        async def fake_list_tokens(*_args, **_kwargs):
+            return []
+
+        async def fake_ensure_named_token(
+            _client,
+            _user_id,
+            _headers,
+            _user,
+            _tokens,
+            token_name,
+            models,
+            *,
+            token_group=None,
+        ):
+            calls[token_name] = models
+            return f"sk-{token_name}"
+
+        client._list_tokens = fake_list_tokens  # type: ignore[method-assign]
+        client._ensure_named_token = fake_ensure_named_token  # type: ignore[method-assign]
+        return await client.ensure_mode_tokens(
+            object(),  # type: ignore[arg-type]
+            "user-1",
+            {},
+            {"group": "default"},
+            {
+                "codex": ("gpt-5.5",),
+                "claude": ("claude-opus-4-8",),
+                "image": (),
+                "video": (),
+            },
+        )
+
+    result = asyncio.run(run())
+
+    assert Settings().image_token_name not in calls
+    assert Settings().video_token_name not in calls
+    assert "image" not in result
+    assert "video" not in result
 
 
 def test_effective_mode_models_derives_grok_credential_profile_without_hiding_text_model() -> None:

@@ -16,6 +16,7 @@ from uuid import uuid4
 import httpx
 
 from app.config import Settings
+from app.media_catalog import public_request_model_name
 from app.model_access import mode_models_payload_from_metadata
 from app.models import WorkspaceRunRequest
 from app.security import UserContext
@@ -723,6 +724,7 @@ async def generate_image(
             value = request.params.get(key)
             if value is not None and str(value):
                 payload[key] = value
+    payload["model"] = public_request_model_name(model, "image")
     image_inputs, mask_input = split_image_inputs_from_files(request)
     endpoint = f"{settings.new_api_base_url}/images/generations"
     if mask_input and not image_inputs:

@@ -10,11 +10,12 @@ class PublicMediaModel:
     model: str
     price: str
     mode: str
+    request_name: str = ""
 
 
 PUBLIC_MEDIA_MODELS = (
     PublicMediaModel("GPT Image 2", "gpt-image-2-4K", "¥0.108/张", "image"),
-    PublicMediaModel("特价 image-2", "geek2api-image-2", "1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10/张", "image"),
+    PublicMediaModel("特价 image-2", "geek2api-image-2", "1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10/张", "image", "特价 image-2"),
     PublicMediaModel("Banana 2", "banana-2", "¥0.162/张", "image"),
     PublicMediaModel("Gemini 3 Pro Image", "gemini-3-pro-image-preview", "¥0.238/张", "image"),
     PublicMediaModel("image 2电商商品图快速通道(1.5K)", "image 2电商商品图快速通道(1.5K)", "¥0.055/张", "image"),
@@ -41,6 +42,14 @@ def resolve_public_media_model(name: str, mode: str) -> str | None:
         if item.name == selected:
             return item.model
     return None
+
+
+def public_request_model_name(model: str, mode: str) -> str:
+    selected = str(model or "").strip()
+    for item in public_models_for_mode(mode):
+        if item.model == selected:
+            return item.request_name or item.model
+    return selected
 
 
 def canonical_allowed_media_models(mode: str, allowed_models: Iterable[str]) -> tuple[str, ...]:

@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 from fastapi import HTTPException
 
-from app.agent_mcp import AgentAuthorizationStore, _generate_image, _is_safe_redirect_uri, _pkce_valid, authorization_page, codex_connection_page, image_size_for_options, media_models_message, mcp_tools, resolved_media_model, safe_mcp_error
+from app.agent_mcp import AgentAuthorizationStore, _generate_image, _generate_video, _is_safe_redirect_uri, _pkce_valid, authorization_page, call_agent_tool, codex_connection_page, live_media_models, media_models_message, mcp_tools, resolved_media_model, safe_mcp_error
 from app.media_catalog import canonical_allowed_media_models
 from app.config import Settings
 from app import main
@@ -71,6 +71,10 @@ def test_pkce_and_public_tool_contract_are_strict():
     visible = json.dumps(safe_mcp_error("https://private.invalid/error"), ensure_ascii=False)
     assert "供应商" not in visible
     assert "private.invalid" not in visible
+    image_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_generate_image")
+    video_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_generate_video")
+    assert {"aspect_ratio", "resolution", "quality", "output_format", "background"} <= set(image_tool["inputSchema"]["properties"])
+    assert {"duration_seconds", "aspect_ratio", "resolution"} <= set(video_tool["inputSchema"]["properties"])
 
 
 def test_media_model_list_uses_website_names_and_prices_without_internal_names():
@@ -82,6 +86,9 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
     assert "GPT Image 2（¥0.108/张）" in message
     assert "特价 image-2（1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10/张）" in message
     assert "Seedance 2.0 DJ Fast（¥0.162/秒）" in message
+    assert "张数：1–4" in message
+    assert "质量：auto、low、medium、high" in message
+    assert "可选：随机种子、水印" in message
     assert "geek2api" not in message
 
 
@@ -93,11 +100,6 @@ def test_media_model_selection_accepts_only_public_website_names():
 
 def test_public_media_permission_name_is_normalized_for_generation():
     assert canonical_allowed_media_models("image", ("特价 image-2",)) == ("geek2api-image-2",)
-
-
-def test_image_size_options_support_explicit_vertical_2k_output():
-    assert image_size_for_options("", "2K", "9:16") == "1152x2048"
-    assert image_size_for_options("1024x1536", "4K", "9:16") == "1024x1536"
 
 
 def test_public_model_permission_generates_with_its_canonical_model_and_size(monkeypatch, tmp_path):
@@ -113,11 +115,16 @@ def test_public_model_permission_generates_with_its_canonical_model_and_size(mon
         def issue_artifact(self, _user, _path):
             return "artifact-token"
 
+    async def fake_live_media_models(_settings, api_key, mode):
+        captured["probe"] = (api_key, mode)
+        return ("geek2api-image-2",)
+
     monkeypatch.setattr("app.agent_mcp.generate_media", fake_generate_media)
+    monkeypatch.setattr("app.agent_mcp.live_media_models", fake_live_media_models)
     response = asyncio.run(
         _generate_image(
             replace(Settings(), runs_dir=tmp_path),
-            UserContext(api_key="sk-test", user_id="user-1", key_hint="agent", allowed_models_by_mode={"image": ("特价 image-2",)}),
+            UserContext(api_key="sk-text", user_id="user-1", key_hint="agent", api_keys={"codex": "sk-text", "image": "sk-image"}, allowed_models_by_mode={"image": ("特价 image-2",)}),
             "生成一张竖版海报",
             "",
             "特价 image-2",
@@ -131,7 +138,134 @@ def test_public_model_permission_generates_with_its_canonical_model_and_size(mon
     assert request.model_roles.image_generation == "geek2api-image-2"
     assert request.metadata["server_allowed_models_by_mode"]["image"] == ["geek2api-image-2"]
     assert request.params["size"] == "1152x2048"
+    assert captured["probe"] == ("sk-image", "image")
     assert response["content"][0]["type"] == "resource_link"
+    assert any("![生成的图片]" in item.get("text", "") for item in response["content"])
+
+
+def test_media_generation_never_falls_back_to_the_text_key(monkeypatch, tmp_path):
+    called = False
+
+    async def fake_generate_media(*_args, **_kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("app.agent_mcp.generate_media", fake_generate_media)
+    response = asyncio.run(
+        _generate_image(
+            replace(Settings(), runs_dir=tmp_path),
+            UserContext(api_key="sk-text", user_id="user-1", key_hint="agent", api_keys={"codex": "sk-text"}),
+            "生成一张海报",
+            "",
+            "GPT Image 2",
+            object(),
+        )
+    )
+
+    assert response["isError"] is True
+    assert called is False
+
+
+def test_live_media_models_queries_the_dedicated_key_and_filters_to_public_catalog(monkeypatch):
+    calls = []
+
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return {"data": [{"id": "gpt-image-2-4K"}, {"id": "not-a-public-media-model"}]}
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url, **kwargs):
+            calls.append((url, kwargs))
+            return Response()
+
+    monkeypatch.setattr("app.agent_mcp.httpx.AsyncClient", Client)
+
+    models = asyncio.run(live_media_models(Settings(new_api_base_url="https://api.example.test/v1"), "sk-image", "image"))
+
+    assert models == ("gpt-image-2-4K",)
+    assert calls == [
+        (
+            "https://api.example.test/v1/models",
+            {"headers": {"Authorization": "Bearer sk-image", "Content-Type": "application/json"}},
+        )
+    ]
+
+
+def test_media_list_uses_the_live_directory_instead_of_saved_model_permissions(monkeypatch):
+    async def fake_live_media_models(_settings, api_key, mode):
+        assert api_key == ("sk-image" if mode == "image" else "sk-video")
+        return ("gpt-image-2-4K",) if mode == "image" else ()
+
+    monkeypatch.setattr("app.agent_mcp.live_media_models", fake_live_media_models)
+    response = asyncio.run(
+        call_agent_tool(
+            Settings(),
+            UserContext(
+                api_key="sk-text",
+                user_id="user-1",
+                key_hint="agent",
+                api_keys={"codex": "sk-text", "image": "sk-image", "video": "sk-video"},
+                allowed_models_by_mode={"image": ("特价 image-2",), "video": ("Seedance 2.0 DJ Fast",)},
+            ),
+            "xingren_list_media_models",
+            {},
+            object(),
+        )
+    )
+
+    text = response["content"][0]["text"]
+    assert "GPT Image 2" in text
+    assert "特价 image-2" not in text
+    assert "可用视频模型：\n暂无" in text
+
+
+def test_video_generation_forwards_model_specific_options_and_a_preview_link(monkeypatch, tmp_path):
+    captured = {}
+
+    async def fake_live_media_models(_settings, api_key, mode):
+        captured["probe"] = (api_key, mode)
+        return ("seedance-2.0-cl-mini",)
+
+    async def fake_generate_media(_settings, request, user, task, _media_type):
+        captured["request"] = request
+        captured["key"] = user.api_key
+        output = tmp_path / "mcp" / "user-1" / task["task_id"] / "outputs"
+        output.mkdir(parents=True)
+        (output / "video.mp4").write_bytes(b"video")
+
+    class FakeStore:
+        def issue_artifact(self, _user, _path):
+            return "artifact-token"
+
+    monkeypatch.setattr("app.agent_mcp.live_media_models", fake_live_media_models)
+    monkeypatch.setattr("app.agent_mcp.generate_media", fake_generate_media)
+    response = asyncio.run(
+        _generate_video(
+            replace(Settings(), runs_dir=tmp_path),
+            UserContext(api_key="sk-text", user_id="user-1", key_hint="agent", api_keys={"codex": "sk-text", "video": "sk-video"}),
+            "生成一段竖版短片",
+            {"model": "Seedance 2.0 CL Mini", "duration_seconds": 8, "aspect_ratio": "9:16", "resolution": "480p"},
+            FakeStore(),
+        )
+    )
+
+    assert captured["probe"] == ("sk-video", "video")
+    assert captured["key"] == "sk-video"
+    assert captured["request"].params["duration_seconds"] == 8
+    assert captured["request"].params["aspect_ratio"] == "9:16"
+    assert captured["request"].params["resolution"] == "480p"
+    assert any("[预览或下载生成的视频]" in item.get("text", "") for item in response["content"])
 
 
 def test_authorization_page_escapes_client_values():
@@ -185,6 +319,20 @@ def test_codex_connection_code_is_rotated_and_revocable():
 
     store.revoke_codex_connection_code(user)
     assert store.access_user(second_code) is None
+
+
+def test_codex_connection_code_does_not_promote_the_text_key_to_media_access():
+    store = AgentAuthorizationStore(FakeRedis(), Settings())
+    user = UserContext(
+        api_key="sk-text",
+        user_id="user-1",
+        key_hint="agent",
+        api_keys={"codex": "sk-text", "image": "sk-text", "video": "sk-text"},
+    )
+
+    code = store.issue_codex_connection_code(user)
+
+    assert store.access_user(code).api_keys == {"codex": "sk-text"}
 
 
 def test_codex_connection_page_uses_the_public_connection_code_endpoint():

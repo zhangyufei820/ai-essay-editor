@@ -198,12 +198,13 @@ def test_image_edit_does_not_fallback_to_grok_on_image2_failure(monkeypatch):
     assert FakeAsyncClient.calls[0]["kwargs"]["data"]["model"] == "gpt-image-2-4K"
 
 
-def test_geek2api_image2_generation_uses_requested_model_and_size(monkeypatch):
+def test_discount_image2_agent_generation_uses_public_model_alias_and_requested_size(monkeypatch):
     FakeImageSuccessAsyncClient.calls = []
     monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeImageSuccessAsyncClient)
 
     request = WorkspaceRunRequest(
         user_query="生成图片：一个白底红色立方体。",
+        task_type="agent_image",
         model_role="image_generation",
         model_config={"image_generation": "geek2api-image-2"},
         params={"n": 1, "size": "1024x1024", "quality": "low"},
@@ -221,7 +222,7 @@ def test_geek2api_image2_generation_uses_requested_model_and_size(monkeypatch):
     call = FakeImageSuccessAsyncClient.calls[0]
     payload = call["kwargs"]["json"]
     assert call["url"] == "https://api.example.test/v1/images/generations"
-    assert payload["model"] == "geek2api-image-2"
+    assert payload["model"] == "特价 image-2"
     assert payload["size"] == "1024x1024"
     assert payload["quality"] == "low"
     assert result.urls == ["https://cdn.test/geek2api-image.png"]

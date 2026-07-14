@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -17,7 +18,13 @@ from redis import Redis
 
 from app.config import Settings, secret_values_for_redaction
 from app.media_catalog import available_public_models, canonical_allowed_media_models, resolve_public_media_model
-from app.media_tools import MediaGenerationError, generate_media
+from app.media_tools import (
+    IMAGE_MODEL_CAPABILITIES,
+    VIDEO_MODEL_CAPABILITIES,
+    MediaGenerationError,
+    generate_media,
+    normalize_mcp_media_request,
+)
 from app.models import WorkspaceRunRequest
 from app.security import UserContext, public_error_message, redact
 
@@ -25,13 +32,6 @@ logger = logging.getLogger(__name__)
 
 MCP_SCOPE = "xingren.agent"
 MCP_PROTOCOL_VERSION = "2025-03-26"
-
-IMAGE_SIZE_BY_RESOLUTION = {
-    "1K": {"1:1": "1024x1024", "9:16": "864x1536", "16:9": "1536x864"},
-    "2K": {"1:1": "2048x2048", "9:16": "1152x2048", "16:9": "2048x1152"},
-    "4K": {"1:1": "2880x2880", "9:16": "2160x3840", "16:9": "3840x2160"},
-}
-
 
 def resolved_media_model(model: str, mode: str) -> str | None:
     return resolve_public_media_model(model, mode)
@@ -42,7 +42,7 @@ def media_models_message(image_models: tuple[str, ...], video_models: tuple[str,
         visible = available_public_models(mode, models)
         if not visible:
             return "暂无"
-        return "\n".join(f"- {item.name}（{item.price}）" for item in visible)
+        return "\n".join(f"- {item.name}（{item.price}）{media_model_options(item.model, mode)}" for item in visible)
 
     return (
         f"可用图像模型：\n{render('image', image_models)}\n\n"
@@ -51,16 +51,79 @@ def media_models_message(image_models: tuple[str, ...], video_models: tuple[str,
     )
 
 
-def image_size_for_options(size: str, resolution: str, aspect_ratio: str) -> str:
-    explicit_size = str(size or "").strip()
-    if explicit_size:
-        return explicit_size
-    selected_resolution = str(resolution or "1K").strip().upper()
-    selected_ratio = str(aspect_ratio or "1:1").strip()
-    return IMAGE_SIZE_BY_RESOLUTION.get(selected_resolution, IMAGE_SIZE_BY_RESOLUTION["1K"]).get(
-        selected_ratio,
-        IMAGE_SIZE_BY_RESOLUTION["1K"]["1:1"],
-    )
+def media_model_options(model: str, mode: str) -> str:
+    if mode == "image":
+        capability = IMAGE_MODEL_CAPABILITIES.get(model)
+        if capability is None:
+            return ""
+        options = [
+            f"比例：{'、'.join(capability.aspect_ratios)}",
+            f"清晰度：{'、'.join(capability.resolutions)}",
+            f"张数：1–{capability.max_count}",
+        ]
+        if capability.qualities:
+            options.append(f"质量：{'、'.join(capability.qualities)}")
+        if capability.output_formats:
+            options.append(f"格式：{'、'.join(capability.output_formats)}")
+        if capability.backgrounds:
+            options.append(f"背景：{'、'.join(capability.backgrounds)}")
+        if capability.allow_negative_prompt:
+            options.append("支持负面提示词")
+        return "；" + "；".join(options)
+    capability = VIDEO_MODEL_CAPABILITIES.get(model)
+    if capability is None:
+        return ""
+    options = [
+        f"时长：{'、'.join(map(str, capability.durations))} 秒",
+        f"比例：{'、'.join(capability.aspect_ratios)}",
+        f"清晰度：{'、'.join(capability.resolutions)}",
+    ]
+    optional = []
+    if capability.allow_seed:
+        optional.append("随机种子")
+    if capability.allow_watermark:
+        optional.append("水印")
+    if optional:
+        options.append(f"可选：{'、'.join(optional)}")
+    return "；" + "；".join(options)
+
+
+def media_api_key(user: UserContext, mode: str) -> str:
+    return str((user.api_keys or {}).get(mode) or "").strip()
+
+
+async def live_media_models(settings: Settings, api_key: str, mode: str) -> tuple[str, ...]:
+    if not api_key or mode not in {"image", "video"}:
+        return ()
+    timeout = httpx.Timeout(12.0, connect=5.0, read=10.0, write=5.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(
+                f"{settings.new_api_base_url.rstrip('/')}/models",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+    except httpx.HTTPError as exc:
+        logger.warning("media model directory unavailable mode=%s reason=%s", mode, type(exc).__name__)
+        return ()
+    if response.status_code != status.HTTP_200_OK:
+        logger.warning("media model directory unavailable mode=%s", mode)
+        return ()
+    try:
+        payload = response.json()
+    except ValueError:
+        return ()
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        return ()
+    models: list[str] = []
+    for item in data:
+        if isinstance(item, dict):
+            value = item.get("id")
+        else:
+            value = item
+        if isinstance(value, str) and value.strip():
+            models.append(value.strip())
+    return canonical_allowed_media_models(mode, models)
 
 
 def public_base(settings: Settings) -> str:
@@ -221,25 +284,31 @@ class AgentAuthorizationStore:
         if not user:
             return None
         allowed = user.get("allowed_models_by_mode") if isinstance(user.get("allowed_models_by_mode"), dict) else {}
+        api_key = str(user.get("api_key") or "")
+        api_keys = {str(key): str(value) for key, value in (user.get("api_keys") or {}).items() if value}
+        for mode in ("image", "video"):
+            if api_keys.get(mode) == api_key:
+                api_keys.pop(mode, None)
         return UserContext(
-            api_key=str(user.get("api_key") or ""),
+            api_key=api_key,
             user_id=str(user.get("user_id") or ""),
             key_hint=str(user.get("key_hint") or "agent"),
             username=str(user.get("username") or ""),
-            api_keys={str(key): str(value) for key, value in (user.get("api_keys") or {}).items() if value},
+            api_keys=api_keys,
             allowed_models_by_mode={str(key): tuple(map(str, value)) for key, value in allowed.items() if isinstance(value, list)},
         )
 
     @staticmethod
     def _user_record(user: UserContext) -> dict[str, Any]:
+        api_keys = user.api_keys or {"codex": user.api_key}
         return {
             "user_id": user.user_id,
             "key_hint": user.key_hint,
             "username": user.username,
             "api_keys": {
                 mode: key
-                for mode, key in (user.api_keys or {"codex": user.api_key, "image": user.api_key}).items()
-                if mode in {"codex", "image", "video"} and key
+                for mode, key in api_keys.items()
+                if mode in {"codex", "image", "video"} and key and (mode not in {"image", "video"} or key != user.api_key)
             },
             "api_key": user.api_key,
             "allowed_models_by_mode": {key: list(value) for key, value in (user.allowed_models_by_mode or {}).items()},
@@ -331,8 +400,8 @@ def mcp_tools() -> list[dict[str, Any]]:
         {"name": "xingren_connection_status", "description": "检查星人工具是否已经连接。用户第一次使用或说连接不上时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
         {"name": "xingren_list_media_models", "description": "列出当前账户可用的图像和视频模型，以及每个模型的费用。用户问能用哪些模型、想先选模型或第一次生成图片视频时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
         {"name": "xingren_ask", "description": "向星人助手提问、写作或分析。仅在用户明确需要文字结果时调用。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "用户的问题或任务"}}, "required": ["prompt"], "additionalProperties": False}},
-        {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。先用 xingren_list_media_models 查看模型和费用；model 只能填写列表中的完整展示名称，留空则自动选择。需要竖版或高清时，填写 aspect_ratio 和 resolution；例如 9:16 和 2K。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "model": {"type": "string", "description": "可选的图像模型展示名称"}, "aspect_ratio": {"type": "string", "enum": ["1:1", "9:16", "16:9"], "description": "画面比例，默认 1:1"}, "resolution": {"type": "string", "enum": ["1K", "2K", "4K"], "description": "清晰度，默认 1K"}, "size": {"type": "string", "enum": ["960x960", "1024x1024", "1536x1024", "1024x1536"], "description": "自定义像素尺寸；填写后优先使用该尺寸"}}, "required": ["prompt"], "additionalProperties": False}},
-        {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。先用 xingren_list_media_models 查看模型和费用；model 只能填写列表中的完整展示名称，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "model": {"type": "string", "description": "可选的视频模型展示名称"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15}}, "required": ["prompt"], "additionalProperties": False}},
+        {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。先用 xingren_list_media_models 查看模型、费用和可选规格；model 只能填写列表中的完整展示名称，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "model": {"type": "string", "description": "可选的图像模型展示名称"}, "aspect_ratio": {"type": "string", "description": "画面比例，必须使用所选模型列表中标注的值"}, "resolution": {"type": "string", "description": "清晰度，必须使用所选模型列表中标注的值"}, "size": {"type": "string", "description": "可选像素尺寸；仅在所选模型支持时填写"}, "n": {"type": "integer", "minimum": 1, "maximum": 10, "description": "生成张数，默认 1"}, "quality": {"type": "string", "description": "可选质量，必须使用所选模型列表中标注的值"}, "output_format": {"type": "string", "description": "可选输出格式"}, "background": {"type": "string", "description": "可选背景模式"}, "negative_prompt": {"type": "string", "description": "可选负面提示词；仅在模型支持时填写"}}, "required": ["prompt"], "additionalProperties": False}},
+        {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。先用 xingren_list_media_models 查看模型、费用和可选规格；model 只能填写列表中的完整展示名称，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "model": {"type": "string", "description": "可选的视频模型展示名称"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15, "description": "时长，必须使用所选模型列表中标注的值"}, "aspect_ratio": {"type": "string", "description": "画面比例，必须使用所选模型列表中标注的值"}, "resolution": {"type": "string", "description": "清晰度，必须使用所选模型列表中标注的值"}, "seed": {"type": "integer", "minimum": 1, "description": "可选随机种子；仅在模型支持时填写"}, "watermark": {"type": "boolean", "description": "可选水印开关；仅在模型支持时填写"}}, "required": ["prompt"], "additionalProperties": False}},
     ]
 
 
@@ -344,10 +413,12 @@ async def call_agent_tool(
     authorization_store: AgentAuthorizationStore,
 ) -> dict[str, Any]:
     if name == "xingren_connection_status":
-        return {"content": [{"type": "text", "text": "已连接。文本、图片和视频工具都可以直接使用。"}]}
+        return {"content": [{"type": "text", "text": "已连接。使用图片或视频前，我会先检查当前可用模型。"}]}
     if name == "xingren_list_media_models":
-        image_models = tuple((user.allowed_models_by_mode or {}).get("image") or settings.image_allowed_models)
-        video_models = tuple((user.allowed_models_by_mode or {}).get("video") or settings.video_allowed_models)
+        image_models, video_models = await asyncio.gather(
+            live_media_models(settings, media_api_key(user, "image"), "image"),
+            live_media_models(settings, media_api_key(user, "video"), "video"),
+        )
         return {"content": [{"type": "text", "text": media_models_message(image_models, video_models)}]}
     prompt = str(arguments.get("prompt") or "").strip()
     if not prompt or len(prompt) > 8000:
@@ -356,7 +427,21 @@ async def call_agent_tool(
         if name == "xingren_ask":
             return await _ask(settings, user, prompt)
         if name == "xingren_generate_image":
-            return await _generate_image(settings, user, prompt, str(arguments.get("size") or ""), str(arguments.get("model") or ""), authorization_store, resolution=str(arguments.get("resolution") or ""), aspect_ratio=str(arguments.get("aspect_ratio") or ""))
+            return await _generate_image(
+                settings,
+                user,
+                prompt,
+                str(arguments.get("size") or ""),
+                str(arguments.get("model") or ""),
+                authorization_store,
+                resolution=str(arguments.get("resolution") or ""),
+                aspect_ratio=str(arguments.get("aspect_ratio") or ""),
+                quality=str(arguments.get("quality") or ""),
+                output_format=str(arguments.get("output_format") or ""),
+                background=str(arguments.get("background") or ""),
+                negative_prompt=str(arguments.get("negative_prompt") or ""),
+                count=arguments.get("n"),
+            )
         if name == "xingren_generate_video":
             return await _generate_video(settings, user, prompt, arguments, authorization_store)
         return safe_mcp_error("该工具暂不可用。")
@@ -393,16 +478,44 @@ async def _generate_image(
     *,
     resolution: str = "",
     aspect_ratio: str = "",
+    quality: str = "",
+    output_format: str = "",
+    background: str = "",
+    negative_prompt: str = "",
+    count: Any = None,
 ) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
-    configured_models = tuple((user.allowed_models_by_mode or {}).get("image") or settings.image_allowed_models)
-    allowed_models = canonical_allowed_media_models("image", configured_models)
+    image_key = media_api_key(user, "image")
+    if not image_key:
+        return safe_mcp_error("当前账号没有可用的图像模型权限。请刷新模型列表后重试。")
+    allowed_models = await live_media_models(settings, image_key, "image")
+    if not allowed_models:
+        return safe_mcp_error("当前没有可用的图像模型。请刷新模型列表后重试。")
     resolved_model = resolved_media_model(model, "image")
     if resolved_model is None or (resolved_model and resolved_model not in allowed_models):
         return safe_mcp_error("所选图像模型当前不可用。请先查看可用模型后再选择。")
-    model = resolved_model
-    request = WorkspaceRunRequest(user_query=prompt, model_role="image_generation", task_type="agent_image", model_config={"image_generation": model}, params={"size": image_size_for_options(size, resolution, aspect_ratio), "n": 1}, metadata={"server_allowed_models_by_mode": {"image": list(allowed_models)}})
-    image_key = (user.api_keys or {}).get("image") or user.api_key
+    model = resolved_model or allowed_models[0]
+    params: dict[str, Any] = {"n": 1 if count is None else count}
+    for key, value in {
+        "size": size,
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "quality": quality,
+        "output_format": output_format,
+        "background": background,
+        "negative_prompt": negative_prompt,
+    }.items():
+        if value:
+            params[key] = value
+    request = WorkspaceRunRequest(
+        user_query=prompt,
+        model_role="image_generation",
+        task_type="agent_image",
+        model_config={"image_generation": model},
+        params=params,
+        metadata={"server_allowed_models_by_mode": {"image": list(allowed_models)}},
+    )
+    request = normalize_mcp_media_request(request, "image", model)
     image_user = UserContext(api_key=image_key, user_id=user.user_id, key_hint=user.key_hint, allowed_models_by_mode=user.allowed_models_by_mode)
     await generate_media(settings, request, image_user, {"task_id": task_id, "workspace": str(settings.runs_dir / "mcp" / user.user_id / task_id)}, "image")
     output_dir = settings.runs_dir / "mcp" / user.user_id / task_id / "outputs"
@@ -414,7 +527,14 @@ async def _generate_image(
         return safe_mcp_error("图片结果无效，请稍后重试。")
     mime_type = "image/png" if image.suffix.lower() == ".png" else "image/jpeg" if image.suffix.lower() in {".jpg", ".jpeg"} else "image/webp"
     artifact_token = authorization_store.issue_artifact(user, image)
-    return {"content": [{"type": "resource_link", "uri": f"{public_base(settings)}/agent/artifacts/{artifact_token}", "name": "生成的图片", "mimeType": mime_type}, {"type": "text", "text": "图片已生成。请打开生成的图片进行预览或下载。"}]}
+    artifact_uri = f"{public_base(settings)}/agent/artifacts/{artifact_token}"
+    return {
+        "content": [
+            {"type": "resource_link", "uri": artifact_uri, "name": "生成的图片", "mimeType": mime_type},
+            {"type": "text", "text": "图片已生成。请打开生成的图片进行预览或下载。"},
+            {"type": "text", "text": f"![生成的图片]({artifact_uri})"},
+        ]
+    }
 
 
 async def _generate_video(
@@ -425,20 +545,29 @@ async def _generate_video(
     authorization_store: AgentAuthorizationStore,
 ) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
+    video_key = media_api_key(user, "video")
+    if not video_key:
+        return safe_mcp_error("当前账号没有可用的视频模型权限。请刷新模型列表后重试。")
+    allowed_models = await live_media_models(settings, video_key, "video")
+    if not allowed_models:
+        return safe_mcp_error("当前没有可用的视频模型。请刷新模型列表后重试。")
     model = resolved_media_model(str(arguments.get("model") or ""), "video")
-    configured_models = tuple((user.allowed_models_by_mode or {}).get("video") or settings.video_allowed_models)
-    allowed_models = canonical_allowed_media_models("video", configured_models)
     if model is None or (model and model not in allowed_models):
         return safe_mcp_error("所选视频模型当前不可用。请先查看可用模型后再选择。")
+    model = model or allowed_models[0]
+    params: dict[str, Any] = {}
+    for key in ("duration_seconds", "aspect_ratio", "resolution", "seed", "watermark"):
+        if key in arguments and arguments[key] is not None:
+            params[key] = arguments[key]
     request = WorkspaceRunRequest(
         user_query=prompt,
         model_role="video_generation",
         task_type="agent_video",
         model_config={"video_generation": model},
-        params={"duration_seconds": arguments.get("duration_seconds") or 8},
+        params=params,
         metadata={"server_allowed_models_by_mode": {"video": list(allowed_models)}},
     )
-    video_key = (user.api_keys or {}).get("video") or user.api_key
+    request = normalize_mcp_media_request(request, "video", model)
     video_user = UserContext(api_key=video_key, user_id=user.user_id, key_hint=user.key_hint, allowed_models_by_mode=user.allowed_models_by_mode)
     await generate_media(settings, request, video_user, {"task_id": task_id, "workspace": str(settings.runs_dir / "mcp" / user.user_id / task_id)}, "video")
     output_dir = settings.runs_dir / "mcp" / user.user_id / task_id / "outputs"
@@ -446,10 +575,12 @@ async def _generate_video(
     if not files:
         return safe_mcp_error("视频已生成，但暂时无法安全交付，请稍后重试。")
     artifact_token = authorization_store.issue_artifact(user, files[0])
+    artifact_uri = f"{public_base(settings)}/agent/artifacts/{artifact_token}"
     return {
         "content": [
-            {"type": "resource_link", "uri": f"{public_base(settings)}/agent/artifacts/{artifact_token}", "name": "生成的视频", "mimeType": "video/mp4"},
+            {"type": "resource_link", "uri": artifact_uri, "name": "生成的视频", "mimeType": "video/mp4"},
             {"type": "text", "text": "视频已生成。请打开生成的视频进行预览或下载。"},
+            {"type": "text", "text": f"[预览或下载生成的视频]({artifact_uri})"},
         ]
     }
 

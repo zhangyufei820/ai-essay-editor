@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
@@ -121,7 +121,11 @@ func DashboardListVisibleModels(c *gin.Context) {
 	})
 }
 
-func ListVisibleModels(c *gin.Context, modelType int) {
+type visibleModelSet struct {
+	modelNames []string
+}
+
+func acceptsUnsetRatioModel(c *gin.Context) bool {
 	acceptUnsetRatioModel := operation_setting.SelfUseModeEnabled
 	if !acceptUnsetRatioModel {
 		userId := c.GetInt("id")
@@ -132,9 +136,80 @@ func ListVisibleModels(c *gin.Context, modelType int) {
 			}
 		}
 	}
+	return acceptUnsetRatioModel
+}
 
-	userModelNames := make([]string, 0)
+func enabledModelNamesForGroups(ownerGroups []string) []string {
+	modelNames := make([]string, 0)
+	for _, group := range ownerGroups {
+		for _, modelName := range model.GetGroupEnabledModels(group) {
+			if !common.StringsContains(modelNames, modelName) {
+				modelNames = append(modelNames, modelName)
+			}
+		}
+	}
+	return modelNames
+}
+
+func tokenAllowsVisibleModel(tokenModelLimit map[string]bool, modelName string) bool {
+	publicModelName := service.PublicImageModelDisplayName(modelName, "")
+	if tokenModelLimit[ratio_setting.FormatMatchingModelName(publicModelName)] {
+		return true
+	}
+	if !service.IsInternalImageModelAllowedByPublicAlias(modelName, publicModelName) {
+		return false
+	}
+	return tokenModelLimit[ratio_setting.FormatMatchingModelName(modelName)]
+}
+
+func visibleModelsForToken(c *gin.Context) (visibleModelSet, error) {
 	groups, err := getModelListGroups(c)
+	if err != nil {
+		return visibleModelSet{}, err
+	}
+
+	ownerGroups := groups.ownerGroups
+	modelNames := enabledModelNamesForGroups(ownerGroups)
+	rawOwnerByModel := getPreferredModelOwners(modelNames, ownerGroups)
+	routableModelNames := make([]string, 0, len(modelNames))
+	for _, modelName := range modelNames {
+		if _, routable := rawOwnerByModel[modelName]; routable {
+			routableModelNames = append(routableModelNames, modelName)
+		}
+	}
+
+	if common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled) {
+		tokenModelLimit := map[string]bool{}
+		if value, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit); ok {
+			if limits, ok := value.(map[string]bool); ok {
+				tokenModelLimit = limits
+			}
+		}
+		limitedModelNames := make([]string, 0, len(routableModelNames))
+		for _, modelName := range routableModelNames {
+			if tokenAllowsVisibleModel(tokenModelLimit, modelName) {
+				limitedModelNames = append(limitedModelNames, modelName)
+			}
+		}
+		routableModelNames = limitedModelNames
+	}
+
+	acceptUnsetRatioModel := acceptsUnsetRatioModel(c)
+	visibleRawModelNames := make([]string, 0, len(routableModelNames))
+	for _, modelName := range routableModelNames {
+		if !acceptUnsetRatioModel && !helper.HasModelBillingConfig(modelName) {
+			continue
+		}
+		visibleRawModelNames = append(visibleRawModelNames, modelName)
+	}
+
+	return visibleModelSet{
+		modelNames: filterUserVisibleModelNames(c.GetInt("id"), visibleRawModelNames),
+	}, nil
+}
+
+func ListVisibleModels(c *gin.Context, modelType int) {
+	visibleModels, err := visibleModelsForToken(c)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -142,50 +217,10 @@ func ListVisibleModels(c *gin.Context, modelType int) {
 		})
 		return
 	}
-	ownerGroups := groups.ownerGroups
-	modelLimitEnable := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
-	if modelLimitEnable {
-		s, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
-		tokenModelLimit := map[string]bool{}
-		if ok {
-			tokenModelLimit = s.(map[string]bool)
-		}
-		for allowModel := range tokenModelLimit {
-			if !acceptUnsetRatioModel && !helper.HasModelBillingConfig(allowModel) {
-				continue
-			}
-			userModelNames = append(userModelNames, allowModel)
-		}
-	} else {
-		var models []string
-		if groups.tokenGroup == "auto" {
-			for _, autoGroup := range ownerGroups {
-				groupModels := model.GetGroupEnabledModels(autoGroup)
-				for _, g := range groupModels {
-					if !common.StringsContains(models, g) {
-						models = append(models, g)
-					}
-				}
-			}
-		} else if len(ownerGroups) > 0 {
-			models = model.GetGroupEnabledModels(ownerGroups[0])
-		}
-		for _, modelName := range models {
-			if !acceptUnsetRatioModel && !helper.HasModelBillingConfig(modelName) {
-				continue
-			}
-			userModelNames = append(userModelNames, modelName)
-		}
-	}
 
-	userModelNames = filterUserVisibleModelNames(c.GetInt("id"), userModelNames)
-	ownerByModel := map[string]string{}
-	if len(ownerGroups) > 0 && len(userModelNames) > 0 {
-		ownerByModel = getPreferredModelOwners(userModelNames, ownerGroups)
-	}
-	userOpenAiModels := make([]dto.OpenAIModels, 0, len(userModelNames))
-	for _, modelName := range userModelNames {
-		userOpenAiModels = append(userOpenAiModels, buildOpenAIModel(modelName, ownerByModel))
+	userOpenAiModels := make([]dto.OpenAIModels, 0, len(visibleModels.modelNames))
+	for _, modelName := range visibleModels.modelNames {
+		userOpenAiModels = append(userOpenAiModels, buildOpenAIModel(modelName, nil))
 	}
 
 	switch modelType {
@@ -232,19 +267,40 @@ func ListVisibleModels(c *gin.Context, modelType int) {
 	}
 }
 
-func RetrieveVisibleModel(c *gin.Context, modelType int) {
-	modelId := c.Param("model")
-	if isHiddenUserVisibleModelForUser(c.GetInt("id"), modelId) {
-		openAIError := types.OpenAIError{
-			Message: fmt.Sprintf("The model '%s' does not exist", modelId),
+func writeModelNotFound(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"error": types.OpenAIError{
+			Message: "The requested model does not exist",
 			Type:    "invalid_request_error",
 			Param:   "model",
 			Code:    "model_not_found",
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"error": openAIError,
-		})
+		},
+	})
+}
+
+func RetrieveVisibleModel(c *gin.Context, modelType int) {
+	modelId := c.Param("model")
+	visibleModels, err := visibleModelsForToken(c)
+	if err != nil || !common.StringsContains(visibleModels.modelNames, modelId) {
+		writeModelNotFound(c)
 		return
 	}
-	RetrieveModel(c, modelType)
+
+	visibleModel := buildOpenAIModel(modelId, nil)
+	switch modelType {
+	case constant.ChannelTypeAnthropic:
+		c.JSON(http.StatusOK, dto.AnthropicModel{
+			ID:          visibleModel.Id,
+			CreatedAt:   time.Unix(int64(visibleModel.Created), 0).UTC().Format(time.RFC3339),
+			DisplayName: visibleModel.Id,
+			Type:        "model",
+		})
+	case constant.ChannelTypeGemini:
+		c.JSON(http.StatusOK, dto.GeminiModel{
+			Name:        visibleModel.Id,
+			DisplayName: visibleModel.Id,
+		})
+	default:
+		c.JSON(http.StatusOK, visibleModel)
+	}
 }

@@ -17,8 +17,6 @@ from app.model_access import (
     mode_models_payload_from_metadata,
     normalize_mode_models_payload,
     split_visible_models,
-    supported_image_models,
-    supported_video_models,
 )
 from app.security import public_error_message, redact
 
@@ -111,9 +109,11 @@ class NewApiClient:
                 None,
             ),
             "claude": (self.settings.claude_token_name, effective_models["claude"], None),
-            "image": (self.settings.image_token_name, effective_models["image"], None),
-            "video": (self.settings.video_token_name, effective_models["video"], None),
         }
+        if effective_models["image"]:
+            profiles["image"] = (self.settings.image_token_name, effective_models["image"], None)
+        if effective_models["video"]:
+            profiles["video"] = (self.settings.video_token_name, effective_models["video"], None)
         if effective_models["grok"]:
             profiles["grok"] = (self.settings.grok_token_name, effective_models["grok"], GROK_TOKEN_GROUP)
         tokens = await self._list_tokens(client, headers)
@@ -156,13 +156,18 @@ class NewApiClient:
         user: dict[str, Any],
     ) -> dict[str, tuple[str, ...]]:
         visible_models = await self._load_visible_models(client, headers)
-        if visible_models is not None:
-            mode_models = split_visible_models(self.settings, visible_models)
-        else:
+        if visible_models is None:
             existing = user.get("metadata") if isinstance(user.get("metadata"), dict) else None
-            mode_models = mode_models_payload_from_metadata(existing)
-            if not mode_models:
-                mode_models = default_mode_models(self.settings)
+            fallback_models = mode_models_payload_from_metadata(existing)
+            mode_models = {
+                "codex": fallback_models.get("codex", default_mode_models(self.settings)["codex"]),
+                "claude": fallback_models.get("claude", default_mode_models(self.settings)["claude"]),
+                "image": (),
+                "video": (),
+            }
+            return self._effective_mode_models(mode_models)
+
+        mode_models = split_visible_models(self.settings, visible_models)
         has_image_benefit = await self._has_image_benefit_access(client, headers, user_id)
         if has_image_benefit:
             image_models = dedupe_models((*mode_models.get("image", ()), IMAGE_BENEFIT_MODEL))
@@ -209,8 +214,8 @@ class NewApiClient:
         current = normalize_mode_models_payload(mode_models or {})
         codex_models = current["codex"] if "codex" in current else defaults["codex"]
         claude_models = current["claude"] if "claude" in current else defaults["claude"]
-        image_models = dedupe_models((*current.get("image", ()), *supported_image_models(self.settings)))
-        video_models = dedupe_models((*current.get("video", ()), *supported_video_models(self.settings)))
+        image_models = current["image"] if "image" in current else ()
+        video_models = current["video"] if "video" in current else ()
         grok_allowed = set(self.settings.grok_allowed_models)
         grok_models = tuple(model for model in codex_models if model in grok_allowed)
         return {
