@@ -24,8 +24,8 @@
 Codex 当前的“自定义 MCP”页面不会自动打开网页登录授权。请按下面做：
 
 1. 先在浏览器打开：`https://api.aiphui.top/codex/agent/codex`，登录后点击“生成连接码”。
-2. 打开 Codex 的“设置 → 插件 → MCP → 连接至自定义 MCP”。
-3. 名称填写“星人工具”，类型选择“流式 HTTP”。
+2. 打开 Codex 的“设置 → 插件 → MCP → 添加服务器 → 连接至自定义 MCP”。
+3. 名称填写 `xingren-media`（只能使用英文、数字或连字符），类型选择“流式 HTTP”。
 4. URL 填写：`https://api.aiphui.top/codex/mcp`。
 5. 使用页面已经显示的那一行“标头”：键填写 `Authorization`，点击连接码页面的“复制填写值”，再把复制内容直接粘贴到“值”。不要点击“添加标头”。
 6. 保存。不要填写“Bearer 令牌环境变量”，也不要填写其他标头。

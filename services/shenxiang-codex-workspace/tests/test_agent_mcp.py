@@ -119,6 +119,9 @@ def test_codex_connection_page_uses_the_public_connection_code_endpoint():
     assert "已经显示的那一行标头" in page
     assert "不要点击“添加标头”" in page
     assert "Bearer ${data.connection_code}" in page
+    assert "插件 → MCP → 添加服务器 → 连接至自定义 MCP" in page
+    assert "xingren-media" in page
+    assert "radial-gradient" in page
 
 
 def test_connection_code_allows_only_the_public_site_origin():
