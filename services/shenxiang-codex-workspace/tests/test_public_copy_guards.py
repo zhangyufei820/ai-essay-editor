@@ -43,3 +43,10 @@ def test_return_link_opens_new_api_chat_at_top_level() -> None:
     index_html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 
     assert '<a class="ghost-button rail-link" href="/" target="_top" aria-label="返回 API 主站">' in index_html
+
+
+def test_sidebar_has_a_local_codex_media_connection_entry() -> None:
+    index_html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+
+    assert 'href="/codex/agent/codex"' in index_html
+    assert "连接本地 Codex 图像视频" in index_html
