@@ -118,18 +118,7 @@ class AgentAuthorizationStore:
             raise HTTPException(status_code=400, detail="授权已过期，请回到 Agent 重新连接")
         self.redis.delete(f"mcp:authorization:{request_id}")
         code = secrets.token_urlsafe(32)
-        user_record = {
-            "user_id": user.user_id,
-            "key_hint": user.key_hint,
-            "username": user.username,
-            "api_keys": {
-                mode: key
-                for mode, key in (user.api_keys or {"codex": user.api_key, "image": user.api_key}).items()
-                if mode in {"codex", "image", "video"} and key
-            },
-            "api_key": user.api_key,
-            "allowed_models_by_mode": {key: list(value) for key, value in (user.allowed_models_by_mode or {}).items()},
-        }
+        user_record = self._user_record(user)
         self._set_json(
             f"mcp:code:{_hash(code)}",
             {"authorization": record, "user": user_record},
@@ -139,6 +128,29 @@ class AgentAuthorizationStore:
         if record.get("state"):
             values["state"] = str(record["state"])
         return RedirectResponse(_append_query(str(record["redirect_uri"]), values), status_code=302)
+
+    def issue_codex_connection_code(self, user: UserContext) -> str:
+        user_key = _hash(user.user_id)
+        pointer_key = f"mcp:codex-connection:user:{user_key}"
+        previous = self._get_json(pointer_key)
+        if previous and isinstance(previous.get("digest"), str):
+            self.redis.delete(f"mcp:codex-connection:{previous['digest']}")
+        code = f"xrc_{secrets.token_urlsafe(36)}"
+        digest = _hash(code)
+        self._set_json(
+            f"mcp:codex-connection:{digest}",
+            {"user": self._user_record(user)},
+            self.settings.codex_connection_code_seconds,
+        )
+        self._set_json(pointer_key, {"digest": digest}, self.settings.codex_connection_code_seconds)
+        return code
+
+    def revoke_codex_connection_code(self, user: UserContext) -> None:
+        pointer_key = f"mcp:codex-connection:user:{_hash(user.user_id)}"
+        previous = self._get_json(pointer_key)
+        self.redis.delete(pointer_key)
+        if previous and isinstance(previous.get("digest"), str):
+            self.redis.delete(f"mcp:codex-connection:{previous['digest']}")
 
     def authorization_details(self, request_id: str) -> dict[str, Any] | None:
         return self._get_json(f"mcp:authorization:{request_id}")
@@ -166,6 +178,8 @@ class AgentAuthorizationStore:
 
     def access_user(self, token: str) -> UserContext | None:
         record = self._get_json(f"mcp:access:{_hash(token)}")
+        if record is None:
+            record = self._get_json(f"mcp:codex-connection:{_hash(token)}")
         user = record.get("user") if isinstance(record, dict) and isinstance(record.get("user"), dict) else None
         if not user:
             return None
@@ -178,6 +192,21 @@ class AgentAuthorizationStore:
             api_keys={str(key): str(value) for key, value in (user.get("api_keys") or {}).items() if value},
             allowed_models_by_mode={str(key): tuple(map(str, value)) for key, value in allowed.items() if isinstance(value, list)},
         )
+
+    @staticmethod
+    def _user_record(user: UserContext) -> dict[str, Any]:
+        return {
+            "user_id": user.user_id,
+            "key_hint": user.key_hint,
+            "username": user.username,
+            "api_keys": {
+                mode: key
+                for mode, key in (user.api_keys or {"codex": user.api_key, "image": user.api_key}).items()
+                if mode in {"codex", "image", "video"} and key
+            },
+            "api_key": user.api_key,
+            "allowed_models_by_mode": {key: list(value) for key, value in (user.allowed_models_by_mode or {}).items()},
+        }
 
     def issue_artifact(self, user: UserContext, file_path: Path) -> str:
         root = (self.settings.runs_dir / "mcp" / user.user_id).resolve()
@@ -243,6 +272,11 @@ def authorization_page(request_id: str, client_name: str, redirect_uri: str) -> 
     safe_name = client_name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     callback_host = (urlparse(redirect_uri).hostname or "此 Agent").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     html = f"""<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>连接 Agent</title><style>body{{font:16px system-ui;max-width:520px;margin:10vh auto;padding:24px;color:#172033}}button{{background:#2558d9;color:#fff;border:0;border-radius:10px;padding:13px 18px;font-size:16px;cursor:pointer}}.card{{border:1px solid #dce2ef;border-radius:16px;padding:28px;box-shadow:0 12px 30px #dce2ef}}</style><main class=\"card\"><h1>连接你的 Agent</h1><p><strong>{safe_name}</strong> 将获得调用星人文本、图片和视频工具的权限。</p><p>完成后会返回到：<strong>{callback_host}</strong></p><p>不会看到你的账户 Key，也不能管理账户。</p><button id=\"approve\">确认连接</button><p id=\"message\"></p></main><script>document.querySelector('#approve').onclick=async()=>{{const message=document.querySelector('#message');const uid=localStorage.getItem('uid')||(()=>{{try{{return JSON.parse(localStorage.getItem('user')||'{{}}').id||''}}catch{{return ''}}}})();if(!uid){{message.textContent='请先登录星人 API 控制台，再回到本页。';return}}message.textContent='正在连接…';const res=await fetch('./approve',{{method:'POST',credentials: 'include',headers:{{'X-New-Api-User':uid,'Content-Type':'application/json'}},body:JSON.stringify({{request_id:{json.dumps(request_id)}}})}});const data=await res.json().catch(()=>({{}}));if(res.ok&&data.redirect_to)location.assign(data.redirect_to);else message.textContent=data.detail||'连接暂时无法完成，请稍后重试。'}};</script></html>"""
+    return HTMLResponse(html, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY"})
+
+
+def codex_connection_page() -> HTMLResponse:
+    html = """<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>连接 Codex</title><style>body{font:16px system-ui;max-width:620px;margin:8vh auto;padding:24px;color:#172033}.card{border:1px solid #dce2ef;border-radius:16px;padding:28px;box-shadow:0 12px 30px #dce2ef}button{background:#2558d9;color:#fff;border:0;border-radius:10px;padding:13px 18px;font-size:16px;cursor:pointer}button.secondary{background:#fff;color:#2558d9;border:1px solid #2558d9}.code{display:none;margin:18px 0;padding:14px;background:#f4f7ff;border-radius:10px;word-break:break-all;font-family:ui-monospace,monospace}.hint{color:#5b6579;line-height:1.65}</style><main class=\"card\"><h1>连接 Codex</h1><p>点击一次生成连接码，然后把它填入 Codex 的“标头值”。</p><p class=\"hint\">连接码只用于调用星人工具；请勿发送给他人。重新生成或断开连接后，旧码立即失效。</p><button id=\"create\">生成连接码</button><div class=\"code\" id=\"code\"></div><button class=\"secondary\" id=\"copy\" hidden>复制连接码</button><button class=\"secondary\" id=\"revoke\" hidden>断开 Codex</button><p class=\"hint\" id=\"message\"></p></main><script>const message=document.querySelector('#message'),code=document.querySelector('#code'),copy=document.querySelector('#copy'),revoke=document.querySelector('#revoke');function userId(){try{return localStorage.getItem('uid')||JSON.parse(localStorage.getItem('user')||'{}').id||''}catch{return ''}}async function call(method){const uid=userId();if(!uid){message.textContent='请先登录星人控制台，再回到本页。';return null}const response=await fetch('./connection-code',{method,credentials:'include',headers:{'X-New-Api-User':uid}});const data=await response.json().catch(()=>({}));if(!response.ok){message.textContent='暂时无法完成，请稍后重试。';return null}return data}document.querySelector('#create').onclick=async()=>{message.textContent='正在生成…';const data=await call('POST');if(!data)return;code.textContent=data.connection_code;code.style.display='block';copy.hidden=false;revoke.hidden=false;message.textContent='请复制连接码，再按下方步骤填入 Codex。'};copy.onclick=async()=>{try{await navigator.clipboard.writeText(code.textContent);message.textContent='已复制。'}catch{message.textContent='请手动选中并复制连接码。'}};revoke.onclick=async()=>{message.textContent='正在断开…';const data=await call('DELETE');if(!data)return;code.textContent='';code.style.display='none';copy.hidden=true;revoke.hidden=true;message.textContent='已断开。Codex 将不能继续使用星人工具。'};</script></html>"""
     return HTMLResponse(html, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY"})
 
 

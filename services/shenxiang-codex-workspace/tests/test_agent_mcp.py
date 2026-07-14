@@ -87,3 +87,19 @@ def test_video_artifacts_use_an_opaque_expiring_reference(tmp_path):
 
     assert store.artifact_path(token) == artifact
     assert store.artifact_path("invalid") is None
+
+
+def test_codex_connection_code_is_rotated_and_revocable():
+    store = AgentAuthorizationStore(FakeRedis(), Settings())
+    user = UserContext(api_key="sk-test", user_id="user-1", key_hint="agent", api_keys={"codex": "sk-text", "image": "sk-image"})
+
+    first_code = store.issue_codex_connection_code(user)
+    assert first_code.startswith("xrc_")
+    assert store.access_user(first_code).api_keys == {"codex": "sk-text", "image": "sk-image"}
+
+    second_code = store.issue_codex_connection_code(user)
+    assert store.access_user(first_code) is None
+    assert store.access_user(second_code).user_id == "user-1"
+
+    store.revoke_codex_connection_code(user)
+    assert store.access_user(second_code) is None

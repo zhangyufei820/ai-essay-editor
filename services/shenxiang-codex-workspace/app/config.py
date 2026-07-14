@@ -81,6 +81,7 @@ class Settings:
     mcp_access_token_seconds: int = 3600
     mcp_refresh_token_seconds: int = 60 * 60 * 24 * 30
     mcp_authorization_code_seconds: int = 300
+    codex_connection_code_seconds: int = 60 * 60 * 24 * 90
     log_level: str = "INFO"
 
 
@@ -149,6 +150,7 @@ def get_settings() -> Settings:
         mcp_access_token_seconds=_env_int("MCP_ACCESS_TOKEN_SECONDS", 3600),
         mcp_refresh_token_seconds=_env_int("MCP_REFRESH_TOKEN_SECONDS", 60 * 60 * 24 * 30),
         mcp_authorization_code_seconds=_env_int("MCP_AUTHORIZATION_CODE_SECONDS", 300),
+        codex_connection_code_seconds=_env_int("CODEX_CONNECTION_CODE_SECONDS", 60 * 60 * 24 * 90),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
     )
 

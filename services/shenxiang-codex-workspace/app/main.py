@@ -26,6 +26,7 @@ from app.agent_mcp import (
     authorization_page,
     authorization_server,
     call_agent_tool,
+    codex_connection_page,
     mcp_endpoint,
     mcp_failure,
     mcp_response,
@@ -395,6 +396,38 @@ def agent_connect_doc() -> HTMLResponse:
     if not doc_path.exists():
         return HTMLResponse("<h1>连接 Agent</h1><p>文档暂未发布。</p>", status_code=404)
     return HTMLResponse(markdown_document_html("连接你的 Agent", doc_path.read_text(encoding="utf-8")))
+
+
+@app.get("/agent/codex", response_class=HTMLResponse)
+@app.get("/codex/agent/codex", response_class=HTMLResponse)
+def codex_connection() -> HTMLResponse:
+    return codex_connection_page()
+
+
+@app.post("/agent/codex/connection-code")
+@app.post("/codex/agent/codex/connection-code")
+async def create_codex_connection_code(
+    request: Request,
+    user: UserContext = Depends(require_codex_user),
+) -> JSONResponse:
+    origin = request.headers.get("origin", "")
+    if origin and origin.rstrip("/") != public_base(settings):
+        raise HTTPException(status_code=403, detail="请求无效")
+    code = agent_authorization_store().issue_codex_connection_code(user)
+    return JSONResponse({"connection_code": code}, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
+
+
+@app.delete("/agent/codex/connection-code")
+@app.delete("/codex/agent/codex/connection-code")
+async def revoke_codex_connection_code(
+    request: Request,
+    user: UserContext = Depends(require_codex_user),
+) -> JSONResponse:
+    origin = request.headers.get("origin", "")
+    if origin and origin.rstrip("/") != public_base(settings):
+        raise HTTPException(status_code=403, detail="请求无效")
+    agent_authorization_store().revoke_codex_connection_code(user)
+    return JSONResponse({"disconnected": True}, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
 
 
 @app.get("/agent/artifacts/{artifact_token}")
