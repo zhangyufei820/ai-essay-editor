@@ -6,7 +6,7 @@ from dataclasses import replace
 import pytest
 from fastapi import HTTPException
 
-from app.agent_mcp import AgentAuthorizationStore, _is_safe_redirect_uri, _pkce_valid, authorization_page, codex_connection_page, mcp_tools, safe_mcp_error
+from app.agent_mcp import AgentAuthorizationStore, _is_safe_redirect_uri, _pkce_valid, authorization_page, codex_connection_page, media_models_message, mcp_tools, resolved_media_model, safe_mcp_error
 from app.config import Settings
 from app.main import is_allowed_browser_origin
 from app.security import UserContext
@@ -68,6 +68,24 @@ def test_pkce_and_public_tool_contract_are_strict():
     visible = json.dumps(safe_mcp_error("https://private.invalid/error"), ensure_ascii=False)
     assert "供应商" not in visible
     assert "private.invalid" not in visible
+
+
+def test_media_model_list_uses_website_names_and_prices_without_internal_names():
+    message = media_models_message(
+        ("gpt-image-2-4K", "geek2api-image-2", "banana-2"),
+        ("seedance-2.0-dj-fast", "seedance-2.0-cl-mini"),
+    )
+
+    assert "GPT Image 2（¥0.108/张）" in message
+    assert "特价 image-2（1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10/张）" in message
+    assert "Seedance 2.0 DJ Fast（¥0.162/秒）" in message
+    assert "geek2api" not in message
+
+
+def test_media_model_selection_accepts_only_public_website_names():
+    assert resolved_media_model("特价 image-2", "image") == "geek2api-image-2"
+    assert resolved_media_model("Seedance 2.0 CL Mini", "video") == "seedance-2.0-cl-mini"
+    assert resolved_media_model("geek2api-image-2", "image") is None
 
 
 def test_authorization_page_escapes_client_values():

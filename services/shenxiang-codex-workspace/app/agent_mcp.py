@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from redis import Redis
 
 from app.config import Settings, secret_values_for_redaction
+from app.media_catalog import available_public_models, resolve_public_media_model
 from app.media_tools import MediaGenerationError, generate_media
 from app.models import WorkspaceRunRequest
 from app.security import UserContext, public_error_message, redact
@@ -24,11 +25,22 @@ logger = logging.getLogger(__name__)
 
 MCP_SCOPE = "xingren.agent"
 MCP_PROTOCOL_VERSION = "2025-03-26"
-PUBLIC_MEDIA_MODEL_ALIASES = {"特价 image-2": "geek2api-image-2"}
+def resolved_media_model(model: str, mode: str) -> str | None:
+    return resolve_public_media_model(model, mode)
 
 
-def resolved_media_model(model: str) -> str:
-    return PUBLIC_MEDIA_MODEL_ALIASES.get(model, model)
+def media_models_message(image_models: tuple[str, ...], video_models: tuple[str, ...]) -> str:
+    def render(mode: str, models: tuple[str, ...]) -> str:
+        visible = available_public_models(mode, models)
+        if not visible:
+            return "暂无"
+        return "\n".join(f"- {item.name}（{item.price}）" for item in visible)
+
+    return (
+        f"可用图像模型：\n{render('image', image_models)}\n\n"
+        f"可用视频模型：\n{render('video', video_models)}\n\n"
+        "请选择上面的完整名称。例如：用 GPT Image 2 生成一张海报。"
+    )
 
 
 def public_base(settings: Settings) -> str:
@@ -297,10 +309,10 @@ def codex_connection_page() -> HTMLResponse:
 def mcp_tools() -> list[dict[str, Any]]:
     return [
         {"name": "xingren_connection_status", "description": "检查星人工具是否已经连接。用户第一次使用或说连接不上时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
-        {"name": "xingren_list_media_models", "description": "列出当前账户可用的图像和视频模型。用户问能用哪些模型、想先选模型或第一次生成图片视频时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
+        {"name": "xingren_list_media_models", "description": "列出当前账户可用的图像和视频模型，以及每个模型的费用。用户问能用哪些模型、想先选模型或第一次生成图片视频时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
         {"name": "xingren_ask", "description": "向星人助手提问、写作或分析。仅在用户明确需要文字结果时调用。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "用户的问题或任务"}}, "required": ["prompt"], "additionalProperties": False}},
-        {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。先用 xingren_list_media_models 查看模型；model 只能填写列表中图像模型，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "model": {"type": "string", "description": "可选的图像模型名称"}, "size": {"type": "string", "enum": ["960x960", "1024x1024", "1536x1024", "1024x1536"]}}, "required": ["prompt"], "additionalProperties": False}},
-        {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。先用 xingren_list_media_models 查看模型；model 只能填写列表中视频模型，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "model": {"type": "string", "description": "可选的视频模型名称"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15}}, "required": ["prompt"], "additionalProperties": False}},
+        {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。先用 xingren_list_media_models 查看模型和费用；model 只能填写列表中的完整展示名称，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "model": {"type": "string", "description": "可选的图像模型展示名称"}, "size": {"type": "string", "enum": ["960x960", "1024x1024", "1536x1024", "1024x1536"]}}, "required": ["prompt"], "additionalProperties": False}},
+        {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。先用 xingren_list_media_models 查看模型和费用；model 只能填写列表中的完整展示名称，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "model": {"type": "string", "description": "可选的视频模型展示名称"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15}}, "required": ["prompt"], "additionalProperties": False}},
     ]
 
 
@@ -314,9 +326,9 @@ async def call_agent_tool(
     if name == "xingren_connection_status":
         return {"content": [{"type": "text", "text": "已连接。文本、图片和视频工具都可以直接使用。"}]}
     if name == "xingren_list_media_models":
-        image_models = list((user.allowed_models_by_mode or {}).get("image") or settings.image_allowed_models)
-        video_models = list((user.allowed_models_by_mode or {}).get("video") or settings.video_allowed_models)
-        return {"content": [{"type": "text", "text": f"可用图像模型：{', '.join(image_models) or '暂无'}\n可用视频模型：{', '.join(video_models) or '暂无'}\n请告诉我：用哪一个模型生成什么内容。"}]}
+        image_models = tuple((user.allowed_models_by_mode or {}).get("image") or settings.image_allowed_models)
+        video_models = tuple((user.allowed_models_by_mode or {}).get("video") or settings.video_allowed_models)
+        return {"content": [{"type": "text", "text": media_models_message(image_models, video_models)}]}
     prompt = str(arguments.get("prompt") or "").strip()
     if not prompt or len(prompt) > 8000:
         return safe_mcp_error("请提供不超过 8000 字的任务说明。")
@@ -354,9 +366,10 @@ async def _ask(settings: Settings, user: UserContext, prompt: str) -> dict[str, 
 async def _generate_image(settings: Settings, user: UserContext, prompt: str, size: str, model: str, authorization_store: AgentAuthorizationStore) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
     allowed_models = tuple((user.allowed_models_by_mode or {}).get("image") or settings.image_allowed_models)
-    model = resolved_media_model(model)
-    if model and model not in allowed_models:
+    resolved_model = resolved_media_model(model, "image")
+    if resolved_model is None or (resolved_model and resolved_model not in allowed_models):
         return safe_mcp_error("所选图像模型当前不可用。请先查看可用模型后再选择。")
+    model = resolved_model
     request = WorkspaceRunRequest(user_query=prompt, model_role="image_generation", task_type="agent_image", model_config={"image_generation": model}, params={"size": size, "n": 1}, metadata={"server_allowed_models_by_mode": {"image": list(allowed_models)}})
     image_key = (user.api_keys or {}).get("image") or user.api_key
     image_user = UserContext(api_key=image_key, user_id=user.user_id, key_hint=user.key_hint, allowed_models_by_mode=user.allowed_models_by_mode)
@@ -381,9 +394,9 @@ async def _generate_video(
     authorization_store: AgentAuthorizationStore,
 ) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
-    model = resolved_media_model(str(arguments.get("model") or ""))
+    model = resolved_media_model(str(arguments.get("model") or ""), "video")
     allowed_models = tuple((user.allowed_models_by_mode or {}).get("video") or settings.video_allowed_models)
-    if model and model not in allowed_models:
+    if model is None or (model and model not in allowed_models):
         return safe_mcp_error("所选视频模型当前不可用。请先查看可用模型后再选择。")
     request = WorkspaceRunRequest(
         user_query=prompt,

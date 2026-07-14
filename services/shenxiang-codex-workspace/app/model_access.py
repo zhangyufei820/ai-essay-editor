@@ -3,15 +3,11 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 from app.config import Settings
+from app.media_catalog import supported_internal_models
 
 
 SERVER_ALLOWED_MODELS_METADATA_KEY = "server_allowed_models_by_mode"
 IMAGE_BENEFIT_MODEL = "image 2电商商品图快速通道(1.5K)"
-EXTRA_IMAGE_MODELS = (
-    "geek2api-image-2",
-    "banana-2",
-    "gemini-3-pro-image-preview",
-)
 MEDIA_HINTS = ("image", "imagine", "video", "seedance", "sora", "veo")
 
 
@@ -30,11 +26,11 @@ def default_mode_models(settings: Settings) -> dict[str, tuple[str, ...]]:
 
 
 def supported_image_models(settings: Settings) -> tuple[str, ...]:
-    return dedupe_models((*settings.image_allowed_models, *EXTRA_IMAGE_MODELS))
+    return dedupe_models((*settings.image_allowed_models, *supported_internal_models("image")))
 
 
 def supported_video_models(settings: Settings) -> tuple[str, ...]:
-    return dedupe_models(settings.video_allowed_models)
+    return dedupe_models((*settings.video_allowed_models, *supported_internal_models("video")))
 
 
 def is_claude_model(model: str) -> bool:
