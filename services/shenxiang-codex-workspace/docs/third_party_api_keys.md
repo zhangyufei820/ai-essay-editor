@@ -461,7 +461,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:57321/backend/status -Body 
 3. 复制下面整条命令到终端并按回车：
 
 ```bash
-npx -y @xingren/codex-image-mcp install
+npx -y xingren-codex-image-mcp install
 ```
 
 如果终端提示找不到 `npx`，请先安装 [Node.js 长期支持版](https://nodejs.org/)，安装后重新打开终端再执行这条命令。
@@ -496,7 +496,7 @@ npx -y @xingren/codex-image-mcp install
 名称：xingren-image
 类型：STDIO
 命令：npx
-参数：-y @xingren/codex-image-mcp
+参数：-y xingren-codex-image-mcp
 ```
 
 然后重新打开 Codex。令牌已经在第 3 步保存好了，不需要再次粘贴。

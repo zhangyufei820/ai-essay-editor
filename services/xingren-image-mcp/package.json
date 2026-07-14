@@ -1,5 +1,5 @@
 {
-  "name": "@xingren/codex-image-mcp",
+  "name": "xingren-codex-image-mcp",
   "version": "0.1.0",
   "description": "Use Xingren image-generation credits from local Codex.",
   "private": false,

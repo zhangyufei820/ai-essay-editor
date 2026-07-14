@@ -6,7 +6,7 @@ const { stdin, stdout } = require("node:process");
 
 const API_BASE_URL = "https://api.aiphui.top/v1";
 const DEFAULT_MODEL = "gpt-image-2-4K";
-const PACKAGE_NAME = "@xingren/codex-image-mcp";
+const PACKAGE_NAME = "xingren-codex-image-mcp";
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 function configPath(homeDirectory = process.env.HOME || process.env.USERPROFILE) {
@@ -30,7 +30,7 @@ async function readConfig(homeDirectory) {
     }
   }
 
-  throw new Error("还没有配置星人图像生成令牌。请运行：npx -y @xingren/codex-image-mcp install");
+  throw new Error("还没有配置星人图像生成令牌。请运行：npx -y xingren-codex-image-mcp install");
 }
 
 async function saveConfig(apiKey, homeDirectory) {
@@ -88,7 +88,7 @@ async function install() {
   await setup();
   const existing = spawnSync("codex", ["mcp", "remove", "xingren-image"], { encoding: "utf8" });
   if (existing.error) {
-    throw new Error("令牌已保存，但没有找到 Codex 命令。请先安装 Codex CLI，或在 Codex 桌面端“设置 → MCP servers”中添加：npx -y @xingren/codex-image-mcp");
+    throw new Error("令牌已保存，但没有找到 Codex 命令。请先安装 Codex CLI，或在 Codex 桌面端“设置 → MCP servers”中添加：npx -y xingren-codex-image-mcp");
   }
   const result = spawnSync("codex", ["mcp", "add", "xingren-image", "--", "npx", "-y", PACKAGE_NAME], {
     encoding: "utf8",
