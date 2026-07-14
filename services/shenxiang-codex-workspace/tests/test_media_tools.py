@@ -3,7 +3,21 @@ import asyncio
 import pytest
 
 from app.config import Settings
-from app.media_tools import MediaGenerationError, MediaResult, detect_media_kind, generate_image, generate_video
+from app.media_catalog import public_models_for_mode
+from app.media_tools import (
+    IMAGE_MODEL_CAPABILITIES,
+    MEDIA_ERROR_INPUT_UNSUPPORTED,
+    MEDIA_ERROR_RESULT_UNAVAILABLE,
+    MEDIA_ERROR_SERVICE_UNAVAILABLE,
+    MEDIA_ERROR_SPEC_UNSUPPORTED,
+    VIDEO_MODEL_CAPABILITIES,
+    MediaGenerationError,
+    MediaResult,
+    build_mcp_image_payload,
+    detect_media_kind,
+    generate_image,
+    generate_video,
+)
 from app.models import WorkspaceFile, WorkspaceRunRequest
 from app.security import UserContext
 
@@ -258,7 +272,7 @@ def test_image_generation_without_renderable_url_fails(monkeypatch):
         model_config={"image_generation": "geek2api-image-2"},
     )
 
-    with pytest.raises(MediaGenerationError, match="可展示结果"):
+    with pytest.raises(MediaGenerationError) as error:
         asyncio.run(
             generate_image(
                 Settings(new_api_base_url="https://api.example.test/v1"),
@@ -267,6 +281,7 @@ def test_image_generation_without_renderable_url_fails(monkeypatch):
                 "geek2api-image-2",
             )
         )
+    assert str(error.value) == MEDIA_ERROR_RESULT_UNAVAILABLE
 
 
 def test_seedance_dj_fast_uses_videos_endpoint_with_image_references(monkeypatch):
@@ -429,7 +444,7 @@ def test_moonapix_non_mini_rejects_video_reference(monkeypatch):
         ],
     )
 
-    with pytest.raises(MediaGenerationError, match="只支持图片参考"):
+    with pytest.raises(MediaGenerationError) as error:
         asyncio.run(
             generate_video(
                 Settings(new_api_base_url="https://api.example.test/v1"),
@@ -438,6 +453,7 @@ def test_moonapix_non_mini_rejects_video_reference(monkeypatch):
                 "seedance-2.0-cl-fast",
             )
         )
+    assert str(error.value) == MEDIA_ERROR_INPUT_UNSUPPORTED
 
     assert FakeVideoAsyncClient.calls == []
 
@@ -493,7 +509,7 @@ def test_moonapix_rejects_local_data_url_reference(monkeypatch):
         ],
     )
 
-    with pytest.raises(MediaGenerationError, match="公网 URL"):
+    with pytest.raises(MediaGenerationError) as error:
         asyncio.run(
             generate_video(
                 Settings(new_api_base_url="https://api.example.test/v1"),
@@ -502,5 +518,183 @@ def test_moonapix_rejects_local_data_url_reference(monkeypatch):
                 "seedance-2.0-cl-fast",
             )
         )
+    assert str(error.value) == MEDIA_ERROR_INPUT_UNSUPPORTED
 
     assert FakeVideoAsyncClient.calls == []
+
+
+def test_all_public_media_models_have_mcp_capability_profiles():
+    assert {item.model for item in public_models_for_mode("image")} <= set(IMAGE_MODEL_CAPABILITIES)
+    assert {item.model for item in public_models_for_mode("video")} <= set(VIDEO_MODEL_CAPABILITIES)
+
+
+def test_mcp_gpt_image_payload_forwards_validated_vertical_2k_options():
+    request = WorkspaceRunRequest(
+        user_query="生成一张竖版海报。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "gpt-image-2-4K"},
+        params={
+            "aspect_ratio": "9:16",
+            "resolution": "2K",
+            "quality": "high",
+            "output_format": "webp",
+            "background": "opaque",
+        },
+    )
+
+    payload = build_mcp_image_payload(request, "gpt-image-2-4K")
+
+    assert payload["size"] == "1152x2048"
+    assert payload["resolution"] == "2K"
+    assert payload["quality"] == "high"
+    assert payload["output_format"] == "webp"
+    assert payload["background"] == "opaque"
+
+
+def test_mcp_image_payload_forwards_nested_image_configuration():
+    request = WorkspaceRunRequest(
+        user_query="生成一张竖版商品图。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "banana-2"},
+        params={"aspect_ratio": "9:16", "resolution": "2K"},
+    )
+
+    payload = build_mcp_image_payload(request, "banana-2")
+
+    assert payload["aspect_ratio"] == "9:16"
+    assert payload["resolution"] == "2K"
+    assert payload["image_size"] == "2K"
+    assert payload["responseFormat"]["image"] == {"aspectRatio": "9:16", "imageSize": "2K"}
+    assert payload["generationConfig"]["imageConfig"] == {"aspectRatio": "9:16", "imageSize": "2K"}
+    assert payload["extra_body"]["google"]["image_config"] == {"aspect_ratio": "9:16", "image_size": "2K"}
+
+
+def test_mcp_image_rejects_unsupported_specification_before_network(monkeypatch):
+    FakeImageSuccessAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeImageSuccessAsyncClient)
+    request = WorkspaceRunRequest(
+        user_query="生成一张商品图。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "ecommerce-banana-2"},
+        params={"aspect_ratio": "9:16", "resolution": "2K"},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        asyncio.run(
+            generate_image(
+                Settings(new_api_base_url="https://api.example.test/v1"),
+                request,
+                UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+                "ecommerce-banana-2",
+            )
+        )
+
+    assert FakeImageSuccessAsyncClient.calls == []
+
+
+def test_mcp_video_forwards_validated_duration_ratio_and_resolution(monkeypatch):
+    FakeVideoAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeVideoAsyncClient)
+    monkeypatch.setattr("app.media_tools.asyncio.sleep", no_sleep)
+    request = WorkspaceRunRequest(
+        user_query="生成一段竖版短片。",
+        task_type="agent_video",
+        model_role="video_generation",
+        model_config={"video_generation": "seedance-2.0-cl-mini"},
+        params={
+            "duration_seconds": 8,
+            "aspect_ratio": "9:16",
+            "resolution": "480p",
+            "watermark": True,
+            "seed": 7,
+        },
+    )
+
+    asyncio.run(
+        generate_video(
+            Settings(new_api_base_url="https://api.example.test/v1"),
+            request,
+            UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+            "seedance-2.0-cl-mini",
+        )
+    )
+
+    payload = FakeVideoAsyncClient.calls[0]["kwargs"]["json"]
+    assert payload["duration"] == 8
+    assert payload["ratio"] == "9:16"
+    assert payload["resolution"] == "480p"
+    assert payload["watermark"] is True
+    assert payload["seed"] == 7
+
+
+def test_mcp_video_rejects_unsupported_duration_before_network(monkeypatch):
+    FakeVideoAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeVideoAsyncClient)
+    request = WorkspaceRunRequest(
+        user_query="生成一段短片。",
+        task_type="agent_video",
+        model_role="video_generation",
+        model_config={"video_generation": "seedance-2.0-dj-fast"},
+        params={"duration_seconds": 8, "aspect_ratio": "9:16", "resolution": "720P"},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        asyncio.run(
+            generate_video(
+                Settings(new_api_base_url="https://api.example.test/v1"),
+                request,
+                UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+                "seedance-2.0-dj-fast",
+            )
+        )
+
+    assert FakeVideoAsyncClient.calls == []
+
+
+def test_media_errors_never_return_raw_transport_or_request_details(monkeypatch):
+    class FailingResponse:
+        status_code = 403
+        text = '{"error":{"message":"HTTP 403 request_id=req-private authorization=Bearer secret-token"}}'
+
+        def json(self):
+            return {"error": {"message": "HTTP 403 request_id=req-private authorization=Bearer secret-token"}}
+
+    class FailingClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, **kwargs):
+            return FailingResponse()
+
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FailingClient)
+    request = WorkspaceRunRequest(
+        user_query="生成一张图片。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "gpt-image-2-4K"},
+        params={"aspect_ratio": "1:1", "resolution": "1K"},
+    )
+
+    with pytest.raises(MediaGenerationError) as error:
+        asyncio.run(
+            generate_image(
+                Settings(new_api_base_url="https://api.example.test/v1"),
+                request,
+                UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+                "gpt-image-2-4K",
+            )
+        )
+
+    assert str(error.value) == MEDIA_ERROR_SERVICE_UNAVAILABLE
+    assert "403" not in str(error.value)
+    assert "request" not in str(error.value)
+    assert "secret" not in str(error.value)

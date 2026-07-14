@@ -15,10 +15,10 @@ from uuid import uuid4
 
 import httpx
 
-from app.config import Settings, secret_values_for_redaction
-from app.model_access import mode_models_from_metadata, mode_models_payload_from_metadata
+from app.config import Settings
+from app.model_access import mode_models_payload_from_metadata
 from app.models import WorkspaceRunRequest
-from app.security import UserContext, redact
+from app.security import UserContext
 
 
 IMAGE_INTENT_KEYWORDS = (
@@ -77,6 +77,536 @@ MOONAPIX_SEEDANCE_VIDEO_MODELS = {
 MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_REMOTE_VIDEO_BYTES = 120 * 1024 * 1024
 
+MEDIA_ERROR_MODEL_UNAVAILABLE = "该模型暂时无法使用，请刷新模型列表后选择其他模型。"
+MEDIA_ERROR_SPEC_UNSUPPORTED = "该模型不支持当前画面规格。请选择模型列表中标注的规格后重试。"
+MEDIA_ERROR_INPUT_UNSUPPORTED = "当前素材或参数暂不支持，请调整后重试。"
+MEDIA_ERROR_SERVICE_UNAVAILABLE = "生成服务暂时繁忙，未开始生成，请稍后重试。"
+MEDIA_ERROR_RESULT_UNAVAILABLE = "生成结果暂时无法展示，请稍后重试。"
+MEDIA_ERROR_TIMEOUT = "生成等待超时，请稍后重试。"
+
+SAFE_MEDIA_ERROR_MESSAGES = frozenset(
+    {
+        MEDIA_ERROR_MODEL_UNAVAILABLE,
+        MEDIA_ERROR_SPEC_UNSUPPORTED,
+        MEDIA_ERROR_INPUT_UNSUPPORTED,
+        MEDIA_ERROR_SERVICE_UNAVAILABLE,
+        MEDIA_ERROR_RESULT_UNAVAILABLE,
+        MEDIA_ERROR_TIMEOUT,
+    }
+)
+
+GPT_IMAGE_SIZE_BY_RESOLUTION = {
+    "1K": {
+        "1:1": "1024x1024",
+        "1:3": "512x1536",
+        "3:1": "1536x512",
+        "2:3": "1024x1536",
+        "3:2": "1536x1024",
+        "3:4": "1008x1344",
+        "4:3": "1344x1008",
+        "4:5": "1024x1280",
+        "5:4": "1280x1024",
+        "16:9": "1536x864",
+        "9:16": "864x1536",
+        "9:21": "672x1568",
+        "21:9": "1568x672",
+    },
+    "2K": {
+        "1:1": "2048x2048",
+        "1:3": "688x2064",
+        "3:1": "2064x688",
+        "2:3": "1376x2064",
+        "3:2": "2064x1376",
+        "3:4": "1536x2048",
+        "4:3": "2048x1536",
+        "4:5": "1664x2080",
+        "5:4": "2080x1664",
+        "16:9": "2048x1152",
+        "9:16": "1152x2048",
+        "9:21": "912x2128",
+        "21:9": "2128x912",
+    },
+    "4K": {
+        "1:1": "2880x2880",
+        "1:3": "1280x3840",
+        "3:1": "3840x1280",
+        "2:3": "2176x3264",
+        "3:2": "3264x2176",
+        "3:4": "2160x2880",
+        "4:3": "2880x2160",
+        "4:5": "2304x2880",
+        "5:4": "2880x2304",
+        "16:9": "3840x2160",
+        "9:16": "2160x3840",
+        "9:21": "1632x3808",
+        "21:9": "3808x1632",
+    },
+}
+GPT_IMAGE_SIZE_TO_SELECTION = {
+    size: (resolution, aspect_ratio)
+    for resolution, sizes in GPT_IMAGE_SIZE_BY_RESOLUTION.items()
+    for aspect_ratio, size in sizes.items()
+}
+GOOGLE_IMAGE_ASPECT_RATIOS = (
+    "1:1",
+    "1:4",
+    "1:8",
+    "2:3",
+    "3:2",
+    "3:4",
+    "4:1",
+    "4:3",
+    "4:5",
+    "5:4",
+    "8:1",
+    "9:16",
+    "16:9",
+    "21:9",
+)
+GROK_IMAGE_SIZE_TO_ASPECT_RATIO = {
+    "960x960": "1:1",
+    "720x1280": "9:16",
+    "1280x720": "16:9",
+    "1168x784": "3:2",
+    "784x1168": "2:3",
+}
+COMMON_IMAGE_SIZE_TO_ASPECT_RATIO = {
+    **{size: aspect_ratio for size, (_, aspect_ratio) in GPT_IMAGE_SIZE_TO_SELECTION.items()},
+    **GROK_IMAGE_SIZE_TO_ASPECT_RATIO,
+}
+VIDEO_SIZE_TO_ASPECT_RATIO = {
+    "1280x720": "16:9",
+    "720x1280": "9:16",
+    "1024x1024": "1:1",
+}
+
+
+@dataclass(frozen=True)
+class ImageModelCapability:
+    family: str
+    aspect_ratios: tuple[str, ...]
+    resolutions: tuple[str, ...]
+    default_aspect_ratio: str
+    default_resolution: str
+    qualities: tuple[str, ...] = ()
+    output_formats: tuple[str, ...] = ("url",)
+    backgrounds: tuple[str, ...] = ()
+    max_count: int = 1
+    allow_output_compression: bool = False
+    allow_input_fidelity: bool = False
+    allow_negative_prompt: bool = False
+
+
+@dataclass(frozen=True)
+class VideoModelCapability:
+    durations: tuple[int, ...]
+    aspect_ratios: tuple[str, ...]
+    resolutions: tuple[str, ...]
+    default_duration: int
+    default_aspect_ratio: str
+    default_resolution: str
+    sizes: tuple[str, ...]
+    allow_seed: bool = False
+    allow_watermark: bool = False
+
+
+_GPT_IMAGE_CAPABILITY = ImageModelCapability(
+    family="gpt_image",
+    aspect_ratios=tuple(GPT_IMAGE_SIZE_BY_RESOLUTION["1K"]),
+    resolutions=("1K", "2K", "4K"),
+    default_aspect_ratio="1:1",
+    default_resolution="1K",
+    qualities=("auto", "low", "medium", "high"),
+    output_formats=("url", "png", "jpeg", "webp"),
+    backgrounds=("auto", "opaque"),
+    max_count=4,
+    allow_output_compression=True,
+    allow_input_fidelity=True,
+    allow_negative_prompt=True,
+)
+_DISCOUNT_IMAGE_CAPABILITY = ImageModelCapability(
+    family="discount_image",
+    aspect_ratios=tuple(GPT_IMAGE_SIZE_BY_RESOLUTION["1K"]),
+    resolutions=("1K", "2K", "4K"),
+    default_aspect_ratio="1:1",
+    default_resolution="1K",
+    qualities=("auto", "low", "medium", "high"),
+    output_formats=("url", "png", "jpeg", "webp"),
+    backgrounds=("auto", "opaque"),
+    max_count=4,
+)
+_ECOMMERCE_IMAGE_CAPABILITY = ImageModelCapability(
+    family="ecommerce_image",
+    aspect_ratios=tuple(GPT_IMAGE_SIZE_BY_RESOLUTION["1K"]),
+    resolutions=("auto",),
+    default_aspect_ratio="1:1",
+    default_resolution="auto",
+    qualities=("auto", "low", "medium", "high"),
+    output_formats=("url", "png", "jpeg", "webp"),
+    backgrounds=("auto", "opaque"),
+    max_count=4,
+    allow_output_compression=True,
+    allow_input_fidelity=True,
+    allow_negative_prompt=True,
+)
+_BANANA_IMAGE_CAPABILITY = ImageModelCapability(
+    family="gemini_image",
+    aspect_ratios=GOOGLE_IMAGE_ASPECT_RATIOS,
+    resolutions=("512", "1K", "2K", "4K"),
+    default_aspect_ratio="16:9",
+    default_resolution="2K",
+    qualities=("auto",),
+    allow_negative_prompt=True,
+)
+_GEMINI_IMAGE_CAPABILITY = ImageModelCapability(
+    family="gemini_image",
+    aspect_ratios=("1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"),
+    resolutions=("1K", "2K", "4K"),
+    default_aspect_ratio="16:9",
+    default_resolution="4K",
+    qualities=("auto",),
+    allow_negative_prompt=True,
+)
+_ECOMMERCE_BANANA_IMAGE_CAPABILITY = ImageModelCapability(
+    family="gemini_image",
+    aspect_ratios=GOOGLE_IMAGE_ASPECT_RATIOS,
+    resolutions=("1K",),
+    default_aspect_ratio="1:1",
+    default_resolution="1K",
+    qualities=("auto",),
+    allow_negative_prompt=True,
+)
+_GROK_IMAGE_CAPABILITY = ImageModelCapability(
+    family="grok_image",
+    aspect_ratios=(
+        "1:1",
+        "3:4",
+        "4:3",
+        "9:16",
+        "16:9",
+        "2:3",
+        "3:2",
+        "9:19.5",
+        "19.5:9",
+        "9:20",
+        "20:9",
+        "1:2",
+        "2:1",
+    ),
+    resolutions=("1k", "2k"),
+    default_aspect_ratio="1:1",
+    default_resolution="2k",
+    qualities=("low", "medium", "high"),
+    output_formats=("url", "b64_json"),
+    max_count=10,
+)
+
+IMAGE_MODEL_CAPABILITIES = {
+    "gpt-image-2-4K": _GPT_IMAGE_CAPABILITY,
+    "geek2api-image-2": _DISCOUNT_IMAGE_CAPABILITY,
+    "banana-2": _BANANA_IMAGE_CAPABILITY,
+    "gemini-3-pro-image-preview": _GEMINI_IMAGE_CAPABILITY,
+    "image 2电商商品图快速通道(1.5K)": _ECOMMERCE_IMAGE_CAPABILITY,
+    "ecommerce-banana-2": _ECOMMERCE_BANANA_IMAGE_CAPABILITY,
+    "grok-imagine-image": _GROK_IMAGE_CAPABILITY,
+}
+
+VIDEO_MODEL_CAPABILITIES = {
+    "seedance-2.0-dj-fast": VideoModelCapability(
+        durations=(5, 10, 15),
+        aspect_ratios=("16:9", "9:16"),
+        resolutions=("720P",),
+        default_duration=10,
+        default_aspect_ratio="16:9",
+        default_resolution="720P",
+        sizes=("1280x720", "720x1280"),
+    ),
+    "seedance-2.0-cl-mini": VideoModelCapability(
+        durations=tuple(range(4, 16)),
+        aspect_ratios=("16:9", "9:16", "1:1", "4:3", "3:4"),
+        resolutions=("480p", "720p"),
+        default_duration=8,
+        default_aspect_ratio="16:9",
+        default_resolution="720p",
+        sizes=("1280x720", "720x1280", "1024x1024"),
+        allow_seed=True,
+        allow_watermark=True,
+    ),
+}
+
+
+def _media_params(request: WorkspaceRunRequest) -> dict[str, Any]:
+    return request.params if isinstance(request.params, dict) else {}
+
+
+def _string_param(params: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = params.get(key)
+        if value is None:
+            continue
+        normalized = str(value).strip()
+        if normalized:
+            return normalized
+    return ""
+
+
+def _canonical_option(value: str, allowed: tuple[str, ...]) -> str:
+    lookup = {item.casefold(): item for item in allowed}
+    return lookup.get(value.casefold(), "")
+
+
+def _positive_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    try:
+        parsed = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return int(parsed) if parsed.is_integer() else None
+
+
+def _boolean_value(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().casefold()
+        if normalized in {"true", "1", "yes"}:
+            return True
+        if normalized in {"false", "0", "no"}:
+            return False
+    return None
+
+
+def _unsupported_media_spec() -> None:
+    raise MediaGenerationError(MEDIA_ERROR_SPEC_UNSUPPORTED)
+
+
+def _image_ratio_from_size(size: str) -> tuple[str, str]:
+    normalized = size.replace(" ", "").casefold()
+    if normalized in {ratio.casefold() for ratio in GOOGLE_IMAGE_ASPECT_RATIOS}:
+        return next(ratio for ratio in GOOGLE_IMAGE_ASPECT_RATIOS if ratio.casefold() == normalized), ""
+    for image_size, selection in GPT_IMAGE_SIZE_TO_SELECTION.items():
+        if image_size.casefold() == normalized:
+            return selection[1], selection[0]
+    for image_size, ratio in GROK_IMAGE_SIZE_TO_ASPECT_RATIO.items():
+        if image_size.casefold() == normalized:
+            return ratio, ""
+    return "", ""
+
+
+def _image_options(request: WorkspaceRunRequest, capability: ImageModelCapability) -> tuple[str, str]:
+    params = _media_params(request)
+    explicit_size = _string_param(params, "size")
+    size_ratio, size_resolution = _image_ratio_from_size(explicit_size) if explicit_size else ("", "")
+    if explicit_size and not size_ratio:
+        _unsupported_media_spec()
+
+    requested_ratio = _string_param(params, "aspect_ratio", "ratio")
+    if requested_ratio:
+        aspect_ratio = _canonical_option(requested_ratio, capability.aspect_ratios)
+        if not aspect_ratio:
+            _unsupported_media_spec()
+        if size_ratio and size_ratio != aspect_ratio:
+            _unsupported_media_spec()
+    else:
+        aspect_ratio = size_ratio or capability.default_aspect_ratio
+
+    requested_resolution = _string_param(params, "resolution", "image_size")
+    if requested_resolution:
+        resolution = _canonical_option(requested_resolution, capability.resolutions)
+        if not resolution:
+            _unsupported_media_spec()
+        if size_resolution and size_resolution != resolution:
+            _unsupported_media_spec()
+    elif size_resolution and size_resolution in capability.resolutions:
+        resolution = size_resolution
+    else:
+        resolution = capability.default_resolution
+
+    return aspect_ratio, resolution
+
+
+def _image_pixel_size(capability: ImageModelCapability, aspect_ratio: str, resolution: str) -> str:
+    if capability.family == "ecommerce_image" and resolution == "auto":
+        return "auto"
+    if capability.family == "grok_image":
+        return next(
+            (size for size, ratio in GROK_IMAGE_SIZE_TO_ASPECT_RATIO.items() if ratio == aspect_ratio),
+            "",
+        )
+    source_resolution = resolution if resolution in GPT_IMAGE_SIZE_BY_RESOLUTION else "1K"
+    return GPT_IMAGE_SIZE_BY_RESOLUTION[source_resolution].get(aspect_ratio, "")
+
+
+def _mcp_image_count(params: dict[str, Any], capability: ImageModelCapability) -> int:
+    raw_count = params.get("n", 1)
+    count = _positive_int(raw_count)
+    if count is None or count < 1 or count > capability.max_count:
+        _unsupported_media_spec()
+    return count
+
+
+def _mcp_image_option(
+    params: dict[str, Any],
+    key: str,
+    allowed: tuple[str, ...],
+) -> str:
+    value = _string_param(params, key)
+    if not value:
+        return ""
+    normalized = _canonical_option(value, allowed)
+    if not normalized:
+        _unsupported_media_spec()
+    return normalized
+
+
+def _mcp_flag_option(params: dict[str, Any], key: str, enabled: bool) -> Any:
+    if key not in params or params[key] is None:
+        return None
+    if not enabled:
+        _unsupported_media_spec()
+    return params[key]
+
+
+def build_mcp_image_payload(request: WorkspaceRunRequest, model: str) -> dict[str, Any]:
+    capability = IMAGE_MODEL_CAPABILITIES.get(model)
+    if capability is None:
+        raise MediaGenerationError(MEDIA_ERROR_MODEL_UNAVAILABLE)
+
+    params = _media_params(request)
+    aspect_ratio, resolution = _image_options(request, capability)
+    payload: dict[str, Any] = {
+        "model": model,
+        "prompt": request.user_query,
+        "n": _mcp_image_count(params, capability),
+        "aspect_ratio": aspect_ratio,
+        "resolution": resolution,
+    }
+
+    pixel_size = _image_pixel_size(capability, aspect_ratio, resolution)
+    if capability.family == "gemini_image":
+        payload["size"] = aspect_ratio
+        payload["image_size"] = resolution
+        image_config = {"aspectRatio": aspect_ratio, "imageSize": resolution}
+        payload["responseFormat"] = {"image": image_config}
+        payload["generationConfig"] = {"imageConfig": image_config}
+        payload["extra_body"] = {
+            "google": {"image_config": {"aspect_ratio": aspect_ratio, "image_size": resolution}}
+        }
+    elif capability.family == "grok_image":
+        pass
+    elif pixel_size:
+        payload["size"] = pixel_size
+    else:
+        _unsupported_media_spec()
+
+    quality = _mcp_image_option(params, "quality", capability.qualities)
+    if quality:
+        payload["quality"] = quality
+    output_format = _mcp_image_option(params, "output_format", capability.output_formats)
+    if not output_format:
+        output_format = _mcp_image_option(params, "response_format", capability.output_formats)
+    if output_format:
+        payload["response_format" if capability.family == "grok_image" else "output_format"] = output_format
+    background = _mcp_image_option(params, "background", capability.backgrounds)
+    if background:
+        payload["background"] = background
+
+    for key in ("style", "moderation"):
+        value = _string_param(params, key)
+        if value:
+            payload[key] = value
+    for key, enabled in (
+        ("output_compression", capability.allow_output_compression),
+        ("input_fidelity", capability.allow_input_fidelity),
+        ("negative_prompt", capability.allow_negative_prompt),
+    ):
+        value = _mcp_flag_option(params, key, enabled)
+        if value is not None:
+            payload[key] = value
+    return payload
+
+
+def _video_options(request: WorkspaceRunRequest, capability: VideoModelCapability) -> tuple[int, str, str]:
+    params = _media_params(request)
+    raw_duration = _string_param(params, "duration", "duration_seconds", "seconds")
+    if raw_duration:
+        duration = _positive_int(raw_duration)
+        if duration is None or duration not in capability.durations:
+            _unsupported_media_spec()
+    else:
+        duration = capability.default_duration
+
+    raw_size = _string_param(params, "size")
+    size_ratio = VIDEO_SIZE_TO_ASPECT_RATIO.get(raw_size.casefold(), "") if raw_size else ""
+    if raw_size and not size_ratio and not _canonical_option(raw_size, capability.resolutions):
+        _unsupported_media_spec()
+    raw_ratio = _string_param(params, "ratio", "aspect_ratio")
+    if raw_ratio:
+        aspect_ratio = _canonical_option(raw_ratio, capability.aspect_ratios)
+        if not aspect_ratio or (size_ratio and aspect_ratio != size_ratio):
+            _unsupported_media_spec()
+    else:
+        aspect_ratio = size_ratio or capability.default_aspect_ratio
+
+    raw_resolution = _string_param(params, "resolution") or (raw_size if raw_size and not size_ratio else "")
+    if raw_resolution:
+        resolution = _canonical_option(raw_resolution, capability.resolutions)
+        if not resolution:
+            _unsupported_media_spec()
+    else:
+        resolution = capability.default_resolution
+    return duration, aspect_ratio, resolution
+
+
+def build_mcp_video_payload(request: WorkspaceRunRequest, model: str) -> dict[str, Any]:
+    capability = VIDEO_MODEL_CAPABILITIES.get(model)
+    if capability is None:
+        raise MediaGenerationError(MEDIA_ERROR_MODEL_UNAVAILABLE)
+
+    params = _media_params(request)
+    duration, aspect_ratio, resolution = _video_options(request, capability)
+    payload: dict[str, Any] = {
+        "model": model,
+        "prompt": request.user_query,
+        "duration": duration,
+        "duration_seconds": duration,
+        "ratio": aspect_ratio,
+        "aspect_ratio": aspect_ratio,
+        "resolution": resolution,
+    }
+    if "seed" in params and params["seed"] is not None:
+        seed = _positive_int(params["seed"])
+        if not capability.allow_seed or seed is None:
+            _unsupported_media_spec()
+        payload["seed"] = seed
+    if "watermark" in params and params["watermark"] is not None:
+        watermark = _boolean_value(params["watermark"])
+        if not capability.allow_watermark or watermark is None:
+            _unsupported_media_spec()
+        payload["watermark"] = watermark
+    return payload
+
+
+def normalize_mcp_media_request(
+    request: WorkspaceRunRequest,
+    media_type: str,
+    model: str,
+) -> WorkspaceRunRequest:
+    if media_type == "image":
+        payload = build_mcp_image_payload(request, model)
+    elif media_type == "video":
+        payload = build_mcp_video_payload(request, model)
+    else:
+        raise MediaGenerationError(MEDIA_ERROR_MODEL_UNAVAILABLE)
+
+    params = {key: value for key, value in payload.items() if key not in {"model", "prompt"}}
+    return request.model_copy(update={"params": params})
+
 
 @dataclass
 class MediaResult:
@@ -134,17 +664,20 @@ def selected_media_model(settings: Settings, request: WorkspaceRunRequest, media
     config = request.model_roles.model_dump()
     candidate = str(config.get(role) or "").strip()
     metadata = request.metadata if isinstance(request.metadata, dict) else {}
-    configured = mode_models_from_metadata(metadata, "image" if media_type == "image" else "video")
-    allowed = set(configured or (settings.image_allowed_models if media_type == "image" else settings.video_allowed_models))
     mode_key = "image" if media_type == "image" else "video"
-    if mode_key in mode_models_payload_from_metadata(metadata) and not allowed:
-        raise MediaGenerationError(f"当前账号没有可用的{ '图像' if media_type == 'image' else '视频' }模型权限。")
+    configured_by_mode = mode_models_payload_from_metadata(metadata)
+    if mode_key in configured_by_mode:
+        allowed = configured_by_mode[mode_key]
+    else:
+        allowed = settings.image_allowed_models if media_type == "image" else settings.video_allowed_models
+    if not allowed:
+        raise MediaGenerationError(MEDIA_ERROR_MODEL_UNAVAILABLE)
     if candidate in allowed:
         return candidate
     default_model = settings.default_image_model if media_type == "image" else settings.default_video_model
     if default_model in allowed:
         return default_model
-    return next(iter(allowed), default_model)
+    return allowed[0]
 
 
 async def generate_media(
@@ -175,37 +708,43 @@ async def generate_image(
     user: UserContext,
     model: str,
 ) -> MediaResult:
-    payload: dict[str, Any] = {
-        "model": model,
-        "prompt": request.user_query,
-        "n": int(request.params.get("n") or 1),
-        "size": str(request.params.get("size") or request.params.get("resolution") or "1024x1024"),
-    }
-    for key in ("quality", "style", "response_format", "background", "moderation"):
-        value = request.params.get(key)
-        if value is not None and str(value):
-            payload[key] = value
+    if request.task_type == "agent_image":
+        payload = build_mcp_image_payload(request, model)
+    else:
+        payload: dict[str, Any] = {
+            "model": model,
+            "prompt": request.user_query,
+            "n": int(request.params.get("n") or 1),
+            "size": str(request.params.get("size") or request.params.get("resolution") or "1024x1024"),
+        }
+        for key in ("quality", "style", "response_format", "background", "moderation"):
+            value = request.params.get(key)
+            if value is not None and str(value):
+                payload[key] = value
     image_inputs, mask_input = split_image_inputs_from_files(request)
     endpoint = f"{settings.new_api_base_url}/images/generations"
     if mask_input and not image_inputs:
-        raise MediaGenerationError("局部编辑需要同时上传原图和 mask 蒙版 PNG。mask 必须和原图尺寸完全一致。")
+        raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
     if image_inputs:
         endpoint = f"{settings.new_api_base_url}/images/edits"
     timeout = httpx.Timeout(240.0, connect=10.0, read=240.0, write=30.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        if image_inputs:
-            response = await post_image_edit(client, endpoint, user.api_key, payload, image_inputs, mask_input)
-        else:
-            response = await client.post(endpoint, headers=auth_headers(user.api_key), json=payload)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            if image_inputs:
+                response = await post_image_edit(client, endpoint, user.api_key, payload, image_inputs, mask_input)
+            else:
+                response = await client.post(endpoint, headers=auth_headers(user.api_key), json=payload)
+    except httpx.HTTPError as exc:
+        raise MediaGenerationError(MEDIA_ERROR_SERVICE_UNAVAILABLE) from exc
     if response.status_code >= 400:
         raise MediaGenerationError(upstream_error(settings, user.api_key, response))
     try:
         body = response.json()
     except ValueError as exc:
-        raise MediaGenerationError("图像服务没有返回有效结果。") from exc
+        raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE) from exc
     urls = extract_media_urls(body, "image")
     if not urls:
-        raise MediaGenerationError("图像服务没有返回可展示结果，请重试或更换图像模型。")
+        raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE)
     return MediaResult(media_type="image", model=model, prompt=request.user_query, urls=urls, raw_text=json.dumps(body, ensure_ascii=False)[:4000])
 
 
@@ -215,6 +754,10 @@ async def generate_video(
     user: UserContext,
     model: str,
 ) -> MediaResult:
+    mcp_payload: dict[str, Any] | None = None
+    if request.task_type == "agent_video":
+        request = normalize_mcp_media_request(request, "video", model)
+        mcp_payload = build_mcp_video_payload(request, model)
     if model in OFFICIAL_SEEDANCE_REFERENCE_MODELS:
         return await generate_official_seedance_video(settings, request, user, model)
     if model in MOONAPIX_SEEDANCE_VIDEO_MODELS:
@@ -235,13 +778,19 @@ async def generate_video(
         ],
         "stream": False,
     }
-    for key in ("duration", "duration_seconds", "size", "ratio", "resolution", "quality", "fps"):
-        value = request.params.get(key)
-        if value is not None and str(value):
-            payload[key] = value
+    if mcp_payload is not None:
+        payload.update({key: value for key, value in mcp_payload.items() if key not in {"model", "prompt"}})
+    else:
+        for key in ("duration", "duration_seconds", "size", "ratio", "resolution", "quality", "fps"):
+            value = request.params.get(key)
+            if value is not None and str(value):
+                payload[key] = value
     timeout = httpx.Timeout(480.0, connect=10.0, read=480.0, write=30.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(f"{settings.new_api_base_url}/chat/completions", headers=headers, json=payload)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(f"{settings.new_api_base_url}/chat/completions", headers=headers, json=payload)
+    except httpx.HTTPError as exc:
+        raise MediaGenerationError(MEDIA_ERROR_SERVICE_UNAVAILABLE) from exc
     if response.status_code >= 400:
         raise MediaGenerationError(upstream_error(settings, user.api_key, response))
     text = ""
@@ -250,10 +799,10 @@ async def generate_video(
         text = extract_text_response(body) or json.dumps(body, ensure_ascii=False)[:4000]
         urls = extract_media_urls(body, "video") or VIDEO_URL_RE.findall(text)
     except ValueError:
-        text = response.text[:4000]
-        urls = VIDEO_URL_RE.findall(text)
+        text = ""
+        urls = []
     if not urls:
-        raise MediaGenerationError("视频服务没有返回可展示结果，请重试或更换视频模型。")
+        raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE)
     return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text)
 
 
@@ -288,26 +837,29 @@ async def generate_moonapix_seedance_video(
         if value is not None and str(value):
             payload[key] = value
     timeout = httpx.Timeout(480.0, connect=10.0, read=480.0, write=30.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            f"{settings.new_api_base_url}/videos",
-            headers=auth_headers(user.api_key),
-            json=payload,
-        )
-        if response.status_code >= 400:
-            raise MediaGenerationError(upstream_error(settings, user.api_key, response))
-        try:
-            body = response.json()
-        except ValueError as exc:
-            raise MediaGenerationError("视频服务没有返回有效任务。") from exc
-        urls = extract_media_urls(body, "video")
-        task_id = video_task_id(body)
-        if not urls and task_id:
-            body = await poll_official_seedance_video(client, settings, user, task_id)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{settings.new_api_base_url}/videos",
+                headers=auth_headers(user.api_key),
+                json=payload,
+            )
+            if response.status_code >= 400:
+                raise MediaGenerationError(upstream_error(settings, user.api_key, response))
+            try:
+                body = response.json()
+            except ValueError as exc:
+                raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE) from exc
             urls = extract_media_urls(body, "video")
-        text = json.dumps(body, ensure_ascii=False)[:4000]
+            task_id = video_task_id(body)
+            if not urls and task_id:
+                body = await poll_official_seedance_video(client, settings, user, task_id)
+                urls = extract_media_urls(body, "video")
+            text = json.dumps(body, ensure_ascii=False)[:4000]
+    except httpx.HTTPError as exc:
+        raise MediaGenerationError(MEDIA_ERROR_SERVICE_UNAVAILABLE) from exc
     if not urls:
-        raise MediaGenerationError("视频服务没有返回可展示结果，请重试或更换视频模型。")
+        raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE)
     return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text, task_id=task_id)
 
 
@@ -329,26 +881,29 @@ async def generate_official_seedance_video(
     if references:
         payload["references"] = references
     timeout = httpx.Timeout(480.0, connect=10.0, read=480.0, write=30.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            f"{settings.new_api_base_url}/videos",
-            headers=auth_headers(user.api_key),
-            json=payload,
-        )
-        if response.status_code >= 400:
-            raise MediaGenerationError(upstream_error(settings, user.api_key, response))
-        try:
-            body = response.json()
-        except ValueError as exc:
-            raise MediaGenerationError("视频服务没有返回有效任务。") from exc
-        urls = extract_media_urls(body, "video")
-        task_id = video_task_id(body)
-        if not urls and task_id:
-            body = await poll_official_seedance_video(client, settings, user, task_id)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{settings.new_api_base_url}/videos",
+                headers=auth_headers(user.api_key),
+                json=payload,
+            )
+            if response.status_code >= 400:
+                raise MediaGenerationError(upstream_error(settings, user.api_key, response))
+            try:
+                body = response.json()
+            except ValueError as exc:
+                raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE) from exc
             urls = extract_media_urls(body, "video")
-        text = json.dumps(body, ensure_ascii=False)[:4000]
+            task_id = video_task_id(body)
+            if not urls and task_id:
+                body = await poll_official_seedance_video(client, settings, user, task_id)
+                urls = extract_media_urls(body, "video")
+            text = json.dumps(body, ensure_ascii=False)[:4000]
+    except httpx.HTTPError as exc:
+        raise MediaGenerationError(MEDIA_ERROR_SERVICE_UNAVAILABLE) from exc
     if not urls:
-        raise MediaGenerationError("视频服务没有返回可展示结果，请重试或更换视频模型。")
+        raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE)
     return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text, task_id=task_id)
 
 
@@ -363,10 +918,13 @@ async def poll_official_seedance_video(
     last_body: dict[str, Any] = {}
     while time.monotonic() < deadline:
         await asyncio.sleep(interval)
-        response = await client.get(
-            f"{settings.new_api_base_url}/videos/{task_id}",
-            headers=auth_headers(user.api_key),
-        )
+        try:
+            response = await client.get(
+                f"{settings.new_api_base_url}/videos/{task_id}",
+                headers=auth_headers(user.api_key),
+            )
+        except httpx.HTTPError as exc:
+            raise MediaGenerationError(MEDIA_ERROR_SERVICE_UNAVAILABLE) from exc
         if response.status_code >= 400:
             raise MediaGenerationError(upstream_error(settings, user.api_key, response))
         try:
@@ -379,12 +937,12 @@ async def poll_official_seedance_video(
         if extract_media_urls(body, "video"):
             return body
         if status in {"failed", "error", "cancelled", "canceled"}:
-            raise MediaGenerationError(video_failure_reason(body) or "视频任务失败。")
+            raise MediaGenerationError(video_failure_reason(body))
         if interval < 8:
             interval += 1
     if last_body:
         return last_body
-    raise MediaGenerationError("视频生成等待超时，请稍后到任务日志查看结果。")
+    raise MediaGenerationError(MEDIA_ERROR_TIMEOUT)
 
 
 def official_seedance_duration(model: str, params: dict[str, Any]) -> int:
@@ -511,13 +1069,11 @@ def validate_moonapix_seedance_reference_inputs(model: str, request: WorkspaceRu
         if media_type == "video" and model != "seedance-2.0-cl-mini":
             unsupported_video.append(file.path)
     if unsupported_local:
-        raise MediaGenerationError(
-            "视频参考素材需要公网 URL 或 Asset:// 引用；云端 Codex 暂不能把本地上传文件直接作为参考素材。"
-        )
+        raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
     if unsupported_audio:
-        raise MediaGenerationError("该视频模型暂不接收音频参考，请移除音频素材。")
+        raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
     if unsupported_video:
-        raise MediaGenerationError("当前视频模型只支持图片参考，请移除视频素材或切换到 CL Mini。")
+        raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
 
 
 def public_media_reference_url(file: Any) -> str:
@@ -556,18 +1112,8 @@ def video_task_id(body: dict[str, Any]) -> str:
 
 
 def video_failure_reason(body: dict[str, Any]) -> str:
-    for key in ("error", "message", "fail_reason"):
-        value = body.get(key)
-        if isinstance(value, str) and value:
-            return value
-        if isinstance(value, dict):
-            message = value.get("message")
-            if isinstance(message, str) and message:
-                return message
-    data = body.get("data")
-    if isinstance(data, dict):
-        return video_failure_reason(data)
-    return ""
+    _ = body
+    return MEDIA_ERROR_SERVICE_UNAVAILABLE
 
 
 async def persist_remote_media(
@@ -627,7 +1173,11 @@ async def post_image_edit(
     image_inputs: list[str],
     mask_input: str,
 ) -> httpx.Response:
-    data = {key: str(value) for key, value in payload.items() if value is not None}
+    data = {
+        key: json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value)
+        for key, value in payload.items()
+        if value is not None
+    }
     files: list[tuple[str, tuple[str, bytes, str]]] = []
     for index, item in enumerate(image_inputs[:10], start=1):
         decoded = decode_data_url_image(item)
@@ -784,18 +1334,12 @@ def dedupe(values: list[str]) -> list[str]:
 
 
 def upstream_error(settings: Settings, api_key: str, response: httpx.Response) -> str:
-    body = redact(response.text[:800], secret_values_for_redaction(settings, api_key))
-    try:
-        payload = json.loads(body)
-    except ValueError:
-        payload = {}
-    if isinstance(payload, dict):
-        error = payload.get("error")
-        if isinstance(error, dict) and error.get("message"):
-            body = str(error["message"])
-        elif payload.get("message"):
-            body = str(payload["message"])
-    return f"媒体服务暂时异常 HTTP {response.status_code}: {body or '没有错误详情'}"
+    _ = settings, api_key
+    if response.status_code in {400, 413, 415, 422}:
+        return MEDIA_ERROR_INPUT_UNSUPPORTED
+    if response.status_code in {408, 504}:
+        return MEDIA_ERROR_TIMEOUT
+    return MEDIA_ERROR_SERVICE_UNAVAILABLE
 
 
 class MediaGenerationError(Exception):
