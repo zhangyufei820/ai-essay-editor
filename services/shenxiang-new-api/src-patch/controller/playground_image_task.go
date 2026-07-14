@@ -1454,26 +1454,7 @@ func cacheFirstPlaygroundImageTaskResult(c *gin.Context, task *model.Task, paylo
 	if err != nil {
 		return nil, err
 	}
-	if playgroundImageTaskResultHasSizeMismatch(item) {
-		removePlaygroundMediaWithMetadata(filepath.Join(playgroundMediaUserDir(c), item.Filename))
-		return nil, errors.New("生成结果尺寸未达到所选规格，请重新生成。")
-	}
 	return item, nil
-}
-
-func playgroundImageTaskResultHasSizeMismatch(item *playgroundMediaItem) bool {
-	if item == nil || len(item.Metadata) == 0 {
-		return false
-	}
-	mismatch, _ := item.Metadata["requested_actual_mismatch"].(bool)
-	requestedSize, _ := item.Metadata["effective_size"].(string)
-	width, height, found := strings.Cut(strings.TrimSpace(requestedSize), "x")
-	if !mismatch || !found {
-		return false
-	}
-	parsedWidth, widthErr := strconv.Atoi(width)
-	parsedHeight, heightErr := strconv.Atoi(height)
-	return widthErr == nil && heightErr == nil && parsedWidth > 0 && parsedHeight > 0
 }
 
 func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem, payload *playgroundImageTaskPayload, status int, actualQuota int) {

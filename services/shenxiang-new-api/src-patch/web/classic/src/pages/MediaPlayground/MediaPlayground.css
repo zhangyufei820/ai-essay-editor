@@ -5372,6 +5372,22 @@ body.mp-route-active .mp-result-inspector-meta strong {
   white-space: nowrap;
 }
 
+body.mp-route-active .mp-result-inspector-size-notice {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px;
+  background: var(--mp-bg-elevated);
+  color: var(--mp-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+body.mp-route-active .mp-result-inspector-size-notice strong {
+  color: var(--mp-text-primary);
+}
+
 body.mp-route-active .mp-result-inspector-prompt {
   display: -webkit-box;
   max-height: 42px;

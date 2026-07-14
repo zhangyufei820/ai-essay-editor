@@ -127,7 +127,7 @@ func TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInter
 	require.NotContains(t, payload, "display_model")
 }
 
-func TestCacheFirstPlaygroundImageTaskResultRejectsMismatchedImageSize(t *testing.T) {
+func TestCacheFirstPlaygroundImageTaskResultRetainsMismatchedImageSize(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	root := t.TempDir()
 	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", root)
@@ -149,26 +149,14 @@ func TestCacheFirstPlaygroundImageTaskResultRejectsMismatchedImageSize(t *testin
 		&dto.ImageResponse{Data: []dto.ImageData{{B64Json: base64.StdEncoding.EncodeToString(imageBytes.Bytes())}}},
 	)
 
-	require.Nil(t, item)
-	require.EqualError(t, err, "生成结果尺寸未达到所选规格，请重新生成。")
+	require.NoError(t, err)
+	require.NotNil(t, item)
+	require.Equal(t, "1024x768", item.Metadata["actual_size"])
+	require.Equal(t, true, item.Metadata["requested_actual_mismatch"])
 	entries, readErr := os.ReadDir(filepath.Join(root, "u-7"))
 	require.NoError(t, readErr)
-	require.Empty(t, entries)
-}
-
-func TestPlaygroundImageTaskResultHasSizeMismatchRequiresExactRequestedSize(t *testing.T) {
-	require.True(t, playgroundImageTaskResultHasSizeMismatch(&playgroundMediaItem{
-		Metadata: map[string]interface{}{
-			"effective_size":            "2048x1536",
-			"requested_actual_mismatch": true,
-		},
-	}))
-	require.False(t, playgroundImageTaskResultHasSizeMismatch(&playgroundMediaItem{
-		Metadata: map[string]interface{}{
-			"effective_size":            "auto",
-			"requested_actual_mismatch": true,
-		},
-	}))
+	require.NotEmpty(t, entries)
+	require.FileExists(t, filepath.Join(root, "u-7", item.Filename))
 }
 
 func TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName(t *testing.T) {

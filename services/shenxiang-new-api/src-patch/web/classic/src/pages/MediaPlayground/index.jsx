@@ -1736,6 +1736,8 @@ function imageTaskToResult(
       '',
   ).trim();
   const metadata = item.metadata || item.Metadata || {};
+  const actualSize = firstPromptText(metadata.actual_size);
+  const requestedSize = firstPromptText(metadata.effective_size, metadata.requested_size);
   return {
     id: `image-${task.task_id}`,
     kind: 'image',
@@ -1758,8 +1760,9 @@ function imageTaskToResult(
     revisedPrompt,
     displayPrompt: firstPromptText(revisedPrompt, originalPrompt),
     taskId: task.task_id,
-    actualSize: firstPromptText(metadata.actual_size),
-    requestedSize: firstPromptText(metadata.effective_size, metadata.requested_size),
+    actualSize,
+    requestedSize,
+    sizeMismatch: Boolean(actualSize && requestedSize && actualSize !== requestedSize),
     status: 'ready',
     cacheStatus: 'ready',
     createdAt: Date.now(),
@@ -5360,6 +5363,14 @@ const MediaPlayground = () => {
                       <strong>{inspectorResult.kind === 'image' ? formatLabel : 'MP4 / URL'}</strong>
                     </div>
                   </div>
+                  {inspectorResult.kind === 'image' && inspectorResult.sizeMismatch ? (
+                    <div className='mp-result-inspector-size-notice'>
+                      <strong>尺寸说明</strong>
+                      <span>
+                        本次请求 {inspectorResult.requestedSize}，实际生成 {inspectorResult.actualSize}。已保留该结果，可直接下载。
+                      </span>
+                    </div>
+                  ) : null}
                   {inspectorResultPrompt ? (
                     <div className='mp-result-inspector-prompt'>
                       <span>Prompt 摘要</span>
