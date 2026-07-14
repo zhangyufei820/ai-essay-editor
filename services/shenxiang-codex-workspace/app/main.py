@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Header, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from redis import ConnectionPool, Redis
 
@@ -517,6 +517,11 @@ async def agent_token(request: Request) -> JSONResponse:
     else:
         raise HTTPException(status_code=400, detail="不支持的授权方式")
     return JSONResponse(tokens, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
+
+
+@app.get("/mcp")
+def mcp_browser_help() -> RedirectResponse:
+    return RedirectResponse(f"{public_base(settings)}/agent", status_code=302)
 
 
 @app.post("/mcp")
