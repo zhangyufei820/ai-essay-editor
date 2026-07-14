@@ -209,8 +209,8 @@ class NewApiClient:
         current = normalize_mode_models_payload(mode_models or {})
         codex_models = current["codex"] if "codex" in current else defaults["codex"]
         claude_models = current["claude"] if "claude" in current else defaults["claude"]
-        image_models = current["image"] if "image" in current else supported_image_models(self.settings)
-        video_models = current["video"] if "video" in current else supported_video_models(self.settings)
+        image_models = dedupe_models((*current.get("image", ()), *supported_image_models(self.settings)))
+        video_models = dedupe_models((*current.get("video", ()), *supported_video_models(self.settings)))
         grok_allowed = set(self.settings.grok_allowed_models)
         grok_models = tuple(model for model in codex_models if model in grok_allowed)
         return {

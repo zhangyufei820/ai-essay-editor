@@ -19,7 +19,7 @@ from app.main import (
 )
 from app.models import WorkspaceRunRequest
 from app.new_api_client import NewApiAuthError, NewApiClient
-from app.model_access import IMAGE_BENEFIT_MODEL, split_visible_models
+from app.model_access import IMAGE_BENEFIT_MODEL, split_visible_models, supported_image_models, supported_video_models
 from app.security import UserContext
 
 
@@ -94,8 +94,8 @@ def test_effective_mode_models_preserves_explicit_empty_permissions() -> None:
     assert result["codex"] == ()
     assert result["grok"] == ()
     assert result["claude"] == ("claude-opus-4-8",)
-    assert result["image"] == ()
-    assert result["video"] == ("seedance-2.0",)
+    assert set(result["image"]) == set(supported_image_models(Settings()))
+    assert set(result["video"]) == set(supported_video_models(Settings()))
 
 
 def test_resolve_mode_models_keeps_empty_visible_models_when_endpoint_succeeds() -> None:
@@ -110,8 +110,8 @@ def test_resolve_mode_models_keeps_empty_visible_models_when_endpoint_succeeds()
 
     assert result["codex"] == ()
     assert result["claude"] == ()
-    assert result["image"] == ()
-    assert result["video"] == ()
+    assert set(result["image"]) == set(supported_image_models(Settings()))
+    assert set(result["video"]) == set(supported_video_models(Settings()))
 
 
 def test_effective_mode_models_derives_grok_credential_profile_without_hiding_text_model() -> None:
