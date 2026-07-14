@@ -21,7 +21,7 @@
       <h2>第一次安装：只做这 4 步</h2>
       <div class="step"><span class="number">1</span><div><strong>打开终端</strong><p>Windows 打开 PowerShell；Mac 打开“终端”。</p></div></div>
       <div class="step"><span class="number">2</span><div><strong>复制图像生成令牌</strong><p>进入星人 API 控制台的“第三方接入”，复制“星人图像生成令牌”。不要把它发给任何人。</p></div></div>
-      <div class="step"><span class="number">3</span><div><strong>复制并运行这一条命令</strong><pre>npx -y @xingren/codex-image-mcp install</pre><p>出现提示后粘贴令牌并按回车。粘贴内容不会显示，这是正常的。</p></div></div>
+      <div class="step"><span class="number">3</span><div><strong>复制并运行这一条命令</strong><pre>npx -y xingren-codex-image-mcp install</pre><p>出现提示后粘贴令牌并按回车。粘贴内容不会显示，这是正常的。</p></div></div>
       <div class="step"><span class="number">4</span><div><strong>重启 Codex</strong><p>完全退出后重新打开 Codex，即可开始使用。</p></div></div>
       <p class="tip">如果终端提示找不到 <code>npx</code>，先安装 Node.js 长期支持版，重新打开终端后再执行第 3 步。</p>
     </section>
@@ -41,7 +41,7 @@
       <dt>我看不到图像工具</dt><dd>在 Codex 输入 <code>/mcp</code>。看到 <code>xingren-image</code> 就表示连接成功；若没看到，请重启 Codex 后再试。</dd>
       <dt>提示令牌无效或额度不足</dt><dd>回到控制台重新复制“星人图像生成令牌”，再运行一次安装命令。不要使用文本令牌或视频令牌。</dd>
       <dt>图片没有生成成功</dt><dd>稍等一分钟后重试；也可以把描述写得更具体，例如补充主体、画面比例、风格和“不要出现文字”等要求。</dd>
-      <dt>我想重新设置令牌</dt><dd>再次运行 <code>npx -y @xingren/codex-image-mcp install</code>，按提示粘贴新的图像生成令牌即可。</dd>
+      <dt>我想重新设置令牌</dt><dd>再次运行 <code>npx -y xingren-codex-image-mcp install</code>，按提示粘贴新的图像生成令牌即可。</dd>
     </dl>
 
     <p class="tip">安全提醒：令牌只保存在你的电脑上。不要发送令牌、截图令牌，也不要把令牌写进项目文件。</p>
