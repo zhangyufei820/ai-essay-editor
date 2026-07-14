@@ -520,17 +520,15 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
-	request, err := preprocessGeminiOpenAIResponsesRequest(request)
+	result, err := relayconvert.ConvertRequest(c, info, types.RelayFormatGemini, &request)
 	if err != nil {
 		return nil, err
 	}
-
-	chatRequest, err := relayconvert.ResponsesRequestToChatCompletionsRequest(&request)
-	if err != nil {
-		return nil, err
+	geminiRequest, ok := result.Value.(*dto.GeminiChatRequest)
+	if !ok {
+		return nil, fmt.Errorf("expected Gemini generateContent request, got %T", result.Value)
 	}
-
-	return a.ConvertOpenAIRequest(c, info, chatRequest)
+	return geminiRequest, nil
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
