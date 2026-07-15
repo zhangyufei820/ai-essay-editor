@@ -356,7 +356,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("gpt-5.6-terra", sql)
         self.assertIn("gpt-5.6-sol", sql)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
-        self.assertNotIn("codex-auto-review", sql)
+        self.assertIn("codex-auto-review", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertIn("CACHE:admin-key-1,admin-key-2", sql)
 

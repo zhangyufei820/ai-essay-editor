@@ -1169,12 +1169,7 @@ def ensure_discount_image2_backing_model() -> None:
 def sync_tokens(profiles: dict[str, list[str]]) -> None:
     statements = ["START TRANSACTION;"]
     for profile, names in TOKEN_PROFILES.items():
-        profile_models = profiles[profile]
-        if profile == "codex":
-            profile_models = [
-                model for model in profile_models if model not in CONTROLLED_CODEX_MODEL_ALIASES
-            ]
-        models = ",".join(sanitize_token_models(profile_models))
+        models = ",".join(sanitize_token_models(profiles[profile]))
         for name in names:
             statements.append(
                 "UPDATE tokens "
