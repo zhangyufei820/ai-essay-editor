@@ -13,7 +13,6 @@ import (
 	appconstant "github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
-	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
@@ -50,12 +49,15 @@ func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayIn
 }
 
 func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayInfo, req *dto.ClaudeRequest) (any, error) {
-	adaptor := openai.Adaptor{}
-	oaiReq, err := adaptor.ConvertClaudeRequest(c, info, req)
+	result, err := relayconvert.ConvertRequest(c, info, types.RelayFormatGemini, req)
 	if err != nil {
 		return nil, err
 	}
-	return a.ConvertOpenAIRequest(c, info, oaiReq.(*dto.GeneralOpenAIRequest))
+	geminiRequest, ok := result.Value.(*dto.GeminiChatRequest)
+	if !ok {
+		return nil, fmt.Errorf("expected Gemini generateContent request, got %T", result.Value)
+	}
+	return geminiRequest, nil
 }
 
 func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.AudioRequest) (io.Reader, error) {
@@ -462,13 +464,11 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	if request == nil {
 		return nil, errors.New("request is nil")
 	}
-
-	geminiRequest, err := CovertOpenAI2Gemini(c, *request, info)
+	result, err := relayconvert.ConvertRequest(c, info, types.RelayFormatGemini, request)
 	if err != nil {
 		return nil, err
 	}
-
-	return geminiRequest, nil
+	return result.Value, nil
 }
 
 func (a *Adaptor) ConvertRerankRequest(c *gin.Context, relayMode int, request dto.RerankRequest) (any, error) {

@@ -7,6 +7,7 @@ from app.media_catalog import public_models_for_mode
 from app.media_tools import (
     IMAGE_MODEL_CAPABILITIES,
     MEDIA_ERROR_INPUT_UNSUPPORTED,
+    MEDIA_ERROR_MODEL_UNAVAILABLE,
     MEDIA_ERROR_RESULT_UNAVAILABLE,
     MEDIA_ERROR_SERVICE_UNAVAILABLE,
     MEDIA_ERROR_SPEC_UNSUPPORTED,
@@ -18,6 +19,7 @@ from app.media_tools import (
     generate_image,
     generate_video,
     normalize_mcp_media_request,
+    upstream_error,
 )
 from app.models import WorkspaceFile, WorkspaceRunRequest
 from app.security import UserContext
@@ -207,7 +209,7 @@ def test_discount_image2_agent_generation_uses_public_model_alias_and_requested_
         task_type="agent_image",
         model_role="image_generation",
         model_config={"image_generation": "geek2api-image-2"},
-        params={"n": 1, "size": "1024x1024", "quality": "low"},
+        params={"n": 1, "size": "1024x1024", "quality": "low", "output_compression": 80},
     )
 
     result = asyncio.run(
@@ -225,6 +227,7 @@ def test_discount_image2_agent_generation_uses_public_model_alias_and_requested_
     assert payload["model"] == "特价 image-2"
     assert payload["size"] == "1024x1024"
     assert payload["quality"] == "low"
+    assert payload["output_compression"] == 80
     assert result.urls == ["https://cdn.test/geek2api-image.png"]
 
 
@@ -528,6 +531,14 @@ def test_moonapix_rejects_local_data_url_reference(monkeypatch):
 def test_all_public_media_models_have_mcp_capability_profiles():
     assert {item.model for item in public_models_for_mode("image")} <= set(IMAGE_MODEL_CAPABILITIES)
     assert {item.model for item in public_models_for_mode("video")} <= set(VIDEO_MODEL_CAPABILITIES)
+    assert "grok-imagine-image" not in {item.model for item in public_models_for_mode("image")}
+
+
+@pytest.mark.parametrize("status_code", [403, 404])
+def test_model_access_failures_have_a_safe_public_message(status_code):
+    response = type("Response", (), {"status_code": status_code})()
+
+    assert upstream_error(Settings(), "sk-test", response) == MEDIA_ERROR_MODEL_UNAVAILABLE
 
 
 def test_mcp_gpt_image_payload_forwards_validated_vertical_2k_options():
@@ -541,6 +552,7 @@ def test_mcp_gpt_image_payload_forwards_validated_vertical_2k_options():
             "resolution": "2K",
             "quality": "high",
             "output_format": "webp",
+            "output_compression": 80,
             "background": "opaque",
         },
     )
@@ -551,7 +563,34 @@ def test_mcp_gpt_image_payload_forwards_validated_vertical_2k_options():
     assert payload["resolution"] == "2K"
     assert payload["quality"] == "high"
     assert payload["output_format"] == "webp"
+    assert payload["output_compression"] == 80
     assert payload["background"] == "opaque"
+
+
+def test_mcp_image_rejects_invalid_output_compression():
+    request = WorkspaceRunRequest(
+        user_query="生成一张海报。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "gpt-image-2-4K"},
+        params={"output_compression": 101},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        build_mcp_image_payload(request, "gpt-image-2-4K")
+
+
+def test_mcp_image_rejects_unverified_ecommerce_output_compression():
+    request = WorkspaceRunRequest(
+        user_query="生成一张商品主图。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "image 2电商商品图快速通道(1.5K)"},
+        params={"output_compression": 80},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        build_mcp_image_payload(request, "image 2电商商品图快速通道(1.5K)")
 
 
 def test_mcp_image_payload_forwards_nested_image_configuration():
@@ -573,6 +612,33 @@ def test_mcp_image_payload_forwards_nested_image_configuration():
     assert payload["extra_body"]["google"]["image_config"] == {"aspect_ratio": "9:16", "image_size": "2K"}
 
 
+def test_mcp_image_rejects_unpublished_negative_prompt():
+    request = WorkspaceRunRequest(
+        user_query="生成一张竖版商品图。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "banana-2"},
+        params={"negative_prompt": "不要文字"},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        build_mcp_image_payload(request, "banana-2")
+
+
+@pytest.mark.parametrize("parameter", ["input_fidelity", "moderation", "style"])
+def test_mcp_image_rejects_other_unpublished_parameters(parameter):
+    request = WorkspaceRunRequest(
+        user_query="生成一张商品图。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "gpt-image-2-4K"},
+        params={parameter: "enabled"},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        build_mcp_image_payload(request, "gpt-image-2-4K")
+
+
 def test_mcp_normalization_keeps_ecommerce_auto_output_valid():
     request = WorkspaceRunRequest(
         user_query="生成一张商品主图。",
@@ -590,23 +656,6 @@ def test_mcp_normalization_keeps_ecommerce_auto_output_valid():
 
     assert payload["size"] == "auto"
     assert payload["resolution"] == "auto"
-
-
-def test_mcp_grok_payload_keeps_supported_non_pixel_aspect_ratio():
-    request = WorkspaceRunRequest(
-        user_query="生成一张超宽横版封面。",
-        task_type="agent_image",
-        model_role="image_generation",
-        model_config={"image_generation": "grok-imagine-image"},
-        params={"aspect_ratio": "20:9", "resolution": "1k", "response_format": "b64_json", "n": 2},
-    )
-
-    payload = build_mcp_image_payload(request, "grok-imagine-image")
-
-    assert payload["aspect_ratio"] == "20:9"
-    assert payload["resolution"] == "1k"
-    assert payload["response_format"] == "b64_json"
-    assert "size" not in payload
 
 
 def test_mcp_image_rejects_unsupported_specification_before_network(monkeypatch):
@@ -732,7 +781,7 @@ def test_media_errors_never_return_raw_transport_or_request_details(monkeypatch)
             )
         )
 
-    assert str(error.value) == MEDIA_ERROR_SERVICE_UNAVAILABLE
+    assert str(error.value) == MEDIA_ERROR_MODEL_UNAVAILABLE
     assert "403" not in str(error.value)
     assert "request" not in str(error.value)
     assert "secret" not in str(error.value)

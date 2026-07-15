@@ -32,7 +32,7 @@ func TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels(t *testing.T) {
 			Id:     102,
 			Name:   "disabled-model-channel",
 			Type:   constant.ChannelTypeOpenAI,
-			Status: common.ChannelStatusDisabled,
+			Status: common.ChannelStatusManuallyDisabled,
 			Group:  "default",
 			Models: "disabled-model",
 		},

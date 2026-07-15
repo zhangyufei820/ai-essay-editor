@@ -65,6 +65,7 @@ const (
 	LogTypeSystem  = 4
 	LogTypeError   = 5
 	LogTypeRefund  = 6
+	LogTypeLogin   = 7
 )
 
 func formatUserLogs(logs []*Log, startIdx int) {
@@ -104,6 +105,29 @@ func RecordLog(userId int, logType int, content string) {
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		common.SysLog("failed to record log: " + err.Error())
+	}
+}
+
+func RecordLoginLog(userId int, username string, content string, ip string, action string, params map[string]interface{}, extra map[string]interface{}) {
+	other := map[string]interface{}{}
+	for key, value := range extra {
+		other[key] = value
+	}
+	other["op"] = map[string]interface{}{
+		"action": action,
+		"params": params,
+	}
+	log := &Log{
+		UserId:    userId,
+		Username:  username,
+		CreatedAt: common.GetTimestamp(),
+		Type:      LogTypeLogin,
+		Content:   content,
+		Ip:        ip,
+		Other:     common.MapToJsonStr(other),
+	}
+	if err := LOG_DB.Create(log).Error; err != nil {
+		common.SysLog("failed to record login log: " + err.Error())
 	}
 }
 

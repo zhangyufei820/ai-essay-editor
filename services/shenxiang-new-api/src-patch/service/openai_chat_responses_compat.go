@@ -20,6 +20,10 @@ func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesRespons
 	return openaicompat.ResponsesResponseToChatCompletionsResponse(resp, id)
 }
 
+func ResponsesFinishReasonFromStatus(resp *dto.OpenAIResponsesResponse) (string, bool) {
+	return relayconvert.ResponsesFinishReasonFromStatus(resp)
+}
+
 func ChatCompletionsResponseToResponsesResponse(resp *dto.OpenAITextResponse, args ...interface{}) (*dto.OpenAIResponsesResponse, *dto.Usage, error) {
 	var req *dto.OpenAIResponsesRequest
 	var id string

@@ -33,6 +33,7 @@ from app.agent_mcp import (
     mcp_tools,
     public_base,
 )
+from app.media_catalog import public_display_model_name, public_display_model_names, resolve_public_media_model
 from app.config import GROK_MODEL, Settings, ensure_codex_config, ensure_directories, get_settings, secret_values_for_redaction
 from app.codex_runner import CodexRunner
 from app.models import (
@@ -614,7 +615,7 @@ async def bootstrap(user: UserContext = Depends(require_codex_user)) -> dict[str
             "used_quota": user.used_quota,
             "request_count": user.request_count,
         },
-        "defaults": default_model_config().model_dump(),
+        "defaults": public_default_model_config().model_dump(),
         "suggestions": model_suggestions(),
         "skills": list_user_visible_skills(user),
         "models": fast_models_payload(user),
@@ -913,6 +914,13 @@ def default_model_config() -> ModelRoleConfig:
     )
 
 
+def public_default_model_config() -> ModelRoleConfig:
+    config = default_model_config()
+    config.image_generation = public_display_model_name(config.image_generation, "image")
+    config.video_generation = public_display_model_name(config.video_generation, "video")
+    return config
+
+
 def model_suggestions() -> dict[str, Any]:
     return {
         "chat_main": {
@@ -933,12 +941,12 @@ def model_suggestions() -> dict[str, Any]:
         "image_generation": {
             "label": "图像生成",
             "description": "生成图片、封面、视觉草图时使用。只有当你的 New API Key 对该模型有权限时可用。",
-            "recommended": settings.default_image_model,
+            "recommended": public_display_model_name(settings.default_image_model, "image"),
         },
         "video_generation": {
             "label": "视频生成",
             "description": "生成短视频、图生视频、首尾帧任务时使用。建议只给付费用户开放。",
-            "recommended": settings.default_video_model,
+            "recommended": public_display_model_name(settings.default_video_model, "video"),
         },
         "code_review": {
             "label": "代码审查",
@@ -969,15 +977,15 @@ def model_modes(user: UserContext | None = None) -> dict[str, Any]:
         },
         "image": {
             "label": "图像生成",
-            "description": "Image 2、高速图像、通用图像和高质量图像是独立模型，请按任务明确选择。",
-            "models": list(mode_models["image"]),
+            "description": "这里只显示当前已接通的图像模型，请按任务明确选择。",
+            "models": list(public_display_model_names("image", mode_models["image"])),
             "token_name": settings.image_token_name,
             "billing": "按张计费。系统不会在不同图像模型之间自动切换。",
         },
         "video": {
             "label": "视频生成",
-            "description": "文生视频、图生视频和多素材视频。",
-            "models": list(mode_models["video"]),
+            "description": "这里只显示当前已接通的视频模型。",
+            "models": list(public_display_model_names("video", mode_models["video"])),
             "token_name": settings.video_token_name,
             "billing": "按秒或按次计费。扩展视频模型支持 4-15 秒。",
         },
@@ -985,9 +993,7 @@ def model_modes(user: UserContext | None = None) -> dict[str, Any]:
 
 
 def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple[str, ...]] | None = None) -> list[dict[str, Any]]:
-    pseudo_user = None
-    if mode_models:
-        pseudo_user = UserContext(api_key="", user_id="", key_hint="sk-****", allowed_models_by_mode=mode_models)
+    pseudo_user = UserContext(api_key="", user_id="", key_hint="sk-****", allowed_models_by_mode=mode_models or {})
     modes = model_modes(pseudo_user)
     visible_grok_models = set((mode_models or {}).get("grok", ()))
     grok_models = tuple(model for model in settings.grok_allowed_models if model in visible_grok_models)
@@ -1299,7 +1305,7 @@ async def stream_media_generation(
     }
     yield {
         "type": "status",
-        "message": f"正在连接 {model}",
+        "message": f"正在连接{label}生成服务",
         "mode": "media_generation",
         "task_id": task_id,
     }
@@ -1387,7 +1393,7 @@ async def stream_media_generation(
         "task_id": task_id,
         "media": {
             "type": result.media_type,
-            "model": result.model,
+            "model": public_display_model_name(result.model, media_kind) or label,
             "urls": result.local_urls or result.urls,
         },
     }
@@ -2146,6 +2152,13 @@ def normalize_allowed_models_from_metadata(metadata: dict[str, Any] | None) -> d
 
 
 def attach_allowed_models_metadata(request: WorkspaceRunRequest, user: UserContext) -> None:
+    mode = request_mode(request)
+    if mode in {"image", "video"}:
+        role = "image_generation" if mode == "image" else "video_generation"
+        selected = str(getattr(request.model_roles, role) or "").strip()
+        resolved = resolve_public_media_model(selected, mode)
+        if resolved:
+            setattr(request.model_roles, role, resolved)
     if user.allowed_models_by_mode is None:
         request.metadata.pop(SERVER_ALLOWED_MODELS_METADATA_KEY, None)
         return
@@ -2174,7 +2187,11 @@ def user_mode_models(user: UserContext | None) -> dict[str, tuple[str, ...]]:
         "image": supported_image_models(settings),
         "video": supported_video_models(settings),
     }
-    if user is None or not user.allowed_models_by_mode:
+    if user is None:
+        return result
+    if not user.allowed_models_by_mode:
+        result["image"] = ()
+        result["video"] = ()
         return result
     for mode, values in user.allowed_models_by_mode.items():
         result[mode] = tuple(values)

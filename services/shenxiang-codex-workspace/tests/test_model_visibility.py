@@ -12,6 +12,7 @@ from app.config import (
 from app.main import (
     attach_allowed_models_metadata,
     build_direct_task,
+    model_modes,
     provision_key_profiles,
     submit_workspace_task,
     user_for_mode,
@@ -721,6 +722,44 @@ def test_provision_profiles_never_expose_an_internal_service_address(monkeypatch
 
     assert all(profile["base_url"] != "http://internal-service:3000/v1" for profile in profiles)
     assert {profile["base_url"] for profile in profiles if profile["mode"] != "claude"} == {"https://api.aiphui.top/v1"}
+
+
+def test_public_model_modes_hide_internal_media_identifiers_and_accept_public_selection() -> None:
+    user = UserContext(
+        api_key="sk-primary",
+        user_id="user-1",
+        key_hint="sk-primary",
+        allowed_models_by_mode={
+            "codex": ("gpt-5.5",),
+            "claude": (),
+            "image": ("geek2api-image-2",),
+            "video": (),
+        },
+    )
+
+    modes = model_modes(user)
+    assert modes["image"]["models"] == ["特价 image-2"]
+    assert "geek2api" not in str(modes).lower()
+
+    request = WorkspaceRunRequest(
+        user_query="生成一张海报",
+        model_role="image_generation",
+        model_config={"image_generation": "特价 image-2"},
+    )
+    attach_allowed_models_metadata(request, user)
+
+    assert request.model_roles.image_generation == "geek2api-image-2"
+    assert request.metadata["server_allowed_models_by_mode"]["image"] == ["geek2api-image-2"]
+
+
+def test_public_model_modes_fail_closed_for_media_without_model_permissions() -> None:
+    user = UserContext(api_key="sk-primary", user_id="user-1", key_hint="sk-primary", allowed_models_by_mode=None)
+
+    modes = model_modes(user)
+
+    assert modes["image"]["models"] == []
+    assert modes["video"]["models"] == []
+    assert "geek2api" not in str(modes).lower()
 
 
 def test_provision_profiles_expose_dedicated_grok_key_when_entitled() -> None:

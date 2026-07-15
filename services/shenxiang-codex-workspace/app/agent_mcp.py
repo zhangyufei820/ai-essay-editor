@@ -47,7 +47,7 @@ def media_models_message(image_models: tuple[str, ...], video_models: tuple[str,
     return (
         f"可用图像模型：\n{render('image', image_models)}\n\n"
         f"可用视频模型：\n{render('video', video_models)}\n\n"
-        "请选择上面的完整名称。例如：用 GPT Image 2 生成一张海报。"
+        "这里只显示已接通的模型。请选择上面的完整名称，例如：用 GPT Image 2 生成一张海报。"
     )
 
 
@@ -67,8 +67,8 @@ def media_model_options(model: str, mode: str) -> str:
             options.append(f"格式：{'、'.join(capability.output_formats)}")
         if capability.backgrounds:
             options.append(f"背景：{'、'.join(capability.backgrounds)}")
-        if capability.allow_negative_prompt:
-            options.append("支持负面提示词")
+        if capability.allow_output_compression:
+            options.append("输出压缩：0–100")
         return "；" + "；".join(options)
     capability = VIDEO_MODEL_CAPABILITIES.get(model)
     if capability is None:
@@ -78,6 +78,8 @@ def media_model_options(model: str, mode: str) -> str:
         f"比例：{'、'.join(capability.aspect_ratios)}",
         f"清晰度：{'、'.join(capability.resolutions)}",
     ]
+    if capability.sizes:
+        options.append(f"尺寸：{'、'.join(capability.sizes)}")
     optional = []
     if capability.allow_seed:
         optional.append("随机种子")
@@ -398,10 +400,10 @@ def codex_connection_page() -> HTMLResponse:
 def mcp_tools() -> list[dict[str, Any]]:
     return [
         {"name": "xingren_connection_status", "description": "检查星人工具是否已经连接。用户第一次使用或说连接不上时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
-        {"name": "xingren_list_media_models", "description": "列出当前账户可用的图像和视频模型，以及每个模型的费用。用户问能用哪些模型、想先选模型或第一次生成图片视频时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
+        {"name": "xingren_list_media_models", "description": "列出当前账户已经接通的图像和视频模型，以及每个模型的费用。用户问能用哪些模型、想先选模型或第一次生成图片视频时调用。", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
         {"name": "xingren_ask", "description": "向星人助手提问、写作或分析。仅在用户明确需要文字结果时调用。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "用户的问题或任务"}}, "required": ["prompt"], "additionalProperties": False}},
-        {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。先用 xingren_list_media_models 查看模型、费用和可选规格；model 只能填写列表中的完整展示名称，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "model": {"type": "string", "description": "可选的图像模型展示名称"}, "aspect_ratio": {"type": "string", "description": "画面比例，必须使用所选模型列表中标注的值"}, "resolution": {"type": "string", "description": "清晰度，必须使用所选模型列表中标注的值"}, "size": {"type": "string", "description": "可选像素尺寸；仅在所选模型支持时填写"}, "n": {"type": "integer", "minimum": 1, "maximum": 10, "description": "生成张数，默认 1"}, "quality": {"type": "string", "description": "可选质量，必须使用所选模型列表中标注的值"}, "output_format": {"type": "string", "description": "可选输出格式"}, "background": {"type": "string", "description": "可选背景模式"}, "negative_prompt": {"type": "string", "description": "可选负面提示词；仅在模型支持时填写"}}, "required": ["prompt"], "additionalProperties": False}},
-        {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。先用 xingren_list_media_models 查看模型、费用和可选规格；model 只能填写列表中的完整展示名称，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "model": {"type": "string", "description": "可选的视频模型展示名称"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15, "description": "时长，必须使用所选模型列表中标注的值"}, "aspect_ratio": {"type": "string", "description": "画面比例，必须使用所选模型列表中标注的值"}, "resolution": {"type": "string", "description": "清晰度，必须使用所选模型列表中标注的值"}, "seed": {"type": "integer", "minimum": 1, "description": "可选随机种子；仅在模型支持时填写"}, "watermark": {"type": "boolean", "description": "可选水印开关；仅在模型支持时填写"}}, "required": ["prompt"], "additionalProperties": False}},
+        {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。先用 xingren_list_media_models 查看模型、费用和可选规格；model 只能填写列表中的完整展示名称，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "model": {"type": "string", "description": "可选的图像模型展示名称"}, "aspect_ratio": {"type": "string", "description": "画面比例，必须使用所选模型列表中标注的值"}, "resolution": {"type": "string", "description": "清晰度，必须使用所选模型列表中标注的值"}, "n": {"type": "integer", "minimum": 1, "maximum": 10, "description": "生成张数，默认 1"}, "quality": {"type": "string", "description": "可选质量，必须使用所选模型列表中标注的值"}, "output_format": {"type": "string", "description": "可选输出格式"}, "output_compression": {"type": "integer", "minimum": 0, "maximum": 100, "description": "可选输出压缩，范围 0–100；仅在模型列表标注支持时填写"}, "background": {"type": "string", "description": "可选背景模式"}}, "required": ["prompt"], "additionalProperties": False}},
+        {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。先用 xingren_list_media_models 查看模型、费用和可选规格；model 只能填写列表中的完整展示名称，留空则自动选择。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "model": {"type": "string", "description": "可选的视频模型展示名称"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15, "description": "时长，必须使用所选模型列表中标注的值"}, "aspect_ratio": {"type": "string", "description": "画面比例，必须使用所选模型列表中标注的值"}, "size": {"type": "string", "description": "可选像素尺寸，必须使用所选模型列表中标注的值；不能与画面比例冲突"}, "resolution": {"type": "string", "description": "清晰度，必须使用所选模型列表中标注的值"}, "seed": {"type": "integer", "minimum": 1, "description": "可选随机种子；仅在模型支持时填写"}, "watermark": {"type": "boolean", "description": "可选水印开关；仅在模型支持时填写"}}, "required": ["prompt"], "additionalProperties": False}},
     ]
 
 
@@ -438,8 +440,8 @@ async def call_agent_tool(
                 aspect_ratio=str(arguments.get("aspect_ratio") or ""),
                 quality=str(arguments.get("quality") or ""),
                 output_format=str(arguments.get("output_format") or ""),
+                output_compression=arguments.get("output_compression"),
                 background=str(arguments.get("background") or ""),
-                negative_prompt=str(arguments.get("negative_prompt") or ""),
                 count=arguments.get("n"),
             )
         if name == "xingren_generate_video":
@@ -480,8 +482,8 @@ async def _generate_image(
     aspect_ratio: str = "",
     quality: str = "",
     output_format: str = "",
+    output_compression: Any = None,
     background: str = "",
-    negative_prompt: str = "",
     count: Any = None,
 ) -> dict[str, Any]:
     task_id = f"mcp_{uuid4().hex}"
@@ -503,10 +505,11 @@ async def _generate_image(
         "quality": quality,
         "output_format": output_format,
         "background": background,
-        "negative_prompt": negative_prompt,
     }.items():
         if value:
             params[key] = value
+    if output_compression is not None:
+        params["output_compression"] = output_compression
     request = WorkspaceRunRequest(
         user_query=prompt,
         model_role="image_generation",
@@ -556,7 +559,7 @@ async def _generate_video(
         return safe_mcp_error("所选视频模型当前不可用。请先查看可用模型后再选择。")
     model = model or allowed_models[0]
     params: dict[str, Any] = {}
-    for key in ("duration_seconds", "aspect_ratio", "resolution", "seed", "watermark"):
+    for key in ("duration_seconds", "aspect_ratio", "size", "resolution", "seed", "watermark"):
         if key in arguments and arguments[key] is not None:
             params[key] = arguments[key]
     request = WorkspaceRunRequest(

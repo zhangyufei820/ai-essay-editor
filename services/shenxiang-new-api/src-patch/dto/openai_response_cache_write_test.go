@@ -18,9 +18,17 @@ func TestInputTokenDetailsUsesOpenAICacheWriteTokens(t *testing.T) {
 	}`), &usage))
 	require.NotNil(t, usage.InputTokensDetails)
 	require.Equal(t, 12, usage.InputTokensDetails.GetCacheWriteTokens())
+	require.Equal(t, 12, usage.InputTokensDetails.CacheCreationTokensTotal())
 }
 
 func TestInputTokenDetailsKeepsLegacyCacheCreationTokens(t *testing.T) {
 	details := InputTokenDetails{CachedCreationTokens: 8}
 	require.Equal(t, 8, details.GetCacheWriteTokens())
+	require.Equal(t, 8, details.CacheCreationTokensTotal())
+}
+
+func TestInputTokenDetailsCacheCreationTokensTotalClampsNegativeValues(t *testing.T) {
+	details := InputTokenDetails{CachedCreationTokens: -1, CacheWriteTokens: -2}
+
+	require.Equal(t, 0, details.CacheCreationTokensTotal())
 }

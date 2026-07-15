@@ -2,7 +2,6 @@ package model
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -24,37 +23,38 @@ var ErrUserQuotaInsufficient = errors.New("user quota is not enough")
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
-	Id               int            `json:"id"`
-	Username         string         `json:"username" gorm:"unique;index" validate:"max=20"`
-	Password         string         `json:"password" gorm:"not null;" validate:"min=8,max=20"`
-	OriginalPassword string         `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
-	DisplayName      string         `json:"display_name" gorm:"index" validate:"max=20"`
-	Role             int            `json:"role" gorm:"type:int;default:1"`   // admin, common
-	Status           int            `json:"status" gorm:"type:int;default:1"` // enabled, disabled
-	Email            string         `json:"email" gorm:"index" validate:"max=50"`
-	GitHubId         string         `json:"github_id" gorm:"column:github_id;index"`
-	DiscordId        string         `json:"discord_id" gorm:"column:discord_id;index"`
-	OidcId           string         `json:"oidc_id" gorm:"column:oidc_id;index"`
-	WeChatId         string         `json:"wechat_id" gorm:"column:wechat_id;index"`
-	TelegramId       string         `json:"telegram_id" gorm:"column:telegram_id;index"`
-	VerificationCode string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
-	AccessToken      *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
-	Quota            int            `json:"quota" gorm:"type:int;default:0"`
-	UsedQuota        int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
-	RequestCount     int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
-	Group            string         `json:"group" gorm:"type:varchar(64);default:'default'"`
-	AffCode          string         `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
-	AffCount         int            `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
-	AffQuota         int            `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
-	AffHistoryQuota  int            `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
-	InviterId        int            `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
-	DeletedAt        gorm.DeletedAt `gorm:"index"`
-	LinuxDOId        string         `json:"linux_do_id" gorm:"column:linux_do_id;index"`
-	Setting          string         `json:"setting" gorm:"type:text;column:setting"`
-	Remark           string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
-	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
-	CreatedAt        int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
-	LastLoginAt      int64          `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	Id               int                        `json:"id"`
+	Username         string                     `json:"username" gorm:"unique;index" validate:"max=20"`
+	Password         string                     `json:"password" gorm:"not null;" validate:"min=8,max=20"`
+	OriginalPassword string                     `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
+	DisplayName      string                     `json:"display_name" gorm:"index" validate:"max=20"`
+	Role             int                        `json:"role" gorm:"type:int;default:1"`   // admin, common
+	Status           int                        `json:"status" gorm:"type:int;default:1"` // enabled, disabled
+	Email            string                     `json:"email" gorm:"index" validate:"max=50"`
+	GitHubId         string                     `json:"github_id" gorm:"column:github_id;index"`
+	DiscordId        string                     `json:"discord_id" gorm:"column:discord_id;index"`
+	OidcId           string                     `json:"oidc_id" gorm:"column:oidc_id;index"`
+	WeChatId         string                     `json:"wechat_id" gorm:"column:wechat_id;index"`
+	TelegramId       string                     `json:"telegram_id" gorm:"column:telegram_id;index"`
+	VerificationCode string                     `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
+	AccessToken      *string                    `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
+	Quota            int                        `json:"quota" gorm:"type:int;default:0"`
+	UsedQuota        int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
+	RequestCount     int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
+	Group            string                     `json:"group" gorm:"type:varchar(64);default:'default'"`
+	AffCode          string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
+	AffCount         int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
+	AffQuota         int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
+	AffHistoryQuota  int                        `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
+	InviterId        int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	DeletedAt        gorm.DeletedAt             `gorm:"index"`
+	LinuxDOId        string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
+	Setting          string                     `json:"setting" gorm:"type:text;column:setting"`
+	Remark           string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
+	StripeCustomer   string                     `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
+	CreatedAt        int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
+	LastLoginAt      int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	AdminPermissions map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -84,7 +84,7 @@ func (user *User) SetAccessToken(token string) {
 func (user *User) GetSetting() dto.UserSetting {
 	setting := dto.UserSetting{}
 	if user.Setting != "" {
-		err := json.Unmarshal([]byte(user.Setting), &setting)
+		err := common.Unmarshal([]byte(user.Setting), &setting)
 		if err != nil {
 			common.SysLog("failed to unmarshal setting: " + err.Error())
 		}
@@ -93,7 +93,7 @@ func (user *User) GetSetting() dto.UserSetting {
 }
 
 func (user *User) SetSetting(setting dto.UserSetting) {
-	settingBytes, err := json.Marshal(setting)
+	settingBytes, err := common.Marshal(setting)
 	if err != nil {
 		common.SysLog("failed to marshal setting: " + err.Error())
 		return
@@ -105,7 +105,7 @@ func UpdateUserSetting(userId int, setting dto.UserSetting) error {
 	if userId == 0 {
 		return errors.New("id 为空！")
 	}
-	settingBytes, err := json.Marshal(setting)
+	settingBytes, err := common.Marshal(setting)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 	// 普通用户不包含admin区域
 
 	// 转换为JSON字符串
-	configBytes, err := json.Marshal(defaultConfig)
+	configBytes, err := common.Marshal(defaultConfig)
 	if err != nil {
 		common.SysLog("生成默认边栏配置失败: " + err.Error())
 		return ""
@@ -185,6 +185,7 @@ func CheckUserExistOrDeleted(username string, email string) (bool, error) {
 	// check email if empty
 	email = NormalizeEmail(email)
 	var err error
+	email = NormalizeEmail(email)
 	if email == "" {
 		err = DB.Unscoped().First(&user, "username = ?", username).Error
 	} else {
@@ -251,7 +252,17 @@ func EnsureEmailAvailable(email string, excludeUserID int) error {
 }
 
 // withNormalizedEmailLock serializes concurrent writers that target the same
-// normalized email inside tx, so a check-then-write sequence cannot race.
+// normalized email inside tx, so a "check then write" sequence cannot be raced
+// by two transactions. It must be called inside an active transaction; the lock
+// is scoped to that transaction and released on commit/rollback.
+//
+//   - PostgreSQL: transaction-level advisory lock keyed by the normalized email.
+//   - MySQL (default REPEATABLE READ): a locking read that takes a next-key/gap
+//     lock on the email index, blocking concurrent inserts of the same value.
+//   - SQLite: no explicit lock; the single-writer model already serializes the
+//     write, so a racing second write fails instead of duplicating.
+//
+// An empty email is allowed to repeat and needs no serialization.
 func withNormalizedEmailLock(tx *gorm.DB, email string, fn func(tx *gorm.DB) error) error {
 	email = NormalizeEmail(email)
 	if email == "" {
@@ -297,7 +308,7 @@ func GetAllUsers(pageInfo *common.PageInfo) (users []*User, total int64, err err
 	}
 
 	// Get paginated users within same transaction
-	err = tx.Unscoped().Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password").Find(&users).Error
+	err = tx.Unscoped().Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password", "access_token").Find(&users).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
@@ -355,7 +366,11 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 		query = query.Where("role = ?", *role)
 	}
 	if status != nil {
-		query = query.Where("status = ?", *status)
+		if *status == -1 {
+			query = query.Where("deleted_at IS NOT NULL")
+		} else {
+			query = query.Where("deleted_at IS NULL").Where("status = ?", *status)
+		}
 	}
 
 	// 获取总数
@@ -366,7 +381,7 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	}
 
 	// 获取分页数据
-	err = query.Omit("password").Order("id desc").Limit(num).Offset(startIdx).Find(&users).Error
+	err = query.Omit("password", "access_token").Order("id desc").Limit(num).Offset(startIdx).Find(&users).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
@@ -389,7 +404,7 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 	if selectAll {
 		err = DB.First(&user, "id = ?", id).Error
 	} else {
-		err = DB.Omit("password").First(&user, "id = ?", id).Error
+		err = DB.Omit("password", "access_token").First(&user, "id = ?", id).Error
 	}
 	return &user, err
 }
@@ -415,8 +430,12 @@ func HardDeleteUserById(id int) error {
 	if id == 0 {
 		return errors.New("id 为空！")
 	}
-	err := DB.Unscoped().Delete(&User{}, "id = ?", id).Error
-	return err
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := deleteUserOAuthBindingsByUserId(tx, id); err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(&User{}, "id = ?", id).Error
+	})
 }
 
 func inviteUser(inviterId int) (err error) {
@@ -444,7 +463,7 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 	defer tx.Rollback() // 确保在函数退出时事务能回滚
 
 	// 加锁查询用户以确保数据一致性
-	err := tx.Set("gorm:query_option", "FOR UPDATE").First(&user, user.Id).Error
+	err := lockForUpdate(tx).First(&user, user.Id).Error
 	if err != nil {
 		return err
 	}
@@ -480,6 +499,25 @@ func (user *User) prepareForInsert(tx *gorm.DB) error {
 	return err
 }
 
+// BindEmailToUser atomically checks email availability and assigns it to the
+// user, serializing concurrent binds of the same email so two accounts cannot
+// end up sharing one address. The email is normalized before check and store.
+func BindEmailToUser(user *User, email string) error {
+	email = NormalizeEmail(email)
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		return withNormalizedEmailLock(tx, email, func(tx *gorm.DB) error {
+			if err := ensureEmailAvailableWithTx(tx, email, user.Id); err != nil {
+				return err
+			}
+			user.Email = email
+			return user.UpdateWithTx(tx, false)
+		})
+	}); err != nil {
+		return err
+	}
+	return updateUserCache(*user)
+}
+
 func ensureEmailAvailableWithTx(tx *gorm.DB, email string, excludeUserID int) error {
 	email = NormalizeEmail(email)
 	if email == "" {
@@ -506,7 +544,6 @@ func (user *User) Insert(inviterId int) error {
 				return err
 			}
 			user.Quota = common.QuotaForNewUser
-			//user.SetAccessToken(common.GetUUID())
 			user.AffCode = common.GetRandomString(4)
 
 			// 初始化用户设置，包括默认的边栏配置
@@ -522,6 +559,11 @@ func (user *User) Insert(inviterId int) error {
 		return err
 	}
 
+	user.finishInsert(inviterId)
+	return nil
+}
+
+func (user *User) finishInsert(inviterId int) {
 	// 用户创建成功后，根据角色初始化边栏配置
 	// 需要重新获取用户以确保有正确的ID和Role
 	var createdUser User
@@ -551,35 +593,31 @@ func (user *User) Insert(inviterId int) error {
 			_ = inviteUser(inviterId)
 		}
 	}
-	return nil
+}
+
+func (user *User) FinishInsert(inviterId int) {
+	user.finishInsert(inviterId)
 }
 
 // InsertWithTx inserts a new user within an existing transaction.
 // This is used for OAuth registration where user creation and binding need to be atomic.
 // Post-creation tasks (sidebar config, logs, inviter rewards) are handled after the transaction commits.
 func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
-	var err error
-	if user.Password != "" {
-		user.Password, err = common.Password2Hash(user.Password)
-		if err != nil {
+	return withNormalizedEmailLock(tx, user.Email, func(tx *gorm.DB) error {
+		if err := user.prepareForInsert(tx); err != nil {
 			return err
 		}
-	}
-	user.Quota = common.QuotaForNewUser
-	user.AffCode = common.GetRandomString(4)
+		user.Quota = common.QuotaForNewUser
+		user.AffCode = common.GetRandomString(4)
 
-	// 初始化用户设置
-	if user.Setting == "" {
-		defaultSetting := dto.UserSetting{}
-		user.SetSetting(defaultSetting)
-	}
+		// 初始化用户设置
+		if user.Setting == "" {
+			defaultSetting := dto.UserSetting{}
+			user.SetSetting(defaultSetting)
+		}
 
-	result := tx.Create(user)
-	if result.Error != nil {
-		return result.Error
-	}
-
-	return nil
+		return tx.Create(user).Error
+	})
 }
 
 // FinalizeOAuthUserCreation performs post-transaction tasks for OAuth user creation.
@@ -614,6 +652,13 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 }
 
 func (user *User) Update(updatePassword bool) error {
+	if err := user.UpdateWithTx(DB, updatePassword); err != nil {
+		return err
+	}
+	return updateUserCache(*user)
+}
+
+func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	var err error
 	if updatePassword {
 		user.Password, err = common.Password2Hash(user.Password)
@@ -622,16 +667,24 @@ func (user *User) Update(updatePassword bool) error {
 		}
 	}
 	newUser := *user
-	DB.First(&user, user.Id)
-	if err = DB.Model(user).Updates(newUser).Error; err != nil {
+	current := User{}
+	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
 	}
-
-	// Update cache
-	return updateUserCache(*user)
+	if err = tx.Model(&current).Omit("quota", "used_quota", "request_count").Updates(newUser).Error; err != nil {
+		return err
+	}
+	return tx.First(user, user.Id).Error
 }
 
 func (user *User) Edit(updatePassword bool) error {
+	if err := user.EditWithTx(DB, updatePassword); err != nil {
+		return err
+	}
+	return updateUserCache(*user)
+}
+
+func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	var err error
 	if updatePassword {
 		user.Password, err = common.Password2Hash(user.Password)
@@ -651,13 +704,14 @@ func (user *User) Edit(updatePassword bool) error {
 		updates["password"] = newUser.Password
 	}
 
-	DB.First(&user, user.Id)
-	if err = DB.Model(user).Updates(updates).Error; err != nil {
+	current := User{}
+	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
 	}
-
-	// Update cache
-	return updateUserCache(*user)
+	if err = tx.Model(&current).Updates(updates).Error; err != nil {
+		return err
+	}
+	return tx.First(user, user.Id).Error
 }
 
 func (user *User) ClearBinding(bindingType string) error {
@@ -707,8 +761,12 @@ func (user *User) HardDelete() error {
 	if user.Id == 0 {
 		return errors.New("id 为空！")
 	}
-	err := DB.Unscoped().Delete(user).Error
-	return err
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := deleteUserOAuthBindingsByUserId(tx, user.Id); err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(user).Error
+	})
 }
 
 // ValidateAndFill check password & user status
@@ -728,6 +786,9 @@ func (user *User) ValidateAndFill() (err error) {
 			return ErrInvalidCredentials
 		}
 		return fmt.Errorf("%w: %v", ErrDatabase, err)
+	}
+	if user.Password == "" {
+		return ErrInvalidCredentials
 	}
 	okay := common.ValidatePasswordAndHash(password, user.Password)
 	if !okay || user.Status != common.UserStatusEnabled {
@@ -808,23 +869,6 @@ func IsEmailAlreadyTaken(email string) bool {
 	return err == nil && count > 0
 }
 
-// IsEmailTakenByOtherUser reports whether an email is already bound to a user
-// other than excludeUserId. Used to prevent two accounts from sharing one
-// email, which would make password-reset-by-email ambiguous. Returns an error
-// on DB failure so callers fail closed rather than treating a failed lookup as
-// "not taken".
-func IsEmailTakenByOtherUser(email string, excludeUserId int) (bool, error) {
-	email = NormalizeEmail(email)
-	if email == "" {
-		return false, nil
-	}
-	var count int64
-	if err := emailQuery(DB, email).Where("id <> ?", excludeUserId).Count(&count).Error; err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}
-
 func GetUniqueUserByEmail(email string) (*User, error) {
 	email = NormalizeEmail(email)
 	if email == "" {
@@ -892,36 +936,6 @@ func IsAdmin(userId int) bool {
 	}
 	return user.Role >= common.RoleAdminUser
 }
-
-//// IsUserEnabled checks user status from Redis first, falls back to DB if needed
-//func IsUserEnabled(id int, fromDB bool) (status bool, err error) {
-//	defer func() {
-//		// Update Redis cache asynchronously on successful DB read
-//		if shouldUpdateRedis(fromDB, err) {
-//			gopool.Go(func() {
-//				if err := updateUserStatusCache(id, status); err != nil {
-//					common.SysError("failed to update user status cache: " + err.Error())
-//				}
-//			})
-//		}
-//	}()
-//	if !fromDB && common.RedisEnabled {
-//		// Try Redis first
-//		status, err := getUserStatusCache(id)
-//		if err == nil {
-//			return status == common.UserStatusEnabled, nil
-//		}
-//		// Don't return error - fall through to DB
-//	}
-//	fromDB = true
-//	var user User
-//	err = DB.Where("id = ?", id).Select("status").Find(&user).Error
-//	if err != nil {
-//		return false, err
-//	}
-//
-//	return user.Status == common.UserStatusEnabled, nil
-//}
 
 func ValidateAccessToken(token string) (*User, error) {
 	if token == "" {

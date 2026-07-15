@@ -96,6 +96,15 @@ SAFE_MEDIA_ERROR_MESSAGES = frozenset(
     }
 )
 
+UNPUBLISHED_MCP_IMAGE_PARAMETERS = frozenset(
+    {
+        "input_fidelity",
+        "moderation",
+        "negative_prompt",
+        "style",
+    }
+)
+
 GPT_IMAGE_SIZE_BY_RESOLUTION = {
     "1K": {
         "1:1": "1024x1024",
@@ -164,16 +173,8 @@ GOOGLE_IMAGE_ASPECT_RATIOS = (
     "16:9",
     "21:9",
 )
-GROK_IMAGE_SIZE_TO_ASPECT_RATIO = {
-    "960x960": "1:1",
-    "720x1280": "9:16",
-    "1280x720": "16:9",
-    "1168x784": "3:2",
-    "784x1168": "2:3",
-}
 COMMON_IMAGE_SIZE_TO_ASPECT_RATIO = {
     **{size: aspect_ratio for size, (_, aspect_ratio) in GPT_IMAGE_SIZE_TO_SELECTION.items()},
-    **GROK_IMAGE_SIZE_TO_ASPECT_RATIO,
 }
 VIDEO_SIZE_TO_ASPECT_RATIO = {
     "1280x720": "16:9",
@@ -194,8 +195,6 @@ class ImageModelCapability:
     backgrounds: tuple[str, ...] = ()
     max_count: int = 1
     allow_output_compression: bool = False
-    allow_input_fidelity: bool = False
-    allow_negative_prompt: bool = False
 
 
 @dataclass(frozen=True)
@@ -222,8 +221,6 @@ _GPT_IMAGE_CAPABILITY = ImageModelCapability(
     backgrounds=("auto", "opaque"),
     max_count=4,
     allow_output_compression=True,
-    allow_input_fidelity=True,
-    allow_negative_prompt=True,
 )
 _DISCOUNT_IMAGE_CAPABILITY = ImageModelCapability(
     family="discount_image",
@@ -235,6 +232,7 @@ _DISCOUNT_IMAGE_CAPABILITY = ImageModelCapability(
     output_formats=("url", "png", "jpeg", "webp"),
     backgrounds=("auto", "opaque"),
     max_count=4,
+    allow_output_compression=True,
 )
 _ECOMMERCE_IMAGE_CAPABILITY = ImageModelCapability(
     family="ecommerce_image",
@@ -246,9 +244,6 @@ _ECOMMERCE_IMAGE_CAPABILITY = ImageModelCapability(
     output_formats=("url", "png", "jpeg", "webp"),
     backgrounds=("auto", "opaque"),
     max_count=4,
-    allow_output_compression=True,
-    allow_input_fidelity=True,
-    allow_negative_prompt=True,
 )
 _BANANA_IMAGE_CAPABILITY = ImageModelCapability(
     family="gemini_image",
@@ -256,8 +251,7 @@ _BANANA_IMAGE_CAPABILITY = ImageModelCapability(
     resolutions=("512", "1K", "2K", "4K"),
     default_aspect_ratio="16:9",
     default_resolution="2K",
-    qualities=("auto",),
-    allow_negative_prompt=True,
+    output_formats=(),
 )
 _GEMINI_IMAGE_CAPABILITY = ImageModelCapability(
     family="gemini_image",
@@ -265,8 +259,7 @@ _GEMINI_IMAGE_CAPABILITY = ImageModelCapability(
     resolutions=("1K", "2K", "4K"),
     default_aspect_ratio="16:9",
     default_resolution="4K",
-    qualities=("auto",),
-    allow_negative_prompt=True,
+    output_formats=(),
 )
 _ECOMMERCE_BANANA_IMAGE_CAPABILITY = ImageModelCapability(
     family="gemini_image",
@@ -274,32 +267,7 @@ _ECOMMERCE_BANANA_IMAGE_CAPABILITY = ImageModelCapability(
     resolutions=("1K",),
     default_aspect_ratio="1:1",
     default_resolution="1K",
-    qualities=("auto",),
-    allow_negative_prompt=True,
-)
-_GROK_IMAGE_CAPABILITY = ImageModelCapability(
-    family="grok_image",
-    aspect_ratios=(
-        "1:1",
-        "3:4",
-        "4:3",
-        "9:16",
-        "16:9",
-        "2:3",
-        "3:2",
-        "9:19.5",
-        "19.5:9",
-        "9:20",
-        "20:9",
-        "1:2",
-        "2:1",
-    ),
-    resolutions=("1k", "2k"),
-    default_aspect_ratio="1:1",
-    default_resolution="2k",
-    qualities=("low", "medium", "high"),
-    output_formats=("url", "b64_json"),
-    max_count=10,
+    output_formats=(),
 )
 
 IMAGE_MODEL_CAPABILITIES = {
@@ -309,7 +277,6 @@ IMAGE_MODEL_CAPABILITIES = {
     "gemini-3-pro-image-preview": _GEMINI_IMAGE_CAPABILITY,
     "image 2电商商品图快速通道(1.5K)": _ECOMMERCE_IMAGE_CAPABILITY,
     "ecommerce-banana-2": _ECOMMERCE_BANANA_IMAGE_CAPABILITY,
-    "grok-imagine-image": _GROK_IMAGE_CAPABILITY,
 }
 
 VIDEO_MODEL_CAPABILITIES = {
@@ -393,9 +360,6 @@ def _image_ratio_from_size(size: str) -> tuple[str, str]:
     for image_size, selection in GPT_IMAGE_SIZE_TO_SELECTION.items():
         if image_size.casefold() == normalized:
             return selection[1], selection[0]
-    for image_size, ratio in GROK_IMAGE_SIZE_TO_ASPECT_RATIO.items():
-        if image_size.casefold() == normalized:
-            return ratio, ""
     return "", ""
 
 
@@ -436,11 +400,6 @@ def _image_options(request: WorkspaceRunRequest, capability: ImageModelCapabilit
 def _image_pixel_size(capability: ImageModelCapability, aspect_ratio: str, resolution: str) -> str:
     if capability.family == "ecommerce_image" and resolution == "auto":
         return "auto"
-    if capability.family == "grok_image":
-        return next(
-            (size for size, ratio in GROK_IMAGE_SIZE_TO_ASPECT_RATIO.items() if ratio == aspect_ratio),
-            "",
-        )
     source_resolution = resolution if resolution in GPT_IMAGE_SIZE_BY_RESOLUTION else "1K"
     return GPT_IMAGE_SIZE_BY_RESOLUTION[source_resolution].get(aspect_ratio, "")
 
@@ -467,12 +426,15 @@ def _mcp_image_option(
     return normalized
 
 
-def _mcp_flag_option(params: dict[str, Any], key: str, enabled: bool) -> Any:
-    if key not in params or params[key] is None:
+def _mcp_output_compression(params: dict[str, Any], capability: ImageModelCapability) -> int | None:
+    if "output_compression" not in params or params["output_compression"] is None:
         return None
-    if not enabled:
+    if not capability.allow_output_compression:
         _unsupported_media_spec()
-    return params[key]
+    compression = _positive_int(params["output_compression"])
+    if compression is None or compression < 0 or compression > 100:
+        _unsupported_media_spec()
+    return compression
 
 
 def build_mcp_image_payload(request: WorkspaceRunRequest, model: str) -> dict[str, Any]:
@@ -481,6 +443,8 @@ def build_mcp_image_payload(request: WorkspaceRunRequest, model: str) -> dict[st
         raise MediaGenerationError(MEDIA_ERROR_MODEL_UNAVAILABLE)
 
     params = _media_params(request)
+    if UNPUBLISHED_MCP_IMAGE_PARAMETERS.intersection(params):
+        _unsupported_media_spec()
     aspect_ratio, resolution = _image_options(request, capability)
     payload: dict[str, Any] = {
         "model": model,
@@ -500,8 +464,6 @@ def build_mcp_image_payload(request: WorkspaceRunRequest, model: str) -> dict[st
         payload["extra_body"] = {
             "google": {"image_config": {"aspect_ratio": aspect_ratio, "image_size": resolution}}
         }
-    elif capability.family == "grok_image":
-        pass
     elif pixel_size:
         payload["size"] = pixel_size
     else:
@@ -514,23 +476,14 @@ def build_mcp_image_payload(request: WorkspaceRunRequest, model: str) -> dict[st
     if not output_format:
         output_format = _mcp_image_option(params, "response_format", capability.output_formats)
     if output_format:
-        payload["response_format" if capability.family == "grok_image" else "output_format"] = output_format
+        payload["output_format"] = output_format
     background = _mcp_image_option(params, "background", capability.backgrounds)
     if background:
         payload["background"] = background
+    output_compression = _mcp_output_compression(params, capability)
+    if output_compression is not None:
+        payload["output_compression"] = output_compression
 
-    for key in ("style", "moderation"):
-        value = _string_param(params, key)
-        if value:
-            payload[key] = value
-    for key, enabled in (
-        ("output_compression", capability.allow_output_compression),
-        ("input_fidelity", capability.allow_input_fidelity),
-        ("negative_prompt", capability.allow_negative_prompt),
-    ):
-        value = _mcp_flag_option(params, key, enabled)
-        if value is not None:
-            payload[key] = value
     return payload
 
 
@@ -1339,6 +1292,8 @@ def dedupe(values: list[str]) -> list[str]:
 
 def upstream_error(settings: Settings, api_key: str, response: httpx.Response) -> str:
     _ = settings, api_key
+    if response.status_code in {403, 404}:
+        return MEDIA_ERROR_MODEL_UNAVAILABLE
     if response.status_code in {400, 413, 415, 422}:
         return MEDIA_ERROR_INPUT_UNSUPPORTED
     if response.status_code in {408, 504}:

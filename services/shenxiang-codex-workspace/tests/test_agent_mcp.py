@@ -12,6 +12,8 @@ from app.media_catalog import canonical_allowed_media_models
 from app.config import Settings
 from app import main
 from app.main import is_allowed_browser_origin
+from app.media_tools import MediaResult
+from app.models import WorkspaceRunRequest
 from app.security import UserContext
 
 
@@ -73,8 +75,10 @@ def test_pkce_and_public_tool_contract_are_strict():
     assert "private.invalid" not in visible
     image_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_generate_image")
     video_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_generate_video")
-    assert {"aspect_ratio", "resolution", "quality", "output_format", "background"} <= set(image_tool["inputSchema"]["properties"])
-    assert {"duration_seconds", "aspect_ratio", "resolution"} <= set(video_tool["inputSchema"]["properties"])
+    assert {"aspect_ratio", "resolution", "quality", "output_format", "output_compression", "background"} <= set(image_tool["inputSchema"]["properties"])
+    assert "negative_prompt" not in image_tool["inputSchema"]["properties"]
+    assert "size" not in image_tool["inputSchema"]["properties"]
+    assert {"duration_seconds", "aspect_ratio", "resolution", "size"} <= set(video_tool["inputSchema"]["properties"])
 
 
 def test_media_model_list_uses_website_names_and_prices_without_internal_names():
@@ -88,7 +92,10 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
     assert "Seedance 2.0 DJ Fast（¥0.162/秒）" in message
     assert "张数：1–4" in message
     assert "质量：auto、low、medium、high" in message
+    assert "输出压缩：0–100" in message
+    assert "尺寸：1280x720、720x1280、1024x1024" in message
     assert "可选：随机种子、水印" in message
+    assert "这里只显示已接通的模型" in message
     assert "geek2api" not in message
 
 
@@ -141,6 +148,83 @@ def test_public_model_permission_generates_with_its_canonical_model_and_size(mon
     assert captured["probe"] == ("sk-image", "image")
     assert response["content"][0]["type"] == "resource_link"
     assert any("![生成的图片]" in item.get("text", "") for item in response["content"])
+
+
+def test_public_model_forwards_supported_output_compression(monkeypatch, tmp_path):
+    captured = {}
+
+    async def fake_generate_media(_settings, request, _user, task, _media_type):
+        captured["request"] = request
+        output = tmp_path / "mcp" / "user-1" / task["task_id"] / "outputs"
+        output.mkdir(parents=True)
+        (output / "image.png").write_bytes(b"png")
+
+    class FakeStore:
+        def issue_artifact(self, _user, _path):
+            return "artifact-token"
+
+    async def fake_live_media_models(_settings, _api_key, _mode):
+        return ("gpt-image-2-4K",)
+
+    monkeypatch.setattr("app.agent_mcp.generate_media", fake_generate_media)
+    monkeypatch.setattr("app.agent_mcp.live_media_models", fake_live_media_models)
+
+    asyncio.run(
+        _generate_image(
+            replace(Settings(), runs_dir=tmp_path),
+            UserContext(api_key="sk-text", user_id="user-1", key_hint="agent", api_keys={"image": "sk-image"}),
+            "生成一张海报",
+            "",
+            "GPT Image 2",
+            FakeStore(),
+            output_compression=80,
+        )
+    )
+
+    assert captured["request"].params["output_compression"] == 80
+
+
+def test_media_stream_uses_public_model_name_and_never_emits_internal_model(monkeypatch, tmp_path):
+    class FakeStore:
+        def create(self, _task):
+            pass
+
+        def update(self, *_args, **_kwargs):
+            pass
+
+    async def fake_generate_media(_settings, _request, _user, _task, _media_kind):
+        return MediaResult(
+            media_type="image",
+            model="geek2api-image-2",
+            prompt="生成一张海报",
+            urls=["https://cdn.test/image.png"],
+            local_urls=["https://cdn.test/image.png"],
+        )
+
+    real_sleep = asyncio.sleep
+
+    async def no_sleep(_seconds):
+        await real_sleep(0)
+
+    monkeypatch.setattr(main, "task_store", lambda: FakeStore())
+    monkeypatch.setattr(main, "generate_media", fake_generate_media)
+    monkeypatch.setattr(main.asyncio, "sleep", no_sleep)
+    request = WorkspaceRunRequest(
+        user_query="生成一张海报",
+        model_role="image_generation",
+        model_config={"image_generation": "geek2api-image-2"},
+    )
+    user = UserContext(api_key="sk-text", user_id="user-1", key_hint="agent", api_keys={"image": "sk-image"})
+
+    async def collect_events():
+        return [event async for event in main.stream_media_generation(request, user, {"task_id": "media-test", "workspace": str(tmp_path)}, "image")]
+
+    events = asyncio.run(collect_events())
+    serialized = json.dumps(events, ensure_ascii=False)
+
+    assert "geek2api" not in serialized
+    assert events[1]["message"] == "正在连接图像生成服务"
+    assert events[-1]["media"]["model"] == "特价 image-2"
 
 
 def test_media_generation_never_falls_back_to_the_text_key(monkeypatch, tmp_path):
@@ -255,7 +339,7 @@ def test_video_generation_forwards_model_specific_options_and_a_preview_link(mon
             replace(Settings(), runs_dir=tmp_path),
             UserContext(api_key="sk-text", user_id="user-1", key_hint="agent", api_keys={"codex": "sk-text", "video": "sk-video"}),
             "生成一段竖版短片",
-            {"model": "Seedance 2.0 CL Mini", "duration_seconds": 8, "aspect_ratio": "9:16", "resolution": "480p"},
+            {"model": "Seedance 2.0 CL Mini", "duration_seconds": 8, "resolution": "480p", "size": "720x1280"},
             FakeStore(),
         )
     )
@@ -265,6 +349,7 @@ def test_video_generation_forwards_model_specific_options_and_a_preview_link(mon
     assert captured["request"].params["duration_seconds"] == 8
     assert captured["request"].params["aspect_ratio"] == "9:16"
     assert captured["request"].params["resolution"] == "480p"
+    assert captured["request"].params["ratio"] == "9:16"
     assert any("[预览或下载生成的视频]" in item.get("text", "") for item in response["content"])
 
 

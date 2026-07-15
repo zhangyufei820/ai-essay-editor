@@ -20,7 +20,6 @@ PUBLIC_MEDIA_MODELS = (
     PublicMediaModel("Gemini 3 Pro Image", "gemini-3-pro-image-preview", "¥0.238/张", "image"),
     PublicMediaModel("image 2电商商品图快速通道(1.5K)", "image 2电商商品图快速通道(1.5K)", "¥0.055/张", "image"),
     PublicMediaModel("电商特价banana-2", "ecommerce-banana-2", "¥0.085/张", "image"),
-    PublicMediaModel("Grok Image Pro", "grok-imagine-image", "¥0.324/张", "image"),
     PublicMediaModel("Seedance 2.0 DJ Fast", "seedance-2.0-dj-fast", "¥0.162/秒", "video"),
     PublicMediaModel("Seedance 2.0 CL Mini", "seedance-2.0-cl-mini", "输入含视频 ¥12.852/1M｜输出 ¥21.114/1M Token", "video"),
 )
@@ -50,6 +49,23 @@ def public_request_model_name(model: str, mode: str) -> str:
         if item.model == selected:
             return item.request_name or item.model
     return selected
+
+
+def public_display_model_name(model: str, mode: str) -> str:
+    selected = str(model or "").strip()
+    for item in public_models_for_mode(mode):
+        if item.model == selected or item.name == selected:
+            return item.name
+    return ""
+
+
+def public_display_model_names(mode: str, models: Iterable[str]) -> tuple[str, ...]:
+    visible: list[str] = []
+    for model in models:
+        name = public_display_model_name(str(model or ""), mode)
+        if name and name not in visible:
+            visible.append(name)
+    return tuple(visible)
 
 
 def canonical_allowed_media_models(mode: str, allowed_models: Iterable[str]) -> tuple[str, ...]:
