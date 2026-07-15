@@ -10,15 +10,20 @@ GROK_TOKEN_GROUP = "grok45"
 GROK_TOKEN_NAME = "星人 Grok 4.5 专用令牌"
 
 
+DEFAULT_IMAGE_ALLOWED_MODELS = (
+    "gpt-image-2-4K",
+    "geek2api-image-2",
+    "grok-imagine-image",
+    "banana-2",
+    "gemini-3-pro-image-preview",
+    "image 2电商商品图快速通道(1.5K)",
+    "ecommerce-banana-2",
+)
+DEFAULT_IMAGE_ALLOWED_MODELS_ENV = ",".join(DEFAULT_IMAGE_ALLOWED_MODELS)
+
 DEFAULT_VIDEO_ALLOWED_MODELS = (
-    "seedance-2.0",
     "seedance-2.0-dj-fast",
-    "seedance-2.0-ld-17",
-    "seedance-2.0-kz-fast",
-    "seedance-2.0-cl-fast",
-    "seedance-2.0-cl",
     "seedance-2.0-cl-mini",
-    "grok-video-super-720p",
 )
 DEFAULT_VIDEO_ALLOWED_MODELS_ENV = ",".join(DEFAULT_VIDEO_ALLOWED_MODELS)
 
@@ -40,7 +45,7 @@ class Settings:
     default_small_fast_model: str = "gpt-5.4-mini"
     default_web_search_model: str = "gpt-5.4"
     default_image_model: str = "gpt-image-2-4K"
-    default_video_model: str = "seedance-2.0"
+    default_video_model: str = DEFAULT_VIDEO_ALLOWED_MODELS[0]
     default_code_model: str = "gpt-5.4-mini"
     codex_chat_fallback_model: str = "gpt-5.4-mini"
     auto_token_name: str = "星人 Codex 文本令牌"
@@ -64,7 +69,7 @@ class Settings:
         "claude-opus-4-7",
         "claude-opus-4-8",
     )
-    image_allowed_models: tuple[str, ...] = ("gpt-image-2-4K", "geek2api-image-2", "grok-imagine-image")
+    image_allowed_models: tuple[str, ...] = DEFAULT_IMAGE_ALLOWED_MODELS
     video_allowed_models: tuple[str, ...] = (
         *DEFAULT_VIDEO_ALLOWED_MODELS,
     )
@@ -110,7 +115,7 @@ def get_settings() -> Settings:
         default_small_fast_model=os.getenv("DEFAULT_SMALL_FAST_MODEL", "gpt-5.4-mini"),
         default_web_search_model=os.getenv("DEFAULT_WEB_SEARCH_MODEL", "gpt-5.4"),
         default_image_model=os.getenv("DEFAULT_IMAGE_MODEL", "gpt-image-2-4K"),
-        default_video_model=os.getenv("DEFAULT_VIDEO_MODEL", "seedance-2.0"),
+        default_video_model=os.getenv("DEFAULT_VIDEO_MODEL", DEFAULT_VIDEO_ALLOWED_MODELS[0]),
         default_code_model=os.getenv("DEFAULT_CODE_MODEL", "gpt-5.4-mini"),
         codex_chat_fallback_model=os.getenv("CODEX_CHAT_FALLBACK_MODEL", "gpt-5.4-mini"),
         auto_token_name=os.getenv("AUTO_TOKEN_NAME", "星人 Codex 文本令牌"),
@@ -132,7 +137,7 @@ def get_settings() -> Settings:
             "claude-fable-5,claude-opus-4-6,claude-opus-4-7,claude-opus-4-8",
             normalize_claude_group_suffix=True,
         ),
-        image_allowed_models=_env_list("IMAGE_ALLOWED_MODELS", "gpt-image-2-4K,geek2api-image-2,grok-imagine-image"),
+        image_allowed_models=_env_list("IMAGE_ALLOWED_MODELS", DEFAULT_IMAGE_ALLOWED_MODELS_ENV),
         video_allowed_models=_env_list(
             "VIDEO_ALLOWED_MODELS",
             DEFAULT_VIDEO_ALLOWED_MODELS_ENV,

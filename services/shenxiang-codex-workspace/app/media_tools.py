@@ -6,11 +6,12 @@ import asyncio
 import ipaddress
 import json
 import re
+import socket
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from uuid import uuid4
 
 import httpx
@@ -77,6 +78,7 @@ MOONAPIX_SEEDANCE_VIDEO_MODELS = {
 }
 MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_REMOTE_VIDEO_BYTES = 120 * 1024 * 1024
+MAX_MEDIA_REDIRECTS = 3
 
 MEDIA_ERROR_MODEL_UNAVAILABLE = "该模型暂时无法使用，请刷新模型列表后选择其他模型。"
 MEDIA_ERROR_SPEC_UNSUPPORTED = "该模型不支持当前画面规格。请选择模型列表中标注的规格后重试。"
@@ -240,9 +242,6 @@ _ECOMMERCE_IMAGE_CAPABILITY = ImageModelCapability(
     resolutions=("auto",),
     default_aspect_ratio="1:1",
     default_resolution="auto",
-    qualities=("auto", "low", "medium", "high"),
-    output_formats=("url", "png", "jpeg", "webp"),
-    backgrounds=("auto", "opaque"),
     max_count=4,
 )
 _BANANA_IMAGE_CAPABILITY = ImageModelCapability(
@@ -261,6 +260,29 @@ _GEMINI_IMAGE_CAPABILITY = ImageModelCapability(
     default_resolution="4K",
     output_formats=(),
 )
+_GROK_IMAGE_CAPABILITY = ImageModelCapability(
+    family="grok_image",
+    aspect_ratios=(
+        "1:1",
+        "3:4",
+        "4:3",
+        "9:16",
+        "16:9",
+        "2:3",
+        "3:2",
+        "9:19.5",
+        "19.5:9",
+        "9:20",
+        "20:9",
+        "1:2",
+        "2:1",
+    ),
+    resolutions=("1k", "2k"),
+    default_aspect_ratio="1:1",
+    default_resolution="2k",
+    output_formats=(),
+    max_count=4,
+)
 _ECOMMERCE_BANANA_IMAGE_CAPABILITY = ImageModelCapability(
     family="gemini_image",
     aspect_ratios=GOOGLE_IMAGE_ASPECT_RATIOS,
@@ -273,6 +295,7 @@ _ECOMMERCE_BANANA_IMAGE_CAPABILITY = ImageModelCapability(
 IMAGE_MODEL_CAPABILITIES = {
     "gpt-image-2-4K": _GPT_IMAGE_CAPABILITY,
     "geek2api-image-2": _DISCOUNT_IMAGE_CAPABILITY,
+    "grok-imagine-image": _GROK_IMAGE_CAPABILITY,
     "banana-2": _BANANA_IMAGE_CAPABILITY,
     "gemini-3-pro-image-preview": _GEMINI_IMAGE_CAPABILITY,
     "image 2电商商品图快速通道(1.5K)": _ECOMMERCE_IMAGE_CAPABILITY,
@@ -400,6 +423,8 @@ def _image_options(request: WorkspaceRunRequest, capability: ImageModelCapabilit
 def _image_pixel_size(capability: ImageModelCapability, aspect_ratio: str, resolution: str) -> str:
     if capability.family == "ecommerce_image" and resolution == "auto":
         return "auto"
+    if capability.family == "grok_image":
+        return ""
     source_resolution = resolution if resolution in GPT_IMAGE_SIZE_BY_RESOLUTION else "1K"
     return GPT_IMAGE_SIZE_BY_RESOLUTION[source_resolution].get(aspect_ratio, "")
 
@@ -437,6 +462,24 @@ def _mcp_output_compression(params: dict[str, Any], capability: ImageModelCapabi
     return compression
 
 
+def _ecommerce_image_payload(request: WorkspaceRunRequest, model: str, capability: ImageModelCapability) -> dict[str, Any]:
+    params = _media_params(request)
+    explicit_size = _string_param(params, "size")
+    if explicit_size and explicit_size.casefold() != "auto":
+        _unsupported_media_spec()
+    if _string_param(params, "aspect_ratio", "ratio"):
+        _unsupported_media_spec()
+    requested_resolution = _string_param(params, "resolution", "image_size")
+    if requested_resolution and requested_resolution.casefold() != "auto":
+        _unsupported_media_spec()
+    return {
+        "model": model,
+        "prompt": request.user_query,
+        "n": _mcp_image_count(params, capability),
+        "size": "auto",
+    }
+
+
 def build_mcp_image_payload(request: WorkspaceRunRequest, model: str) -> dict[str, Any]:
     capability = IMAGE_MODEL_CAPABILITIES.get(model)
     if capability is None:
@@ -445,29 +488,32 @@ def build_mcp_image_payload(request: WorkspaceRunRequest, model: str) -> dict[st
     params = _media_params(request)
     if UNPUBLISHED_MCP_IMAGE_PARAMETERS.intersection(params):
         _unsupported_media_spec()
-    aspect_ratio, resolution = _image_options(request, capability)
-    payload: dict[str, Any] = {
-        "model": model,
-        "prompt": request.user_query,
-        "n": _mcp_image_count(params, capability),
-        "aspect_ratio": aspect_ratio,
-        "resolution": resolution,
-    }
-
-    pixel_size = _image_pixel_size(capability, aspect_ratio, resolution)
-    if capability.family == "gemini_image":
-        payload["size"] = aspect_ratio
-        payload["image_size"] = resolution
-        image_config = {"aspectRatio": aspect_ratio, "imageSize": resolution}
-        payload["responseFormat"] = {"image": image_config}
-        payload["generationConfig"] = {"imageConfig": image_config}
-        payload["extra_body"] = {
-            "google": {"image_config": {"aspect_ratio": aspect_ratio, "image_size": resolution}}
-        }
-    elif pixel_size:
-        payload["size"] = pixel_size
+    if capability.family == "ecommerce_image":
+        payload = _ecommerce_image_payload(request, model, capability)
     else:
-        _unsupported_media_spec()
+        aspect_ratio, resolution = _image_options(request, capability)
+        payload = {
+            "model": model,
+            "prompt": request.user_query,
+            "n": _mcp_image_count(params, capability),
+            "aspect_ratio": aspect_ratio,
+            "resolution": resolution,
+        }
+
+        pixel_size = _image_pixel_size(capability, aspect_ratio, resolution)
+        if capability.family == "gemini_image":
+            payload["size"] = aspect_ratio
+            payload["image_size"] = resolution
+            image_config = {"aspectRatio": aspect_ratio, "imageSize": resolution}
+            payload["responseFormat"] = {"image": image_config}
+            payload["generationConfig"] = {"imageConfig": image_config}
+            payload["extra_body"] = {
+                "google": {"image_config": {"aspect_ratio": aspect_ratio, "image_size": resolution}}
+            }
+        elif pixel_size:
+            payload["size"] = pixel_size
+        elif capability.family != "grok_image":
+            _unsupported_media_spec()
 
     quality = _mcp_image_option(params, "quality", capability.qualities)
     if quality:
@@ -537,7 +583,7 @@ def build_mcp_video_payload(request: WorkspaceRunRequest, model: str) -> dict[st
     }
     if "seed" in params and params["seed"] is not None:
         seed = _positive_int(params["seed"])
-        if not capability.allow_seed or seed is None:
+        if not capability.allow_seed or seed is None or seed < 0:
             _unsupported_media_spec()
         payload["seed"] = seed
     if "watermark" in params and params["watermark"] is not None:
@@ -582,10 +628,10 @@ class MediaResult:
             "",
         ]
         if self.media_type == "image":
-            for index, url in enumerate(self.local_urls or self.urls, start=1):
+            for index, url in enumerate(self.local_urls, start=1):
                 lines.append(f"![生成图片 {index}]({url})")
         else:
-            for index, url in enumerate(self.local_urls or self.urls, start=1):
+            for index, url in enumerate(self.local_urls, start=1):
                 lines.append(f"[生成视频 {index}]({url})")
         return "\n".join(lines).strip()
 
@@ -655,6 +701,8 @@ async def generate_media(
         result = await generate_video(settings, request, user, model)
     result.duration_ms = int((time.monotonic() - started) * 1000)
     result.local_urls = await persist_remote_media(settings, user, task, output_dir, result)
+    if not result.local_urls:
+        raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE)
     return result
 
 
@@ -1079,35 +1127,45 @@ async def persist_remote_media(
     task: dict[str, Any],
     output_dir: Path,
     result: MediaResult,
+    *,
+    timeout_seconds: float | None = None,
 ) -> list[str]:
     local_urls: list[str] = []
+    deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None and timeout_seconds > 0 else None
     timeout = httpx.Timeout(90.0, connect=10.0, read=90.0, write=20.0)
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
         for index, url in enumerate(result.urls[:4], start=1):
+            remaining_seconds = None if deadline is None else deadline - time.monotonic()
+            if remaining_seconds is not None and remaining_seconds <= 0:
+                break
             if url.startswith("data:image/"):
                 target = output_dir / f"{result.media_type}-{index}-{uuid4().hex[:8]}.png"
                 try:
                     header, encoded = url.split(",", 1)
-                    target.write_bytes(base64.b64decode(encoded))
+                    target.write_bytes(base64.b64decode(encoded, validate=True))
                     local_urls.append(
                         f"{settings.public_base_url}/api/tasks/{task['task_id']}/files/outputs/{target.name}"
                     )
                     continue
                 except Exception:
-                    local_urls.append(url)
                     continue
             if not is_public_http_url(url):
-                local_urls.append(url)
                 continue
             suffix = suffix_for_url(url, result.media_type)
             target = output_dir / f"{result.media_type}-{index}-{uuid4().hex[:8]}{suffix}"
             try:
-                content = await fetch_limited_media(client, url, result.media_type)
+                if remaining_seconds is None:
+                    content = await fetch_limited_media(client, url, result.media_type)
+                else:
+                    content = await asyncio.wait_for(
+                        fetch_limited_media(client, url, result.media_type),
+                        timeout=remaining_seconds,
+                    )
+            except TimeoutError:
+                break
             except Exception:
-                local_urls.append(url)
                 continue
             if not content:
-                local_urls.append(url)
                 continue
             target.write_bytes(content)
             local_urls.append(
@@ -1242,17 +1300,24 @@ def suffix_for_url(url: str, media_type: str) -> str:
 
 
 def is_public_http_url(url: str) -> bool:
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").strip().lower()
+    except ValueError:
         return False
-    host = (parsed.hostname or "").strip().lower()
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
+        return False
     if not host or host in {"localhost", "0.0.0.0"} or host.endswith(".local"):
         return False
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
         return True
-    return not (
+    return is_public_media_address(address)
+
+
+def is_public_media_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return address.is_global and not (
         address.is_private
         or address.is_loopback
         or address.is_link_local
@@ -1262,22 +1327,90 @@ def is_public_http_url(url: str) -> bool:
     )
 
 
+async def resolve_public_media_host(host: str, port: int) -> tuple[str, ...]:
+    try:
+        addresses = await asyncio.get_running_loop().getaddrinfo(
+            host,
+            port,
+            family=socket.AF_UNSPEC,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+    except (OSError, ValueError, UnicodeError):
+        return ()
+    return tuple(dict.fromkeys(str(item[4][0]).split("%", 1)[0] for item in addresses if item[4]))
+
+
+async def resolve_public_media_target(url: str) -> tuple[httpx.URL, str, str] | None:
+    if not is_public_http_url(url):
+        return None
+    try:
+        target = httpx.URL(url)
+        host = target.host
+    except (httpx.InvalidURL, ValueError):
+        return None
+    if not host:
+        return None
+    default_port = 443 if target.scheme == "https" else 80
+    port = target.port if target.port is not None else default_port
+    if not 1 <= port <= 65535:
+        return None
+    addresses = await resolve_public_media_host(host, port)
+    if not addresses:
+        return None
+    try:
+        parsed_addresses = tuple(ipaddress.ip_address(address) for address in addresses)
+    except ValueError:
+        return None
+    if not all(is_public_media_address(address) for address in parsed_addresses):
+        return None
+    try:
+        connected_url = target.copy_with(host=str(parsed_addresses[0]))
+    except (httpx.InvalidURL, ValueError):
+        return None
+    origin_host = f"[{host}]" if ":" in host else host
+    host_header = origin_host if port == default_port else f"{origin_host}:{port}"
+    return connected_url, host_header, host
+
+
 async def fetch_limited_media(client: httpx.AsyncClient, url: str, media_type: str) -> bytes:
     limit = MAX_REMOTE_IMAGE_BYTES if media_type == "image" else MAX_REMOTE_VIDEO_BYTES
-    chunks: list[bytes] = []
-    total = 0
-    async with client.stream("GET", url) as response:
-        if response.status_code >= 400:
+    target_url = url
+    for _ in range(MAX_MEDIA_REDIRECTS + 1):
+        target = await resolve_public_media_target(target_url)
+        if target is None:
             return b""
-        declared = response.headers.get("content-length")
-        if declared and declared.isdigit() and int(declared) > limit:
+        connected_url, host_header, sni_hostname = target
+        try:
+            async with client.stream(
+                "GET",
+                connected_url,
+                headers={"Host": host_header},
+                extensions={"sni_hostname": sni_hostname},
+                follow_redirects=False,
+            ) as response:
+                if 300 <= response.status_code < 400:
+                    location = str(response.headers.get("location") or "").strip()
+                    if not location:
+                        return b""
+                    target_url = urljoin(target_url, location)
+                    continue
+                if response.status_code >= 400:
+                    return b""
+                declared = response.headers.get("content-length")
+                if declared and declared.isdigit() and int(declared) > limit:
+                    return b""
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > limit:
+                        return b""
+                    chunks.append(chunk)
+                return b"".join(chunks)
+        except (httpx.HTTPError, OSError, ValueError):
             return b""
-        async for chunk in response.aiter_bytes():
-            total += len(chunk)
-            if total > limit:
-                return b""
-            chunks.append(chunk)
-    return b"".join(chunks)
+    return b""
 
 
 def dedupe(values: list[str]) -> list[str]:

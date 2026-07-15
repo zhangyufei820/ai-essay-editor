@@ -1,5 +1,6 @@
 import asyncio
 
+import httpx
 import pytest
 
 from app.config import Settings
@@ -15,10 +16,13 @@ from app.media_tools import (
     MediaGenerationError,
     MediaResult,
     build_mcp_image_payload,
+    build_mcp_video_payload,
     detect_media_kind,
     generate_image,
     generate_video,
+    fetch_limited_media,
     normalize_mcp_media_request,
+    persist_remote_media,
     upstream_error,
 )
 from app.models import WorkspaceFile, WorkspaceRunRequest
@@ -236,17 +240,222 @@ def test_media_result_markdown_is_preview_first_and_hides_internal_model_name():
         media_type="image",
         model="geek2api-image-2",
         prompt="生成图片",
-        urls=["https://cdn.test/image.png"],
+        urls=["https://supplier.example/image.png?signature=private"],
+        local_urls=["https://api.example.test/codex/api/tasks/task-1/files/outputs/image.png"],
         raw_text='{"error":"should not be shown"}',
     )
 
     markdown = result.markdown()
 
     assert "图像生成完成" in markdown
-    assert "![生成图片 1](https://cdn.test/image.png)" in markdown
+    assert "![生成图片 1](https://api.example.test/codex/api/tasks/task-1/files/outputs/image.png)" in markdown
     assert "geek2api" not in markdown.lower()
+    assert "supplier.example" not in markdown
+    assert "signature=private" not in markdown
     assert "下载" not in markdown
     assert "raw_text" not in markdown
+
+
+def test_media_result_markdown_never_falls_back_to_remote_urls():
+    result = MediaResult(
+        media_type="image",
+        model="gpt-image-2-4K",
+        prompt="生成图片",
+        urls=["https://supplier.example/image.png?signature=private"],
+    )
+
+    markdown = result.markdown()
+
+    assert "supplier.example" not in markdown
+    assert "signature=private" not in markdown
+    assert "![生成图片" not in markdown
+
+
+def test_persist_remote_media_never_returns_remote_url_when_download_fails(monkeypatch, tmp_path):
+    async def fail_fetch(*_args, **_kwargs):
+        raise RuntimeError("remote download failed")
+
+    monkeypatch.setattr("app.media_tools.fetch_limited_media", fail_fetch)
+    result = MediaResult(
+        media_type="image",
+        model="gpt-image-2-4K",
+        prompt="生成图片",
+        urls=["https://supplier.example/image.png?signature=private"],
+    )
+
+    local_urls = asyncio.run(
+        persist_remote_media(
+            Settings(public_base_url="https://api.example.test/codex"),
+            UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+            {"task_id": "task-1"},
+            tmp_path,
+            result,
+        )
+    )
+
+    assert local_urls == []
+
+
+def test_persist_remote_media_stops_at_the_shared_preview_deadline(monkeypatch, tmp_path):
+    calls: list[str] = []
+
+    async def slow_fetch(_client, url, _media_type):
+        calls.append(url)
+        await asyncio.sleep(1.5)
+        return b""
+
+    monkeypatch.setattr("app.media_tools.fetch_limited_media", slow_fetch)
+    result = MediaResult(
+        media_type="image",
+        model="gpt-image-2-4K",
+        prompt="生成图片",
+        urls=["https://cdn.example.test/one.png", "https://cdn.example.test/two.png"],
+    )
+
+    local_urls = asyncio.run(
+        persist_remote_media(
+            Settings(public_base_url="https://api.example.test/codex"),
+            UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+            {"task_id": "task-1"},
+            tmp_path,
+            result,
+            timeout_seconds=1,
+        )
+    )
+
+    assert local_urls == []
+    assert calls == ["https://cdn.example.test/one.png"]
+
+
+def test_media_download_does_not_follow_private_redirects(monkeypatch):
+    visited: list[str] = []
+
+    async def resolve_public_media_host(host: str, _port: int) -> tuple[str, ...]:
+        assert host == "cdn.example.test"
+        return ("8.8.8.8",)
+
+    monkeypatch.setattr("app.media_tools.resolve_public_media_host", resolve_public_media_host, raising=False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        visited.append(str(request.url))
+        if request.headers["host"] == "cdn.example.test":
+            return httpx.Response(302, headers={"location": "http://127.0.0.1/private"}, request=request)
+        return httpx.Response(200, content=b"private", request=request)
+
+    async def fetch() -> bytes:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True) as client:
+            return await fetch_limited_media(client, "https://cdn.example.test/output.png", "image")
+
+    assert asyncio.run(fetch()) == b""
+    assert all("127.0.0.1" not in url for url in visited)
+
+
+@pytest.mark.parametrize(
+    "unsafe_address",
+    (
+        "127.0.0.1",
+        "10.0.0.1",
+        "169.254.10.10",
+        "0.0.0.0",
+        "224.0.0.1",
+        "240.0.0.1",
+        "::1",
+        "fc00::1",
+        "fe80::1",
+        "ff00::1",
+    ),
+)
+def test_media_download_rejects_non_public_dns_answers(monkeypatch, unsafe_address):
+    visited: list[str] = []
+
+    async def resolve_public_media_host(host: str, _port: int) -> tuple[str, ...]:
+        assert host == "cdn.example.test"
+        return (unsafe_address,)
+
+    monkeypatch.setattr("app.media_tools.resolve_public_media_host", resolve_public_media_host, raising=False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        visited.append(str(request.url))
+        return httpx.Response(200, content=b"unexpected", request=request)
+
+    async def fetch() -> bytes:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_limited_media(client, "https://cdn.example.test/output.png", "image")
+
+    assert asyncio.run(fetch()) == b""
+    assert visited == []
+
+
+def test_media_download_rejects_mixed_public_and_private_dns_answers(monkeypatch):
+    visited: list[str] = []
+
+    async def resolve_public_media_host(_host: str, _port: int) -> tuple[str, ...]:
+        return ("8.8.8.8", "127.0.0.1")
+
+    monkeypatch.setattr("app.media_tools.resolve_public_media_host", resolve_public_media_host, raising=False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        visited.append(str(request.url))
+        return httpx.Response(200, content=b"unexpected", request=request)
+
+    async def fetch() -> bytes:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_limited_media(client, "https://cdn.example.test/output.png", "image")
+
+    assert asyncio.run(fetch()) == b""
+    assert visited == []
+
+
+def test_media_download_pins_validated_dns_address_and_preserves_origin(monkeypatch):
+    observed: list[httpx.Request] = []
+
+    async def resolve_public_media_host(host: str, port: int) -> tuple[str, ...]:
+        assert (host, port) == ("cdn.example.test", 443)
+        return ("8.8.8.8",)
+
+    monkeypatch.setattr("app.media_tools.resolve_public_media_host", resolve_public_media_host, raising=False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed.append(request)
+        return httpx.Response(200, content=b"image", request=request)
+
+    async def fetch() -> bytes:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_limited_media(client, "https://cdn.example.test/output.png", "image")
+
+    assert asyncio.run(fetch()) == b"image"
+    assert len(observed) == 1
+    assert observed[0].url.host == "8.8.8.8"
+    assert observed[0].headers["host"] == "cdn.example.test"
+    assert observed[0].extensions["sni_hostname"] == "cdn.example.test"
+
+
+def test_media_download_validates_every_redirect_destination(monkeypatch):
+    visited: list[str] = []
+
+    async def resolve_public_media_host(host: str, _port: int) -> tuple[str, ...]:
+        if host == "cdn.example.test":
+            return ("8.8.8.8",)
+        if host == "redirect.example.test":
+            return ("127.0.0.1",)
+        raise AssertionError("unexpected redirect host")
+
+    monkeypatch.setattr("app.media_tools.resolve_public_media_host", resolve_public_media_host, raising=False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        visited.append(str(request.url))
+        return httpx.Response(
+            302,
+            headers={"location": "https://redirect.example.test/private.png"},
+            request=request,
+        )
+
+    async def fetch() -> bytes:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_limited_media(client, "https://cdn.example.test/output.png", "image")
+
+    assert asyncio.run(fetch()) == b""
+    assert visited == ["https://8.8.8.8/output.png"]
 
 
 def test_image_generation_without_renderable_url_fails(monkeypatch):
@@ -531,7 +740,7 @@ def test_moonapix_rejects_local_data_url_reference(monkeypatch):
 def test_all_public_media_models_have_mcp_capability_profiles():
     assert {item.model for item in public_models_for_mode("image")} <= set(IMAGE_MODEL_CAPABILITIES)
     assert {item.model for item in public_models_for_mode("video")} <= set(VIDEO_MODEL_CAPABILITIES)
-    assert "grok-imagine-image" not in {item.model for item in public_models_for_mode("image")}
+    assert "grok-imagine-image" in {item.model for item in public_models_for_mode("image")}
 
 
 @pytest.mark.parametrize("status_code", [403, 404])
@@ -565,6 +774,95 @@ def test_mcp_gpt_image_payload_forwards_validated_vertical_2k_options():
     assert payload["output_format"] == "webp"
     assert payload["output_compression"] == 80
     assert payload["background"] == "opaque"
+
+
+def test_mcp_grok_image_payload_uses_verified_ratio_and_resolution_without_extra_options():
+    request = WorkspaceRunRequest(
+        user_query="生成一张竖版人物海报。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "grok-imagine-image"},
+        params={"aspect_ratio": "9:16", "resolution": "2K"},
+    )
+
+    payload = build_mcp_image_payload(request, "grok-imagine-image")
+
+    assert payload == {
+        "model": "grok-imagine-image",
+        "prompt": "生成一张竖版人物海报。",
+        "n": 1,
+        "aspect_ratio": "9:16",
+        "resolution": "2k",
+    }
+
+
+def test_mcp_grok_image_accepts_up_to_four_images():
+    request = WorkspaceRunRequest(
+        user_query="生成四张竖版人物海报。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "grok-imagine-image"},
+        params={"aspect_ratio": "9:16", "resolution": "2K", "n": 4},
+    )
+
+    payload = build_mcp_image_payload(request, "grok-imagine-image")
+
+    assert payload["n"] == 4
+
+
+def test_mcp_grok_image_rejects_more_than_four_images():
+    request = WorkspaceRunRequest(
+        user_query="生成五张竖版人物海报。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "grok-imagine-image"},
+        params={"n": 5},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        build_mcp_image_payload(request, "grok-imagine-image")
+
+
+def test_grok_image_generation_forwards_only_verified_payload(monkeypatch):
+    FakeImageSuccessAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeImageSuccessAsyncClient)
+    request = WorkspaceRunRequest(
+        user_query="生成一张竖版人物海报。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "grok-imagine-image"},
+        params={"aspect_ratio": "9:16", "resolution": "2K"},
+    )
+
+    asyncio.run(
+        generate_image(
+            Settings(new_api_base_url="https://api.example.test/v1"),
+            request,
+            UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+            "grok-imagine-image",
+        )
+    )
+
+    assert FakeImageSuccessAsyncClient.calls[0]["kwargs"]["json"] == {
+        "model": "grok-imagine-image",
+        "prompt": "生成一张竖版人物海报。",
+        "n": 1,
+        "aspect_ratio": "9:16",
+        "resolution": "2k",
+    }
+
+
+def test_mcp_grok_image_rejects_unverified_output_compression_before_network():
+    request = WorkspaceRunRequest(
+        user_query="生成一张人物海报。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "grok-imagine-image"},
+        params={"output_compression": 80},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        build_mcp_image_payload(request, "grok-imagine-image")
 
 
 def test_mcp_image_rejects_invalid_output_compression():
@@ -639,7 +937,7 @@ def test_mcp_image_rejects_other_unpublished_parameters(parameter):
         build_mcp_image_payload(request, "gpt-image-2-4K")
 
 
-def test_mcp_normalization_keeps_ecommerce_auto_output_valid():
+def test_mcp_ecommerce_uses_only_verified_automatic_size_payload():
     request = WorkspaceRunRequest(
         user_query="生成一张商品主图。",
         task_type="agent_image",
@@ -654,8 +952,25 @@ def test_mcp_normalization_keeps_ecommerce_auto_output_valid():
     )
     payload = build_mcp_image_payload(normalized, "image 2电商商品图快速通道(1.5K)")
 
-    assert payload["size"] == "auto"
-    assert payload["resolution"] == "auto"
+    assert payload == {
+        "model": "image 2电商商品图快速通道(1.5K)",
+        "prompt": "生成一张商品主图。",
+        "n": 1,
+        "size": "auto",
+    }
+
+
+def test_mcp_ecommerce_rejects_unverified_manual_image_specification():
+    request = WorkspaceRunRequest(
+        user_query="生成一张竖版商品主图。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "image 2电商商品图快速通道(1.5K)"},
+        params={"aspect_ratio": "9:16"},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        build_mcp_image_payload(request, "image 2电商商品图快速通道(1.5K)")
 
 
 def test_mcp_image_rejects_unsupported_specification_before_network(monkeypatch):
@@ -715,6 +1030,33 @@ def test_mcp_video_forwards_validated_duration_ratio_and_resolution(monkeypatch)
     assert payload["resolution"] == "480p"
     assert payload["watermark"] is True
     assert payload["seed"] == 7
+
+
+def test_mcp_video_accepts_zero_seed():
+    request = WorkspaceRunRequest(
+        user_query="生成一段竖版短片。",
+        task_type="agent_video",
+        model_role="video_generation",
+        model_config={"video_generation": "seedance-2.0-cl-mini"},
+        params={"seed": 0},
+    )
+
+    payload = build_mcp_video_payload(request, "seedance-2.0-cl-mini")
+
+    assert payload["seed"] == 0
+
+
+def test_mcp_video_rejects_negative_seed():
+    request = WorkspaceRunRequest(
+        user_query="生成一段竖版短片。",
+        task_type="agent_video",
+        model_role="video_generation",
+        model_config={"video_generation": "seedance-2.0-cl-mini"},
+        params={"seed": -1},
+    )
+
+    with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_SPEC_UNSUPPORTED):
+        build_mcp_video_payload(request, "seedance-2.0-cl-mini")
 
 
 def test_mcp_video_rejects_unsupported_duration_before_network(monkeypatch):

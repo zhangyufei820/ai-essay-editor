@@ -2,6 +2,10 @@ import asyncio
 from dataclasses import replace
 
 from app.config import (
+    DEFAULT_IMAGE_ALLOWED_MODELS,
+    DEFAULT_IMAGE_ALLOWED_MODELS_ENV,
+    DEFAULT_VIDEO_ALLOWED_MODELS,
+    DEFAULT_VIDEO_ALLOWED_MODELS_ENV,
     GROK_MODEL,
     GROK_TOKEN_GROUP,
     GROK_TOKEN_NAME,
@@ -78,6 +82,44 @@ def test_grok_profile_settings_support_production_env_names(monkeypatch) -> None
 
     assert settings.grok_allowed_models == (GROK_MODEL,)
     assert settings.grok_token_name == GROK_TOKEN_NAME
+
+
+def test_default_video_models_only_include_verified_public_models(monkeypatch) -> None:
+    expected = (
+        "seedance-2.0-dj-fast",
+        "seedance-2.0-cl-mini",
+    )
+    monkeypatch.delenv("DEFAULT_VIDEO_MODEL", raising=False)
+    monkeypatch.delenv("VIDEO_ALLOWED_MODELS", raising=False)
+
+    settings = get_settings()
+
+    assert DEFAULT_VIDEO_ALLOWED_MODELS == expected
+    assert DEFAULT_VIDEO_ALLOWED_MODELS_ENV == ",".join(expected)
+    assert Settings().default_video_model == expected[0]
+    assert Settings().video_allowed_models == expected
+    assert settings.default_video_model == expected[0]
+    assert settings.video_allowed_models == expected
+
+
+def test_default_image_models_include_every_verified_public_model(monkeypatch) -> None:
+    expected = (
+        "gpt-image-2-4K",
+        "geek2api-image-2",
+        "grok-imagine-image",
+        "banana-2",
+        "gemini-3-pro-image-preview",
+        "image 2电商商品图快速通道(1.5K)",
+        "ecommerce-banana-2",
+    )
+    monkeypatch.delenv("IMAGE_ALLOWED_MODELS", raising=False)
+
+    settings = get_settings()
+
+    assert DEFAULT_IMAGE_ALLOWED_MODELS == expected
+    assert DEFAULT_IMAGE_ALLOWED_MODELS_ENV == ",".join(expected)
+    assert Settings().image_allowed_models == expected
+    assert settings.image_allowed_models == expected
 
 
 def test_effective_mode_models_preserves_explicit_empty_permissions() -> None:
@@ -750,6 +792,35 @@ def test_public_model_modes_hide_internal_media_identifiers_and_accept_public_se
 
     assert request.model_roles.image_generation == "geek2api-image-2"
     assert request.metadata["server_allowed_models_by_mode"]["image"] == ["geek2api-image-2"]
+
+
+def test_public_model_modes_expose_grok_image_with_website_name_only() -> None:
+    user = UserContext(
+        api_key="sk-primary",
+        user_id="user-1",
+        key_hint="sk-primary",
+        allowed_models_by_mode={
+            "codex": (),
+            "claude": (),
+            "image": ("grok-imagine-image",),
+            "video": (),
+        },
+    )
+
+    modes = model_modes(user)
+
+    assert modes["image"]["models"] == ["Grok Image Pro"]
+    assert "grok-imagine-image" not in str(modes)
+
+    request = WorkspaceRunRequest(
+        user_query="生成一张人物海报",
+        model_role="image_generation",
+        model_config={"image_generation": "Grok Image Pro"},
+    )
+    attach_allowed_models_metadata(request, user)
+
+    assert request.model_roles.image_generation == "grok-imagine-image"
+    assert request.metadata["server_allowed_models_by_mode"]["image"] == ["grok-imagine-image"]
 
 
 def test_public_model_modes_fail_closed_for_media_without_model_permissions() -> None:

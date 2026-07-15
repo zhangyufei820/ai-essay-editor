@@ -45,7 +45,7 @@ from app.models import (
     UserSkillCreateRequest,
     WorkspaceRunRequest,
 )
-from app.media_tools import MediaGenerationError, detect_media_kind, generate_media, selected_media_model
+from app.media_tools import MEDIA_ERROR_RESULT_UNAVAILABLE, MediaGenerationError, detect_media_kind, generate_media, selected_media_model
 from app.model_access import (
     SERVER_ALLOWED_MODELS_METADATA_KEY,
     default_mode_models,
@@ -1325,6 +1325,8 @@ async def stream_media_generation(
                 "task_id": task_id,
             }
         result = await generation_task
+        if not result.local_urls:
+            raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE)
     except MediaGenerationError as exc:
         store.update(
             task_id,
@@ -1394,7 +1396,7 @@ async def stream_media_generation(
         "media": {
             "type": result.media_type,
             "model": public_display_model_name(result.model, media_kind) or label,
-            "urls": result.local_urls or result.urls,
+            "urls": result.local_urls,
         },
     }
 

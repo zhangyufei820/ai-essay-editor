@@ -25,6 +25,9 @@ class TaskStore:
     def _secret_key(self, task_id: str) -> str:
         return f"codex:task-secret:{task_id}"
 
+    def _media_request_key(self, fingerprint: str) -> str:
+        return f"codex:mcp-media-request:{fingerprint}"
+
     def put(self, task: dict[str, Any]) -> None:
         self.redis.set(
             self._key(task["task_id"]),
@@ -87,6 +90,24 @@ class TaskStore:
 
     def delete_task_secret(self, task_id: str) -> None:
         self.redis.delete(self._secret_key(task_id))
+
+    def reserve_media_request(self, fingerprint: str, task_id: str, ttl_seconds: int) -> str:
+        key = self._media_request_key(fingerprint)
+        if self.redis.set(key, task_id, ex=max(1, ttl_seconds), nx=True):
+            return task_id
+        raw = self.redis.get(key)
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        return str(raw or "")
+
+    def release_media_request(self, fingerprint: str, task_id: str) -> bool:
+        result = self.redis.eval(
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end",
+            1,
+            self._media_request_key(fingerprint),
+            task_id,
+        )
+        return bool(result)
 
     def write_status_file(self, task: dict[str, Any]) -> None:
         workspace = task.get("workspace")
