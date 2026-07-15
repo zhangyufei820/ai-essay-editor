@@ -94,6 +94,9 @@ CODEX_ALLOWED_MODELS = [
     CODEX_AUTO_REVIEW_MODEL,
     CODEX_IMAGE_15K_MODEL,
 ]
+CODEX_STANDARD_ALLOWED_MODELS = [
+    model for model in CODEX_ALLOWED_MODELS if model not in CONTROLLED_CODEX_MODEL_ALIASES
+]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
 CLAUDE_ALLOWED_MODELS = [
@@ -391,7 +394,11 @@ def sanitize_codex_token_models(models: list[str]) -> list[str]:
 
 def ensure_codex_image_model_limits(raw: str, required_models: list[str] | None = None) -> str:
     models = sanitize_codex_token_models(raw.split(","))
-    required = sanitize_codex_token_models(required_models or CODEX_ALLOWED_MODELS)
+    required = [
+        model
+        for model in sanitize_codex_token_models(required_models or CODEX_STANDARD_ALLOWED_MODELS)
+        if model not in CONTROLLED_CODEX_MODEL_ALIASES
+    ]
     if not required:
         required = [CODEX_DEFAULT_MODEL, CODEX_IMAGE_15K_MODEL]
     for model in required:
@@ -1162,7 +1169,12 @@ def ensure_discount_image2_backing_model() -> None:
 def sync_tokens(profiles: dict[str, list[str]]) -> None:
     statements = ["START TRANSACTION;"]
     for profile, names in TOKEN_PROFILES.items():
-        models = ",".join(sanitize_token_models(profiles[profile]))
+        profile_models = profiles[profile]
+        if profile == "codex":
+            profile_models = [
+                model for model in profile_models if model not in CONTROLLED_CODEX_MODEL_ALIASES
+            ]
+        models = ",".join(sanitize_token_models(profile_models))
         for name in names:
             statements.append(
                 "UPDATE tokens "

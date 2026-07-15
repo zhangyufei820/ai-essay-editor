@@ -40,6 +40,9 @@ CODEX_ALLOWED_MODELS = (
     CODEX_AUTO_REVIEW_MODEL,
     CODEX_IMAGE_15K_MODEL,
 )
+CODEX_STANDARD_ALLOWED_MODELS = tuple(
+    model for model in CODEX_ALLOWED_MODELS if model != CODEX_AUTO_REVIEW_MODEL
+)
 SUPPLIER_EXPOSED_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL,
 }
@@ -650,7 +653,7 @@ def sanitize_codex_token_models(models: list[str]) -> list[str]:
 
 def ensure_codex_image_model_limits(raw: str) -> str:
     models = sanitize_codex_token_models(raw.split(","))
-    for model in CODEX_ALLOWED_MODELS:
+    for model in CODEX_STANDARD_ALLOWED_MODELS:
         if model not in models:
             models.append(model)
     return ",".join(models)

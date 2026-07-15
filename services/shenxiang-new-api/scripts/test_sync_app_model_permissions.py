@@ -64,7 +64,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -72,7 +72,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_token_cache_key_uses_crypto_secret_hmac(self) -> None:
@@ -340,6 +340,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     "gpt-5.6-luna",
                     "gpt-5.6-terra",
                     "gpt-5.6-sol",
+                    "codex-auto-review",
                     "image 2电商商品图快速通道(1.5K)",
                 ],
                 "claude": ["claude-opus-4-8"],
@@ -355,6 +356,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("gpt-5.6-terra", sql)
         self.assertIn("gpt-5.6-sol", sql)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
+        self.assertNotIn("codex-auto-review", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertIn("CACHE:admin-key-1,admin-key-2", sql)
 
@@ -397,8 +399,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '106'", sql)
         self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105,key-106", sql)
         self.assertIn("model_limits_enabled = 1", sql)
-        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
-        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("gpt-5.3-codex-spark", sql)
         self.assertNotIn("gpt-5.3-spark", sql)
         self.assertNotIn("gpt-5.4-openai-compact", sql)
