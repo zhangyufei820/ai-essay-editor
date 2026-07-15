@@ -215,7 +215,7 @@ API.get('/api/user/models');
 
         self.assertEqual(
             self.module.sanitize_model_limits(raw),
-            "gpt-image-2-4K,gpt-5.5",
+            "gpt-image-2-4K,gpt-5.5,codex-auto-review",
         )
 
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
@@ -223,7 +223,7 @@ API.get('/api/user/models');
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -231,7 +231,7 @@ API.get('/api/user/models');
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_supplier_exposed_model_limit_predicate_covers_known_markers(self) -> None:

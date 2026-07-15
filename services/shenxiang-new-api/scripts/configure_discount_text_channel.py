@@ -27,6 +27,11 @@ UPSTREAM_KEY_ENV = "DISCOUNT_UPSTREAM_API_KEY"
 UPSTREAM_BASE_URL_ENV = "DISCOUNT_UPSTREAM_BASE_URL"
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
+CODEX_AUTO_REVIEW_MODEL = "codex-auto-review"
+CODEX_AUTO_REVIEW_BACKING_MODEL = "gpt-5.5"
+CONTROLLED_MODEL_ALIASES = {
+    CODEX_AUTO_REVIEW_MODEL: CODEX_AUTO_REVIEW_BACKING_MODEL,
+}
 CODEX_TEXT_MODELS = (
     "gpt-5.4",
     "gpt-5.4-mini",
@@ -147,7 +152,11 @@ def fetch_upstream_models(base_url: str, api_key: str) -> set[str]:
 
 
 def build_discount_plan(upstream_models: set[str]) -> DiscountPlan:
-    matched = tuple(model for model in CODEX_TEXT_MODELS if model in upstream_models)
+    matched_models = [model for model in CODEX_TEXT_MODELS if model in upstream_models]
+    for alias, backing_model in CONTROLLED_MODEL_ALIASES.items():
+        if backing_model in upstream_models:
+            matched_models.append(alias)
+    matched = tuple(matched_models)
     missing = tuple(model for model in CODEX_TEXT_MODELS if model not in upstream_models)
     if not matched:
         raise ConfigurationError("upstream does not expose any current Codex text model alias")
@@ -329,7 +338,9 @@ def mysql_status(output: list[str], prefix: str) -> str:
 
 def build_apply_sql(plan: DiscountPlan, api_key: str, base_url: str, options: dict[str, str]) -> str:
     models = ",".join(plan.matched_models)
-    model_mapping = json_option({model: model for model in plan.matched_models})
+    model_mapping = json_option(
+        {model: CONTROLLED_MODEL_ALIASES.get(model, model) for model in plan.matched_models}
+    )
     statements = ["START TRANSACTION;"]
     statements.extend(option_guard_statements(options))
     relevant_channel_condition = (

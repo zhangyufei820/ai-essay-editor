@@ -42,6 +42,11 @@ PUBLIC_ALIAS_BACKING_MODELS = {
 }
 DISCOUNT_TEXT_GROUP = "discount"
 DISCOUNT_TEXT_CHANNEL_TAG = "xingren-discount-text"
+CODEX_AUTO_REVIEW_MODEL = "codex-auto-review"
+CODEX_AUTO_REVIEW_BACKING_MODEL = "gpt-5.5"
+CONTROLLED_CODEX_MODEL_ALIASES = {
+    CODEX_AUTO_REVIEW_MODEL: CODEX_AUTO_REVIEW_BACKING_MODEL,
+}
 DISCOUNT_TEXT_ALLOWED_MODELS = (
     "gpt-5.4",
     "gpt-5.4-mini",
@@ -50,6 +55,7 @@ DISCOUNT_TEXT_ALLOWED_MODELS = (
     "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
+    CODEX_AUTO_REVIEW_MODEL,
 )
 _DISCOUNT_TEXT_MODEL_REGEX_ALTERNATION = "|".join(
     model.replace(".", "[.]") for model in DISCOUNT_TEXT_ALLOWED_MODELS
@@ -85,6 +91,7 @@ CODEX_ALLOWED_MODELS = [
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     "gpt-5.5-openai-compact",
+    CODEX_AUTO_REVIEW_MODEL,
     CODEX_IMAGE_15K_MODEL,
 ]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
@@ -122,8 +129,9 @@ CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
     "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
+    CODEX_AUTO_REVIEW_MODEL,
 ]
-RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact", "codex-auto-review")
+RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact")
 PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
     # Customer price = official RMB token price * 1.08.
     # New API ratio formula: input CNY per 1M = model_ratio * 2 * USDExchangeRate.
@@ -189,6 +197,13 @@ PUBLIC_OPENAI_TEXT_MODELS = {
         "longcontext_cache_read_cny": Decimal("1.0000"),
         "longcontext_cache_create_cny": Decimal("12.5000"),
     },
+}
+PUBLIC_OPENAI_TEXT_MODELS[CODEX_AUTO_REVIEW_MODEL] = {
+    **PUBLIC_OPENAI_TEXT_MODELS[CODEX_AUTO_REVIEW_BACKING_MODEL],
+    "description": "Codex 自动审批审查模型，仅供已授权的 Codex 令牌调用。",
+    "icon": "Codex",
+    "tags": "text,codex,approval",
+    "endpoints": '{"openai-response":"/v1/responses"}',
 }
 
 
@@ -623,8 +638,8 @@ def ensure_public_openai_text_models() -> None:
                 [
                     "@openai_text_model",
                     sql_quote(str(config["description"])),
-                    sql_quote("OpenAI"),
-                    sql_quote("text,openai,codex"),
+                    sql_quote(str(config.get("icon", "OpenAI"))),
+                    sql_quote(str(config.get("tags", "text,openai,codex"))),
                     "1",
                     sql_quote(str(config.get("endpoints", '{"openai":"/v1/chat/completions"}'))),
                     "1",
@@ -640,9 +655,9 @@ def ensure_public_openai_text_models() -> None:
             "description = "
             + sql_quote(str(config["description"]))
             + ", icon = "
-            + sql_quote("OpenAI")
+            + sql_quote(str(config.get("icon", "OpenAI")))
             + ", tags = "
-            + sql_quote("text,openai,codex")
+            + sql_quote(str(config.get("tags", "text,openai,codex")))
             + ", vendor_id = 1, endpoints = "
             + sql_quote(str(config.get("endpoints", '{"openai":"/v1/chat/completions"}')))
             + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
@@ -727,6 +742,11 @@ def ensure_codex_text_channel_models() -> dict[str, int]:
         for key in retired_mapping_keys:
             mapping.pop(key, None)
         mapping_changed = True
+
+    for alias, backing_model in CONTROLLED_CODEX_MODEL_ALIASES.items():
+        if mapping.get(alias) != backing_model:
+            mapping[alias] = backing_model
+            mapping_changed = True
 
     if models_changed or mapping_changed:
         payload = json.dumps(mapping, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -1207,6 +1227,50 @@ def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
+def append_model_limit(raw_limits: str, model: str) -> str:
+    models = [item.strip() for item in raw_limits.split(",") if item.strip()]
+    if model in models:
+        return raw_limits
+    separator = "" if not raw_limits or raw_limits.endswith(",") else ","
+    return raw_limits + separator + model
+
+
+def sync_controlled_codex_alias_tokens() -> dict[str, int]:
+    token_rows = mysql(
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND status = 1 AND model_limits_enabled = 1 "
+        "AND FIND_IN_SET("
+        + sql_quote(CODEX_AUTO_REVIEW_BACKING_MODEL)
+        + ", REPLACE(COALESCE(model_limits, ''), ' ', '')) > 0;"
+    )
+    token_updates: list[tuple[str, str, str, str]] = []
+    for token_id, token_key, raw_limits in token_rows:
+        next_limits = append_model_limit(raw_limits, CODEX_AUTO_REVIEW_MODEL)
+        if next_limits != raw_limits:
+            token_updates.append((token_id, raw_limits, next_limits, token_key))
+
+    statements = ["START TRANSACTION;"]
+    for token_id, raw_limits, next_limits, _token_key in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits = "
+            + sql_quote(next_limits)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + " AND status = 1 AND model_limits_enabled = 1 AND FIND_IN_SET("
+            + sql_quote(CODEX_AUTO_REVIEW_BACKING_MODEL)
+            + ", REPLACE(COALESCE(model_limits, ''), ' ', '')) > 0"
+            + " AND BINARY COALESCE(model_limits, '') = BINARY "
+            + sql_quote(raw_limits)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    caches_deleted = delete_token_caches(
+        [token_key for _token_id, _raw_limits, _next_limits, token_key in token_updates]
+    )
+    return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
+
+
 def sync_user_claude_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
     claude_models = ",".join(sanitize_token_models(profiles["claude"]))
     token_rows = mysql(
@@ -1584,6 +1648,7 @@ def main() -> int:
     sync_abilities()
     sync_tokens(profiles)
     codex_token_result = sync_user_codex_tokens(profiles)
+    codex_alias_token_result = sync_controlled_codex_alias_tokens()
     claude_token_result = sync_user_claude_tokens(profiles)
     guard_result = enforce_gpt_image2_db_guard()
     env_changed = sync_codex_env(profiles)
@@ -1592,7 +1657,7 @@ def main() -> int:
     print(
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
-        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, claude_token_sync={claude_token_result}, gpt_image2_guard={guard_result}"
+        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, codex_alias_token_sync={codex_alias_token_result}, claude_token_sync={claude_token_result}, gpt_image2_guard={guard_result}"
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
         + f", retired_claude={retired_claude_result}"

@@ -28,6 +28,7 @@ CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 CODEX_TOKEN_NAMES = ("星人 Codex 文本令牌", "星人 Codex 自动令牌")
 USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 ADMIN_SYSTEM_TOKEN_USER_ID = 1
+CODEX_AUTO_REVIEW_MODEL = "codex-auto-review"
 CODEX_ALLOWED_MODELS = (
     "gpt-5.5",
     "gpt-5.4",
@@ -36,6 +37,7 @@ CODEX_ALLOWED_MODELS = (
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     "gpt-5.5-openai-compact",
+    CODEX_AUTO_REVIEW_MODEL,
     CODEX_IMAGE_15K_MODEL,
 )
 SUPPLIER_EXPOSED_MODELS = {
@@ -64,7 +66,6 @@ RETIRED_CODEX_TEXT_MODELS = (
     "gpt-5.3-codex-spark",
     "gpt-5.3-spark",
     "gpt-5.4-openai-compact",
-    "codex-auto-review",
 )
 
 

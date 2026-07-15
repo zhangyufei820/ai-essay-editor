@@ -27,7 +27,7 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
     def test_build_discount_plan_uses_only_current_public_aliases(self) -> None:
         plan = self.module.build_discount_plan({"gpt-5.5", "gpt-5.4-mini", "supplier-private-model"})
 
-        self.assertEqual(plan.matched_models, ("gpt-5.4-mini", "gpt-5.5"))
+        self.assertEqual(plan.matched_models, ("gpt-5.4-mini", "gpt-5.5", "codex-auto-review"))
         self.assertNotIn("supplier-private-model", plan.matched_models)
         self.assertEqual(plan.upstream_model_count, 3)
 
@@ -66,7 +66,7 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
     def test_build_apply_sql_keeps_channel_and_abilities_in_discount_only(self) -> None:
         plan = self.module.DiscountPlan(
             upstream_model_count=2,
-            matched_models=("gpt-5.4", "gpt-5.5"),
+            matched_models=("gpt-5.4", "gpt-5.5", "codex-auto-review"),
             missing_models=(),
         )
         sql = self.module.build_apply_sql(
@@ -84,6 +84,8 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertIn("`group` = 'discount'", sql)
         self.assertIn("'discount', 'gpt-5.4', @discount_channel_id", sql)
         self.assertIn("'discount', 'gpt-5.5', @discount_channel_id", sql)
+        self.assertIn("'discount', 'codex-auto-review', @discount_channel_id", sql)
+        self.assertIn('"codex-auto-review":"gpt-5.5"', sql)
         self.assertNotIn("'default', 'gpt-5.4', @discount_channel_id", sql)
         self.assertIn(self.module.DISCOUNT_CHANNEL_TAG, sql)
 
