@@ -106,6 +106,10 @@ CLAUDE_ALLOWED_MODELS = [
     "claude-sonnet-4-6",
     "claude-sonnet-5",
 ]
+PUBLIC_SD2_FAST_MODEL = "seedance-sd2-fast-720p"
+UPSTREAM_SD2_FAST_MODEL = "sd2-fast-720p"
+PUBLIC_GROK15_VIDEO_MODEL = "grok-video-1.5"
+UPSTREAM_GROK15_VIDEO_MODEL = "grok-imagine-1.5-video"
 PUBLIC_VIDEO_MODEL_CONFIGS = {
     "grok-video-super-720p": {
         "description": "星人 Grok 视频生成｜人民币 ¥6.50/次｜固定按次计费，支持 5/10/15 秒，生成后请及时下载",
@@ -113,23 +117,23 @@ PUBLIC_VIDEO_MODEL_CONFIGS = {
         "tags": "video,grok",
         "vendor_id": 3,
     },
-    "seedance-2.0-dj-fast": {
-        "description": "星人 Seedance 2.0 DJ Fast｜人民币 ¥0.162/秒｜支持 5/10/15 秒，只接收图片参考，生成后请及时下载",
-        "icon": "Doubao.Color",
-        "tags": "video,doubao,seedance",
-        "vendor_id": 4,
-    },
-    "seedance-2.0-cl-mini": {
-        "description": "星人 Seedance 2.0 CL Mini 视频生成｜支持 4-15 秒｜支持图片参考，也可传 1 个视频参考，生成后请及时下载",
-        "icon": "Doubao.Color",
-        "tags": "video,seedance",
-        "vendor_id": 4,
-    },
     "seedance-2.0-ld-17": {
         "description": "星人 Seedance 2.0 LD-17｜人民币 ¥6.48/次｜固定按次计费，支持 5-15 秒和多模态参考，生成后请及时下载",
         "icon": "Doubao.Color",
         "tags": "video,doubao,seedance",
         "vendor_id": 4,
+    },
+    PUBLIC_SD2_FAST_MODEL: {
+        "description": "星人 Seedance SD Fast 720P｜人民币 ¥0.25/秒｜按生成时长计费，支持图片参考，生成后请及时下载",
+        "icon": "Doubao.Color",
+        "tags": "video,seedance",
+        "vendor_id": 4,
+    },
+    PUBLIC_GROK15_VIDEO_MODEL: {
+        "description": "星人 Grok Video 1.5｜人民币 ¥0.20/次｜固定按次计费，生成后请及时下载",
+        "icon": "Grok",
+        "tags": "video,grok",
+        "vendor_id": 3,
     },
 }
 PUBLIC_VIDEO_MODELS = tuple(PUBLIC_VIDEO_MODEL_CONFIGS)
@@ -139,12 +143,13 @@ DISABLED_PUBLIC_VIDEO_MODELS = [
     "seedance-2.0-kz-fast",
     "seedance-2.0-cl-fast",
     "seedance-2.0-cl",
-]
-PUBLIC_SEEDANCE_CHANNEL_ID = "5"
-PUBLIC_SEEDANCE_CHANNEL_MODELS = [
+    "seedance-2.0-dj-fast",
     "seedance-2.0-cl-mini",
 ]
-PUBLIC_SEEDANCE_MODEL_MAPPING = '{"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
+DISABLED_PUBLIC_VIDEO_CHANNEL_IDS = ("5", "25")
+PUBLIC_GROK_VIDEO_CHANNEL_ID = "7"
+PUBLIC_GROK_VIDEO_CHANNEL_MODELS = ["grok-video-super-720p"]
+PUBLIC_GROK_VIDEO_MODEL_MAPPING = '{"grok-video-super-720p":"grok-imagine-video-1.5-preview"}'
 PUBLIC_LD17_CHANNEL_ID = "26"
 PUBLIC_LD17_CHANNEL_MODELS = [
     "seedance-2.0-ld-17",
@@ -152,14 +157,28 @@ PUBLIC_LD17_CHANNEL_MODELS = [
 PUBLIC_LD17_MODEL_MAPPING = '{"seedance-2.0-ld-17":"seedance-2.0-wc-b-720p"}'
 PUBLIC_VIDEO_CHANNEL_CONFIGS = (
     (
-        PUBLIC_SEEDANCE_CHANNEL_ID,
-        PUBLIC_SEEDANCE_CHANNEL_MODELS,
-        PUBLIC_SEEDANCE_MODEL_MAPPING,
+        "id",
+        PUBLIC_GROK_VIDEO_CHANNEL_ID,
+        PUBLIC_GROK_VIDEO_CHANNEL_MODELS,
+        PUBLIC_GROK_VIDEO_MODEL_MAPPING,
     ),
     (
+        "id",
         PUBLIC_LD17_CHANNEL_ID,
         PUBLIC_LD17_CHANNEL_MODELS,
         PUBLIC_LD17_MODEL_MAPPING,
+    ),
+    (
+        "tag",
+        "xingren-sd2-fast-video",
+        [PUBLIC_SD2_FAST_MODEL],
+        json.dumps({PUBLIC_SD2_FAST_MODEL: UPSTREAM_SD2_FAST_MODEL}, separators=(",", ":")),
+    ),
+    (
+        "tag",
+        "xingren-grok15-video",
+        [PUBLIC_GROK15_VIDEO_MODEL],
+        json.dumps({PUBLIC_GROK15_VIDEO_MODEL: UPSTREAM_GROK15_VIDEO_MODEL}, separators=(",", ":")),
     ),
 )
 CODEX_TEXT_CHANNEL_ID = "21"
@@ -172,18 +191,12 @@ CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
     CODEX_AUTO_REVIEW_MODEL,
 ]
 RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact")
-PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
-    # Customer price = official RMB token price * 1.08.
-    # New API ratio formula: input CNY per 1M = model_ratio * 2 * USDExchangeRate.
-    "seedance-2.0-cl-mini": {
-        "input_with_video": Decimal("11.90") * Decimal("1.08"),
-        "output": Decimal("19.55") * Decimal("1.08"),
-    }
-}
+PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M: dict[str, dict[str, Decimal]] = {}
 PUBLIC_VIDEO_FIXED_PRICES_CNY = {
     "grok-video-super-720p": Decimal("6.50"),
-    "seedance-2.0-dj-fast": Decimal("0.162"),
     "seedance-2.0-ld-17": Decimal("6.48"),
+    PUBLIC_SD2_FAST_MODEL: Decimal("0.25"),
+    PUBLIC_GROK15_VIDEO_MODEL: Decimal("0.20"),
 }
 OPENAI_TEXT_LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
 PUBLIC_OPENAI_TEXT_MODELS = {
@@ -617,6 +630,11 @@ def sync_public_video_pricing() -> None:
     completion_ratios = parse_json_option("CompletionRatio")
     model_prices = parse_json_option("ModelPrice")
     exchange_rate = usd_exchange_rate()
+
+    for model in DISABLED_PUBLIC_VIDEO_MODELS:
+        model_prices.pop(model, None)
+        model_ratios.pop(model, None)
+        completion_ratios.pop(model, None)
 
     for model, price_cny in PUBLIC_VIDEO_FIXED_PRICES_CNY.items():
         model_prices[model] = decimal_to_float(price_cny / exchange_rate)
@@ -1156,14 +1174,24 @@ def ensure_public_video_models() -> None:
             "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
             "WHERE model_name = @public_video_model AND id <> @keep_model_id;"
         )
-    for channel_id, public_models, model_mapping in PUBLIC_VIDEO_CHANNEL_CONFIGS:
+    if DISABLED_PUBLIC_VIDEO_CHANNEL_IDS:
+        disabled_channel_ids = ", ".join(str(int(channel_id)) for channel_id in DISABLED_PUBLIC_VIDEO_CHANNEL_IDS)
+        statements.append(f"UPDATE channels SET status = 2 WHERE id IN ({disabled_channel_ids});")
+        statements.append(f"UPDATE abilities SET enabled = 0 WHERE channel_id IN ({disabled_channel_ids});")
+    for selector, selector_value, public_models, model_mapping in PUBLIC_VIDEO_CHANNEL_CONFIGS:
+        if selector == "id":
+            channel_where = "id = " + str(int(selector_value))
+        elif selector == "tag":
+            channel_where = "tag = " + sql_quote(selector_value)
+        else:
+            raise ValueError("unsupported public video channel selector")
         statements.append(
-            "UPDATE channels SET models = "
+            "UPDATE channels SET status = 1, models = "
             + sql_quote(",".join(public_models))
             + ", model_mapping = "
             + sql_quote(model_mapping)
-            + " WHERE id = "
-            + channel_id
+            + " WHERE "
+            + channel_where
             + ";"
         )
     statements.append("COMMIT;")

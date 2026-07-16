@@ -447,14 +447,9 @@ const VIDEO_REFERENCE_ACCEPT = [
   ...VIDEO_AUDIO_TYPES,
 ].join(',');
 const GROK_VIDEO_PRICE_PER_CALL = 6.5;
-const SEEDANCE_DJ_FAST_PRICE_PER_SECOND = 0.162;
-const SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M = 12.852;
-const SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M = 21.114;
+const SEEDANCE_SD2_FAST_PRICE_PER_SECOND = 0.25;
+const GROK_VIDEO_15_PRICE_PER_CALL = 0.2;
 const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
-const SEEDANCE_EXTENDED_VIDEO_DURATIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-const PUBLIC_SEEDANCE_VIDEO_MODELS = [
-  'seedance-2.0-cl-mini',
-];
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1';
 const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000;
 const VIDEO_LONG_WAIT_MS = 70 * 1000;
@@ -722,38 +717,33 @@ const VIDEO_MODELS = [
     hint: '固定 ¥6.50/次；支持 5/10/15 秒，建议生成 15 秒。',
   },
   {
-    value: 'seedance-2.0-dj-fast',
-    label: 'Seedance 2.0 DJ Fast',
-    badge: '豆包',
-    vendor: '豆包视频',
+    value: 'seedance-sd2-fast-720p',
+    label: 'Seedance SD Fast 720P',
+    badge: 'Fast',
+    vendor: '星人视频',
     sizes: ['1280x720', '720x1280'],
     durations: [5, 10, 15],
     defaultSize: '1280x720',
     defaultDuration: 10,
     defaultFps: 24,
     referenceLimits: { image: 10, video: 0, audio: 0 },
-    supportsFace: false,
     billingLabel: '按秒计费',
-    priceLabel: `¥${SEEDANCE_DJ_FAST_PRICE_PER_SECOND.toFixed(3)}/秒`,
-    hint: '¥0.162/秒；支持 5/10/15 秒，只接收图片参考，不能过人脸。',
+    priceLabel: `¥${SEEDANCE_SD2_FAST_PRICE_PER_SECOND.toFixed(2)}/秒`,
+    hint: '¥0.25/秒；支持 5/10/15 秒，只接收图片参考。',
   },
   {
-    value: 'seedance-2.0-cl-mini',
-    label: 'Seedance 2.0 CL Mini',
-    badge: 'Seedance',
+    value: 'grok-video-1.5',
+    label: 'Grok Video 1.5',
+    badge: '1.5',
     vendor: '星人视频',
-    sizes: ['1280x720', '720x1280', '1024x1024'],
-    durations: SEEDANCE_EXTENDED_VIDEO_DURATIONS,
+    sizes: ['1280x720', '720x1280'],
+    durations: [5, 10, 15],
     defaultSize: '1280x720',
-    defaultDuration: 4,
+    defaultDuration: 15,
     defaultFps: 24,
-    resolutions: ['480p', '720p'],
-    defaultResolution: '720p',
-    referenceLimits: { image: 10, video: 1, audio: 0 },
-    extendedSeedance: true,
-    billingLabel: '按 token 计费',
-    priceLabel: `输入含视频 ¥${SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M.toFixed(3)}/1M｜输出 ¥${SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M.toFixed(3)}/1M`,
-    hint: `支持图片参考，也可传 1 个视频参考；输入含视频 ¥${SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M.toFixed(3)}/1M tokens，输出 ¥${SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M.toFixed(3)}/1M tokens。`,
+    billingLabel: '按次计费',
+    priceLabel: `¥${GROK_VIDEO_15_PRICE_PER_CALL.toFixed(2)}/次`,
+    hint: '固定 ¥0.20/次；参数与 Grok Video 一致。',
   },
   {
     value: 'seedance-2.0-ld-17',
@@ -1539,7 +1529,6 @@ function mentionQueryAtCursor(value, cursor) {
 
 function isOfficialSeedanceReferenceModel(modelValue) {
   return Boolean(VIDEO_MODELS.find((item) => item.value === modelValue)?.officialSeedanceReferences) ||
-    modelValue === 'seedance-2.0-dj-fast' ||
     modelValue === 'seedance-2.0-ld-17';
 }
 
@@ -2756,7 +2745,6 @@ const MediaPlayground = () => {
   const isImageModelAllowed = (modelValue) =>
     models.length === 0 || models.some((item) => item === modelValue);
   const isVideoModelAllowed = (modelValue) =>
-    PUBLIC_SEEDANCE_VIDEO_MODELS.includes(modelValue) ||
     models.length === 0 ||
     models.some((item) => item === modelValue);
   const activeModel = mode === 'image' ? activeImageModel : activeVideoModel;
@@ -3253,7 +3241,7 @@ const MediaPlayground = () => {
       enhance_prompt: enhancePrompt,
       watermark,
       ratio: SIZE_TO_ASPECT_RATIO[size] || undefined,
-      resolution: activeVideoModel.value === 'seedance-2.0-dj-fast'
+      resolution: activeVideoModel.value === 'seedance-sd2-fast-720p'
         ? '720P'
         : activeVideoModel.resolutions?.includes(resolution)
           ? resolution
@@ -3264,7 +3252,6 @@ const MediaPlayground = () => {
     if (activeNegativePrompt)
       payload.metadata.negative_prompt = activeNegativePrompt;
     if (
-      activeVideoModel.value === 'seedance-2.0-dj-fast' ||
       activeVideoModel.value === 'seedance-2.0-ld-17' ||
       activeVideoModel.officialSeedanceReferences ||
       activeVideoModel.extendedSeedance
@@ -3500,7 +3487,7 @@ const MediaPlayground = () => {
     const referenceItemsForModel =
       videoWorkflow === 'first-last'
         ? imageReferenceItems.slice(0, 1)
-        : videoModel === 'seedance-2.0-dj-fast'
+        : videoModel === 'seedance-sd2-fast-720p'
           ? imageReferenceItems
           : referenceFiles;
     const limitedReferenceItems = isOfficialReferencesModel
@@ -4047,14 +4034,8 @@ const MediaPlayground = () => {
       if (videoWorkflow === 'first-last' && counts.image === 0) {
         return Toast.error('首尾帧视频需要先上传首帧图片。');
       }
-      if (videoModel === 'seedance-2.0-dj-fast' && counts.image === 0) {
-        return Toast.error('DJ Fast 只支持图片参考，请先上传图片素材。');
-      }
-      if (activeVideoModel.extendedSeedance && counts.audio > 0) {
-        return Toast.error('该视频模型暂不接收音频参考，请移除音频素材。');
-      }
-      if (activeVideoModel.extendedSeedance && videoModel !== 'seedance-2.0-cl-mini' && counts.video > 0) {
-        return Toast.error('当前视频模型只支持图片参考，请移除视频素材或切换到 CL Mini。');
+      if (videoModel === 'seedance-sd2-fast-720p' && counts.image === 0) {
+        return Toast.error('Seedance SD Fast 只支持图片参考，请先上传图片素材。');
       }
     }
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile)

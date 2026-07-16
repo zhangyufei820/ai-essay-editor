@@ -94,13 +94,22 @@ const PRICING_DISPLAY_OVERRIDES = {
     visible_vendor_name: '星人媒体',
     icon: null,
   },
-  'seedance-2.0-dj-fast': {
-    display_name: 'seedance-2.0-dj-fast',
-    description: '豆包 Seedance 2.0 DJ Fast：人民币 ¥0.162/秒，按秒计费；支持 5/10/15 秒，只接收图片参考，不能过人脸。',
-    fixed_price_label: '¥0.162',
+  'seedance-sd2-fast-720p': {
+    display_name: 'Seedance SD Fast 720P',
+    description: '人民币 ¥0.25/秒，按生成时长计费；支持图片参考。',
+    fixed_price_label: '¥0.25',
     price_unit_label: '秒',
     billing_label: '按秒计费',
     icon: 'Doubao',
+  },
+  'grok-video-1.5': {
+    display_name: 'Grok Video 1.5',
+    description: '固定人民币 ¥0.20/次，按次计费。',
+    fixed_price_label: '¥0.20',
+    price_unit_label: '次',
+    billing_label: '按次计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   'seedance-2.0-ld-17': {
     display_name: 'seedance-2.0-ld-17',

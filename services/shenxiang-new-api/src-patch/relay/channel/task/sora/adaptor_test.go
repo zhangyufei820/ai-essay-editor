@@ -7,7 +7,71 @@ import (
 
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/gin-gonic/gin"
 )
+
+func TestDirectVideoModelsUseGenerationEndpoint(t *testing.T) {
+	adaptor := TaskAdaptor{baseURL: "https://provider.test"}
+	for _, modelName := range []string{seedanceSD2FastUpstreamModel, grok15VideoUpstreamModel} {
+		url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
+			ChannelMeta:   &relaycommon.ChannelMeta{UpstreamModelName: modelName},
+			TaskRelayInfo: &relaycommon.TaskRelayInfo{},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if url != "https://provider.test/api/v1/video/generations" {
+			t.Fatalf("url = %q, want direct generation endpoint", url)
+		}
+	}
+}
+
+func TestNewVideoModelsUseConfiguredBillingUnits(t *testing.T) {
+	adaptor := TaskAdaptor{}
+	for _, modelName := range []string{"grok-video-super-720p", grok15VideoPublicModel, grok15VideoUpstreamModel} {
+		if ratios := adaptor.EstimateBilling(nil, &relaycommon.RelayInfo{
+			OriginModelName: modelName,
+			TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+		}); ratios != nil {
+			t.Fatalf("fixed-price model %q ratios = %#v, want nil", modelName, ratios)
+		}
+	}
+
+	context := &gin.Context{}
+	context.Set("task_request", relaycommon.TaskSubmitReq{Seconds: "5", Size: "1280x720"})
+	ratios := adaptor.EstimateBilling(context, &relaycommon.RelayInfo{
+		OriginModelName: seedanceSD2FastPublicModel,
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: seedanceSD2FastUpstreamModel,
+		},
+	})
+	if ratios["seconds"] != 5 {
+		t.Fatalf("seconds ratio = %#v, want 5", ratios["seconds"])
+	}
+}
+
+func TestNewVideoModelsUseExistingPayloadShapes(t *testing.T) {
+	sdPayload := normalizeSeedanceVideoRequestBody(map[string]interface{}{
+		"model":    seedanceSD2FastUpstreamModel,
+		"prompt":   "A paper plane crosses the sky.",
+		"duration": float64(5),
+		"size":     "1280x720",
+	})
+	if sdPayload["model"] != seedanceSD2FastUpstreamModel || sdPayload["seconds"] != "5" {
+		t.Fatalf("Seedance payload = %#v", sdPayload)
+	}
+
+	grokPayload := normalizeGrokVideoRequestBody(map[string]interface{}{
+		"model":    grok15VideoUpstreamModel,
+		"prompt":   "A paper plane crosses the sky.",
+		"duration": float64(5),
+		"size":     "1280x720",
+	})
+	if grokPayload["model"] != grok15VideoUpstreamModel || grokPayload["duration"] != 15 {
+		t.Fatalf("Grok payload = %#v", grokPayload)
+	}
+}
 
 func TestNormalizeSeedanceVideoRequestBodyUsesOfficialFirstFramePayload(t *testing.T) {
 	body := map[string]interface{}{

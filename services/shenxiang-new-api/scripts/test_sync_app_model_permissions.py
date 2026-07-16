@@ -64,9 +64,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.module.PUBLIC_VIDEO_MODELS,
             (
                 "grok-video-super-720p",
-                "seedance-2.0-dj-fast",
-                "seedance-2.0-cl-mini",
                 "seedance-2.0-ld-17",
+                "seedance-sd2-fast-720p",
+                "grok-video-1.5",
             ),
         )
         self.assertTrue(
@@ -77,6 +77,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("seedance-2.0", self.module.PUBLIC_VIDEO_MODELS)
         self.assertNotIn("seedance-nsfw", self.module.PUBLIC_VIDEO_MODELS)
         self.assertNotIn("seedance-2.0-wc-b-720p", self.module.PUBLIC_VIDEO_MODELS)
+        self.assertNotIn("sd2-fast-720p", self.module.PUBLIC_VIDEO_MODELS)
+        self.assertNotIn("grok-imagine-1.5-video", self.module.PUBLIC_VIDEO_MODELS)
 
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
         raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2,claude-opus-4-8,seedance-2.0-cl-mini"
@@ -279,17 +281,21 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn(model, sql)
         self.assertIn("status = 1", sql)
         self.assertIn("deleted_at = NULL", sql)
-        self.assertIn("models = 'seedance-2.0-cl-mini'", sql)
+        self.assertNotIn("models = 'seedance-2.0-cl-mini'", sql)
         self.assertIn("models = 'seedance-2.0-ld-17'", sql)
         self.assertIn(
             "model_mapping = '{\"seedance-2.0-ld-17\":\"seedance-2.0-wc-b-720p\"}' WHERE id = 26",
             sql,
         )
+        self.assertIn("models = 'seedance-sd2-fast-720p'", sql)
+        self.assertIn("model_mapping = '{\"seedance-sd2-fast-720p\":\"sd2-fast-720p\"}'", sql)
+        self.assertIn("models = 'grok-video-1.5'", sql)
+        self.assertIn("model_mapping = '{\"grok-video-1.5\":\"grok-imagine-1.5-video\"}'", sql)
+        self.assertIn("UPDATE channels SET status = 2 WHERE id IN (5, 25)", sql)
         self.assertNotIn(
             "SET @public_video_model := 'seedance-2.0-wc-b-720p'",
             sql,
         )
-        self.assertNotIn("models = 'grok-video-super-720p", sql)
         self.assertIn("'seedance-2.0'", sql)
         self.assertIn("UPDATE abilities SET enabled = 0", sql)
         self.assertNotIn("seedance-nsfw", sql)
@@ -319,25 +325,23 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             0.890410958904,
         )
         self.assertEqual(
-            captured_options["ModelPrice"]["seedance-2.0-dj-fast"],
-            0.022191780822,
+            captured_options["ModelPrice"]["seedance-sd2-fast-720p"],
+            0.034246575342,
         )
         self.assertEqual(
             captured_options["ModelPrice"]["seedance-2.0-ld-17"],
             0.887671232877,
         )
+        self.assertEqual(
+            captured_options["ModelPrice"]["grok-video-1.5"],
+            0.027397260274,
+        )
         for model in self.module.PUBLIC_VIDEO_FIXED_PRICES_CNY:
             self.assertNotIn(model, captured_options["ModelRatio"])
             self.assertNotIn(model, captured_options["CompletionRatio"])
         self.assertNotIn("seedance-2.0-cl-mini", captured_options["ModelPrice"])
-        self.assertEqual(
-            captured_options["ModelRatio"]["seedance-2.0-cl-mini"],
-            0.880273972603,
-        )
-        self.assertEqual(
-            captured_options["CompletionRatio"]["seedance-2.0-cl-mini"],
-            1.642857142857,
-        )
+        self.assertNotIn("seedance-2.0-dj-fast", captured_options["ModelPrice"])
+        self.assertNotIn("seedance-2.0-cl-mini", captured_options["ModelPrice"])
 
     def test_sync_abilities_fails_closed_for_discount_channel_with_extra_model(self) -> None:
         captured: list[str] = []
@@ -551,9 +555,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             {
                 "video": [
                     "grok-video-super-720p",
-                    "seedance-2.0-dj-fast",
-                    "seedance-2.0-cl-mini",
                     "seedance-2.0-ld-17",
+                    "seedance-sd2-fast-720p",
+                    "grok-video-1.5",
                 ]
             }
         )
@@ -564,7 +568,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '212'", sql)
         self.assertIn("model_limits_enabled = 1", sql)
         self.assertIn(
-            "grok-video-super-720p,seedance-2.0-dj-fast,seedance-2.0-cl-mini,seedance-2.0-ld-17",
+            "grok-video-super-720p,seedance-2.0-ld-17,seedance-sd2-fast-720p,grok-video-1.5",
             sql,
         )
         self.assertNotIn("seedance-2.0'", sql)

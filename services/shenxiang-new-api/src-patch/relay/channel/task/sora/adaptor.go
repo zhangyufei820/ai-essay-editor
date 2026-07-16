@@ -26,8 +26,12 @@ import (
 )
 
 const (
-	seedanceLD17PublicModel   = "seedance-2.0-ld-17"
-	seedanceLD17UpstreamModel = "seedance-2.0-wc-b-720p"
+	seedanceLD17PublicModel      = "seedance-2.0-ld-17"
+	seedanceLD17UpstreamModel    = "seedance-2.0-wc-b-720p"
+	seedanceSD2FastPublicModel   = "seedance-sd2-fast-720p"
+	seedanceSD2FastUpstreamModel = "sd2-fast-720p"
+	grok15VideoPublicModel       = "grok-video-1.5"
+	grok15VideoUpstreamModel     = "grok-imagine-1.5-video"
 )
 
 var moonApiXSeedanceVideoModels = map[string]bool{
@@ -254,7 +258,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if info.Action == constant.TaskActionRemix {
 		return nil
 	}
-	if isSeedanceLD17Model(info.OriginModelName) || isSeedanceLD17Model(info.UpstreamModelName) {
+	if isFixedPriceVideoModel(info.OriginModelName) || isFixedPriceVideoModel(info.UpstreamModelName) {
 		return nil
 	}
 
@@ -295,6 +299,9 @@ func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, erro
 	}
 	if isOfficialSeedanceReferencesModel(info.UpstreamModelName) {
 		return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
+	}
+	if isDirectVideoGenerationModel(info.UpstreamModelName) {
+		return fmt.Sprintf("%s/api/v1/video/generations", a.baseURL), nil
 	}
 	if isSeedanceVideoModel(info.UpstreamModelName) {
 		return fmt.Sprintf("%s/api/v1/video/generations", a.baseURL), nil
@@ -406,12 +413,26 @@ func isMoonApiXKZSeedanceVideoModel(modelName string) bool {
 }
 
 func isSeedanceVideoModel(modelName string) bool {
-	return strings.Contains(strings.ToLower(strings.TrimSpace(modelName)), "seedance")
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	return strings.Contains(modelName, "seedance") || modelName == seedanceSD2FastUpstreamModel
 }
 
 func isGrokVideoModel(modelName string) bool {
 	modelName = strings.ToLower(strings.TrimSpace(modelName))
-	return strings.Contains(modelName, "grok-video") || strings.Contains(modelName, "grok-imagine-video")
+	return strings.Contains(modelName, "grok") && strings.Contains(modelName, "video")
+}
+
+func isDirectVideoGenerationModel(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case seedanceSD2FastPublicModel, seedanceSD2FastUpstreamModel, grok15VideoPublicModel, grok15VideoUpstreamModel:
+		return true
+	default:
+		return false
+	}
+}
+
+func isFixedPriceVideoModel(modelName string) bool {
+	return isSeedanceLD17Model(modelName) || isGrokVideoModel(modelName)
 }
 
 func seedanceUpstreamModel(modelName string) string {
