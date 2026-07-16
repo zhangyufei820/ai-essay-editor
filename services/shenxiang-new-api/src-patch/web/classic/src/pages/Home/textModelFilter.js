@@ -8,9 +8,11 @@ const DISCOUNT_TEXT_MODELS = new Set([
   'gpt-5.4',
   'gpt-5.4-mini',
   'gpt-5.5',
+  'gpt-5.5-openai-compact',
   'gpt-5.6-luna',
   'gpt-5.6-terra',
   'gpt-5.6-sol',
+  'codex-auto-review',
 ]);
 
 const FALLBACK_TEXT_MODELS = [
@@ -69,10 +71,21 @@ export function getDefaultTextModel(models = []) {
   return options.find((option) => option.value === DEFAULT_TEXT_MODEL)?.value || options[0]?.value || DEFAULT_TEXT_MODEL;
 }
 
-export function getTextModelGroup(modelName) {
+export function isTextPricingModel(modelName) {
+  const name = String(modelName || '').trim().toLowerCase();
+  return DISCOUNT_TEXT_MODELS.has(name);
+}
+
+export function getTextModelGroupForPreference(modelName, pricingGroup) {
   const name = String(modelName || '').trim().toLowerCase();
   if (GROK_TEXT_MODELS.has(name)) return 'grok45';
-  if (DISCOUNT_TEXT_MODELS.has(name)) return 'discount';
+  const normalizedGroup = String(pricingGroup || '').trim().toLowerCase();
+  if (
+    DISCOUNT_TEXT_MODELS.has(name) &&
+    (normalizedGroup === 'discount' || normalizedGroup === 'default')
+  ) {
+    return normalizedGroup;
+  }
   return '';
 }
 

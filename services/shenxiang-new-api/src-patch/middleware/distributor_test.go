@@ -31,11 +31,64 @@ func TestMain(m *testing.M) {
 	model.DB = db
 	model.LOG_DB = db
 	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
-	if err := db.AutoMigrate(&model.Task{}); err != nil {
+	if err := db.AutoMigrate(&model.Task{}, &model.User{}); err != nil {
 		panic("failed to migrate test db: " + err.Error())
 	}
 
 	os.Exit(m.Run())
+}
+
+func TestApplyPlaygroundTextPricingPreferenceOverridesStaleClientGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	redisEnabled := common.RedisEnabled
+	common.RedisEnabled = false
+	t.Cleanup(func() { common.RedisEnabled = redisEnabled })
+	user := model.User{
+		Username: "middleware-pricing-sync",
+		Password: "password-for-test",
+		Status:   common.UserStatusEnabled,
+		Group:    model.TextPricingGroupDefault,
+	}
+	setting := user.GetSetting()
+	setting.TextPricingGroup = model.TextPricingGroupDiscount
+	user.SetSetting(setting)
+	if err := model.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	t.Cleanup(func() { model.DB.Delete(&model.User{}, user.Id) })
+
+	assertGroup := func(requestedGroup, wantGroup string) {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/chat/completions", nil)
+		ctx.Set("id", user.Id)
+		common.SetContextKey(ctx, constant.ContextKeyUsingGroup, requestedGroup)
+		modelRequest := &ModelRequest{Model: "gpt-5.5", Group: requestedGroup}
+
+		got, err := applyPlaygroundTextPricingPreference(ctx, modelRequest)
+		if err != nil {
+			t.Fatalf("apply preference: %v", err)
+		}
+		if got != wantGroup || modelRequest.Group != wantGroup {
+			t.Fatalf("group = %q request group = %q, want %q", got, modelRequest.Group, wantGroup)
+		}
+		if usingGroup := common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup); usingGroup != wantGroup {
+			t.Fatalf("using group = %q, want %q", usingGroup, wantGroup)
+		}
+		if tokenGroup := common.GetContextKeyString(ctx, constant.ContextKeyTokenGroup); tokenGroup != wantGroup {
+			t.Fatalf("token group = %q, want %q", tokenGroup, wantGroup)
+		}
+		if header := recorder.Header().Get("X-Aiphui-Pricing-Group"); header != wantGroup {
+			t.Fatalf("pricing header = %q, want %q", header, wantGroup)
+		}
+	}
+
+	assertGroup(model.TextPricingGroupDefault, model.TextPricingGroupDiscount)
+	setting.TextPricingGroup = model.TextPricingGroupDefault
+	if err := model.UpdateUserSetting(user.Id, setting); err != nil {
+		t.Fatalf("update preference: %v", err)
+	}
+	assertGroup(model.TextPricingGroupDiscount, model.TextPricingGroupDefault)
 }
 
 func truncateMiddlewareTestDB(t *testing.T) {
