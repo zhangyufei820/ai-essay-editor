@@ -274,6 +274,40 @@ func TestNormalizeSeedanceLD17KeepsMixedOfficialReferences(t *testing.T) {
 	}
 }
 
+func TestNormalizeSeedanceLD17UpstreamAliasKeepsOfficialPayload(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    seedanceLD17UpstreamModel,
+		"prompt":   "A paper plane crosses a blue sky.",
+		"duration": float64(5),
+		"ratio":    "16:9",
+		"references": []interface{}{
+			map[string]interface{}{
+				"media_type": "image",
+				"role":       "first_frame",
+				"url":        "https://cdn.test/frame.png",
+			},
+		},
+	}
+
+	got := normalizeSeedanceVideoRequestBody(body)
+	if got["model"] != seedanceLD17UpstreamModel {
+		t.Fatalf("model = %#v, want mapped upstream model", got["model"])
+	}
+	if got["duration"] != 5 || got["ratio"] != "16:9" {
+		t.Fatalf("official LD-17 fields not preserved: %#v", got)
+	}
+	if _, ok := got["seconds"]; ok {
+		t.Fatalf("mapped LD-17 payload should not use generic seconds: %#v", got)
+	}
+	if _, ok := got["metadata"]; ok {
+		t.Fatalf("mapped LD-17 payload should not forward generic metadata: %#v", got)
+	}
+	refs, ok := got["references"].([]map[string]interface{})
+	if !ok || len(refs) != 1 || refs[0]["media_type"] != "image" {
+		t.Fatalf("mapped LD-17 references = %#v", got["references"])
+	}
+}
+
 func TestNormalizeSeedanceLD17DropsAudioOnlyReferences(t *testing.T) {
 	body := map[string]interface{}{
 		"model":  "seedance-2.0-ld-17",
@@ -309,7 +343,7 @@ func TestSeedanceBuildRequestURLUsesGenerationEndpoint(t *testing.T) {
 
 func TestSeedanceOfficialReferencesBuildRequestURLUsesVideosEndpoint(t *testing.T) {
 	adaptor := TaskAdaptor{baseURL: "https://provider.test"}
-	for _, model := range []string{"seedance-2.0-dj-fast", "seedance-2.0-ld-17"} {
+	for _, model := range []string{"seedance-2.0-dj-fast", seedanceLD17PublicModel, seedanceLD17UpstreamModel} {
 		url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
 			ChannelMeta:   &relaycommon.ChannelMeta{UpstreamModelName: model},
 			TaskRelayInfo: &relaycommon.TaskRelayInfo{},

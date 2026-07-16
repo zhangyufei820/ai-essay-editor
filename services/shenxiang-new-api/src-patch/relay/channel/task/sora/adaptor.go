@@ -25,6 +25,11 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+const (
+	seedanceLD17PublicModel   = "seedance-2.0-ld-17"
+	seedanceLD17UpstreamModel = "seedance-2.0-wc-b-720p"
+)
+
 var moonApiXSeedanceVideoModels = map[string]bool{
 	"seedance-2.0":         true,
 	"seedance-2.0-kz":      true,
@@ -249,8 +254,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if info.Action == constant.TaskActionRemix {
 		return nil
 	}
-	if strings.EqualFold(strings.TrimSpace(info.OriginModelName), "seedance-2.0-ld-17") ||
-		strings.EqualFold(strings.TrimSpace(info.UpstreamModelName), "seedance-2.0-ld-17") {
+	if isSeedanceLD17Model(info.OriginModelName) || isSeedanceLD17Model(info.UpstreamModelName) {
 		return nil
 	}
 
@@ -812,8 +816,13 @@ func moonApiXFirstVideoURL(references []map[string]interface{}) string {
 }
 
 func isOfficialSeedanceReferencesModel(modelName string) bool {
+	return strings.EqualFold(strings.TrimSpace(modelName), "seedance-2.0-dj-fast") ||
+		isSeedanceLD17Model(modelName)
+}
+
+func isSeedanceLD17Model(modelName string) bool {
 	switch strings.ToLower(strings.TrimSpace(modelName)) {
-	case "seedance-2.0-dj-fast", "seedance-2.0-ld-17":
+	case seedanceLD17PublicModel, seedanceLD17UpstreamModel:
 		return true
 	default:
 		return false
@@ -1058,12 +1067,13 @@ func normalizeSeedanceVideoContent(bodyMap, metadata map[string]interface{}) []i
 
 func normalizeSeedanceOfficialReferences(bodyMap, metadata map[string]interface{}, modelName string) []map[string]interface{} {
 	modelName = strings.ToLower(strings.TrimSpace(modelName))
-	allowVideo := modelName == "seedance-2.0-ld-17"
-	allowAudio := modelName == "seedance-2.0-ld-17"
+	isLD17 := isSeedanceLD17Model(modelName)
+	allowVideo := isLD17
+	allowAudio := isLD17
 	maxImages := 10
 	maxVideos := 0
 	maxAudios := 0
-	if modelName == "seedance-2.0-ld-17" {
+	if isLD17 {
 		maxImages = 9
 		maxVideos = 3
 		maxAudios = 3
