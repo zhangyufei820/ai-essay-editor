@@ -1,14 +1,51 @@
 package sora
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/gin-gonic/gin"
 )
+
+func TestBuildRequestBodyNormalizesJSONForNewVideoModelWithoutContentType(t *testing.T) {
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(`{
+		"model":"grok-video-1.5",
+		"prompt":"A paper plane crosses the sky.",
+		"duration":5,
+		"size":"1280x720"
+	}`))
+	defer common.CleanupBodyStorage(context)
+
+	reader, err := (&TaskAdaptor{}).BuildRequestBody(context, &relaycommon.RelayInfo{
+		OriginModelName: grok15VideoPublicModel,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: grok15VideoUpstreamModel,
+		},
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contentType := context.GetHeader("Content-Type"); contentType != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", contentType)
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(reader).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["model"] != grok15VideoUpstreamModel {
+		t.Fatalf("model = %#v, want %q", payload["model"], grok15VideoUpstreamModel)
+	}
+}
 
 func TestNewVideoModelsUseVideosEndpoint(t *testing.T) {
 	adaptor := TaskAdaptor{baseURL: "https://provider.test"}

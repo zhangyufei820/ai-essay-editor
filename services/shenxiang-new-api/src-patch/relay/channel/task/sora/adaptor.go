@@ -326,8 +326,13 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		return nil, errors.Wrap(err, "read_body_bytes_failed")
 	}
 	contentType := c.GetHeader("Content-Type")
+	isJSONRequest := strings.HasPrefix(contentType, "application/json")
+	if !isJSONRequest && usesVideosEndpoint(info.UpstreamModelName) && json.Valid(cachedBody) {
+		isJSONRequest = true
+		c.Request.Header.Set("Content-Type", "application/json")
+	}
 
-	if strings.HasPrefix(contentType, "application/json") {
+	if isJSONRequest {
 		var bodyMap map[string]interface{}
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
 			bodyMap["model"] = info.UpstreamModelName
