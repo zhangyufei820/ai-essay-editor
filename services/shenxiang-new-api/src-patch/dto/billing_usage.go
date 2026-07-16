@@ -1,5 +1,7 @@
 package dto
 
+import "reflect"
+
 const (
 	BillingUsageSourceClaudeMessages = "claude_messages"
 	BillingUsageSourceGeminiChat     = "gemini_chat"
@@ -183,7 +185,13 @@ func cloneGeminiUsageMetadata(metadata GeminiUsageMetadata) GeminiUsageMetadata 
 	metadata.PromptTokensDetails = append([]GeminiPromptTokensDetails{}, metadata.PromptTokensDetails...)
 	metadata.ToolUsePromptTokensDetails = append([]GeminiPromptTokensDetails{}, metadata.ToolUsePromptTokensDetails...)
 	metadata.CandidatesTokensDetails = append([]GeminiPromptTokensDetails{}, metadata.CandidatesTokensDetails...)
-	metadata.BillingUsage = nil
+	// BillingUsage was added to GeminiUsageMetadata after the fixed production
+	// baseline. Clear it when present without making this compatibility DTO
+	// depend on that newer field at compile time.
+	metadataValue := reflect.ValueOf(&metadata).Elem()
+	if billingUsageField := metadataValue.FieldByName("BillingUsage"); billingUsageField.IsValid() && billingUsageField.CanSet() {
+		billingUsageField.Set(reflect.Zero(billingUsageField.Type()))
+	}
 	return metadata
 }
 
