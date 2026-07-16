@@ -522,6 +522,45 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("claude-opus-4-6,claude-sonnet-5", sql)
         self.assertIn("CACHE:key-201,key-202", sql)
 
+    def test_sync_user_video_tokens_replaces_all_public_video_limits(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            self.assertIn("name IN ('星人视频生成令牌')", query)
+            self.assertNotIn("Seedance 私测视频令牌", query)
+            return [
+                ["211", "key-211", "seedance-2.0-cl-mini,seedance-2.0", "1"],
+                ["212", "key-212", "", "0"],
+            ]
+
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
+
+        result = self.module.sync_user_video_tokens(
+            {
+                "video": [
+                    "grok-video-super-720p",
+                    "seedance-2.0-dj-fast",
+                    "seedance-2.0-cl-mini",
+                    "seedance-2.0-ld-17",
+                ]
+            }
+        )
+
+        sql = "\n".join(captured)
+        self.assertEqual(result, {"tokens_rewritten": 2, "token_caches_deleted": 2})
+        self.assertIn("WHERE id = '211'", sql)
+        self.assertIn("WHERE id = '212'", sql)
+        self.assertIn("model_limits_enabled = 1", sql)
+        self.assertIn(
+            "grok-video-super-720p,seedance-2.0-dj-fast,seedance-2.0-cl-mini,seedance-2.0-ld-17",
+            sql,
+        )
+        self.assertNotIn("seedance-2.0'", sql)
+        self.assertNotIn("seedance-nsfw", sql)
+        self.assertIn("CACHE:key-211,key-212", sql)
+
     def test_sync_controlled_codex_alias_tokens_requires_backing_entitlement(self) -> None:
         captured: list[str] = []
 

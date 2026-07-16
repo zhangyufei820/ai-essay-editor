@@ -1343,6 +1343,35 @@ def sync_user_claude_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
+def sync_user_video_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
+    video_models = ",".join(sanitize_token_models(profiles["video"]))
+    token_names = TOKEN_PROFILES["video"]
+    token_rows = mysql(
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0) FROM tokens "
+        "WHERE deleted_at IS NULL AND name IN ("
+        + ", ".join(sql_quote(name) for name in token_names)
+        + ");"
+    )
+    token_updates: list[tuple[str, str]] = []
+    for token_id, token_key, raw_limits, raw_enabled in token_rows:
+        if raw_limits != video_models or raw_enabled != "1":
+            token_updates.append((token_id, token_key))
+
+    statements = ["START TRANSACTION;"]
+    for token_id, _token_key in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits_enabled = 1, model_limits = "
+            + sql_quote(video_models)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    caches_deleted = delete_token_caches([token_key for _token_id, token_key in token_updates])
+    return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
+
+
 def sync_abilities() -> None:
     groups = active_groups()
     channel_rows = mysql(
@@ -1694,6 +1723,7 @@ def main() -> int:
     codex_token_result = sync_user_codex_tokens(profiles)
     codex_alias_token_result = sync_controlled_codex_alias_tokens()
     claude_token_result = sync_user_claude_tokens(profiles)
+    video_token_result = sync_user_video_tokens(profiles)
     guard_result = enforce_gpt_image2_db_guard()
     env_changed = sync_codex_env(profiles)
     if env_changed or os.environ.get("SYNC_FORCE_CODEX_REFRESH") == "1":
@@ -1701,7 +1731,7 @@ def main() -> int:
     print(
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
-        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, codex_alias_token_sync={codex_alias_token_result}, claude_token_sync={claude_token_result}, gpt_image2_guard={guard_result}"
+        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, codex_alias_token_sync={codex_alias_token_result}, claude_token_sync={claude_token_result}, video_token_sync={video_token_result}, gpt_image2_guard={guard_result}"
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
         + f", retired_claude={retired_claude_result}"
