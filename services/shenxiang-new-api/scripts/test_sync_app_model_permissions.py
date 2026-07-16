@@ -76,6 +76,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
         self.assertNotIn("seedance-2.0", self.module.PUBLIC_VIDEO_MODELS)
         self.assertNotIn("seedance-nsfw", self.module.PUBLIC_VIDEO_MODELS)
+        self.assertNotIn("seedance-2.0-wc-b-720p", self.module.PUBLIC_VIDEO_MODELS)
 
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
         raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2,claude-opus-4-8,seedance-2.0-cl-mini"
@@ -279,6 +280,15 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("status = 1", sql)
         self.assertIn("deleted_at = NULL", sql)
         self.assertIn("models = 'seedance-2.0-cl-mini'", sql)
+        self.assertIn("models = 'seedance-2.0-ld-17'", sql)
+        self.assertIn(
+            "model_mapping = '{\"seedance-2.0-ld-17\":\"seedance-2.0-wc-b-720p\"}' WHERE id = 26",
+            sql,
+        )
+        self.assertNotIn(
+            "SET @public_video_model := 'seedance-2.0-wc-b-720p'",
+            sql,
+        )
         self.assertNotIn("models = 'grok-video-super-720p", sql)
         self.assertIn("'seedance-2.0'", sql)
         self.assertIn("UPDATE abilities SET enabled = 0", sql)

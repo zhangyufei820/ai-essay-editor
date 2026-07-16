@@ -145,6 +145,23 @@ PUBLIC_SEEDANCE_CHANNEL_MODELS = [
     "seedance-2.0-cl-mini",
 ]
 PUBLIC_SEEDANCE_MODEL_MAPPING = '{"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
+PUBLIC_LD17_CHANNEL_ID = "26"
+PUBLIC_LD17_CHANNEL_MODELS = [
+    "seedance-2.0-ld-17",
+]
+PUBLIC_LD17_MODEL_MAPPING = '{"seedance-2.0-ld-17":"seedance-2.0-wc-b-720p"}'
+PUBLIC_VIDEO_CHANNEL_CONFIGS = (
+    (
+        PUBLIC_SEEDANCE_CHANNEL_ID,
+        PUBLIC_SEEDANCE_CHANNEL_MODELS,
+        PUBLIC_SEEDANCE_MODEL_MAPPING,
+    ),
+    (
+        PUBLIC_LD17_CHANNEL_ID,
+        PUBLIC_LD17_CHANNEL_MODELS,
+        PUBLIC_LD17_MODEL_MAPPING,
+    ),
+)
 CODEX_TEXT_CHANNEL_ID = "21"
 CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
     "gpt-5.5",
@@ -1139,15 +1156,16 @@ def ensure_public_video_models() -> None:
             "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
             "WHERE model_name = @public_video_model AND id <> @keep_model_id;"
         )
-    statements.append(
-        "UPDATE channels SET models = "
-        + sql_quote(",".join(PUBLIC_SEEDANCE_CHANNEL_MODELS))
-        + ", model_mapping = "
-        + sql_quote(PUBLIC_SEEDANCE_MODEL_MAPPING)
-        + " WHERE id = "
-        + PUBLIC_SEEDANCE_CHANNEL_ID
-        + ";"
-    )
+    for channel_id, public_models, model_mapping in PUBLIC_VIDEO_CHANNEL_CONFIGS:
+        statements.append(
+            "UPDATE channels SET models = "
+            + sql_quote(",".join(public_models))
+            + ", model_mapping = "
+            + sql_quote(model_mapping)
+            + " WHERE id = "
+            + channel_id
+            + ";"
+        )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
 
