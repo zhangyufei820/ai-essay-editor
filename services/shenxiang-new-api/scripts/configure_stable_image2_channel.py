@@ -208,11 +208,12 @@ def validate_channel_uniqueness() -> None:
     rows = mysql(
         "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') <> "
         + sql_quote(CHANNEL_TAG)
-        + " AND TRIM(TRAILING '/' FROM COALESCE(base_url, '')) = "
-        + sql_quote(EXPECTED_BASE_URL)
+        + " AND FIND_IN_SET("
+        + sql_quote(INTERNAL_MODEL)
+        + ", REPLACE(COALESCE(models, ''), ' ', '')) > 0"
     )
     if (int(rows[0][0]) if rows else 0) > 0:
-        raise ConfigurationError("the image endpoint is already assigned to another channel")
+        raise ConfigurationError("the internal image model is already assigned to another channel")
 
 
 def build_apply_sql(api_key: str, base_url: str) -> str:
