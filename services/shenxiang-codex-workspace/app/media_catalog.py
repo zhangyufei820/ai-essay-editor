@@ -16,6 +16,7 @@ class PublicMediaModel:
 PUBLIC_MEDIA_MODELS = (
     PublicMediaModel("GPT Image 2", "gpt-image-2-4K", "¥0.108/张", "image"),
     PublicMediaModel("特价 image-2", "geek2api-image-2", "1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10/张", "image", "特价 image-2"),
+    PublicMediaModel("官转image 2稳定", "internal-image2-stable-v1", "¥0.135/张", "image", "官转image 2稳定"),
     PublicMediaModel("Grok Image Pro", "grok-imagine-image", "¥0.324/张", "image"),
     PublicMediaModel("Banana 2", "banana-2", "¥0.162/张", "image"),
     PublicMediaModel("Gemini 3 Pro Image", "gemini-3-pro-image-preview", "¥0.238/张", "image"),

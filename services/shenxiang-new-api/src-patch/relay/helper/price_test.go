@@ -71,6 +71,17 @@ func TestHasModelBillingConfigAcceptsPublicDiscountImage2Alias(t *testing.T) {
 	require.True(t, HasModelBillingConfig(service.PublicDiscountImage2ModelName))
 }
 
+func TestHasModelBillingConfigResolvesStableImage2PublicPrice(t *testing.T) {
+	oldModelPrice := ratio_setting.ModelPrice2JSONString()
+	defer func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(oldModelPrice))
+	}()
+
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"`+service.PublicStableImage2ModelName+`":0.0185}`))
+
+	require.True(t, HasModelBillingConfig(service.InternalStableImage2ModelName))
+}
+
 func TestHandleGroupRatioPinsDiscountMarketplaceRatio(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	originalGroupRatio := ratio_setting.GroupRatio2JSONString()

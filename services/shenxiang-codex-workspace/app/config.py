@@ -13,6 +13,7 @@ GROK_TOKEN_NAME = "星人 Grok 4.5 专用令牌"
 DEFAULT_IMAGE_ALLOWED_MODELS = (
     "gpt-image-2-4K",
     "geek2api-image-2",
+    "官转image 2稳定",
     "grok-imagine-image",
     "banana-2",
     "gemini-3-pro-image-preview",

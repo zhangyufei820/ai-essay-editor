@@ -169,6 +169,7 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
     assert [(item.name, item.price, item.mode) for item in PUBLIC_MEDIA_MODELS] == [
         ("GPT Image 2", "¥0.108/张", "image"),
         ("特价 image-2", "1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10/张", "image"),
+        ("官转image 2稳定", "¥0.135/张", "image"),
         ("Grok Image Pro", "¥0.324/张", "image"),
         ("Banana 2", "¥0.162/张", "image"),
         ("Gemini 3 Pro Image", "¥0.238/张", "image"),
@@ -181,6 +182,7 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
         (
             "gpt-image-2-4K",
             "geek2api-image-2",
+            "官转image 2稳定",
             "grok-imagine-image",
             "banana-2",
             "gemini-3-pro-image-preview",
@@ -192,6 +194,7 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
 
     assert "GPT Image 2（¥0.108/张）" in message
     assert "特价 image-2（1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10/张）" in message
+    assert "官转image 2稳定（¥0.135/张）" in message
     assert "Grok Image Pro（¥0.324/张）" in message
     assert "Banana 2（¥0.162/张）" in message
     assert "Gemini 3 Pro Image（¥0.238/张）" in message
@@ -211,6 +214,7 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
 
 def test_media_model_selection_accepts_only_public_website_names():
     assert resolved_media_model("特价 image-2", "image") == "geek2api-image-2"
+    assert resolved_media_model("官转image 2稳定", "image") == "internal-image2-stable-v1"
     assert resolved_media_model("Grok Image Pro", "image") == "grok-imagine-image"
     assert resolved_media_model("Seedance 2.0 CL Mini", "video") == "seedance-2.0-cl-mini"
     assert resolved_media_model("geek2api-image-2", "image") is None
@@ -219,6 +223,7 @@ def test_media_model_selection_accepts_only_public_website_names():
 
 def test_public_media_permission_name_is_normalized_for_generation():
     assert canonical_allowed_media_models("image", ("特价 image-2",)) == ("geek2api-image-2",)
+    assert canonical_allowed_media_models("image", ("官转image 2稳定",)) == ("internal-image2-stable-v1",)
 
 
 def test_async_media_submission_persists_only_safe_task_state(monkeypatch, tmp_path):

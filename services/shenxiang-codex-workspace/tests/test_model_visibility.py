@@ -106,6 +106,7 @@ def test_default_image_models_include_every_verified_public_model(monkeypatch) -
     expected = (
         "gpt-image-2-4K",
         "geek2api-image-2",
+        "官转image 2稳定",
         "grok-imagine-image",
         "banana-2",
         "gemini-3-pro-image-preview",

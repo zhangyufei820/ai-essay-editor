@@ -235,6 +235,64 @@ def test_discount_image2_agent_generation_uses_public_model_alias_and_requested_
     assert result.urls == ["https://cdn.test/geek2api-image.png"]
 
 
+def test_stable_image2_agent_generation_uses_public_model_alias(monkeypatch):
+    FakeImageSuccessAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeImageSuccessAsyncClient)
+
+    request = WorkspaceRunRequest(
+        user_query="生成图片：一个白底蓝色圆形。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "internal-image2-stable-v1"},
+        params={"n": 1, "size": "1024x1024", "resolution": "1K", "quality": "auto"},
+    )
+
+    asyncio.run(
+        generate_image(
+            Settings(new_api_base_url="https://api.example.test/v1"),
+            request,
+            UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+            "internal-image2-stable-v1",
+        )
+    )
+
+    payload = FakeImageSuccessAsyncClient.calls[0]["kwargs"]["json"]
+    assert payload["model"] == "官转image 2稳定"
+    assert payload["size"] == "1024x1024"
+    assert payload["resolution"] == "1K"
+
+
+def test_stable_image2_rejects_unverified_image_edit(monkeypatch):
+    FakeImageSuccessAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeImageSuccessAsyncClient)
+
+    request = WorkspaceRunRequest(
+        user_query="编辑这张图片。",
+        task_type="agent_image",
+        model_role="image_generation",
+        model_config={"image_generation": "internal-image2-stable-v1"},
+        files=[
+            WorkspaceFile(
+                path="input.png",
+                content="data:image/png;base64,aW1hZ2U=",
+            )
+        ],
+    )
+
+    with pytest.raises(MediaGenerationError) as error:
+        asyncio.run(
+            generate_image(
+                Settings(new_api_base_url="https://api.example.test/v1"),
+                request,
+                UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+                "internal-image2-stable-v1",
+            )
+        )
+
+    assert str(error.value) == MEDIA_ERROR_INPUT_UNSUPPORTED
+    assert FakeImageSuccessAsyncClient.calls == []
+
+
 def test_media_result_markdown_is_preview_first_and_hides_internal_model_name():
     result = MediaResult(
         media_type="image",

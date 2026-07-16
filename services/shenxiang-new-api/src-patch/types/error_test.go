@@ -73,6 +73,7 @@ func TestPublicMessageHidesSupplierNames(t *testing.T) {
 		"ccapi provider returned invalid response",
 		"moonapix balance_not_enough",
 		"dragtokens temporary error",
+		"api.smile-ai-studio.com request failed",
 	} {
 		err := WithOpenAIError(OpenAIError{
 			Message: message,

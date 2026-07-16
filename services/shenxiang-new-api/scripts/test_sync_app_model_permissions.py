@@ -24,7 +24,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module = load_sync_module()
 
     def test_sanitize_model_limits_replaces_raw_gpt_image2(self) -> None:
-        raw = "gpt-5.5,gpt-image-2,gpt-image-2-4K,gpt-image-2,geek2api-image-2,gpt-5.3-codex-spark,gpt-5.3-spark"
+        raw = "gpt-5.5,gpt-image-2,gpt-image-2-4K,gpt-image-2,geek2api-image-2,internal-image2-stable-v1,gpt-5.3-codex-spark,gpt-5.3-spark"
 
         self.assertEqual(
             self.module.sanitize_model_limits(raw),
@@ -169,6 +169,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 ["13", "gpt-image-2-4K", "image,openai"],
                 ["14", "geek2api-image-2", "image,openai,geek2api"],
                 ["15", "seedance-nsfw", "video,seedance"],
+                ["16", "internal-image2-stable-v1", "image,openai"],
             ]
 
         self.module.mysql = fake_mysql
@@ -195,7 +196,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("codex-auto-review", profiles["codex"])
         self.assertNotIn("gpt-image-2-4K", profiles["codex"])
         self.assertIn("特价 image-2", profiles["image"])
+        self.assertIn("官转image 2稳定", profiles["image"])
         self.assertNotIn("geek2api-image-2", profiles["image"])
+        self.assertNotIn("internal-image2-stable-v1", profiles["image"])
         self.assertNotIn("seedance-nsfw", profiles["video"])
 
     def test_disabled_image2_ability_pairs_are_not_synced(self) -> None:
@@ -423,6 +426,40 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("image,openai", sql)
         self.assertNotIn("image,openai,geek2api", sql)
 
+    def test_ensure_stable_image2_backing_model_uses_public_metadata(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_stable_image2_backing_model()
+
+        sql = "\n".join(captured)
+        self.assertIn("internal-image2-stable-v1", sql)
+        self.assertIn("官转image 2稳定", sql)
+        self.assertIn("¥0.135/张", sql)
+        self.assertNotIn("smile-ai-studio", sql)
+        self.assertIn('/v1/images/generations', sql)
+        self.assertNotIn('/v1/images/edits', sql)
+
+    def test_sync_public_image_pricing_sets_fixed_cny_price(self) -> None:
+        captured_options: dict[str, dict[str, float]] = {}
+        self.module.parse_json_option = lambda key: {
+            "ModelRatio": {"官转image 2稳定": 9.9},
+            "CompletionRatio": {"官转image 2稳定": 2.0},
+            "ModelPrice": {"gpt-image-2-4K": 0.01},
+        }[key].copy()
+        self.module.option_value = lambda key: "7.3" if key == "USDExchangeRate" else ""
+        self.module.upsert_json_option = lambda key, values: captured_options.update({key: values})
+
+        self.module.sync_public_image_pricing()
+
+        self.assertAlmostEqual(
+            captured_options["ModelPrice"]["官转image 2稳定"],
+            0.018493150685,
+            places=12,
+        )
+        self.assertNotIn("官转image 2稳定", captured_options["ModelRatio"])
+        self.assertNotIn("官转image 2稳定", captured_options["CompletionRatio"])
+
     def test_sync_tokens_updates_admin_system_tokens_only(self) -> None:
         captured: list[str] = []
         self.module.mysql_exec = captured.append
@@ -440,7 +477,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     "image 2电商商品图快速通道(1.5K)",
                 ],
                 "claude": ["claude-opus-4-8"],
-                "image": ["gpt-image-2-4K", "geek2api-image-2"],
+                "image": ["gpt-image-2-4K", "特价 image-2", "官转image 2稳定", "geek2api-image-2"],
                 "video": ["seedance-2.0-cl-mini"],
             }
         )
@@ -454,6 +491,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertIn("codex-auto-review", sql)
         self.assertNotIn("geek2api-image-2", sql)
+        self.assertIn("官转image 2稳定", sql)
         self.assertIn("CACHE:admin-key-1,admin-key-2", sql)
 
     def test_sync_user_codex_tokens_updates_non_admin_codex_tokens(self) -> None:
@@ -570,6 +608,38 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("seedance-2.0'", sql)
         self.assertNotIn("seedance-nsfw", sql)
         self.assertIn("CACHE:key-211,key-212", sql)
+
+    def test_sync_user_image_tokens_replaces_all_public_image_limits(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            self.assertIn("name IN ('星人图像生成令牌')", query)
+            self.assertNotIn("user_id = 1", query)
+            return [
+                ["221", "key-221", "gpt-image-2-4K", "1"],
+                ["222", "key-222", "", "0"],
+            ]
+
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
+
+        result = self.module.sync_user_image_tokens(
+            {
+                "image": [
+                    "gpt-image-2-4K",
+                    "特价 image-2",
+                    "官转image 2稳定",
+                    "internal-image2-stable-v1",
+                ]
+            }
+        )
+
+        sql = "\n".join(captured)
+        self.assertEqual(result, {"tokens_rewritten": 2, "token_caches_deleted": 2})
+        self.assertIn("gpt-image-2-4K,特价 image-2,官转image 2稳定", sql)
+        self.assertNotIn("internal-image2-stable-v1", sql)
+        self.assertIn("CACHE:key-221,key-222", sql)
 
     def test_sync_controlled_codex_alias_tokens_requires_backing_entitlement(self) -> None:
         captured: list[str] = []
