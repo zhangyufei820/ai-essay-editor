@@ -22,8 +22,10 @@ DEFAULT_IMAGE_ALLOWED_MODELS = (
 DEFAULT_IMAGE_ALLOWED_MODELS_ENV = ",".join(DEFAULT_IMAGE_ALLOWED_MODELS)
 
 DEFAULT_VIDEO_ALLOWED_MODELS = (
-    "seedance-2.0-dj-fast",
-    "seedance-2.0-cl-mini",
+    "grok-video-super-720p",
+    "seedance-2.0-ld-17",
+    "seedance-sd2-fast-720p",
+    "grok-video-1.5",
 )
 DEFAULT_VIDEO_ALLOWED_MODELS_ENV = ",".join(DEFAULT_VIDEO_ALLOWED_MODELS)
 

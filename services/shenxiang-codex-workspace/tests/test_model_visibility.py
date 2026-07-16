@@ -42,7 +42,8 @@ def test_split_visible_models_uses_runtime_user_models_for_all_modes() -> None:
             "geek2api-image-2",
             "banana-2",
             "seedance-2.0-ld-17",
-            "seedance-2.0-cl-mini",
+            "seedance-sd2-fast-720p",
+            "grok-video-1.5",
             IMAGE_BENEFIT_MODEL,
         ],
         include_image_benefit=True,
@@ -51,7 +52,7 @@ def test_split_visible_models_uses_runtime_user_models_for_all_modes() -> None:
     assert result["codex"] == ("gpt-5.5", "gpt-5.4-mini", GROK_MODEL)
     assert result["claude"] == ("claude-opus-4-8",)
     assert result["image"] == ("gpt-image-2-4K", "geek2api-image-2", "banana-2", IMAGE_BENEFIT_MODEL)
-    assert result["video"] == ("seedance-2.0-ld-17", "seedance-2.0-cl-mini")
+    assert result["video"] == ("seedance-2.0-ld-17", "seedance-sd2-fast-720p", "grok-video-1.5")
 
 
 def test_strip_claude_group_suffix_keeps_media_fast_models() -> None:
@@ -86,8 +87,10 @@ def test_grok_profile_settings_support_production_env_names(monkeypatch) -> None
 
 def test_default_video_models_only_include_verified_public_models(monkeypatch) -> None:
     expected = (
-        "seedance-2.0-dj-fast",
-        "seedance-2.0-cl-mini",
+        "grok-video-super-720p",
+        "seedance-2.0-ld-17",
+        "seedance-sd2-fast-720p",
+        "grok-video-1.5",
     )
     monkeypatch.delenv("DEFAULT_VIDEO_MODEL", raising=False)
     monkeypatch.delenv("VIDEO_ALLOWED_MODELS", raising=False)

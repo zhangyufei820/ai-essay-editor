@@ -481,3 +481,30 @@ func TestCachePlaygroundVideoTaskResultFallsBackToAuthenticatedUpstreamContent(t
 	require.Equal(t, "video", other["media_kind"])
 	require.Contains(t, other["cached_url"], "/pg/media/files/u-1003/")
 }
+
+func TestRedactVideoResponseBodyRemovesProviderDetailsAndDirectURLs(t *testing.T) {
+	raw := []byte(`{
+		"id":"internal-task-id",
+		"task_id":"internal-task-id",
+		"model":"internal-video-model",
+		"status":"failed",
+		"provider_code":"vendor_balance_error",
+		"message":"supplier backend rejected the request",
+		"result_url":"https://provider.example/video.mp4",
+		"data":{"channel_id":27,"error":{"code":"vendor_error","detail":"upstream detail"}}
+	}`)
+	redacted := redactVideoResponseBody(raw)
+	text := strings.ToLower(string(redacted))
+	for _, forbidden := range []string{
+		"internal-task-id",
+		"internal-video-model",
+		"vendor_balance_error",
+		"supplier",
+		"provider.example",
+		"channel_id",
+		"upstream detail",
+	} {
+		require.NotContains(t, text, forbidden)
+	}
+	require.Contains(t, text, `"status":"failed"`)
+}

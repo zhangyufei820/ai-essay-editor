@@ -80,6 +80,18 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("sd2-fast-720p", self.module.PUBLIC_VIDEO_MODELS)
         self.assertNotIn("grok-imagine-1.5-video", self.module.PUBLIC_VIDEO_MODELS)
 
+    def test_new_video_catalog_describes_price_inputs_and_face_support_without_provider_details(self) -> None:
+        sd_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["seedance-sd2-fast-720p"]["description"]
+        grok_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["grok-video-1.5"]["description"]
+
+        for expected in ("¥0.25/秒", "720P", "5/10/15", "文生视频", "图生视频", "图片", "不支持视频或音频", "人脸能力未承诺"):
+            self.assertIn(expected, sd_description)
+        for expected in ("¥0.20/次", "720P", "6/10", "图生视频", "必须上传 1 张图片", "不支持文生视频", "不支持", "人脸能力未承诺"):
+            self.assertIn(expected, grok_description)
+        combined = f"{sd_description}\n{grok_description}".lower()
+        for forbidden in ("smile-ai", "api.smile", "sd2-fast-720p", "grok-imagine-1.5-video", "provider", "supplier", "上游", "渠道"):
+            self.assertNotIn(forbidden, combined)
+
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
         raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2,claude-opus-4-8,seedance-2.0-cl-mini"
 

@@ -56,7 +56,11 @@ def media_models_message(image_models: tuple[str, ...], video_models: tuple[str,
         visible = available_public_models(mode, models)
         if not visible:
             return "暂无"
-        return "\n".join(f"- {item.name}（{item.price}）{media_model_options(item.model, mode)}" for item in visible)
+        return "\n".join(
+            f"- {item.name}（{item.price}）{media_model_options(item.model, mode)}"
+            f"{f'；{item.details}' if item.details else ''}"
+            for item in visible
+        )
 
     return (
         f"可用图像模型：\n{render('image', image_models)}\n\n"

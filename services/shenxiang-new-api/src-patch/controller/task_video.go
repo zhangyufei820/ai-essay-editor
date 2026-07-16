@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -117,7 +118,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 		taskResult.Url = t.GetResultURL()
 		taskResult.Progress = t.Progress
 		taskResult.Reason = t.FailReason
-		task.Data = t.Data
+		task.Data = redactVideoResponseBody(t.Data)
 	} else if taskResult, err = adaptor.ParseTaskResult(responseBody); err != nil {
 		return fmt.Errorf("parseTaskResult failed for task %s: %w", taskId, err)
 	} else {
@@ -128,8 +129,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 
 	now := time.Now().Unix()
 	if taskResult.Status == "" {
-		//return fmt.Errorf("task %s status is empty", taskId)
-		taskResult = relaycommon.FailTaskInfo("upstream returned empty status")
+		taskResult = relaycommon.FailTaskInfo("视频生成失败，请稍后重试。")
+	}
+	if taskResult.Status == string(model.TaskStatusFailure) {
+		taskResult.Reason = "视频生成失败，请稍后重试。"
 	}
 
 	// 记录原本的状态，防止重复退款
@@ -159,7 +162,8 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 			task.FinishTime = now
 		}
 		if !(len(taskResult.Url) > 5 && taskResult.Url[:5] == "data:") {
-			task.FailReason = taskResult.Url
+			task.PrivateData.ResultURL = taskResult.Url
+			task.FailReason = ""
 		}
 
 		// 如果返回了 total_tokens 并且配置了模型倍率(非固定价格)，则重新计费。
@@ -311,27 +315,48 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 func redactVideoResponseBody(body []byte) []byte {
 	var m map[string]any
 	if err := json.Unmarshal(body, &m); err != nil {
-		return body
+		return []byte("{}")
 	}
-	resp, _ := m["response"].(map[string]any)
-	if resp != nil {
-		delete(resp, "bytesBase64Encoded")
-		if v, ok := resp["video"].(string); ok {
-			resp["video"] = truncateBase64(v)
+	redactVideoResponseMap(m)
+	b, err := json.Marshal(m)
+	if err != nil {
+		return []byte("{}")
+	}
+	return b
+}
+
+func redactVideoResponseMap(value map[string]any) {
+	for key, item := range value {
+		normalized := strings.ToLower(strings.TrimSpace(key))
+		if isPrivateVideoResponseKey(normalized) {
+			delete(value, key)
+			continue
 		}
-		if vs, ok := resp["videos"].([]any); ok {
-			for i := range vs {
-				if vm, ok := vs[i].(map[string]any); ok {
-					delete(vm, "bytesBase64Encoded")
+		switch typed := item.(type) {
+		case map[string]any:
+			redactVideoResponseMap(typed)
+		case []any:
+			for _, child := range typed {
+				if childMap, ok := child.(map[string]any); ok {
+					redactVideoResponseMap(childMap)
 				}
 			}
 		}
 	}
-	b, err := json.Marshal(m)
-	if err != nil {
-		return body
+}
+
+func isPrivateVideoResponseKey(key string) bool {
+	if strings.Contains(key, "upstream") || strings.Contains(key, "provider") || strings.Contains(key, "supplier") || strings.Contains(key, "channel") {
+		return true
 	}
-	return b
+	switch key {
+	case "id", "task_id", "model", "code", "status_code", "error", "message", "detail", "reason", "fail_reason",
+		"request_id", "base_url", "api_key", "raw_response", "bytesbase64encoded", "url", "video_url", "result_url",
+		"output_url", "download_url", "signed_url", "uri", "link", "href":
+		return true
+	default:
+		return false
+	}
 }
 
 func truncateBase64(s string) string {

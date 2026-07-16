@@ -720,7 +720,6 @@ const VIDEO_MODELS = [
     value: 'seedance-sd2-fast-720p',
     label: 'Seedance SD Fast 720P',
     badge: 'Fast',
-    vendor: '星人视频',
     sizes: ['1280x720', '720x1280'],
     durations: [5, 10, 15],
     defaultSize: '1280x720',
@@ -729,21 +728,23 @@ const VIDEO_MODELS = [
     referenceLimits: { image: 10, video: 0, audio: 0 },
     billingLabel: '按秒计费',
     priceLabel: `¥${SEEDANCE_SD2_FAST_PRICE_PER_SECOND.toFixed(2)}/秒`,
-    hint: '¥0.25/秒；支持 5/10/15 秒，只接收图片参考。',
+    hint: '¥0.25/秒；固定 720P，支持 5/10/15 秒；可文生视频或上传图片，不支持视频/音频参考；人脸能力未承诺。',
   },
   {
     value: 'grok-video-1.5',
     label: 'Grok Video 1.5',
     badge: '1.5',
-    vendor: '星人视频',
     sizes: ['1280x720', '720x1280'],
-    durations: [5, 10, 15],
+    durations: [6, 10],
     defaultSize: '1280x720',
-    defaultDuration: 15,
+    defaultDuration: 6,
     defaultFps: 24,
+    referenceLimits: { image: 1, video: 0, audio: 0 },
+    workflows: ['image'],
+    requiresImage: true,
     billingLabel: '按次计费',
     priceLabel: `¥${GROK_VIDEO_15_PRICE_PER_CALL.toFixed(2)}/次`,
-    hint: '固定 ¥0.20/次；参数与 Grok Video 一致。',
+    hint: '固定 ¥0.20/次；固定 720P，仅支持 6/10 秒图生视频；必须上传 1 张图片，不支持视频/音频参考；人脸能力未承诺。',
   },
   {
     value: 'seedance-2.0-ld-17',
@@ -1113,7 +1114,7 @@ function userFacingGenerationError(error) {
     return '提示词或参考图被安全策略拒绝，请调整内容后重试。';
   }
   if (lower.includes('current status: failure')) {
-    return '视频任务已失败，上游没有返回可下载视频；请调整提示词或参考图后重试。';
+    return '视频任务已失败，没有返回可下载视频；请调整提示词或参考图后重试。';
   }
   if (
     code === 'econnaborted' ||
@@ -3052,6 +3053,13 @@ const MediaPlayground = () => {
   }, [mode, videoWorkflow, videoModel]);
 
   useEffect(() => {
+    if (mode !== 'video' || !activeVideoModel.workflows?.length) return;
+    if (!activeVideoModel.workflows.includes(videoWorkflow)) {
+      setVideoWorkflow(activeVideoModel.workflows[0]);
+    }
+  }, [activeVideoModel, mode, videoWorkflow]);
+
+  useEffect(() => {
     setResults(restoreStoredResults());
     setResultsLoaded(true);
   }, []);
@@ -3849,7 +3857,7 @@ const MediaPlayground = () => {
           longWaitNotified = true;
         }
         if (elapsedMs >= VIDEO_BACKGROUND_WAIT_MS) {
-          waitSuffix = '，已转入长时间后台轮询，上游完成后会回写日志和媒体工坊';
+          waitSuffix = '，已转入长时间后台轮询，生成完成后会回写日志和媒体工坊';
           if (!backgroundNotified) {
             Toast.info('视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。');
             backgroundNotified = true;
@@ -3893,13 +3901,13 @@ const MediaPlayground = () => {
       } catch (error) {
         if (!isTransientVideoPollError(error)) throw error;
         const elapsedMs = Date.now() - startedAt;
-        let waitSuffix = '，页面会继续轮询，不会中断上游生成任务';
+        let waitSuffix = '，页面会继续轮询，不会中断生成任务';
         if (!longWaitNotified && elapsedMs >= VIDEO_LONG_WAIT_MS) {
           Toast.info('视频任务仍在生成中，请不要重复提交，完成后会自动回写日志和媒体工坊。');
           longWaitNotified = true;
         }
         if (elapsedMs >= VIDEO_BACKGROUND_WAIT_MS) {
-          waitSuffix = '，已转入长时间后台轮询，上游完成后会回写日志和媒体工坊';
+          waitSuffix = '，已转入长时间后台轮询，生成完成后会回写日志和媒体工坊';
           if (!backgroundNotified) {
             Toast.info('视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。');
             backgroundNotified = true;
@@ -3932,7 +3940,20 @@ const MediaPlayground = () => {
   }
 
   async function submitVideo() {
-    const payload = await applyVideoReferences({ ...requestPayload });
+    let payload;
+    if (videoModel === 'grok-video-1.5') {
+      const reference = referenceFiles.find((item) => referenceMediaTypeOf(item) === 'image');
+      const file = referenceFileOf(reference);
+      if (!file) throw new Error('Grok Video 1.5 必须上传一张参考图片。');
+      payload = new FormData();
+      payload.set('model', videoModel);
+      payload.set('prompt', prompt.trim());
+      payload.set('seconds', String(duration));
+      payload.set('size', size);
+      payload.set('input_reference', file);
+    } else {
+      payload = await applyVideoReferences({ ...requestPayload });
+    }
     const res = await API.post('/pg/videos', payload, {
       skipErrorHandler: true,
     });
@@ -4029,6 +4050,12 @@ const MediaPlayground = () => {
       return Toast.error('图像修改需要先上传参考图。');
     if (mode === 'video' && videoWorkflow !== 'text' && referenceFiles.length === 0)
       return Toast.error('图生视频需要先上传首帧或参考素材。');
+    if (mode === 'video' && activeVideoModel.requiresImage) {
+      const counts = videoReferenceCounts(referenceFiles);
+      if (videoWorkflow !== 'image' || counts.image !== 1) {
+        return Toast.error('Grok Video 1.5 必须且只能上传一张参考图片。');
+      }
+    }
     if (mode === 'video' && videoWorkflow !== 'text') {
       const counts = videoReferenceCounts(referenceFiles);
       if (videoWorkflow === 'first-last' && counts.image === 0) {
@@ -4294,7 +4321,7 @@ const MediaPlayground = () => {
         { value: 'text', label: '文生视频' },
         { value: 'image', label: '图生视频' },
         { value: 'first-last', label: '首尾帧' },
-      ]
+      ].filter((item) => !activeVideoModel.workflows || activeVideoModel.workflows.includes(item.value))
       : creativeTask === 'image-edit'
         ? [{ value: 'edit', label: '图像修改' }]
         : [
@@ -4358,7 +4385,7 @@ const MediaPlayground = () => {
         statusText: videoPolling ? '轮询中' : '生成中',
         progress: parseProgressPercent(taskMessage),
         createdAt: submitStartedAt || Date.now(),
-        message: taskMessage || '任务已提交，等待上游返回。',
+        message: taskMessage || '任务已提交，等待生成结果。',
       }
       : null);
   const queueItems = [

@@ -32,6 +32,9 @@ const (
 	seedanceSD2FastUpstreamModel = "sd2-fast-720p"
 	grok15VideoPublicModel       = "grok-video-1.5"
 	grok15VideoUpstreamModel     = "grok-imagine-1.5-video"
+	grok15Video6sUpstreamModel   = "grok-imagine-1.5-video-6s"
+	grok15Video10sUpstreamModel  = "grok-imagine-1.5-video-10s"
+	videoReferenceMaxBytes       = 20 << 20
 )
 
 var moonApiXSeedanceVideoModels = map[string]bool{
@@ -249,7 +252,131 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	if info.Action == constant.TaskActionRemix {
 		return validateRemixRequest(c)
 	}
+	if isGrok15VideoModel(info.OriginModelName) || isGrok15VideoModel(info.UpstreamModelName) {
+		return validateGrok15VideoRequest(c, info)
+	}
+	if isSD2FastVideoModel(info.OriginModelName) || isSD2FastVideoModel(info.UpstreamModelName) {
+		return validateSD2FastVideoRequest(c, info)
+	}
 	return relaycommon.ValidateMultipartDirect(c, info)
+}
+
+func localVideoValidationError(message string) *dto.TaskError {
+	return service.TaskErrorWrapperLocal(errors.New(message), "invalid_request", http.StatusBadRequest)
+}
+
+func validateVideoReferenceFile(fileHeader *multipart.FileHeader) *dto.TaskError {
+	if fileHeader == nil || fileHeader.Size <= 0 {
+		return localVideoValidationError("参考图片文件不能为空。")
+	}
+	if fileHeader.Size > videoReferenceMaxBytes {
+		return localVideoValidationError("参考图片不能超过 20MB。")
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		return localVideoValidationError("参考图片读取失败，请重新上传。")
+	}
+	defer file.Close()
+	buffer := make([]byte, 512)
+	read, _ := file.Read(buffer)
+	if read == 0 || !strings.HasPrefix(strings.ToLower(http.DetectContentType(buffer[:read])), "image/") {
+		return localVideoValidationError("参考素材必须是图片文件。")
+	}
+	return nil
+}
+
+func validateGrok15VideoRequest(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
+	if !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
+		return localVideoValidationError("Grok Video 1.5 必须使用 multipart/form-data 上传一张参考图片。")
+	}
+	form, err := common.ParseMultipartFormReusable(c)
+	if err != nil {
+		return localVideoValidationError("视频请求格式无效，请重新提交。")
+	}
+	defer form.RemoveAll()
+	prompt := strings.TrimSpace(firstFormValue(form, "prompt"))
+	if prompt == "" {
+		return localVideoValidationError("prompt 不能为空。")
+	}
+	seconds, err := strconv.Atoi(strings.TrimSpace(firstFormValue(form, "seconds")))
+	if err != nil || (seconds != 6 && seconds != 10) {
+		return localVideoValidationError("Grok Video 1.5 的 seconds 仅支持 6 或 10。")
+	}
+	size := strings.TrimSpace(firstFormValue(form, "size"))
+	if size != "1280x720" && size != "720x1280" {
+		return localVideoValidationError("Grok Video 1.5 的 size 仅支持 1280x720 或 720x1280。")
+	}
+	files := form.File["input_reference"]
+	fileCount := 0
+	for _, fileHeaders := range form.File {
+		fileCount += len(fileHeaders)
+	}
+	if len(files) != 1 || fileCount != 1 {
+		return localVideoValidationError("Grok Video 1.5 必须且只能上传一张 input_reference 参考图片。")
+	}
+	if taskErr := validateVideoReferenceFile(files[0]); taskErr != nil {
+		return taskErr
+	}
+	req := relaycommon.TaskSubmitReq{
+		Prompt:   prompt,
+		Model:    strings.TrimSpace(firstFormValue(form, "model")),
+		Size:     size,
+		Duration: seconds,
+		Seconds:  strconv.Itoa(seconds),
+		Metadata: map[string]interface{}{},
+	}
+	info.Action = constant.TaskActionGenerate
+	c.Set("task_request", req)
+	return nil
+}
+
+func validateSD2FastVideoRequest(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
+	if taskErr := relaycommon.ValidateMultipartDirect(c, info); taskErr != nil {
+		return taskErr
+	}
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return localVideoValidationError("视频请求格式无效，请重新提交。")
+	}
+	duration := req.Duration
+	if duration == 0 {
+		duration, _ = strconv.Atoi(req.Seconds)
+	}
+	if duration != 5 && duration != 10 && duration != 15 {
+		return localVideoValidationError("Seedance SD Fast 的 duration 仅支持 5、10 或 15。")
+	}
+	req.Duration = duration
+	req.Seconds = strconv.Itoa(duration)
+	if strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
+		form, parseErr := common.ParseMultipartFormReusable(c)
+		if parseErr != nil {
+			return localVideoValidationError("视频请求格式无效，请重新提交。")
+		}
+		defer form.RemoveAll()
+		files := form.File["input_reference"]
+		fileCount := 0
+		for _, fileHeaders := range form.File {
+			fileCount += len(fileHeaders)
+		}
+		if fileCount > 0 {
+			if len(files) != 1 || fileCount != 1 {
+				return localVideoValidationError("本地参考素材必须且只能上传一张 input_reference 图片。")
+			}
+			if taskErr := validateVideoReferenceFile(files[0]); taskErr != nil {
+				return taskErr
+			}
+			info.Action = constant.TaskActionGenerate
+		}
+	}
+	c.Set("task_request", req)
+	return nil
+}
+
+func firstFormValue(form *multipart.Form, key string) string {
+	if form == nil || len(form.Value[key]) == 0 {
+		return ""
+	}
+	return form.Value[key][0]
 }
 
 // EstimateBilling 根据用户请求的 seconds 和 size 计算 OtherRatios。
@@ -336,7 +463,11 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		var bodyMap map[string]interface{}
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
 			bodyMap["model"] = info.UpstreamModelName
-			if isGrokVideoModel(info.UpstreamModelName) {
+			if isGrok15VideoModel(info.UpstreamModelName) {
+				return nil, errors.New("Grok Video 1.5 requires multipart/form-data")
+			} else if isSD2FastVideoModel(info.UpstreamModelName) {
+				bodyMap = normalizeSD2FastVideoRequestBody(bodyMap)
+			} else if isGrokVideoModel(info.UpstreamModelName) {
 				bodyMap = normalizeGrokVideoRequestBody(bodyMap)
 			} else if isMoonApiXSeedanceVideoModel(info.UpstreamModelName) {
 				bodyMap = normalizeMoonApiXSeedanceVideoRequestBody(bodyMap)
@@ -351,6 +482,12 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	}
 
 	if strings.Contains(contentType, "multipart/form-data") {
+		if isGrok15VideoModel(info.UpstreamModelName) {
+			return buildGrok15VideoMultipartBody(c)
+		}
+		if isSD2FastVideoModel(info.UpstreamModelName) {
+			return buildSD2FastVideoMultipartBody(c, info.UpstreamModelName)
+		}
 		formData, err := common.ParseMultipartFormReusable(c)
 		if err != nil {
 			return bytes.NewReader(cachedBody), nil
@@ -404,6 +541,102 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	return common.ReaderOnly(storage), nil
 }
 
+func buildGrok15VideoMultipartBody(c *gin.Context) (io.Reader, error) {
+	form, err := common.ParseMultipartFormReusable(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "parse_grok15_multipart_failed")
+	}
+	seconds := strings.TrimSpace(firstFormValue(form, "seconds"))
+	upstreamModel := grok15Video6sUpstreamModel
+	if seconds == "10" {
+		upstreamModel = grok15Video10sUpstreamModel
+	}
+	fields := [][2]string{
+		{"model", upstreamModel},
+		{"prompt", strings.TrimSpace(firstFormValue(form, "prompt"))},
+		{"seconds", seconds},
+		{"size", strings.TrimSpace(firstFormValue(form, "size"))},
+	}
+	return buildVideoMultipartBody(c, form, fields)
+}
+
+func buildSD2FastVideoMultipartBody(c *gin.Context, upstreamModel string) (io.Reader, error) {
+	form, err := common.ParseMultipartFormReusable(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "parse_sd2_fast_multipart_failed")
+	}
+	duration := strings.TrimSpace(firstFormValue(form, "duration"))
+	if duration == "" {
+		duration = strings.TrimSpace(firstFormValue(form, "seconds"))
+	}
+	ratio := seedanceVideoRatio(map[string]interface{}{
+		"ratio":        firstFormValue(form, "ratio"),
+		"aspect_ratio": firstFormValue(form, "aspect_ratio"),
+		"size":         firstFormValue(form, "size"),
+	})
+	fields := [][2]string{
+		{"model", upstreamModel},
+		{"prompt", strings.TrimSpace(firstFormValue(form, "prompt"))},
+		{"duration", duration},
+		{"ratio", ratio},
+		{"quality", "hd"},
+		{"async", "true"},
+	}
+	return buildVideoMultipartBody(c, form, fields)
+}
+
+func buildVideoMultipartBody(c *gin.Context, form *multipart.Form, fields [][2]string) (io.Reader, error) {
+	var buffer bytes.Buffer
+	writer := multipart.NewWriter(&buffer)
+	for _, field := range fields {
+		if field[1] == "" {
+			continue
+		}
+		if err := writer.WriteField(field[0], field[1]); err != nil {
+			return nil, err
+		}
+	}
+	for _, fileHeader := range form.File["input_reference"] {
+		header := make(textproto.MIMEHeader)
+		header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="input_reference"; filename="%s"`, fileHeader.Filename))
+		contentType := fileHeader.Header.Get("Content-Type")
+		if contentType == "" || contentType == "application/octet-stream" {
+			sniffFile, err := fileHeader.Open()
+			if err != nil {
+				return nil, err
+			}
+			buffer := make([]byte, 512)
+			read, _ := sniffFile.Read(buffer)
+			if closeErr := sniffFile.Close(); closeErr != nil {
+				return nil, closeErr
+			}
+			contentType = http.DetectContentType(buffer[:read])
+		}
+		header.Set("Content-Type", contentType)
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			return nil, err
+		}
+		file, err := fileHeader.Open()
+		if err != nil {
+			return nil, err
+		}
+		_, copyErr := io.Copy(part, file)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return nil, copyErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+	return bytes.NewReader(buffer.Bytes()), nil
+}
+
 func isMoonApiXSeedanceVideoModel(modelName string) bool {
 	return moonApiXSeedanceVideoModels[strings.ToLower(strings.TrimSpace(modelName))]
 }
@@ -422,6 +655,24 @@ func isSeedanceVideoModel(modelName string) bool {
 	return strings.Contains(modelName, "seedance") || modelName == seedanceSD2FastUpstreamModel
 }
 
+func isSD2FastVideoModel(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case seedanceSD2FastPublicModel, seedanceSD2FastUpstreamModel:
+		return true
+	default:
+		return false
+	}
+}
+
+func isGrok15VideoModel(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case grok15VideoPublicModel, grok15VideoUpstreamModel, grok15Video6sUpstreamModel, grok15Video10sUpstreamModel:
+		return true
+	default:
+		return false
+	}
+}
+
 func isGrokVideoModel(modelName string) bool {
 	modelName = strings.ToLower(strings.TrimSpace(modelName))
 	return strings.Contains(modelName, "grok") && strings.Contains(modelName, "video")
@@ -429,7 +680,8 @@ func isGrokVideoModel(modelName string) bool {
 
 func usesVideosEndpoint(modelName string) bool {
 	switch strings.ToLower(strings.TrimSpace(modelName)) {
-	case seedanceSD2FastPublicModel, seedanceSD2FastUpstreamModel, grok15VideoPublicModel, grok15VideoUpstreamModel:
+	case seedanceSD2FastPublicModel, seedanceSD2FastUpstreamModel, grok15VideoPublicModel, grok15VideoUpstreamModel,
+		grok15Video6sUpstreamModel, grok15Video10sUpstreamModel:
 		return true
 	default:
 		return false
@@ -442,6 +694,41 @@ func isFixedPriceVideoModel(modelName string) bool {
 
 func seedanceUpstreamModel(modelName string) string {
 	return strings.TrimSpace(modelName)
+}
+
+func normalizeSD2FastVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
+	cleaned := map[string]interface{}{
+		"model":   seedanceSD2FastUpstreamModel,
+		"quality": "hd",
+		"async":   true,
+	}
+	if prompt := strings.TrimSpace(trimmedString(bodyMap["prompt"])); prompt != "" {
+		cleaned["prompt"] = prompt
+	}
+	duration, ok := integerFromAny(bodyMap["duration"])
+	if !ok {
+		duration, _ = integerFromAny(bodyMap["seconds"])
+	}
+	cleaned["duration"] = duration
+	cleaned["ratio"] = seedanceVideoRatio(bodyMap)
+
+	metadata := mapFromAny(bodyMap["metadata"])
+	references := normalizeSeedanceVideoReferences(bodyMap, metadata, "image")
+	imageURLs := make([]string, 0, len(references))
+	seen := make(map[string]bool)
+	for _, reference := range references {
+		if reference.url == "" || seen[reference.url] {
+			continue
+		}
+		seen[reference.url] = true
+		imageURLs = append(imageURLs, reference.url)
+	}
+	if len(imageURLs) == 1 {
+		cleaned["image_url"] = imageURLs[0]
+	} else if len(imageURLs) > 1 {
+		cleaned["images"] = imageURLs
+	}
+	return cleaned
 }
 
 func normalizeGrokVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
@@ -1440,45 +1727,45 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	}
 
 	// 使用公开 task_xxxx ID 返回给客户端
+	hasDirectVideoURL := videoResultURLFromTask(dResp) != ""
 	dResp.ID = info.PublicTaskID
 	dResp.TaskID = info.PublicTaskID
+	dResp.Model = strings.TrimSpace(info.OriginModelName)
+	if dResp.Model == "" {
+		dResp.Model = "video"
+	}
+	dResp.ProviderCode = ""
+	dResp.Code = ""
+	dResp.Message = ""
+	dResp.Error = nil
+	dResp.Data = nil
+	dResp.Metadata = nil
+	dResp.Output = nil
+	dResp.Url = ""
+	dResp.VideoUrl = ""
+	dResp.ResultUrl = ""
+	dResp.OutputUrl = ""
+	if hasDirectVideoURL {
+		proxyURL := taskcommon.BuildProxyURL(info.PublicTaskID)
+		dResp.Url = proxyURL
+		dResp.VideoUrl = proxyURL
+		dResp.ResultUrl = proxyURL
+	}
+	publicBody, marshalErr := common.Marshal(dResp)
+	if marshalErr != nil {
+		taskErr = service.TaskErrorWrapper(marshalErr, "sanitize_video_response_failed", http.StatusInternalServerError)
+		return
+	}
 	c.JSON(http.StatusOK, dResp)
-	return upstreamID, responseBody, nil
+	return upstreamID, publicBody, nil
 }
 
 func seedanceGatewayTaskError(dResp responseTask, httpStatus int) *dto.TaskError {
-	statusCode := dResp.StatusCode
-	if statusCode < http.StatusBadRequest {
-		statusCode = httpStatus
-	}
-	if statusCode < http.StatusBadRequest {
-		statusCode = http.StatusBadGateway
-	}
-
-	code := strings.TrimSpace(dResp.ProviderCode)
-	if code == "" {
-		code = strings.TrimSpace(dResp.Code)
-	}
-	message := strings.TrimSpace(dResp.Message)
-	if dResp.Error != nil {
-		if code == "" {
-			code = responseTaskErrorCode(dResp.Error)
-		}
-		if message == "" {
-			message = responseTaskErrorMessage(dResp.Error)
-		}
-	}
-	if code == "" {
-		code = "service_error"
-	}
-	if message == "" {
-		message = "服务暂时不可用，请稍后重试。"
-	}
-
+	message := "视频生成服务暂时不可用，请稍后重试。"
 	return &dto.TaskError{
-		Code:       code,
+		Code:       "service_unavailable",
 		Message:    message,
-		StatusCode: statusCode,
+		StatusCode: http.StatusBadGateway,
 		Error:      fmt.Errorf("%s", message),
 	}
 }
@@ -1546,11 +1833,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Url = videoResultURLFromTask(resTask)
 	case "failed", "cancelled":
 		taskResult.Status = model.TaskStatusFailure
-		if message := responseTaskErrorMessage(resTask.Error); message != "" {
-			taskResult.Reason = message
-		} else {
-			taskResult.Reason = "task failed"
-		}
+		taskResult.Reason = "视频生成失败，请稍后重试。"
 	default:
 	}
 	if progress := responseTaskProgress(resTask.Progress); progress > 0 && progress < 100 {
@@ -1577,6 +1860,23 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(task *model.Task) ([]byte, error) {
 	var err error
 	if data, err = sjson.SetBytes(data, "id", task.TaskID); err != nil {
 		return nil, errors.Wrap(err, "set id failed")
+	}
+	if data, err = sjson.SetBytes(data, "task_id", task.TaskID); err != nil {
+		return nil, errors.Wrap(err, "set task id failed")
+	}
+	publicModel := strings.TrimSpace(task.Properties.OriginModelName)
+	if publicModel != "" {
+		if data, err = sjson.SetBytes(data, "model", publicModel); err != nil {
+			return nil, errors.Wrap(err, "set public model failed")
+		}
+	}
+	if task.Status == model.TaskStatusSuccess {
+		proxyURL := taskcommon.BuildProxyURL(task.TaskID)
+		for _, key := range []string{"url", "video_url", "result_url"} {
+			if data, err = sjson.SetBytes(data, key, proxyURL); err != nil {
+				return nil, errors.Wrap(err, "set public video url failed")
+			}
+		}
 	}
 	return data, nil
 }

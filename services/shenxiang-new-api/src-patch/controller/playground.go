@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/types"
 
@@ -327,6 +328,13 @@ func playgroundVideoMarkerFromTask(task *model.Task) *playgroundVideoMediaMarker
 func taskToPlaygroundVideoTask(task *model.Task, marker *playgroundVideoMediaMarker) gin.H {
 	taskID := strings.TrimSpace(task.TaskID)
 	resultURL := strings.TrimSpace(task.GetResultURL())
+	if task.Status == model.TaskStatusSuccess && resultURL != "" {
+		resultURL = taskcommon.BuildProxyURL(task.TaskID)
+	}
+	failReason := ""
+	if task.Status == model.TaskStatusFailure {
+		failReason = "视频生成失败，请稍后重试。"
+	}
 	status := string(task.Status)
 	response := gin.H{
 		"id":          taskID,
@@ -343,8 +351,8 @@ func taskToPlaygroundVideoTask(task *model.Task, marker *playgroundVideoMediaMar
 		"result_url":  resultURL,
 		"url":         resultURL,
 		"video_url":   resultURL,
-		"fail_reason": task.FailReason,
-		"message":     task.FailReason,
+		"fail_reason": failReason,
+		"message":     failReason,
 		"data": gin.H{
 			"task_id":     taskID,
 			"status":      status,
@@ -353,7 +361,7 @@ func taskToPlaygroundVideoTask(task *model.Task, marker *playgroundVideoMediaMar
 			"result_url":  resultURL,
 			"url":         resultURL,
 			"video_url":   resultURL,
-			"fail_reason": task.FailReason,
+			"fail_reason": failReason,
 		},
 		"metadata": gin.H{
 			"playground_media": marker,

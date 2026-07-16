@@ -71,16 +71,44 @@ const (
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
+		logs[i].ChannelId = 0
+		logs[i].UpstreamRequestId = ""
+		if types.ContainsProviderDisclosure(strings.ToLower(logs[i].Content)) {
+			logs[i].Content = "模型服务暂时不可用，请稍后重试。"
+		}
 		var otherMap map[string]interface{}
 		otherMap, _ = common.StrToMap(logs[i].Other)
 		if otherMap != nil {
-			// Remove admin-only debug fields.
-			delete(otherMap, "admin_info")
-			// delete(otherMap, "reject_reason")
-			delete(otherMap, "stream_status")
+			sanitizeUserLogMetadata(otherMap)
 		}
 		logs[i].Other = common.MapToJsonStr(otherMap)
 		logs[i].Id = startIdx + i + 1
+	}
+}
+
+func sanitizeUserLogMetadata(metadata map[string]interface{}) {
+	for key, value := range metadata {
+		normalized := strings.ToLower(strings.TrimSpace(key))
+		if normalized == "admin_info" || normalized == "stream_status" || normalized == "channel_id" ||
+			normalized == "result_url" || normalized == "raw_response" || strings.Contains(normalized, "upstream") ||
+			strings.Contains(normalized, "provider") || strings.Contains(normalized, "supplier") || strings.Contains(normalized, "channel") {
+			delete(metadata, key)
+			continue
+		}
+		switch typed := value.(type) {
+		case map[string]interface{}:
+			sanitizeUserLogMetadata(typed)
+		case []interface{}:
+			for _, child := range typed {
+				if childMap, ok := child.(map[string]interface{}); ok {
+					sanitizeUserLogMetadata(childMap)
+				}
+			}
+		case string:
+			if types.ContainsProviderDisclosure(strings.ToLower(typed)) {
+				metadata[key] = "模型服务暂时不可用，请稍后重试。"
+			}
+		}
 	}
 }
 

@@ -1,8 +1,11 @@
 package sora
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,36 +17,116 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestBuildRequestBodyNormalizesJSONForNewVideoModelWithoutContentType(t *testing.T) {
+func newVideoMultipartContext(t *testing.T, fields map[string]string, fileField string, fileContent []byte) *gin.Context {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for key, value := range fields {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if fileField != "" {
+		part, err := writer.CreateFormFile(fileField, "reference.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(fileContent); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", bytes.NewReader(body.Bytes()))
+	context.Request.Header.Set("Content-Type", writer.FormDataContentType())
+	return context
+}
+
+func TestValidateGrok15RejectsJSONWithoutUploadedImage(t *testing.T) {
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())
 	context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(`{
 		"model":"grok-video-1.5",
 		"prompt":"A paper plane crosses the sky.",
-		"duration":5,
+		"seconds":6,
 		"size":"1280x720"
 	}`))
+	context.Request.Header.Set("Content-Type", "application/json")
 	defer common.CleanupBodyStorage(context)
 
-	reader, err := (&TaskAdaptor{}).BuildRequestBody(context, &relaycommon.RelayInfo{
+	taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, &relaycommon.RelayInfo{
 		OriginModelName: grok15VideoPublicModel,
 		ChannelMeta: &relaycommon.ChannelMeta{
 			UpstreamModelName: grok15VideoUpstreamModel,
 		},
 		TaskRelayInfo: &relaycommon.TaskRelayInfo{},
 	})
-	if err != nil {
-		t.Fatal(err)
+	if taskErr == nil || taskErr.Code != "invalid_request" {
+		t.Fatalf("taskErr = %#v, want local invalid_request", taskErr)
 	}
-	if contentType := context.GetHeader("Content-Type"); contentType != "application/json" {
-		t.Fatalf("Content-Type = %q, want application/json", contentType)
+	if strings.Contains(strings.ToLower(taskErr.Message), "provider") || strings.Contains(taskErr.Message, "上游") {
+		t.Fatalf("public validation error leaks provider details: %q", taskErr.Message)
 	}
+}
 
-	var payload map[string]interface{}
-	if err := json.NewDecoder(reader).Decode(&payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload["model"] != grok15VideoUpstreamModel {
-		t.Fatalf("model = %#v, want %q", payload["model"], grok15VideoUpstreamModel)
+func TestBuildRequestBodyForGrok15UsesExactMultipartContract(t *testing.T) {
+	for _, seconds := range []string{"6", "10"} {
+		context := newVideoMultipartContext(t, map[string]string{
+			"model":        grok15VideoPublicModel,
+			"prompt":       "A paper plane crosses the sky.",
+			"seconds":      seconds,
+			"size":         "1280x720",
+			"duration":     "15",
+			"aspect_ratio": "16:9",
+		}, "input_reference", []byte("\x89PNG\r\n\x1a\nreference"))
+		defer common.CleanupBodyStorage(context)
+		info := &relaycommon.RelayInfo{
+			OriginModelName: grok15VideoPublicModel,
+			ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: grok15VideoUpstreamModel},
+			TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+		}
+		if taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, info); taskErr != nil {
+			t.Fatalf("seconds=%s validation failed: %#v", seconds, taskErr)
+		}
+		reader, err := (&TaskAdaptor{}).BuildRequestBody(context, info)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contentType := context.GetHeader("Content-Type")
+		mediaType, params, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mediaType != "multipart/form-data" {
+			t.Fatalf("Content-Type = %q, want multipart/form-data", contentType)
+		}
+		form, err := multipart.NewReader(reader, params["boundary"]).ReadForm(1 << 20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer form.RemoveAll()
+		wantModel := grok15Video6sUpstreamModel
+		if seconds == "10" {
+			wantModel = grok15Video10sUpstreamModel
+		}
+		if got := form.Value["model"]; len(got) != 1 || got[0] != wantModel {
+			t.Fatalf("seconds=%s model = %#v, want %q", seconds, got, wantModel)
+		}
+		if got := form.Value["seconds"]; len(got) != 1 || got[0] != seconds {
+			t.Fatalf("seconds = %#v, want %s", got, seconds)
+		}
+		if len(form.File["input_reference"]) != 1 {
+			t.Fatalf("input_reference files = %#v, want one", form.File)
+		}
+		if got := form.File["input_reference"][0].Header.Get("Content-Type"); got != "image/png" {
+			t.Fatalf("input_reference Content-Type = %q, want image/png", got)
+		}
+		for _, forbidden := range []string{"duration", "resolution", "aspect_ratio"} {
+			if _, ok := form.Value[forbidden]; ok {
+				t.Fatalf("multipart payload must not contain %q: %#v", forbidden, form.Value)
+			}
+		}
 	}
 }
 
@@ -59,6 +142,43 @@ func TestNewVideoModelsUseVideosEndpoint(t *testing.T) {
 		}
 		if url != "https://provider.test/v1/videos" {
 			t.Fatalf("url = %q, want videos endpoint", url)
+		}
+	}
+}
+
+func TestDoResponseUsesPublicModelAndProxyURL(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(`{
+			"id":"internal-task-id",
+			"model":"grok-imagine-1.5-video-6s",
+			"status":"completed",
+			"video_url":"https://provider.example/private.mp4",
+			"data":{"model":"internal-video-model","provider_code":"secret-code"}
+		}`)),
+	}
+	upstreamID, taskData, taskErr := (&TaskAdaptor{}).DoResponse(context, response, &relaycommon.RelayInfo{
+		OriginModelName: grok15VideoPublicModel,
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{
+			PublicTaskID: "task_public_123",
+		},
+	})
+	if taskErr != nil {
+		t.Fatal(taskErr)
+	}
+	if upstreamID != "internal-task-id" {
+		t.Fatalf("upstreamID = %q", upstreamID)
+	}
+	for _, body := range []string{string(taskData), recorder.Body.String()} {
+		if !strings.Contains(body, grok15VideoPublicModel) || !strings.Contains(body, "/v1/videos/task_public_123/content") {
+			t.Fatalf("public response is missing alias or proxy URL: %s", body)
+		}
+		for _, forbidden := range []string{"provider.example", "grok-imagine-1.5-video-6s", "internal-video-model", "secret-code"} {
+			if strings.Contains(body, forbidden) {
+				t.Fatalf("public response contains %q: %s", forbidden, body)
+			}
 		}
 	}
 }
@@ -88,25 +208,32 @@ func TestNewVideoModelsUseConfiguredBillingUnits(t *testing.T) {
 	}
 }
 
-func TestNewVideoModelsUseExistingPayloadShapes(t *testing.T) {
-	sdPayload := normalizeSeedanceVideoRequestBody(map[string]interface{}{
+func TestSD2FastUsesDocumentedJSONPayloadShape(t *testing.T) {
+	sdPayload := normalizeSD2FastVideoRequestBody(map[string]interface{}{
 		"model":    seedanceSD2FastUpstreamModel,
 		"prompt":   "A paper plane crosses the sky.",
 		"duration": float64(5),
 		"size":     "1280x720",
+		"images": []interface{}{
+			"https://cdn.test/first.png",
+			"https://cdn.test/second.png",
+		},
+		"metadata": map[string]interface{}{"resolution": "720P"},
 	})
-	if sdPayload["model"] != seedanceSD2FastUpstreamModel || sdPayload["seconds"] != "5" {
+	if sdPayload["model"] != seedanceSD2FastUpstreamModel || sdPayload["duration"] != 5 {
 		t.Fatalf("Seedance payload = %#v", sdPayload)
 	}
-
-	grokPayload := normalizeGrokVideoRequestBody(map[string]interface{}{
-		"model":    grok15VideoUpstreamModel,
-		"prompt":   "A paper plane crosses the sky.",
-		"duration": float64(5),
-		"size":     "1280x720",
-	})
-	if grokPayload["model"] != grok15VideoUpstreamModel || grokPayload["duration"] != 15 {
-		t.Fatalf("Grok payload = %#v", grokPayload)
+	if sdPayload["ratio"] != "16:9" || sdPayload["quality"] != "hd" || sdPayload["async"] != true {
+		t.Fatalf("Seedance documented fields = %#v", sdPayload)
+	}
+	images, ok := sdPayload["images"].([]string)
+	if !ok || len(images) != 2 {
+		t.Fatalf("images = %#v, want two URL strings", sdPayload["images"])
+	}
+	for _, forbidden := range []string{"seconds", "metadata", "resolution", "image_urls"} {
+		if _, ok := sdPayload[forbidden]; ok {
+			t.Fatalf("Seedance payload must not contain %q: %#v", forbidden, sdPayload)
+		}
 	}
 }
 
@@ -744,7 +871,7 @@ func TestNormalizeMoonApiXNonMiniDropsVideoReferencesAndClampsDuration(t *testin
 	}
 }
 
-func TestSeedanceGatewayFailureReturnsProviderStatus(t *testing.T) {
+func TestSeedanceGatewayFailureReturnsSanitizedServiceError(t *testing.T) {
 	success := false
 	taskErr := seedanceGatewayTaskError(responseTask{
 		Success:      &success,
@@ -756,15 +883,15 @@ func TestSeedanceGatewayFailureReturnsProviderStatus(t *testing.T) {
 	if taskErr == nil {
 		t.Fatal("taskErr is nil")
 	}
-	if taskErr.StatusCode != 400 {
-		t.Fatalf("StatusCode = %d, want 400", taskErr.StatusCode)
+	if taskErr.StatusCode != http.StatusBadGateway {
+		t.Fatalf("StatusCode = %d, want %d", taskErr.StatusCode, http.StatusBadGateway)
 	}
-	if taskErr.Code != "service_error" {
-		t.Fatalf("Code = %q, want service_error", taskErr.Code)
+	if taskErr.Code != "service_unavailable" {
+		t.Fatalf("Code = %q, want service_unavailable", taskErr.Code)
 	}
 }
 
-func TestSeedanceHTTPErrorWithErrorObjectReturnsProviderStatus(t *testing.T) {
+func TestSeedanceHTTPErrorWithErrorObjectDoesNotExposeProviderCode(t *testing.T) {
 	taskErr := seedanceGatewayTaskError(responseTask{
 		Error: map[string]any{
 			"message": "服务暂时不可用，请稍后重试。",
@@ -775,15 +902,15 @@ func TestSeedanceHTTPErrorWithErrorObjectReturnsProviderStatus(t *testing.T) {
 	if taskErr == nil {
 		t.Fatal("taskErr is nil")
 	}
-	if taskErr.StatusCode != http.StatusBadRequest {
-		t.Fatalf("StatusCode = %d, want %d", taskErr.StatusCode, http.StatusBadRequest)
+	if taskErr.StatusCode != http.StatusBadGateway {
+		t.Fatalf("StatusCode = %d, want %d", taskErr.StatusCode, http.StatusBadGateway)
 	}
-	if taskErr.Code != "service_error" {
-		t.Fatalf("Code = %q, want service_error", taskErr.Code)
+	if taskErr.Code != "service_unavailable" {
+		t.Fatalf("Code = %q, want service_unavailable", taskErr.Code)
 	}
 }
 
-func TestSeedanceHTTPErrorWithErrorStringReturnsProviderStatus(t *testing.T) {
+func TestSeedanceHTTPErrorWithErrorStringDoesNotExposeProviderMessage(t *testing.T) {
 	taskErr := seedanceGatewayTaskError(responseTask{
 		Error: "上游任务失败",
 	}, http.StatusBadRequest)
@@ -791,11 +918,11 @@ func TestSeedanceHTTPErrorWithErrorStringReturnsProviderStatus(t *testing.T) {
 	if taskErr == nil {
 		t.Fatal("taskErr is nil")
 	}
-	if taskErr.StatusCode != http.StatusBadRequest {
-		t.Fatalf("StatusCode = %d, want %d", taskErr.StatusCode, http.StatusBadRequest)
+	if taskErr.StatusCode != http.StatusBadGateway {
+		t.Fatalf("StatusCode = %d, want %d", taskErr.StatusCode, http.StatusBadGateway)
 	}
-	if taskErr.Message != "上游任务失败" {
-		t.Fatalf("Message = %q, want upstream error string", taskErr.Message)
+	if strings.Contains(taskErr.Message, "上游") || strings.Contains(strings.ToLower(taskErr.Message), "provider") {
+		t.Fatalf("Message exposes provider details: %q", taskErr.Message)
 	}
 }
 
@@ -903,7 +1030,7 @@ func TestParseTaskResultTreatsRunningAsInProgress(t *testing.T) {
 	}
 }
 
-func TestParseTaskResultAcceptsStringError(t *testing.T) {
+func TestParseTaskResultSanitizesStringError(t *testing.T) {
 	adaptor := TaskAdaptor{}
 
 	result, err := adaptor.ParseTaskResult([]byte(`{
@@ -917,7 +1044,7 @@ func TestParseTaskResultAcceptsStringError(t *testing.T) {
 	if result.Status != model.TaskStatusFailure {
 		t.Fatalf("Status = %q, want %q", result.Status, model.TaskStatusFailure)
 	}
-	if result.Reason != "上游任务失败" {
-		t.Fatalf("Reason = %q, want upstream error string", result.Reason)
+	if result.Reason != "视频生成失败，请稍后重试。" {
+		t.Fatalf("Reason = %q, want sanitized failure", result.Reason)
 	}
 }

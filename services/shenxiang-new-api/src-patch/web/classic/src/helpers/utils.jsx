@@ -96,7 +96,7 @@ const PRICING_DISPLAY_OVERRIDES = {
   },
   'seedance-sd2-fast-720p': {
     display_name: 'Seedance SD Fast 720P',
-    description: '人民币 ¥0.25/秒，按生成时长计费；支持图片参考。',
+    description: '人民币 ¥0.25/秒，按生成时长计费；固定 720P，支持 5/10/15 秒；支持文生视频和图生视频，可上传图片（单个本地文件最大 20MB），不支持视频或音频参考；人脸能力未承诺，不保证。',
     fixed_price_label: '¥0.25',
     price_unit_label: '秒',
     billing_label: '按秒计费',
@@ -104,11 +104,10 @@ const PRICING_DISPLAY_OVERRIDES = {
   },
   'grok-video-1.5': {
     display_name: 'Grok Video 1.5',
-    description: '固定人民币 ¥0.20/次，按次计费。',
+    description: '固定人民币 ¥0.20/次，按次计费；固定 720P，仅支持 6/10 秒图生视频；必须上传 1 张图片（最大 20MB），不支持文生视频、视频或音频参考；人脸能力未承诺，不保证。',
     fixed_price_label: '¥0.20',
     price_unit_label: '次',
     billing_label: '按次计费',
-    visible_vendor_name: '星人媒体',
     icon: null,
   },
   'seedance-2.0-ld-17': {

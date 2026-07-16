@@ -124,13 +124,13 @@ PUBLIC_VIDEO_MODEL_CONFIGS = {
         "vendor_id": 4,
     },
     PUBLIC_SD2_FAST_MODEL: {
-        "description": "星人 Seedance SD Fast 720P｜人民币 ¥0.25/秒｜按生成时长计费，支持图片参考，生成后请及时下载",
+        "description": "Seedance SD Fast 720P｜人民币 ¥0.25/秒｜固定 720P，支持 5/10/15 秒｜支持文生视频和图生视频，可上传图片（单个本地文件最大 20MB），不支持视频或音频参考｜人脸能力未承诺，不保证",
         "icon": "Doubao.Color",
         "tags": "video,seedance",
         "vendor_id": 4,
     },
     PUBLIC_GROK15_VIDEO_MODEL: {
-        "description": "星人 Grok Video 1.5｜人民币 ¥0.20/次｜固定按次计费，生成后请及时下载",
+        "description": "Grok Video 1.5｜人民币 ¥0.20/次｜固定 720P，仅支持 6/10 秒图生视频｜必须上传 1 张图片（最大 20MB），不支持文生视频、视频或音频参考｜人脸能力未承诺，不保证",
         "icon": "Grok",
         "tags": "video,grok",
         "vendor_id": 3,

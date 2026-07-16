@@ -569,6 +569,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			}
 		}
 	}
+	if taskResult.Status == string(model.TaskStatusFailure) {
+		taskResult.Reason = "视频生成失败，请稍后重试。"
+	}
 
 	shouldRefund := false
 	shouldSettle := false
@@ -651,7 +654,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		if task.FinishTime == 0 {
 			task.FinishTime = now
 		}
-		task.FailReason = taskResult.Reason
+		task.FailReason = "视频生成失败，请稍后重试。"
 		logger.LogInfo(ctx, fmt.Sprintf("Task %s failed: %s", task.TaskID, task.FailReason))
 		taskResult.Progress = taskcommon.ProgressComplete
 		if quota != 0 {
@@ -725,27 +728,48 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 func redactVideoResponseBody(body []byte) []byte {
 	var m map[string]any
 	if err := common.Unmarshal(body, &m); err != nil {
-		return body
+		return []byte("{}")
 	}
-	resp, _ := m["response"].(map[string]any)
-	if resp != nil {
-		delete(resp, "bytesBase64Encoded")
-		if v, ok := resp["video"].(string); ok {
-			resp["video"] = truncateBase64(v)
+	redactVideoResponseMap(m)
+	b, err := common.Marshal(m)
+	if err != nil {
+		return []byte("{}")
+	}
+	return b
+}
+
+func redactVideoResponseMap(value map[string]any) {
+	for key, item := range value {
+		normalized := strings.ToLower(strings.TrimSpace(key))
+		if isPrivateVideoResponseKey(normalized) {
+			delete(value, key)
+			continue
 		}
-		if vs, ok := resp["videos"].([]any); ok {
-			for i := range vs {
-				if vm, ok := vs[i].(map[string]any); ok {
-					delete(vm, "bytesBase64Encoded")
+		switch typed := item.(type) {
+		case map[string]any:
+			redactVideoResponseMap(typed)
+		case []any:
+			for _, child := range typed {
+				if childMap, ok := child.(map[string]any); ok {
+					redactVideoResponseMap(childMap)
 				}
 			}
 		}
 	}
-	b, err := common.Marshal(m)
-	if err != nil {
-		return body
+}
+
+func isPrivateVideoResponseKey(key string) bool {
+	if strings.Contains(key, "upstream") || strings.Contains(key, "provider") || strings.Contains(key, "supplier") || strings.Contains(key, "channel") {
+		return true
 	}
-	return b
+	switch key {
+	case "id", "task_id", "model", "code", "status_code", "error", "message", "detail", "reason", "fail_reason",
+		"request_id", "base_url", "api_key", "raw_response", "bytesbase64encoded", "url", "video_url", "result_url",
+		"output_url", "download_url", "signed_url", "uri", "link", "href":
+		return true
+	default:
+		return false
+	}
 }
 
 func extractPlaygroundVideoMediaMarker(data []byte) *playgroundVideoMediaMarker {
