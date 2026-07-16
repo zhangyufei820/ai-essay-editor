@@ -106,23 +106,43 @@ CLAUDE_ALLOWED_MODELS = [
     "claude-sonnet-4-6",
     "claude-sonnet-5",
 ]
-PUBLIC_SEEDANCE_VIDEO_MODELS = [
-    "seedance-2.0-cl-mini",
-]
+PUBLIC_VIDEO_MODEL_CONFIGS = {
+    "grok-video-super-720p": {
+        "description": "星人 Grok 视频生成｜人民币 ¥6.50/次｜固定按次计费，支持 5/10/15 秒，生成后请及时下载",
+        "icon": "Grok",
+        "tags": "video,grok",
+        "vendor_id": 3,
+    },
+    "seedance-2.0-dj-fast": {
+        "description": "星人 Seedance 2.0 DJ Fast｜人民币 ¥0.162/秒｜支持 5/10/15 秒，只接收图片参考，生成后请及时下载",
+        "icon": "Doubao.Color",
+        "tags": "video,doubao,seedance",
+        "vendor_id": 4,
+    },
+    "seedance-2.0-cl-mini": {
+        "description": "星人 Seedance 2.0 CL Mini 视频生成｜支持 4-15 秒｜支持图片参考，也可传 1 个视频参考，生成后请及时下载",
+        "icon": "Doubao.Color",
+        "tags": "video,seedance",
+        "vendor_id": 4,
+    },
+    "seedance-2.0-ld-17": {
+        "description": "星人 Seedance 2.0 LD-17｜人民币 ¥6.48/次｜固定按次计费，支持 5-15 秒和多模态参考，生成后请及时下载",
+        "icon": "Doubao.Color",
+        "tags": "video,doubao,seedance",
+        "vendor_id": 4,
+    },
+}
+PUBLIC_VIDEO_MODELS = tuple(PUBLIC_VIDEO_MODEL_CONFIGS)
+PRIVATE_VIDEO_MODELS = {"seedance-nsfw"}
 DISABLED_PUBLIC_VIDEO_MODELS = [
-    "grok-video-super-720p",
     "seedance-2.0",
-    "seedance-2.0-ld-17",
     "seedance-2.0-kz-fast",
     "seedance-2.0-cl-fast",
     "seedance-2.0-cl",
 ]
-PUBLIC_SEEDANCE_MODEL_DESCRIPTIONS = {
-    "seedance-2.0-cl-mini": "星人 Seedance 2.0 CL Mini 视频生成｜支持 4-15 秒｜支持图片参考，也可传 1 个视频参考，生成后请及时下载",
-}
 PUBLIC_SEEDANCE_CHANNEL_ID = "5"
 PUBLIC_SEEDANCE_CHANNEL_MODELS = [
-    *PUBLIC_SEEDANCE_VIDEO_MODELS,
+    "seedance-2.0-cl-mini",
 ]
 PUBLIC_SEEDANCE_MODEL_MAPPING = '{"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
 CODEX_TEXT_CHANNEL_ID = "21"
@@ -142,6 +162,11 @@ PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
         "input_with_video": Decimal("11.90") * Decimal("1.08"),
         "output": Decimal("19.55") * Decimal("1.08"),
     }
+}
+PUBLIC_VIDEO_FIXED_PRICES_CNY = {
+    "grok-video-super-720p": Decimal("6.50"),
+    "seedance-2.0-dj-fast": Decimal("0.162"),
+    "seedance-2.0-ld-17": Decimal("6.48"),
 }
 OPENAI_TEXT_LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
 PUBLIC_OPENAI_TEXT_MODELS = {
@@ -570,11 +595,16 @@ def usd_exchange_rate() -> Decimal:
     return rate
 
 
-def sync_public_seedance_pricing() -> None:
+def sync_public_video_pricing() -> None:
     model_ratios = parse_json_option("ModelRatio")
     completion_ratios = parse_json_option("CompletionRatio")
     model_prices = parse_json_option("ModelPrice")
     exchange_rate = usd_exchange_rate()
+
+    for model, price_cny in PUBLIC_VIDEO_FIXED_PRICES_CNY.items():
+        model_prices[model] = decimal_to_float(price_cny / exchange_rate)
+        model_ratios.pop(model, None)
+        completion_ratios.pop(model, None)
 
     for model, prices in PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M.items():
         input_cny = prices["input_with_video"]
@@ -1012,6 +1042,8 @@ def model_lists() -> dict[str, list[str]]:
         if "internal-hidden" in tags:
             continue
         if "video" in tags:
+            if model in PRIVATE_VIDEO_MODELS:
+                continue
             append_model("video", model)
             continue
         if "image" in tags:
@@ -1028,7 +1060,7 @@ def model_lists() -> dict[str, list[str]]:
     profiles["codex"] = [model for model in CODEX_ALLOWED_MODELS if model in available_codex_models]
     if DISCOUNT_IMAGE2_PUBLIC_MODEL not in profiles["image"]:
         profiles["image"].append(DISCOUNT_IMAGE2_PUBLIC_MODEL)
-    for model in PUBLIC_SEEDANCE_VIDEO_MODELS:
+    for model in PUBLIC_VIDEO_MODELS:
         if model not in profiles["video"]:
             profiles["video"].append(model)
     return profiles
@@ -1045,7 +1077,7 @@ def active_groups() -> list[str]:
     return sorted(groups)
 
 
-def ensure_public_seedance_models() -> None:
+def ensure_public_video_models() -> None:
     statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
     if DISABLED_PUBLIC_VIDEO_MODELS:
         disabled_models = ", ".join(sql_quote(model) for model in DISABLED_PUBLIC_VIDEO_MODELS)
@@ -1056,28 +1088,31 @@ def ensure_public_seedance_models() -> None:
         statements.append(
             f"UPDATE abilities SET enabled = 0 WHERE model IN ({disabled_models});"
         )
-    for model in PUBLIC_SEEDANCE_VIDEO_MODELS:
-        description = PUBLIC_SEEDANCE_MODEL_DESCRIPTIONS[model]
+    for model, config in PUBLIC_VIDEO_MODEL_CONFIGS.items():
+        description = str(config["description"])
+        icon = str(config["icon"])
+        tags = str(config["tags"])
+        vendor_id = str(int(config["vendor_id"]))
         statements.append(
-            "SET @seedance_model := "
+            "SET @public_video_model := "
             + sql_quote(model)
             + " COLLATE utf8mb4_unicode_ci;"
             "SET @keep_model_id := ("
-            "SELECT MIN(id) FROM models WHERE model_name = @seedance_model AND deleted_at IS NULL"
+            "SELECT MIN(id) FROM models WHERE model_name = @public_video_model AND deleted_at IS NULL"
             ");"
             "SET @keep_model_id := IFNULL(@keep_model_id, ("
-            "SELECT MIN(id) FROM models WHERE model_name = @seedance_model"
+            "SELECT MIN(id) FROM models WHERE model_name = @public_video_model"
             "));"
             "INSERT INTO models "
             "(model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) "
             "SELECT "
             + ", ".join(
                 [
-                    "@seedance_model",
+                    "@public_video_model",
                     sql_quote(description),
-                    sql_quote("Doubao.Color"),
-                    sql_quote("video,seedance"),
-                    "4",
+                    sql_quote(icon),
+                    sql_quote(tags),
+                    vendor_id,
                     sql_quote('{"openai-video":"/v1/videos"}'),
                     "1",
                     "0",
@@ -1092,15 +1127,17 @@ def ensure_public_seedance_models() -> None:
             "description = "
             + sql_quote(description)
             + ", icon = "
-            + sql_quote("Doubao.Color")
+            + sql_quote(icon)
             + ", tags = "
-            + sql_quote("video,seedance")
-            + ", vendor_id = 4, endpoints = "
+            + sql_quote(tags)
+            + ", vendor_id = "
+            + vendor_id
+            + ", endpoints = "
             + sql_quote('{"openai-video":"/v1/videos"}')
             + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
             "WHERE id = @keep_model_id;"
             "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
-            "WHERE model_name = @seedance_model AND id <> @keep_model_id;"
+            "WHERE model_name = @public_video_model AND id <> @keep_model_id;"
         )
     statements.append(
         "UPDATE channels SET models = "
@@ -1638,10 +1675,10 @@ def refresh_codex() -> None:
 
 
 def main() -> int:
-    ensure_public_seedance_models()
+    ensure_public_video_models()
     ensure_discount_image2_backing_model()
     ensure_public_openai_text_models()
-    sync_public_seedance_pricing()
+    sync_public_video_pricing()
     sync_public_openai_text_pricing()
     codex_text_channel_result = ensure_codex_text_channel_models()
     retired_codex_text_result = retire_codex_text_models()

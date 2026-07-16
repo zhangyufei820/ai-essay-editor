@@ -85,6 +85,15 @@ const PRICING_DISPLAY_OVERRIDES = {
     price_unit_label: '张',
     billing_label: '按张计费',
   },
+  'grok-video-super-720p': {
+    display_name: 'Grok Video',
+    description: '固定人民币 ¥6.50/次，支持 5/10/15 秒，按次计费。',
+    fixed_price_label: '¥6.50',
+    price_unit_label: '次',
+    billing_label: '按次计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
+  },
   'seedance-2.0-dj-fast': {
     display_name: 'seedance-2.0-dj-fast',
     description: '豆包 Seedance 2.0 DJ Fast：人民币 ¥0.162/秒，按秒计费；支持 5/10/15 秒，只接收图片参考，不能过人脸。',

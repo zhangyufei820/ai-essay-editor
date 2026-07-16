@@ -35,7 +35,12 @@ const (
 )
 
 func videoTokenModels() []string {
-	return []string{"seedance-2.0-dj-fast", "seedance-2.0-cl-mini"}
+	return []string{
+		"grok-video-super-720p",
+		"seedance-2.0-dj-fast",
+		"seedance-2.0-cl-mini",
+		"seedance-2.0-ld-17",
+	}
 }
 
 func SystemTokenProfiles() []SystemTokenProfile {

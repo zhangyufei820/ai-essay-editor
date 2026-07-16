@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSystemTokenProfilesIncludesSeedanceVideoModels(t *testing.T) {
+func TestSystemTokenProfilesIncludesCallablePublicVideoModels(t *testing.T) {
 	var videoModels []string
 	for _, profile := range SystemTokenProfiles() {
 		if profile.Mode == "video" {
@@ -16,11 +16,14 @@ func TestSystemTokenProfilesIncludesSeedanceVideoModels(t *testing.T) {
 		}
 	}
 
-	require.Contains(t, videoModels, "seedance-2.0-dj-fast")
-	require.Contains(t, videoModels, "seedance-2.0-cl-mini")
-	require.NotContains(t, videoModels, "seedance-2.0-ld-17")
-	require.NotContains(t, videoModels, "grok-video-super-720p")
+	require.Equal(t, []string{
+		"grok-video-super-720p",
+		"seedance-2.0-dj-fast",
+		"seedance-2.0-cl-mini",
+		"seedance-2.0-ld-17",
+	}, videoModels)
 	require.NotContains(t, videoModels, "seedance-2.0")
+	require.NotContains(t, videoModels, "seedance-nsfw")
 	require.NotContains(t, videoModels, "seedance-2.0-kz-fast")
 	require.NotContains(t, videoModels, "seedance-2.0-cl-fast")
 	require.NotContains(t, videoModels, "seedance-2.0-cl")

@@ -59,6 +59,24 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             ),
         )
 
+    def test_public_video_models_are_full_price_and_callable_only(self) -> None:
+        self.assertEqual(
+            self.module.PUBLIC_VIDEO_MODELS,
+            (
+                "grok-video-super-720p",
+                "seedance-2.0-dj-fast",
+                "seedance-2.0-cl-mini",
+                "seedance-2.0-ld-17",
+            ),
+        )
+        self.assertTrue(
+            set(self.module.PUBLIC_VIDEO_MODELS).isdisjoint(
+                self.module.DISCOUNT_TEXT_ALLOWED_MODELS
+            )
+        )
+        self.assertNotIn("seedance-2.0", self.module.PUBLIC_VIDEO_MODELS)
+        self.assertNotIn("seedance-nsfw", self.module.PUBLIC_VIDEO_MODELS)
+
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
         raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2,claude-opus-4-8,seedance-2.0-cl-mini"
 
@@ -149,6 +167,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 ["12", "image 2电商商品图快速通道(1.5K)", "image,openai,ecommerce,1.5k,dragtokens"],
                 ["13", "gpt-image-2-4K", "image,openai"],
                 ["14", "geek2api-image-2", "image,openai,geek2api"],
+                ["15", "seedance-nsfw", "video,seedance"],
             ]
 
         self.module.mysql = fake_mysql
@@ -176,6 +195,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("gpt-image-2-4K", profiles["codex"])
         self.assertIn("特价 image-2", profiles["image"])
         self.assertNotIn("geek2api-image-2", profiles["image"])
+        self.assertNotIn("seedance-nsfw", profiles["video"])
 
     def test_disabled_image2_ability_pairs_are_not_synced(self) -> None:
         self.assertTrue(self.module.is_disabled_ability_pair("12", "gpt-image-2-4K"))
@@ -211,9 +231,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 return [
                     ["31", "gpt-5.5", "0", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAG, "discount"],
                     ["21", "gpt-5.5", "0", "100", "stable", "default,internal"],
+                    ["7", "grok-video-super-720p", "15", "100", "xingren-grok-video", "default,internal"],
                 ]
             if "SELECT model_name FROM models" in query:
-                return [["gpt-5.5"]]
+                return [["gpt-5.5"], ["grok-video-super-720p"]]
             return []
 
         self.module.active_groups = lambda: ["default", "internal", "discount"]
@@ -229,6 +250,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("'discount', 'gpt-5.5', 21", sql)
         self.assertIn("'default', 'gpt-5.5', 21", sql)
         self.assertIn("'internal', 'gpt-5.5', 21", sql)
+        self.assertIn("'default', 'grok-video-super-720p', 7", sql)
+        self.assertIn("'internal', 'grok-video-super-720p', 7", sql)
+        self.assertNotIn("'discount', 'grok-video-super-720p', 7", sql)
         self.assertIn("FIND_IN_SET(ability.model", sql)
         self.assertNotIn("INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) VALUES", sql)
         self.assertIn("FROM channels AS current_channel", sql)
@@ -242,6 +266,68 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
         self.assertIn("REGEXP BINARY", sql)
         self.assertGreater(sql.index("UPDATE abilities SET enabled = 0"), sql.rindex("ON DUPLICATE KEY UPDATE"))
+
+    def test_ensure_public_video_models_restores_only_callable_models(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_public_video_models()
+
+        sql = "\n".join(captured)
+        for model in self.module.PUBLIC_VIDEO_MODELS:
+            self.assertIn(model, sql)
+        self.assertIn("status = 1", sql)
+        self.assertIn("deleted_at = NULL", sql)
+        self.assertIn("models = 'seedance-2.0-cl-mini'", sql)
+        self.assertNotIn("models = 'grok-video-super-720p", sql)
+        self.assertIn("'seedance-2.0'", sql)
+        self.assertIn("UPDATE abilities SET enabled = 0", sql)
+        self.assertNotIn("seedance-nsfw", sql)
+
+    def test_sync_public_video_pricing_keeps_video_models_at_full_price(self) -> None:
+        captured_options: dict[str, dict[str, float]] = {}
+        self.module.parse_json_option = lambda key: {
+            "ModelRatio": {
+                "grok-video-super-720p": 0.05,
+                "seedance-2.0-dj-fast": 0.05,
+                "seedance-2.0-ld-17": 0.05,
+            },
+            "CompletionRatio": {
+                "grok-video-super-720p": 0.05,
+                "seedance-2.0-dj-fast": 0.05,
+                "seedance-2.0-ld-17": 0.05,
+            },
+            "ModelPrice": {"seedance-2.0-cl-mini": 0.05},
+        }[key].copy()
+        self.module.option_value = lambda key: "7.3" if key == "USDExchangeRate" else ""
+        self.module.upsert_json_option = lambda key, values: captured_options.update({key: values})
+
+        self.module.sync_public_video_pricing()
+
+        self.assertEqual(
+            captured_options["ModelPrice"]["grok-video-super-720p"],
+            0.890410958904,
+        )
+        self.assertEqual(
+            captured_options["ModelPrice"]["seedance-2.0-dj-fast"],
+            0.022191780822,
+        )
+        self.assertEqual(
+            captured_options["ModelPrice"]["seedance-2.0-ld-17"],
+            0.887671232877,
+        )
+        for model in self.module.PUBLIC_VIDEO_FIXED_PRICES_CNY:
+            self.assertNotIn(model, captured_options["ModelRatio"])
+            self.assertNotIn(model, captured_options["CompletionRatio"])
+        self.assertNotIn("seedance-2.0-cl-mini", captured_options["ModelPrice"])
+        self.assertEqual(
+            captured_options["ModelRatio"]["seedance-2.0-cl-mini"],
+            0.880273972603,
+        )
+        self.assertEqual(
+            captured_options["CompletionRatio"]["seedance-2.0-cl-mini"],
+            1.642857142857,
+        )
 
     def test_sync_abilities_fails_closed_for_discount_channel_with_extra_model(self) -> None:
         captured: list[str] = []

@@ -446,9 +446,11 @@ const VIDEO_REFERENCE_ACCEPT = [
   ...VIDEO_VIDEO_TYPES,
   ...VIDEO_AUDIO_TYPES,
 ].join(',');
+const GROK_VIDEO_PRICE_PER_CALL = 6.5;
 const SEEDANCE_DJ_FAST_PRICE_PER_SECOND = 0.162;
 const SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M = 12.852;
 const SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M = 21.114;
+const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
 const SEEDANCE_EXTENDED_VIDEO_DURATIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 const PUBLIC_SEEDANCE_VIDEO_MODELS = [
   'seedance-2.0-cl-mini',
@@ -707,6 +709,19 @@ function googleImageEditSizeFor(aspectRatio, imageSize, modelValue) {
 
 const VIDEO_MODELS = [
   {
+    value: 'grok-video-super-720p',
+    label: 'Grok Video',
+    badge: '720P',
+    sizes: ['1280x720', '720x1280'],
+    durations: [5, 10, 15],
+    defaultSize: '1280x720',
+    defaultDuration: 15,
+    defaultFps: 24,
+    billingLabel: '按次计费',
+    priceLabel: `¥${GROK_VIDEO_PRICE_PER_CALL.toFixed(2)}/次`,
+    hint: '固定 ¥6.50/次；支持 5/10/15 秒，建议生成 15 秒。',
+  },
+  {
     value: 'seedance-2.0-dj-fast',
     label: 'Seedance 2.0 DJ Fast',
     badge: '豆包',
@@ -739,6 +754,21 @@ const VIDEO_MODELS = [
     billingLabel: '按 token 计费',
     priceLabel: `输入含视频 ¥${SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M.toFixed(3)}/1M｜输出 ¥${SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M.toFixed(3)}/1M`,
     hint: `支持图片参考，也可传 1 个视频参考；输入含视频 ¥${SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M.toFixed(3)}/1M tokens，输出 ¥${SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M.toFixed(3)}/1M tokens。`,
+  },
+  {
+    value: 'seedance-2.0-ld-17',
+    label: 'Seedance 2.0 LD-17',
+    badge: '全能',
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultSize: '1280x720',
+    defaultDuration: 8,
+    defaultFps: 24,
+    referenceLimits: { image: 9, video: 3, audio: 3 },
+    supportsFace: true,
+    billingLabel: '按次计费',
+    priceLabel: `¥${SEEDANCE_LD17_PRICE_PER_CALL.toFixed(2)}/次`,
+    hint: '固定 ¥6.48/次；支持 5-15 秒，可使用 9 图 / 3 视频 / 3 音频参考。',
   },
   {
     value: 'seedance-nsfw',
