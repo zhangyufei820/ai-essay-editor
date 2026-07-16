@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestDirectVideoModelsUseGenerationEndpoint(t *testing.T) {
+func TestNewVideoModelsUseVideosEndpoint(t *testing.T) {
 	adaptor := TaskAdaptor{baseURL: "https://provider.test"}
 	for _, modelName := range []string{seedanceSD2FastUpstreamModel, grok15VideoUpstreamModel} {
 		url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
@@ -20,8 +20,8 @@ func TestDirectVideoModelsUseGenerationEndpoint(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if url != "https://provider.test/api/v1/video/generations" {
-			t.Fatalf("url = %q, want direct generation endpoint", url)
+		if url != "https://provider.test/v1/videos" {
+			t.Fatalf("url = %q, want videos endpoint", url)
 		}
 	}
 }

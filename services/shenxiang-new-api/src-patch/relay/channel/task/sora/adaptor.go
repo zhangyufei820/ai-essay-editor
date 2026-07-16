@@ -300,8 +300,8 @@ func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, erro
 	if isOfficialSeedanceReferencesModel(info.UpstreamModelName) {
 		return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
 	}
-	if isDirectVideoGenerationModel(info.UpstreamModelName) {
-		return fmt.Sprintf("%s/api/v1/video/generations", a.baseURL), nil
+	if usesVideosEndpoint(info.UpstreamModelName) {
+		return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
 	}
 	if isSeedanceVideoModel(info.UpstreamModelName) {
 		return fmt.Sprintf("%s/api/v1/video/generations", a.baseURL), nil
@@ -422,7 +422,7 @@ func isGrokVideoModel(modelName string) bool {
 	return strings.Contains(modelName, "grok") && strings.Contains(modelName, "video")
 }
 
-func isDirectVideoGenerationModel(modelName string) bool {
+func usesVideosEndpoint(modelName string) bool {
 	switch strings.ToLower(strings.TrimSpace(modelName)) {
 	case seedanceSD2FastPublicModel, seedanceSD2FastUpstreamModel, grok15VideoPublicModel, grok15VideoUpstreamModel:
 		return true
