@@ -405,6 +405,9 @@ func normalizePlaygroundImageTaskRequest(imageReq *dto.ImageRequest, payload map
 	if normalizePlaygroundImageTaskModel(imageReq, payload) {
 		changed = true
 	}
+	if normalizePlaygroundImageTaskResponseFormat(imageReq, payload) {
+		changed = true
+	}
 	if normalizePlaygroundImageTaskCount(imageReq, payload) {
 		changed = true
 	}
@@ -459,6 +462,18 @@ func normalizePlaygroundImageTaskModel(imageReq *dto.ImageRequest, payload map[s
 	}
 	imageReq.Model = normalized
 	payload["model"] = normalized
+	return true
+}
+
+func normalizePlaygroundImageTaskResponseFormat(imageReq *dto.ImageRequest, payload map[string]interface{}) bool {
+	if imageReq == nil || payload == nil || !strings.EqualFold(strings.TrimSpace(imageReq.Model), "grok-imagine-image") {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(imageReq.ResponseFormat), "b64_json") {
+		return false
+	}
+	imageReq.ResponseFormat = "b64_json"
+	payload["response_format"] = "b64_json"
 	return true
 }
 

@@ -55,6 +55,34 @@ func TestNormalizePlaygroundImageTaskPayloadAddsGeminiImageConfig(t *testing.T) 
 	require.Equal(t, "2K", imageConfig["image_size"])
 }
 
+func TestNormalizePlaygroundImageTaskPayloadForcesGrokBase64Response(t *testing.T) {
+	raw := []byte(`{"model":"grok-imagine-image","prompt":"test","response_format":"url"}`)
+	request := dto.ImageRequest{
+		Model:          "grok-imagine-image",
+		Prompt:         "test",
+		ResponseFormat: "url",
+	}
+
+	normalized, changed := normalizePlaygroundImageTaskPayload(raw, &request)
+	require.True(t, changed)
+	require.Equal(t, "b64_json", request.ResponseFormat)
+	require.JSONEq(t, `{"model":"grok-imagine-image","prompt":"test","response_format":"b64_json"}`, string(normalized))
+}
+
+func TestNormalizePlaygroundImageTaskPayloadKeepsOtherModelResponseFormat(t *testing.T) {
+	raw := []byte(`{"model":"banana-2","prompt":"test","response_format":"url"}`)
+	request := dto.ImageRequest{
+		Model:          "banana-2",
+		Prompt:         "test",
+		ResponseFormat: "url",
+	}
+
+	normalized, changed := normalizePlaygroundImageTaskPayload(raw, &request)
+	require.False(t, changed)
+	require.Nil(t, normalized)
+	require.Equal(t, "url", request.ResponseFormat)
+}
+
 func TestNormalizePlaygroundImageTaskPayloadConvertsStringN(t *testing.T) {
 	raw := []byte(`{
 		"model":"gpt-image-2-4K",
