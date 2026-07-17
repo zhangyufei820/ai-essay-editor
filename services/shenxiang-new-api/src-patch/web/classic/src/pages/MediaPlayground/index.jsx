@@ -763,11 +763,10 @@ const VIDEO_MODELS = [
     defaultDuration: 6,
     defaultFps: 24,
     referenceLimits: { image: 1, video: 0, audio: 0 },
-    workflows: ['image'],
-    requiresImage: true,
+    workflows: ['text', 'image'],
     billingLabel: '按次计费',
     priceLabel: `¥${GROK_VIDEO_15_PRICE_PER_CALL.toFixed(2)}/次`,
-    hint: '固定 ¥0.20/次；固定 720P，仅支持 6/10 秒图生视频；必须上传 1 张图片，不支持视频/音频参考；人脸能力未承诺。',
+    hint: '固定 ¥0.20/次；固定 720P，支持 6/10 秒文生视频和图生视频；图生模式可上传 1 张图片，不支持视频/音频参考；人脸能力未承诺。',
   },
   {
     value: 'seedance-2.0-ld-17',
@@ -3965,15 +3964,19 @@ const MediaPlayground = () => {
   async function submitVideo() {
     let payload;
     if (videoModel === 'grok-video-1.5') {
-      const reference = referenceFiles.find((item) => referenceMediaTypeOf(item) === 'image');
-      const file = referenceFileOf(reference);
-      if (!file) throw new Error('Grok Video 1.5 必须上传一张参考图片。');
       payload = new FormData();
       payload.set('model', videoModel);
       payload.set('prompt', prompt.trim());
       payload.set('seconds', String(duration));
       payload.set('size', size);
-      payload.set('input_reference', file);
+      if (videoWorkflow === 'image') {
+        const reference = referenceFiles.find(
+          (item) => referenceMediaTypeOf(item) === 'image',
+        );
+        const file = referenceFileOf(reference);
+        if (!file) throw new Error('图生视频需要上传一张参考图片。');
+        payload.set('input_reference', file);
+      }
     } else {
       payload = await applyVideoReferences({ ...requestPayload });
     }
@@ -4073,12 +4076,6 @@ const MediaPlayground = () => {
       return Toast.error('图像修改需要先上传参考图。');
     if (mode === 'video' && videoWorkflow !== 'text' && referenceFiles.length === 0)
       return Toast.error('图生视频需要先上传首帧或参考素材。');
-    if (mode === 'video' && activeVideoModel.requiresImage) {
-      const counts = videoReferenceCounts(referenceFiles);
-      if (videoWorkflow !== 'image' || counts.image !== 1) {
-        return Toast.error('Grok Video 1.5 必须且只能上传一张参考图片。');
-      }
-    }
     if (mode === 'video' && videoWorkflow !== 'text') {
       const counts = videoReferenceCounts(referenceFiles);
       if (videoWorkflow === 'first-last' && counts.image === 0) {
@@ -4086,6 +4083,9 @@ const MediaPlayground = () => {
       }
       if (videoModel === 'seedance-sd2-fast-720p' && counts.image === 0) {
         return Toast.error('Seedance SD Fast 只支持图片参考，请先上传图片素材。');
+      }
+      if (videoModel === 'grok-video-1.5' && counts.image !== 1) {
+        return Toast.error('Grok Video 1.5 图生模式必须且只能上传一张图片。');
       }
     }
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile)

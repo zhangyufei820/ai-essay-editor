@@ -113,7 +113,7 @@ const PRICING_DISPLAY_OVERRIDES = {
   },
   'grok-video-1.5': {
     display_name: 'Grok Video 1.5',
-    description: '固定人民币 ¥0.20/次，按次计费；固定 720P，仅支持 6/10 秒图生视频；必须上传 1 张图片（最大 20MB），不支持文生视频、视频或音频参考；人脸能力未承诺，不保证。',
+    description: '固定人民币 ¥0.20/次，按次计费；固定 720P，支持 6/10 秒文生视频和图生视频；图生模式可上传 1 张图片（最大 20MB），不支持视频或音频参考；人脸能力未承诺，不保证。',
     fixed_price_label: '¥0.20',
     price_unit_label: '次',
     billing_label: '按次计费',

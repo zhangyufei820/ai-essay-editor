@@ -151,12 +151,28 @@ def test_new_video_payloads_match_public_contracts():
     assert files[0][0] == "input_reference"
 
 
-def test_grok15_video_requires_exactly_one_uploaded_image():
+def test_grok15_video_supports_text_to_video_without_uploaded_image():
     request = WorkspaceRunRequest(
         user_query="让人物缓慢转身。",
         model_role="video_generation",
         model_config={"video_generation": "grok-video-1.5"},
         params={"seconds": 6, "size": "1280x720"},
+    )
+    payload, files = new_catalog_video_request(request, "grok-video-1.5")
+    assert payload["seconds"] == 6
+    assert files == []
+
+
+def test_grok15_video_rejects_more_than_one_uploaded_image():
+    request = WorkspaceRunRequest(
+        user_query="让人物缓慢转身。",
+        model_role="video_generation",
+        model_config={"video_generation": "grok-video-1.5"},
+        params={"seconds": 6, "size": "1280x720"},
+        files=[
+            WorkspaceFile(path="first.png", content="data:image/png;base64,iVBORw0KGgo="),
+            WorkspaceFile(path="second.png", content="data:image/png;base64,iVBORw0KGgo="),
+        ],
     )
     with pytest.raises(MediaGenerationError, match=MEDIA_ERROR_INPUT_UNSUPPORTED):
         new_catalog_video_request(request, "grok-video-1.5")
@@ -193,6 +209,39 @@ def test_grok15_video_posts_multipart_without_provider_fields(monkeypatch):
         "size": "1280x720",
     }
     assert post["kwargs"]["files"][0][0] == "input_reference"
+    assert result.urls == ["https://cdn.test/out.mp4"]
+
+
+def test_grok15_text_to_video_posts_multipart_without_file(monkeypatch):
+    FakeVideoAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeVideoAsyncClient)
+    monkeypatch.setattr("app.media_tools.asyncio.sleep", no_sleep)
+    request = WorkspaceRunRequest(
+        user_query="云层缓慢掠过山谷。",
+        model_role="video_generation",
+        model_config={"video_generation": "grok-video-1.5"},
+        params={"seconds": 10, "size": "720x1280"},
+    )
+
+    result = asyncio.run(
+        generate_video(
+            Settings(new_api_base_url="https://api.example.test/v1"),
+            request,
+            UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+            "grok-video-1.5",
+        )
+    )
+
+    post = FakeVideoAsyncClient.calls[0]
+    assert post["url"] == "https://api.example.test/v1/videos"
+    assert "json" not in post["kwargs"]
+    assert "data" not in post["kwargs"]
+    assert post["kwargs"]["files"] == [
+        ("model", (None, "grok-video-1.5")),
+        ("prompt", (None, "云层缓慢掠过山谷。")),
+        ("seconds", (None, "10")),
+        ("size", (None, "720x1280")),
+    ]
     assert result.urls == ["https://cdn.test/out.mp4"]
 
 

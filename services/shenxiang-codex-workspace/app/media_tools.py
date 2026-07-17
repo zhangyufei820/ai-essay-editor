@@ -885,7 +885,7 @@ def new_catalog_video_request(
         if decoded is None:
             raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
         images.append(decoded)
-    if model == GROK15_VIDEO_MODEL and len(images) != 1:
+    if model == GROK15_VIDEO_MODEL and len(images) > 1:
         raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
     if model == SD2_FAST_VIDEO_MODEL and len(images) > 1:
         raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
@@ -913,7 +913,24 @@ async def generate_new_catalog_video(
     timeout = httpx.Timeout(480.0, connect=10.0, read=480.0, write=30.0)
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            if files:
+            if model == GROK15_VIDEO_MODEL and not files:
+                multipart_fields = [
+                    (
+                        key,
+                        (
+                            None,
+                            str(value).lower() if isinstance(value, bool) else str(value),
+                        ),
+                    )
+                    for key, value in payload.items()
+                    if value is not None
+                ]
+                response = await client.post(
+                    f"{settings.new_api_base_url}/videos",
+                    headers=auth_headers(user.api_key, None),
+                    files=multipart_fields,
+                )
+            elif files:
                 data = {
                     key: str(value).lower() if isinstance(value, bool) else str(value)
                     for key, value in payload.items()

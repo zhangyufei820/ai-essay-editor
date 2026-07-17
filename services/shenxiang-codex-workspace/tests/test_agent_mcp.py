@@ -206,8 +206,9 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
     assert "Seedance 2.0 LD-17（¥6.48/次）" in message
     assert "Seedance SD Fast 720P（¥0.25/秒）" in message
     assert "Grok Video 1.5（¥0.20/次）" in message
-    assert "必须上传 1 张图片" in message
-    assert "不支持文生视频、视频或音频" in message
+    assert "支持文生视频和图生视频" in message
+    assert "可上传 1 张图片" in message
+    assert "不支持视频或音频" in message
     assert "人脸能力未承诺" in message
     assert "最多 9 张图片、3 个视频、3 个音频；支持人脸" in message
     assert "张数：1–4" in message

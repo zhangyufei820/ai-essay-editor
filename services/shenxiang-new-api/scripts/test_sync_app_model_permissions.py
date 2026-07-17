@@ -86,7 +86,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         for expected in ("¥0.25/秒", "720P", "5/10/15", "文生视频", "图生视频", "图片", "不支持视频或音频", "人脸能力未承诺"):
             self.assertIn(expected, sd_description)
-        for expected in ("¥0.20/次", "720P", "6/10", "图生视频", "必须上传 1 张图片", "不支持文生视频", "不支持", "人脸能力未承诺"):
+        for expected in ("¥0.20/次", "720P", "6/10", "文生视频", "图生视频", "可上传 1 张图片", "不支持视频或音频", "人脸能力未承诺"):
             self.assertIn(expected, grok_description)
         combined = f"{sd_description}\n{grok_description}".lower()
         for forbidden in ("smile-ai", "api.smile", "sd2-fast-720p", "grok-imagine-1.5-video", "provider", "supplier", "上游", "渠道"):

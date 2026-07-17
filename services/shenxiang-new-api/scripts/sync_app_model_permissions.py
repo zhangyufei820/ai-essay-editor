@@ -141,7 +141,7 @@ PUBLIC_VIDEO_MODEL_CONFIGS = {
         "vendor_id": 4,
     },
     PUBLIC_GROK15_VIDEO_MODEL: {
-        "description": "Grok Video 1.5｜人民币 ¥0.20/次｜固定 720P，仅支持 6/10 秒图生视频｜必须上传 1 张图片（最大 20MB），不支持文生视频、视频或音频参考｜人脸能力未承诺，不保证",
+        "description": "Grok Video 1.5｜人民币 ¥0.20/次｜固定 720P，支持 6/10 秒文生视频和图生视频｜图生模式可上传 1 张图片（最大 20MB），不支持视频或音频参考｜人脸能力未承诺，不保证",
         "icon": "Grok",
         "tags": "video,grok",
         "vendor_id": 3,

@@ -287,7 +287,7 @@ func validateVideoReferenceFile(fileHeader *multipart.FileHeader) *dto.TaskError
 
 func validateGrok15VideoRequest(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
 	if !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
-		return localVideoValidationError("Grok Video 1.5 必须使用 multipart/form-data 上传一张参考图片。")
+		return localVideoValidationError("Grok Video 1.5 必须使用 multipart/form-data。")
 	}
 	form, err := common.ParseMultipartFormReusable(c)
 	if err != nil {
@@ -311,11 +311,13 @@ func validateGrok15VideoRequest(c *gin.Context, info *relaycommon.RelayInfo) *dt
 	for _, fileHeaders := range form.File {
 		fileCount += len(fileHeaders)
 	}
-	if len(files) != 1 || fileCount != 1 {
-		return localVideoValidationError("Grok Video 1.5 必须且只能上传一张 input_reference 参考图片。")
+	if fileCount != len(files) || len(files) > 1 {
+		return localVideoValidationError("Grok Video 1.5 最多只能上传一张 input_reference 参考图片。")
 	}
-	if taskErr := validateVideoReferenceFile(files[0]); taskErr != nil {
-		return taskErr
+	if len(files) == 1 {
+		if taskErr := validateVideoReferenceFile(files[0]); taskErr != nil {
+			return taskErr
+		}
 	}
 	req := relaycommon.TaskSubmitReq{
 		Prompt:   prompt,

@@ -44,7 +44,7 @@ func newVideoMultipartContext(t *testing.T, fields map[string]string, fileField 
 	return context
 }
 
-func TestValidateGrok15RejectsJSONWithoutUploadedImage(t *testing.T) {
+func TestValidateGrok15RejectsJSONRequest(t *testing.T) {
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())
 	context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(`{
 		"model":"grok-video-1.5",
@@ -67,6 +67,25 @@ func TestValidateGrok15RejectsJSONWithoutUploadedImage(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(taskErr.Message), "provider") || strings.Contains(taskErr.Message, "上游") {
 		t.Fatalf("public validation error leaks provider details: %q", taskErr.Message)
+	}
+}
+
+func TestValidateGrok15AllowsTextToVideoWithoutImage(t *testing.T) {
+	context := newVideoMultipartContext(t, map[string]string{
+		"model":   grok15VideoPublicModel,
+		"prompt":  "A paper plane crosses the sky.",
+		"seconds": "6",
+		"size":    "720x1280",
+	}, "", nil)
+	defer common.CleanupBodyStorage(context)
+
+	taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, &relaycommon.RelayInfo{
+		OriginModelName: grok15VideoPublicModel,
+		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: grok15VideoUpstreamModel},
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+	})
+	if taskErr != nil {
+		t.Fatalf("text-to-video validation failed: %#v", taskErr)
 	}
 }
 
@@ -127,6 +146,48 @@ func TestBuildRequestBodyForGrok15UsesExactMultipartContract(t *testing.T) {
 				t.Fatalf("multipart payload must not contain %q: %#v", forbidden, form.Value)
 			}
 		}
+	}
+}
+
+func TestBuildRequestBodyForGrok15TextToVideoOmitsReference(t *testing.T) {
+	context := newVideoMultipartContext(t, map[string]string{
+		"model":        grok15VideoPublicModel,
+		"prompt":       "A paper plane crosses the sky.",
+		"seconds":      "10",
+		"size":         "720x1280",
+		"duration":     "15",
+		"aspect_ratio": "9:16",
+	}, "", nil)
+	defer common.CleanupBodyStorage(context)
+	info := &relaycommon.RelayInfo{
+		OriginModelName: grok15VideoPublicModel,
+		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: grok15VideoUpstreamModel},
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+	}
+	if taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, info); taskErr != nil {
+		t.Fatalf("text-to-video validation failed: %#v", taskErr)
+	}
+	reader, err := (&TaskAdaptor{}).BuildRequestBody(context, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mediaType, params, err := mime.ParseMediaType(context.GetHeader("Content-Type"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mediaType != "multipart/form-data" {
+		t.Fatalf("Content-Type = %q, want multipart/form-data", mediaType)
+	}
+	form, err := multipart.NewReader(reader, params["boundary"]).ReadForm(1 << 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer form.RemoveAll()
+	if got := form.Value["model"]; len(got) != 1 || got[0] != grok15Video10sUpstreamModel {
+		t.Fatalf("model = %#v, want %q", got, grok15Video10sUpstreamModel)
+	}
+	if len(form.File) != 0 {
+		t.Fatalf("text-to-video files = %#v, want none", form.File)
 	}
 }
 
