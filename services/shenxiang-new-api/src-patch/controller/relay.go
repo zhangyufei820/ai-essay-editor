@@ -1524,6 +1524,12 @@ func isVideoTaskPath(c *gin.Context) bool {
 
 // respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）
 func respondTaskError(c *gin.Context, taskErr *dto.TaskError) {
+	if isVideoTaskPath(c) && !taskErr.LocalError {
+		taskErr.Code = "service_unavailable"
+		taskErr.Message = "视频生成服务暂时不可用，请稍后重试。"
+		taskErr.Data = nil
+		taskErr.StatusCode = http.StatusBadGateway
+	}
 	if taskErr.Code == "gen_relay_info_failed" || taskErr.Code == "get_channel_failed" || types.ContainsProviderDisclosure(taskErr.Code) {
 		taskErr.Code = "service_unavailable"
 	}
