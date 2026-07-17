@@ -6,6 +6,7 @@ import sharp from "sharp"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
+import { resolveDifyUploadRouting } from "@/lib/dify-file-routing"
 import { createRequestId, sanitizeForTrace } from "@/lib/ai-task-trace"
 import { requireUser } from "@/lib/auth/verified-user"
 import { sanitizePublicAiErrorCode } from "@/lib/chat-error-sanitizer"
@@ -284,7 +285,17 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File
     const userId = auth.user!.id
     // 也支持从 formData 获取模型（兼容旧版本）
-    const modelFromForm = formData.get("model") as string | null
+    const modelFromForm = formData.get("model")
+    const uploadRouting = resolveDifyUploadRouting(model || modelFromForm, formData.get("workflowSkillId"))
+    if (!uploadRouting.ok) {
+      return new Response(JSON.stringify({
+        error: "当前批阅工具无效，请刷新页面后重试。",
+        code: "INVALID_WORKFLOW_SKILL",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
+      })
+    }
 
     // ============================================
     // 1. 存在性校验
@@ -361,7 +372,7 @@ export async function POST(request: NextRequest) {
       uploadType: uploadFile.type,
     })
 
-    const targetModel = model || modelFromForm
+    const targetModel = uploadRouting.credentialModel
     const useImageGateway = shouldUseImageGateway(targetModel)
     const targetApiKey = useImageGateway ? "" : getApiKeyForModel(targetModel)
     if (!useImageGateway && !targetApiKey) {
@@ -389,6 +400,7 @@ export async function POST(request: NextRequest) {
           fileName: safeFileName,
           userId,
           model: targetModel,
+          workflowSkill: uploadRouting.workflowSkillId || "none",
           difyFileId,
         })
 

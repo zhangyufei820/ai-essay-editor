@@ -36,6 +36,8 @@ import { hasUsefulOpenClawResult, sanitizeDifyAnswerForModel } from "@/lib/dify-
 import { getSafeUpstreamErrorMessage, sanitizePublicAiError, sanitizePublicAiErrorCode, sanitizePublicAiStatus, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
 import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
+import { buildDifyLocalFileObjects, hasCompleteDifyFileMetadata } from "@/lib/dify-file-routing"
+import { getDifyTerminalFailure } from "@/lib/dify-stream-failure"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
@@ -3384,11 +3386,12 @@ export async function POST(request: NextRequest) {
     if (auth.response) return auth.response
     
     const body = await request.json()
-    const { query, conversation_id, fileIds, inputs, model, imageSize, async_image_task, sessionId, messageId } = body
+    const { query, conversation_id, fileIds, fileAttachments, inputs, model, imageSize, async_image_task, sessionId, messageId } = body
     const workflowSkillId = isWorkflowSkillAgent(body.workflowSkillId) ? body.workflowSkillId : null
     const difyFileIds = Array.isArray(fileIds)
       ? fileIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : []
+    const difyFiles = buildDifyLocalFileObjects(difyFileIds, fileAttachments)
     const fileUrls = pickUrlStrings(body.fileUrls)
 
     const modelPrefix = workflowSkillId || model || "general-chat"
@@ -3527,6 +3530,18 @@ export async function POST(request: NextRequest) {
         })
         return Response.json({ error: "无权访问该会话", code: sanitizePublicAiErrorCode("CHAT_SESSION_FORBIDDEN") }, { status: 403 })
       }
+    }
+
+    if (workflowSkillId && difyFileIds.length > 0 && !hasCompleteDifyFileMetadata(difyFileIds, fileAttachments)) {
+      const message = "附件信息已失效，请重新上传文件后再试。"
+      console.warn(`🚫 [Dify-Chat] 工作流附件缺少类型信息: requestId=${requestId} files=${difyFileIds.length}`)
+      await settlePreflightFailure({
+        stage: "附件信息已失效",
+        errorMessage: message,
+        errorCode: "DIFY_FILE_METADATA_MISSING",
+        metadata: { file_count: difyFileIds.length },
+      })
+      return Response.json({ error: message, code: "FILE_REUPLOAD_REQUIRED" }, { status: 400 })
     }
 
     if (!isDirectImageGatewayRequest && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
@@ -4133,12 +4148,8 @@ export async function POST(request: NextRequest) {
                 console.log(`[Codex Skill] selected=${normalizedCodexSkill?.skillId || "none"} queryInjected=${Boolean(normalizedCodexSkill?.skillId)}`)
             }
 
-            if (!isGptImage2 && difyFileIds.length > 0) {
-                difyRequest.files = difyFileIds.map((id: string) => ({
-                  type: 'image',
-                  transfer_method: 'local_file',
-                  upload_file_id: id
-                } as const))
+            if (!isGptImage2 && difyFiles.length > 0) {
+                difyRequest.files = difyFiles
             }
 
             if (isGptImage2) {
@@ -5077,6 +5088,37 @@ export async function POST(request: NextRequest) {
 	              }
 
 	              // 🔥 收集 Workflow 完成事件的输出文本
+	              if (json.event === "workflow_finished" || json.event === "error") {
+	                const terminalFailure = getDifyTerminalFailure(json)
+	                if (terminalFailure) {
+	                  const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
+	                  workflowNodeFailure = {
+	                    message: terminalFailure.publicMessage,
+	                    code: terminalFailure.code,
+	                  }
+	                  taskCompleted = true
+	                  enqueueSseError(controller, terminalFailure.publicMessage, terminalFailure.code)
+	                  controller.terminate()
+	                  await taskRunCreatePromise.catch((error) => {
+	                    console.warn("[AI Task Trace] create before stream failure failed:", error instanceof Error ? error.message : String(error))
+	                  })
+	                  await updateTaskRun(taskRun.id, {
+	                    status: "failed",
+	                    stage: "任务处理失败",
+	                    progress: 100,
+	                    workflowRunId,
+	                    errorMessage: terminalFailure.publicMessage,
+	                    errorCode: terminalFailure.code,
+	                    sanitizedError: sanitizeForTrace({ error: terminalFailure.rawMessage }) as Record<string, unknown>,
+	                    metadata: {
+	                      ...initialTaskMetadata,
+	                      failure_phase: "stream",
+	                    },
+	                  })
+	                  return
+	                }
+	              }
+
 	              if (json.event === "workflow_finished") {
 	                const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
 	                if (json.data?.outputs) {

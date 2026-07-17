@@ -7,13 +7,15 @@
 // 公共类型
 // ============================================================
 
+export type DifyFileType = "image" | "document" | "audio" | "video" | "custom"
+
 /** Dify 文件对象（用于 Chat API attachments） */
 export type DifyFileObject = {
-  type: "image"
+  type: DifyFileType
   transfer_method: "local_file"
   upload_file_id: string
 } | {
-  type: "image"
+  type: DifyFileType
   transfer_method: "remote_url"
   url: string
 }

@@ -2276,6 +2276,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             const formData = new FormData();
             formData.append("file", fileToUpload);
             formData.append("user", userId)
+            if (workflowSkillId) {
+              formData.append("workflowSkillId", workflowSkillId)
+            }
 
             const res = await fetch("/api/dify-upload", {
               method: "POST",
@@ -2297,6 +2300,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             const data = await res.json()
             const gatewayUrl = data.gatewayUrl || data.data?.gateway_url
             const modelUrl = data.modelUrl || data.data?.model_url || data.data?.url || gatewayUrl
+            const resolvedMimeType = data.data?.content_type || fileToUpload.type
 
             // 🔥 更新进度
             setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
@@ -2305,7 +2309,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 if (isUploadedImageFile({ name: fileToUpload.name, type: fileToUpload.type })) {
                     resolve({
                         name: fileToUpload.name,
-                        type: fileToUpload.type,
+                        type: resolvedMimeType,
                         size: fileToUpload.size,
                         data: modelUrl || "",
                         difyFileId: data.id,
@@ -2317,7 +2321,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 } else {
                     resolve({
                         name: fileToUpload.name,
-                        type: fileToUpload.type,
+                        type: resolvedMimeType,
                         size: fileToUpload.size,
                         data: data.id ? `dify-file://${data.id}` : "",
                         difyFileId: data.id,
@@ -2698,7 +2702,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       )
     }
     try {
-        const fileIds = activeFiles.map(f => f.difyFileId).filter(Boolean)
+        const fileAttachments = activeFiles.flatMap((file) => file.difyFileId
+          ? [{ id: file.difyFileId, mimeType: file.type }]
+          : [])
+        const fileIds = fileAttachments.map((file) => file.id)
         const fileUrls = activeFiles
           .filter(isUploadedImageFile)
           .map((file) => file.modelUrl || (/^https?:\/\//.test(file.data) ? file.data : "") || file.gatewayUrl || "")
@@ -2738,6 +2745,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               } : {
 	              query: isWordCardRequest ? vocabUserMessage : userMsg.content,
               fileIds,
+              fileAttachments,
               fileUrls,
               conversation_id: difyConversationIdRef.current,
 	              model: selectedModel,
