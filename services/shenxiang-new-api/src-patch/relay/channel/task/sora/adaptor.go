@@ -259,6 +259,9 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	if isSD2FastVideoModel(info.OriginModelName) || isSD2FastVideoModel(info.UpstreamModelName) {
 		return validateSD2FastVideoRequest(c, info)
 	}
+	if isSeedanceLD17Model(info.OriginModelName) || isSeedanceLD17Model(info.UpstreamModelName) {
+		return validateSeedanceLD17VideoRequest(c, info)
+	}
 	return relaycommon.ValidateMultipartDirect(c, info)
 }
 
@@ -372,6 +375,44 @@ func validateSD2FastVideoRequest(c *gin.Context, info *relaycommon.RelayInfo) *d
 		}
 	}
 	c.Set("task_request", req)
+	return nil
+}
+
+func validateSeedanceLD17VideoRequest(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
+	if taskErr := relaycommon.ValidateMultipartDirect(c, info); taskErr != nil {
+		return taskErr
+	}
+	if !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "application/json") {
+		return localVideoValidationError("Seedance LD-17 请使用 JSON 格式提交参考素材。")
+	}
+
+	var bodyMap map[string]interface{}
+	if err := common.UnmarshalBodyReusable(c, &bodyMap); err != nil {
+		return localVideoValidationError("视频请求格式无效，请重新提交。")
+	}
+	duration := 0
+	for _, key := range []string{"duration", "seconds"} {
+		if parsed, ok := integerFromAny(bodyMap[key]); ok {
+			duration = parsed
+			break
+		}
+	}
+	if duration != 0 && (duration < 4 || duration > 15) {
+		return localVideoValidationError("Seedance LD-17 的 duration 仅支持 4 到 15 秒。")
+	}
+
+	references := normalizeSeedanceVideoReferences(bodyMap, mapFromAny(bodyMap["metadata"]), "image", "video", "audio")
+	counts := map[string]int{"image": 0, "video": 0, "audio": 0}
+	for _, reference := range references {
+		counts[reference.mediaType]++
+	}
+	if counts["image"]+counts["video"] == 0 {
+		return localVideoValidationError("Seedance LD-17 需要至少一张图片或一个视频参考素材。")
+	}
+	if counts["image"] > 9 || counts["video"] > 3 || counts["audio"] > 3 || len(references) > 12 {
+		return localVideoValidationError("Seedance LD-17 最多支持 9 张图片、3 个视频、3 个音频，且素材总数不能超过 12 个。")
+	}
+	info.Action = constant.TaskActionGenerate
 	return nil
 }
 
@@ -1246,6 +1287,15 @@ func seedanceVideoDuration(bodyMap map[string]interface{}, modelName string) int
 			return 15
 		}
 	}
+	if isSeedanceLD17Model(modelName) {
+		if value < 4 {
+			return 4
+		}
+		if value > 15 {
+			return 15
+		}
+		return value
+	}
 	if value < 5 {
 		return 5
 	}
@@ -1318,6 +1368,9 @@ func seedanceVideoResolution(bodyMap map[string]interface{}) string {
 func seedanceOfficialResolutionForModel(bodyMap map[string]interface{}, modelName string) string {
 	if strings.EqualFold(strings.TrimSpace(modelName), "seedance-2.0-dj-fast") {
 		return "720P"
+	}
+	if isSeedanceLD17Model(modelName) {
+		return "720p"
 	}
 	return ""
 }
@@ -1394,6 +1447,10 @@ func normalizeSeedanceOfficialReferences(bodyMap, metadata map[string]interface{
 		maxVideos = 3
 		maxAudios = 3
 	}
+	maxReferences := maxImages + maxVideos + maxAudios
+	if isLD17 {
+		maxReferences = 12
+	}
 
 	allowed := map[string]bool{"image": true}
 	if allowVideo {
@@ -1411,6 +1468,9 @@ func normalizeSeedanceOfficialReferences(bodyMap, metadata map[string]interface{
 	result := make([]map[string]interface{}, 0, maxImages+maxVideos+maxAudios)
 	for _, reference := range rawReferences {
 		if !allowed[reference.mediaType] || reference.url == "" {
+			continue
+		}
+		if len(result) >= maxReferences {
 			continue
 		}
 		key := reference.mediaType + "\x00" + reference.url

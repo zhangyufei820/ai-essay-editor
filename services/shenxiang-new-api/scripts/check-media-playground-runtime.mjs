@@ -23,12 +23,18 @@ const requiredBundleMarkers = [
   'public_reference',
   'reverse_prompt_upstream_url',
   'upstream_url',
+  'mp-video-preview-modal',
+  '点击播放后放大',
 ]
 
 const requiredBundlePatterns = [
   {
     label: 'Grok Video 1.5 text and image workflows',
     pattern: /value:\s*["']grok-video-1\.5["'][\s\S]{0,1200}?workflows:\s*\[["']text["'],["']image["']\]/,
+  },
+  {
+    label: 'Seedance LD-17 WC-B media constraints',
+    pattern: /value:\s*["']seedance-2\.0-ld-17["'][\s\S]{0,1400}?referenceMaxFiles:\s*12[\s\S]{0,400}?workflows:\s*\[["']image["']\]/,
   },
 ]
 

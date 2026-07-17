@@ -773,15 +773,17 @@ const VIDEO_MODELS = [
     label: 'Seedance 2.0 LD-17',
     badge: '全能',
     sizes: ['1280x720', '720x1280', '1024x1024'],
-    durations: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultSize: '1280x720',
     defaultDuration: 8,
     defaultFps: 24,
     referenceLimits: { image: 9, video: 3, audio: 3 },
+    referenceMaxFiles: 12,
+    workflows: ['image'],
     supportsFace: true,
     billingLabel: '按次计费',
     priceLabel: `¥${SEEDANCE_LD17_PRICE_PER_CALL.toFixed(2)}/次`,
-    hint: '固定 ¥6.48/次；支持 5-15 秒，可使用 9 图 / 3 视频 / 3 音频参考。',
+    hint: '固定 ¥6.48/次；支持 4-15 秒和真人素材；需上传图片或视频，可附加音频；最多 9 图 / 3 视频 / 3 音频，总素材不超过 12 个。',
   },
   {
     value: 'seedance-nsfw',
@@ -1576,10 +1578,14 @@ function videoReferencePolicy(model, options = {}) {
   const allowedTypes = Object.entries(limits)
     .filter(([, limit]) => Number(limit) > 0)
     .map(([type]) => type);
-  const maxFiles = allowedTypes.reduce(
+  const typeLimitTotal = allowedTypes.reduce(
     (sum, type) => sum + Math.max(0, Number(limits[type]) || 0),
     0,
   );
+  const configuredMaxFiles = Math.max(0, Number(model?.referenceMaxFiles) || 0);
+  const maxFiles = configuredMaxFiles
+    ? Math.min(typeLimitTotal, configuredMaxFiles)
+    : typeLimitTotal;
   const typeLabel = {
     image: '图片',
     video: '视频',
@@ -1619,11 +1625,14 @@ function videoReferenceCounts(files) {
 
 function filterReferenceItemsByPolicy(items, policy) {
   const counts = { image: 0, video: 0, audio: 0 };
+  let total = 0;
   return items.filter((item) => {
     const type = referenceMediaTypeOf(item);
     if (!policy.allowedTypes.includes(type)) return false;
     if (counts[type] >= (policy.limits[type] || 0)) return false;
+    if (total >= policy.maxFiles) return false;
     counts[type] += 1;
+    total += 1;
     return true;
   });
 }
@@ -2460,6 +2469,7 @@ function ResultCard({
   const [activeUrlIndex, setActiveUrlIndex] = useState(0);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
+  const [videoPreviewOpen, setVideoPreviewOpen] = useState(false);
   const displayUrl = previewUrls[activeUrlIndex] || '';
   const originalUrl = normalizeURL(result.url);
   const cacheFailed = result.cacheStatus === 'failed';
@@ -2484,6 +2494,7 @@ function ResultCard({
     setActiveUrlIndex(0);
     setPreviewFailed(false);
     setPromptExpanded(false);
+    setVideoPreviewOpen(false);
   }, [result.id, result.cachedUrl, result.displayUrl, result.url]);
 
   const handlePreviewError = () => {
@@ -2536,14 +2547,14 @@ function ResultCard({
             src={displayUrl}
             controls
             playsInline
+            aria-label='视频作品，点击播放后放大'
+            onPlay={(event) => {
+              event.currentTarget.pause();
+              setVideoPreviewOpen(true);
+            }}
             onLoadedData={() => setPreviewFailed(false)}
             onError={handlePreviewError}
           />
-        ) : null}
-        {(cacheFailed || usedFallbackPreview) && !previewUnavailable ? (
-          <div className='mp-media-notice'>
-            已使用原始链接预览，请尽快下载保存。
-          </div>
         ) : null}
         {previewUnavailable ? (
           <div className='mp-media-error'>
@@ -2574,6 +2585,11 @@ function ResultCard({
           </div>
         ) : null}
       </div>
+      {(cacheFailed || usedFallbackPreview) && !previewUnavailable ? (
+        <div className='mp-media-notice' role='status'>
+          已使用原始链接预览，请尽快下载保存。
+        </div>
+      ) : null}
       <div className='mp-result-meta'>
         <span>{fileLabel}</span>
         <span>{createdLabel}</span>
@@ -2652,6 +2668,26 @@ function ResultCard({
           </Button>
         </div>
       </div>
+      {result.kind === 'video' && displayUrl ? (
+        <Modal
+          title='放大播放视频'
+          visible={videoPreviewOpen}
+          onCancel={() => setVideoPreviewOpen(false)}
+          footer={null}
+          width={960}
+          className='mp-video-preview-modal'
+          keepDOM={false}
+        >
+          <video
+            key={`${displayUrl}-expanded`}
+            src={displayUrl}
+            controls
+            autoPlay
+            playsInline
+            aria-label='放大播放视频作品'
+          />
+        </Modal>
+      ) : null}
     </div>
   );
 }
@@ -3114,6 +3150,7 @@ const MediaPlayground = () => {
 
     if (mode === 'video') {
       const counts = videoReferenceCounts(referenceFiles);
+      let total = referenceFiles.length;
       const accepted = [];
       let rejected = 0;
       const counters = nextReferenceCounters(referenceFiles);
@@ -3127,7 +3164,12 @@ const MediaPlayground = () => {
           rejected += 1;
           return;
         }
+        if (total >= videoRefPolicy.maxFiles) {
+          rejected += 1;
+          return;
+        }
         counts[type] += 1;
+        total += 1;
         accepted.push(createReferenceItem(file, counters));
       });
       if (accepted.length === 0) {
@@ -4086,6 +4128,9 @@ const MediaPlayground = () => {
       }
       if (videoModel === 'grok-video-1.5' && counts.image !== 1) {
         return Toast.error('Grok Video 1.5 图生模式必须且只能上传一张图片。');
+      }
+      if (videoModel === 'seedance-2.0-ld-17' && counts.image + counts.video === 0) {
+        return Toast.error('Seedance LD-17 需要至少上传一张图片或一个视频素材。');
       }
     }
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile)

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/gin-gonic/gin"
@@ -86,6 +87,55 @@ func TestValidateGrok15AllowsTextToVideoWithoutImage(t *testing.T) {
 	})
 	if taskErr != nil {
 		t.Fatalf("text-to-video validation failed: %#v", taskErr)
+	}
+}
+
+func TestValidateSeedanceLD17RejectsTextOnlyRequest(t *testing.T) {
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(`{
+		"model":"seedance-2.0-ld-17",
+		"prompt":"A paper plane crosses the sky.",
+		"duration":8,
+		"ratio":"16:9"
+	}`))
+	context.Request.Header.Set("Content-Type", "application/json")
+	defer common.CleanupBodyStorage(context)
+
+	taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, &relaycommon.RelayInfo{
+		OriginModelName: seedanceLD17PublicModel,
+		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: seedanceLD17UpstreamModel},
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+	})
+	if taskErr == nil || taskErr.Code != "invalid_request" {
+		t.Fatalf("taskErr = %#v, want local invalid_request", taskErr)
+	}
+	if strings.Contains(strings.ToLower(taskErr.Message), "provider") || strings.Contains(taskErr.Message, "上游") {
+		t.Fatalf("public validation error leaks provider details: %q", taskErr.Message)
+	}
+}
+
+func TestValidateSeedanceLD17AllowsVisualReference(t *testing.T) {
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(`{
+		"model":"seedance-2.0-ld-17",
+		"prompt":"Animate the reference image.",
+		"duration":4,
+		"ratio":"9:16",
+		"references":[{"media_type":"image","role":"reference_image","url":"https://cdn.test/hero.png"}]
+	}`))
+	context.Request.Header.Set("Content-Type", "application/json")
+	defer common.CleanupBodyStorage(context)
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: seedanceLD17PublicModel,
+		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: seedanceLD17UpstreamModel},
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+	}
+	if taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, info); taskErr != nil {
+		t.Fatalf("visual-reference validation failed: %#v", taskErr)
+	}
+	if info.Action != constant.TaskActionGenerate {
+		t.Fatalf("action = %q, want generate", info.Action)
 	}
 }
 
@@ -622,8 +672,8 @@ func TestNormalizeSeedanceLD17KeepsMixedOfficialReferences(t *testing.T) {
 	if got["ratio"] != "4:3" {
 		t.Fatalf("ratio = %#v, want 4:3", got["ratio"])
 	}
-	if _, ok := got["resolution"]; ok {
-		t.Fatalf("LD-17 payload should not forward resolution: %#v", got)
+	if got["resolution"] != "720p" {
+		t.Fatalf("LD-17 resolution = %#v, want 720p", got["resolution"])
 	}
 	refs, ok := got["references"].([]map[string]interface{})
 	if !ok || len(refs) != 3 {
@@ -665,6 +715,9 @@ func TestNormalizeSeedanceLD17UpstreamAliasKeepsOfficialPayload(t *testing.T) {
 	if got["duration"] != 5 || got["ratio"] != "16:9" {
 		t.Fatalf("official LD-17 fields not preserved: %#v", got)
 	}
+	if got["resolution"] != "720p" {
+		t.Fatalf("mapped LD-17 resolution = %#v, want 720p", got["resolution"])
+	}
 	if _, ok := got["seconds"]; ok {
 		t.Fatalf("mapped LD-17 payload should not use generic seconds: %#v", got)
 	}
@@ -674,6 +727,52 @@ func TestNormalizeSeedanceLD17UpstreamAliasKeepsOfficialPayload(t *testing.T) {
 	refs, ok := got["references"].([]map[string]interface{})
 	if !ok || len(refs) != 1 || refs[0]["media_type"] != "image" {
 		t.Fatalf("mapped LD-17 references = %#v", got["references"])
+	}
+}
+
+func TestNormalizeSeedanceLD17PreservesFourSecondDuration(t *testing.T) {
+	got := normalizeSeedanceVideoRequestBody(map[string]interface{}{
+		"model":      seedanceLD17UpstreamModel,
+		"prompt":     "Animate the reference image.",
+		"duration":   float64(4),
+		"ratio":      "9:16",
+		"references": []interface{}{map[string]interface{}{"media_type": "image", "url": "https://cdn.test/hero.png"}},
+	})
+	if got["duration"] != 4 {
+		t.Fatalf("duration = %#v, want 4", got["duration"])
+	}
+}
+
+func TestNormalizeSeedanceLD17CapsReferencesAtTwelve(t *testing.T) {
+	references := make([]interface{}, 0, 15)
+	for index := 0; index < 9; index++ {
+		references = append(references, map[string]interface{}{
+			"media_type": "image",
+			"url":        fmt.Sprintf("https://cdn.test/image-%02d.png", index),
+		})
+	}
+	for index := 0; index < 3; index++ {
+		references = append(references, map[string]interface{}{
+			"media_type": "video",
+			"url":        fmt.Sprintf("https://cdn.test/video-%02d.mp4", index),
+		})
+	}
+	for index := 0; index < 3; index++ {
+		references = append(references, map[string]interface{}{
+			"media_type": "audio",
+			"url":        fmt.Sprintf("https://cdn.test/audio-%02d.mp3", index),
+		})
+	}
+
+	got := normalizeSeedanceVideoRequestBody(map[string]interface{}{
+		"model":      seedanceLD17UpstreamModel,
+		"prompt":     "Use the references.",
+		"duration":   float64(8),
+		"references": references,
+	})
+	normalized, ok := got["references"].([]map[string]interface{})
+	if !ok || len(normalized) != 12 {
+		t.Fatalf("references = %#v, want exactly 12", got["references"])
 	}
 }
 

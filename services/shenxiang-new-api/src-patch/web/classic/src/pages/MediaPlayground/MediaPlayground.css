@@ -1457,10 +1457,7 @@ body[theme-mode='dark'] .mp-page {
 }
 
 .mp-media-notice {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  margin: 8px 12px 0;
   padding: 8px 10px;
   border-radius: 10px;
   color: rgba(238, 251, 247, 0.86);
@@ -1469,6 +1466,19 @@ body[theme-mode='dark'] .mp-page {
   background: rgba(9, 16, 20, 0.76);
   border: 1px solid rgba(83, 222, 184, 0.22);
   backdrop-filter: blur(12px);
+}
+
+.mp-video-preview-modal .semi-modal-body {
+  padding: 0 24px 24px;
+}
+
+.mp-video-preview-modal video {
+  width: 100%;
+  max-height: min(72vh, 720px);
+  display: block;
+  border-radius: 12px;
+  background: #000;
+  object-fit: contain;
 }
 
 .mp-result-meta {
