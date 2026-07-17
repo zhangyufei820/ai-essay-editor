@@ -18,8 +18,6 @@ const requiredBundleMarkers = [
   'imageTaskTerminal',
   'grok-video-super-720p',
   'grok-video-1.5',
-  'seedance-2.0-dj-fast',
-  'seedance-2.0-cl-mini',
   'seedance-2.0-ld-17',
   'seedance-nsfw',
   'public_reference',
