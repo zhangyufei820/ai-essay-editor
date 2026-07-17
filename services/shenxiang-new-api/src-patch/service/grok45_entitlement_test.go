@@ -256,7 +256,7 @@ func TestReconcileManagedGrok45UserTokensCoversEnabledCommonUsersOnly(t *testing
 	require.Zero(t, secondResult.UsersScanned)
 }
 
-func TestAdminSystemTokenKeepsOnlyGrokCrossGroupRetryDisabled(t *testing.T) {
+func TestAdminSystemTokenDisablesCrossGroupRetryForFixedPricingTokens(t *testing.T) {
 	setupGrok45EntitlementTestDB(t)
 	createManagedGrok45Capability(t)
 	createGrok45TestUser(t, AdminSystemTokenUserID, common.RoleRootUser, common.UserStatusEnabled)
@@ -273,5 +273,26 @@ func TestAdminSystemTokenKeepsOnlyGrokCrossGroupRetryDisabled(t *testing.T) {
 	require.True(t, entitled)
 	var codexToken model.Token
 	require.NoError(t, model.DB.Where("user_id = ? AND name = ?", AdminSystemTokenUserID, "星人 Codex 文本令牌").First(&codexToken).Error)
-	require.True(t, codexToken.CrossGroupRetry)
+	require.False(t, codexToken.CrossGroupRetry)
+}
+
+func TestAdminSystemCodexTokenFollowsTextPricingPreference(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	createManagedGrok45Capability(t)
+	createGrok45TestUser(t, AdminSystemTokenUserID, common.RoleRootUser, common.UserStatusEnabled)
+
+	var user model.User
+	require.NoError(t, model.DB.First(&user, AdminSystemTokenUserID).Error)
+	setting := user.GetSetting()
+	setting.TextPricingGroup = model.TextPricingGroupDiscount
+	user.SetSetting(setting)
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("setting", user.Setting).Error)
+
+	_, err := EnsureSystemTokensForUserID(context.Background(), AdminSystemTokenUserID)
+	require.NoError(t, err)
+
+	var codexToken model.Token
+	require.NoError(t, model.DB.Where("user_id = ? AND name = ?", AdminSystemTokenUserID, "星人 Codex 文本令牌").First(&codexToken).Error)
+	require.Equal(t, model.TextPricingGroupDiscount, codexToken.Group)
+	require.False(t, codexToken.CrossGroupRetry)
 }

@@ -40,6 +40,7 @@ func TestSystemTokenProfilesImageModelsDoNotExposeSupplierModel(t *testing.T) {
 
 	require.Contains(t, imageModels, "gpt-image-2-4K")
 	require.Contains(t, imageModels, "特价 image-2")
+	require.Contains(t, imageModels, "官转image 2稳定")
 	require.Contains(t, imageModels, "image 2电商商品图快速通道(1.5K)")
 	require.NotContains(t, imageModels, "geek2api-image-2")
 }
@@ -55,6 +56,7 @@ func TestSystemTokenProfilesCodexTextIncludesPublicImageModels(t *testing.T) {
 
 	require.Contains(t, codexModels, "gpt-5.5")
 	require.Contains(t, codexModels, "特价 image-2")
+	require.Contains(t, codexModels, "官转image 2稳定")
 	require.Contains(t, codexModels, "image 2电商商品图快速通道(1.5K)")
 	require.NotContains(t, codexModels, "gpt-image-2-4K")
 	require.NotContains(t, codexModels, "geek2api-image-2")

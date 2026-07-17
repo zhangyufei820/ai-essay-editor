@@ -42,6 +42,7 @@ function main() {
 
   const classic = readText(classicPath)
   const gptImage2Block = modelBlock(classic, 'gpt-image-2-4K')
+  const stableImage2Block = modelBlock(classic, '官转image 2稳定')
   const discountImage2Block = modelBlock(classic, '特价 image-2')
   const banana2Block = modelBlock(classic, 'banana-2')
   const geminiProBlock = modelBlock(classic, 'gemini-3-pro-image-preview')
@@ -116,12 +117,26 @@ function main() {
     }
   }
 
+  if (!stableImage2Block) {
+    errors.push('classic media playground must expose public model 官转image 2稳定')
+  } else {
+    if (!stableImage2Block.includes('resolutions: GPT_IMAGE_2_RESOLUTIONS')) {
+      errors.push('官转image 2稳定 must use GPT_IMAGE_2_RESOLUTIONS')
+    }
+    if (!stableImage2Block.includes("priceLabel: '¥0.135/张'")) {
+      errors.push('官转image 2稳定 must show ¥0.135 fixed price')
+    }
+  }
+
   if (gptImage2Block.includes('GOOGLE_GEMINI_31_FLASH_IMAGE_RESOLUTIONS')) {
     errors.push('gpt-image-2-4K must not expose Gemini 512 resolution choices')
   }
 
   if (classic.includes('geek2api-image-2')) {
     errors.push('classic media playground must not expose supplier model geek2api-image-2')
+  }
+  if (classic.includes('internal-image2-stable-v1')) {
+    errors.push('classic media playground must not expose internal stable image model')
   }
 
   if (!banana2Block.includes('resolutions: GOOGLE_GEMINI_31_FLASH_IMAGE_RESOLUTIONS')) {

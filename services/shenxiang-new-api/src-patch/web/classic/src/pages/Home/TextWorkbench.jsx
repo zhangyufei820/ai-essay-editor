@@ -57,7 +57,8 @@ import {
   getDefaultReasoningEffort,
   getDefaultTextModel,
   getReasoningEffortOptions,
-  getTextModelGroup,
+  getTextModelGroupForPreference,
+  isTextPricingModel,
   toTextModelOptions,
 } from './textModelFilter';
 import { useThemePreference } from '../../context/Theme';
@@ -131,8 +132,6 @@ const DEFAULT_GROUP = 'default';
 const DISCOUNT_PRICING_LABEL = '特价 0.05x';
 const DEFAULT_PRICING_LABEL = '原价 1x';
 const DISCOUNT_FALLBACK_HEADER = 'X-Aiphui-Discount-Fallback';
-const DISCOUNT_FALLBACK_REQUEST_HEADER =
-  'X-Aiphui-Discount-Fallback-Request';
 const PRICING_GROUP_HEADER = 'X-Aiphui-Pricing-Group';
 const DISCOUNT_FALLBACK_MAX_COMPLETION_TOKENS = 4096;
 
@@ -531,37 +530,6 @@ async function readResponseError(response) {
   return error;
 }
 
-function isExplicitDiscountGroupAccessDenied(error) {
-  return /(?:无权访问该分组|無權存取該分組|no permission to access this group)/i.test(
-    String(error?.message || ''),
-  );
-}
-
-function shouldFallbackDiscountRequest(error, { signal, hasVisibleOutput }) {
-  if (
-    signal?.aborted ||
-    hasVisibleOutput ||
-    error?.fallbackAttempted ||
-    error?.pricingGroup === DEFAULT_GROUP
-  ) {
-    return false;
-  }
-
-  const status = Number(error?.status || error?.response?.status || 0);
-  const code = String(error?.code || error?.data?.error?.code || '')
-    .trim()
-    .toLowerCase();
-  if (status === 503 && code === 'model_not_found') return true;
-  // Legacy distributor responses may omit access_denied, so the exact localized group-denial text remains mandatory.
-  const isGroupAccessCode =
-    !code || code === 'access_denied' || code === 'new_api_error';
-  return (
-    status === 403 &&
-    isGroupAccessCode &&
-    isExplicitDiscountGroupAccessDenied(error)
-  );
-}
-
 async function readStreamingResponse(response, onText) {
   const contentType = response.headers.get('content-type') || '';
   if (!response.body || contentType.includes('application/json')) {
@@ -822,6 +790,7 @@ const TextWorkbench = ({ isMobile }) => {
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelError, setModelError] = useState('');
+  const [textPricingGroup, setTextPricingGroup] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
   const [reasoningEffort, setReasoningEffort] = useState('');
   const [input, setInput] = useState('');
@@ -842,7 +811,10 @@ const TextWorkbench = ({ isMobile }) => {
   const displayName = user?.username || user?.display_name || user?.email || '已登录用户';
   const modelOptions = useMemo(() => toTextModelOptions(models), [models]);
   const activeModel = selectedModel || getDefaultTextModel(models);
-  const activeModelGroup = getTextModelGroup(activeModel);
+  const activeModelGroup = getTextModelGroupForPreference(
+    activeModel,
+    textPricingGroup,
+  );
   const reasoningEffortOptions = useMemo(
     () => getReasoningEffortOptions(activeModel),
     [activeModel],
@@ -865,6 +837,29 @@ const TextWorkbench = ({ isMobile }) => {
   useEffect(() => {
     setUser(getStoredUser());
   }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setTextPricingGroup('');
+      return undefined;
+    }
+    let cancelled = false;
+    API.get('/api/user/self')
+      .then((res) => {
+        if (cancelled || !res?.data?.success) return;
+        const nextUser = res.data.data || {};
+        const group = String(nextUser.text_pricing_group || '')
+          .trim()
+          .toLowerCase();
+        if (group === DISCOUNT_GROUP || group === DEFAULT_GROUP) {
+          setTextPricingGroup(group);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn]);
 
   useEffect(
     () => () => {
@@ -1076,7 +1071,32 @@ const TextWorkbench = ({ isMobile }) => {
     appendUserMessage = true,
     assistantMessageId = '',
   }) => {
-    const initialModelGroup = activeModelGroup;
+    let latestTextPricingGroup = textPricingGroup;
+    if (isTextPricingModel(activeModel)) {
+      try {
+        const preferenceResponse = await API.get('/api/user/self');
+        const preference = String(
+          preferenceResponse?.data?.data?.text_pricing_group || '',
+        )
+          .trim()
+          .toLowerCase();
+        if (
+          !preferenceResponse?.data?.success ||
+          (preference !== DISCOUNT_GROUP && preference !== DEFAULT_GROUP)
+        ) {
+          throw new Error('倍率偏好不可用');
+        }
+        latestTextPricingGroup = preference;
+        setTextPricingGroup(preference);
+      } catch {
+        Toast.error('未能同步当前倍率，请刷新页面后重试，已阻止本次请求。');
+        return;
+      }
+    }
+    const initialModelGroup = getTextModelGroupForPreference(
+      activeModel,
+      latestTextPricingGroup,
+    );
     let effectivePricingLabel = getPricingLabel(initialModelGroup);
     let hasVisibleOutput = false;
     let fallbackWarningShown = false;
@@ -1181,15 +1201,10 @@ const TextWorkbench = ({ isMobile }) => {
       };
       if (userId) headers['New-Api-User'] = userId;
 
-      const requestChatResponse = (group, fallbackRequest = false) =>
+      const requestChatResponse = (group) =>
         fetch('/pg/chat/completions', {
           method: 'POST',
-          headers: {
-            ...headers,
-            ...(fallbackRequest
-              ? { [DISCOUNT_FALLBACK_REQUEST_HEADER]: '1' }
-              : {}),
-          },
+          headers,
           credentials: 'same-origin',
           signal: controller.signal,
           body: JSON.stringify({
@@ -1227,26 +1242,6 @@ const TextWorkbench = ({ isMobile }) => {
 
       if (backendUsedFallback) {
         markOriginalPriceFallback();
-      }
-
-      if (
-        responseError &&
-        initialModelGroup === DISCOUNT_GROUP &&
-        shouldFallbackDiscountRequest(responseError, {
-          signal: controller.signal,
-          hasVisibleOutput,
-        })
-      ) {
-        response = await requestChatResponse(DEFAULT_GROUP, true);
-        const frontendFallbackMetadata = getResponsePricingMetadata(response);
-        if (
-          response.ok ||
-          frontendFallbackMetadata.fallbackAttempted ||
-          frontendFallbackMetadata.pricingGroup === DEFAULT_GROUP
-        ) {
-          markOriginalPriceFallback();
-        }
-        responseError = response.ok ? null : await readResponseError(response);
       }
 
       if (responseError) throw responseError;
@@ -1739,8 +1734,11 @@ const TextWorkbench = ({ isMobile }) => {
           </div>
           {activeModelGroup === DISCOUNT_GROUP ? (
             <div className='sx-gpt-message-name' role='note'>
-              OpenAI 特价模型优先按 0.05x；特价通道不可用且尚未输出时自动切换原价
-              1x，回复会标明实际倍率。
+              当前跟随“星人 Codex 文本令牌”：特价 0.05x。若特价通道异常，请在接入设置中手动切换原价 1x。
+            </div>
+          ) : activeModelGroup === DEFAULT_GROUP ? (
+            <div className='sx-gpt-message-name' role='note'>
+              当前跟随“星人 Codex 文本令牌”：原价 1x。
             </div>
           ) : null}
           {activeReasoningEffort ? (

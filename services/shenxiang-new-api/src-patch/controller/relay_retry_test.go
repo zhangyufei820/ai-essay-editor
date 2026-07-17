@@ -93,6 +93,7 @@ func newPlaygroundDiscountFallbackContext() (*gin.Context, *httptest.ResponseRec
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/pg/chat/completions", nil)
+	c.Request.Header.Set(playgroundAutoPricingFallbackHeader, "1")
 	return c, recorder
 }
 
@@ -180,6 +181,12 @@ func TestShouldFallbackPlaygroundDiscountRequiresUnwrittenFirstAttempt(t *testin
 	c, _ := newPlaygroundDiscountFallbackContext()
 	if !shouldFallbackPlaygroundDiscount(c, info, boundedMeta, availabilityErr) {
 		t.Fatal("shouldFallbackPlaygroundDiscount() = false, want true before response output")
+	}
+
+	manualOnly, _ := newPlaygroundDiscountFallbackContext()
+	manualOnly.Request.Header.Del(playgroundAutoPricingFallbackHeader)
+	if shouldFallbackPlaygroundDiscount(manualOnly, info, boundedMeta, availabilityErr) {
+		t.Fatal("shouldFallbackPlaygroundDiscount() = true without explicit auto-fallback opt-in")
 	}
 
 	cWithoutCompletionLimit, _ := newPlaygroundDiscountFallbackContext()

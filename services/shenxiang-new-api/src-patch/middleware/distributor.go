@@ -108,7 +108,15 @@ func Distribute() func(c *gin.Context) {
 						abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidPlayground, map[string]any{"Error": err.Error()}))
 						return
 					}
-					if playgroundRequest.Group != "" {
+					if service.IsTextPricingPreferenceModel(modelRequest.Model) {
+						preferredGroup, preferenceErr := applyPlaygroundTextPricingPreference(c, modelRequest)
+						if preferenceErr != nil {
+							common.SysLog(fmt.Sprintf("text pricing preference lookup failed: user_id=%d error=%v", c.GetInt("id"), preferenceErr))
+							abortWithOpenAiMessage(c, http.StatusInternalServerError, "读取当前倍率失败，请稍后重试")
+							return
+						}
+						usingGroup = preferredGroup
+					} else if playgroundRequest.Group != "" {
 						managedGrok45Entitled := false
 						if strings.TrimSpace(usingGroup) == service.Grok45PricingGroupName ||
 							strings.TrimSpace(playgroundRequest.Group) == service.Grok45PricingGroupName {
@@ -194,6 +202,21 @@ func Distribute() func(c *gin.Context) {
 			service.RecordChannelAffinity(c, channel.Id)
 		}
 	}
+}
+
+func applyPlaygroundTextPricingPreference(c *gin.Context, modelRequest *ModelRequest) (string, error) {
+	if c == nil || modelRequest == nil || !service.IsTextPricingPreferenceModel(modelRequest.Model) {
+		return "", errors.New("text pricing preference context is invalid")
+	}
+	preferredGroup, err := model.ResolveUserTextPricingGroup(c.GetInt("id"))
+	if err != nil {
+		return "", err
+	}
+	modelRequest.Group = preferredGroup
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, preferredGroup)
+	common.SetContextKey(c, constant.ContextKeyTokenGroup, preferredGroup)
+	c.Header("X-Aiphui-Pricing-Group", preferredGroup)
+	return preferredGroup, nil
 }
 
 func canUsePlaygroundGroup(usingGroup, requestedGroup, modelName string, managedGrok45Entitled bool) bool {

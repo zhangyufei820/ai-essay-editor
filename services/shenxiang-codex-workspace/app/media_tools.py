@@ -297,12 +297,15 @@ _ECOMMERCE_BANANA_IMAGE_CAPABILITY = ImageModelCapability(
 IMAGE_MODEL_CAPABILITIES = {
     "gpt-image-2-4K": _GPT_IMAGE_CAPABILITY,
     "geek2api-image-2": _DISCOUNT_IMAGE_CAPABILITY,
+    "internal-image2-stable-v1": _GPT_IMAGE_CAPABILITY,
     "grok-imagine-image": _GROK_IMAGE_CAPABILITY,
     "banana-2": _BANANA_IMAGE_CAPABILITY,
     "gemini-3-pro-image-preview": _GEMINI_IMAGE_CAPABILITY,
     "image 2电商商品图快速通道(1.5K)": _ECOMMERCE_IMAGE_CAPABILITY,
     "ecommerce-banana-2": _ECOMMERCE_BANANA_IMAGE_CAPABILITY,
 }
+
+GENERATION_ONLY_IMAGE_MODELS = frozenset({"internal-image2-stable-v1"})
 
 VIDEO_MODEL_CAPABILITIES = {
     "grok-video-super-720p": VideoModelCapability(
@@ -782,6 +785,8 @@ async def generate_image(
     payload["model"] = public_request_model_name(model, "image")
     image_inputs, mask_input = split_image_inputs_from_files(request)
     endpoint = f"{settings.new_api_base_url}/images/generations"
+    if image_inputs and model in GENERATION_ONLY_IMAGE_MODELS:
+        raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
     if mask_input and not image_inputs:
         raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
     if image_inputs:

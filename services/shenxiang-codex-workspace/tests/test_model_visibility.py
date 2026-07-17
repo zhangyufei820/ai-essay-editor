@@ -109,6 +109,7 @@ def test_default_image_models_include_every_verified_public_model(monkeypatch) -
     expected = (
         "gpt-image-2-4K",
         "geek2api-image-2",
+        "官转image 2稳定",
         "grok-imagine-image",
         "banana-2",
         "gemini-3-pro-image-preview",
@@ -366,7 +367,7 @@ def test_create_general_token_normalizes_nonpublic_user_group() -> None:
 
     assert asyncio.run(run()) == 46
     assert captured["group"] == "default"
-    assert captured["cross_group_retry"] is True
+    assert captured["cross_group_retry"] is False
 
 
 def test_general_token_keeps_discount_group() -> None:
@@ -375,6 +376,20 @@ def test_general_token_keeps_discount_group() -> None:
     assert client._token_group_for_profile({"group": "discount"}, None) == "discount"
     assert client._token_group_for_profile({"group": "monthly"}, None) == "default"
     assert client._token_group_for_profile({"group": "discount"}, GROK_TOKEN_GROUP) == GROK_TOKEN_GROUP
+
+
+def test_general_token_prefers_synced_text_pricing_group() -> None:
+    client = NewApiClient(Settings())
+
+    assert client._token_group_for_profile(
+        {"group": "default", "text_pricing_group": "discount"}, None
+    ) == "discount"
+    assert client._token_group_for_profile(
+        {"group": "discount", "text_pricing_group": "default"}, None
+    ) == "default"
+    assert client._token_group_for_profile(
+        {"group": "default", "setting": '{"text_pricing_group":"discount"}'}, None
+    ) == "discount"
 
 
 def test_existing_general_token_moves_nonpublic_group_to_default() -> None:
@@ -409,7 +424,7 @@ def test_existing_general_token_moves_nonpublic_group_to_default() -> None:
     asyncio.run(run())
 
     assert captured["group"] == "default"
-    assert captured["cross_group_retry"] is True
+    assert captured["cross_group_retry"] is False
 
 
 def test_existing_grok_token_is_moved_to_dedicated_group() -> None:

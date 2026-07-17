@@ -32,13 +32,21 @@ DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
 DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：支持 1K/2K/4K 输出，人民币 1K ¥0.03、2K ¥0.06、4K ¥0.10/张。"
 DISCOUNT_IMAGE2_TAGS = "image,openai"
 DISCOUNT_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations","image-edit":"/v1/images/edits"}'
+INTERNAL_STABLE_IMAGE2_MODEL = "internal-image2-stable-v1"
+STABLE_IMAGE2_PUBLIC_MODEL = "官转image 2稳定"
+STABLE_IMAGE2_DESCRIPTION = "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.135/张。"
+STABLE_IMAGE2_TAGS = "image,openai"
+STABLE_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
+STABLE_IMAGE2_PRICE_CNY = Decimal("0.135")
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL,
+    INTERNAL_STABLE_IMAGE2_MODEL,
 }
 PUBLIC_ALIAS_BACKING_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL: DISCOUNT_IMAGE2_PUBLIC_MODEL,
+    INTERNAL_STABLE_IMAGE2_MODEL: STABLE_IMAGE2_PUBLIC_MODEL,
 }
 DISCOUNT_TEXT_GROUP = "discount"
 DISCOUNT_TEXT_CHANNEL_TAG = "xingren-discount-text"
@@ -1093,8 +1101,9 @@ def model_lists() -> dict[str, list[str]]:
             append_model("codex", model)
     available_codex_models = set(profiles["codex"]) | set(profiles["image"])
     profiles["codex"] = [model for model in CODEX_ALLOWED_MODELS if model in available_codex_models]
-    if DISCOUNT_IMAGE2_PUBLIC_MODEL not in profiles["image"]:
-        profiles["image"].append(DISCOUNT_IMAGE2_PUBLIC_MODEL)
+    for public_image_model in (DISCOUNT_IMAGE2_PUBLIC_MODEL, STABLE_IMAGE2_PUBLIC_MODEL):
+        if public_image_model not in profiles["image"]:
+            profiles["image"].append(public_image_model)
     for model in PUBLIC_VIDEO_MODELS:
         if model not in profiles["video"]:
             profiles["video"].append(model)
@@ -1247,6 +1256,73 @@ def ensure_discount_image2_backing_model() -> None:
         "COMMIT;",
     ]
     mysql_exec("\n".join(statements))
+
+
+def ensure_stable_image2_backing_model() -> None:
+    statements = [
+        "START TRANSACTION;",
+        "SET @now := UNIX_TIMESTAMP();",
+        "SET @stable_image2_model := "
+        + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+        + " COLLATE utf8mb4_unicode_ci;",
+        "SET @keep_model_id := ("
+        "SELECT MIN(id) FROM models WHERE model_name = @stable_image2_model AND deleted_at IS NULL"
+        ");",
+        "SET @keep_model_id := IFNULL(@keep_model_id, ("
+        "SELECT MIN(id) FROM models WHERE model_name = @stable_image2_model"
+        "));",
+        "INSERT INTO models "
+        "(model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) "
+        "SELECT "
+        + ", ".join(
+            [
+                "@stable_image2_model",
+                sql_quote(STABLE_IMAGE2_DESCRIPTION),
+                sql_quote("OpenAI"),
+                sql_quote(STABLE_IMAGE2_TAGS),
+                "1",
+                sql_quote(STABLE_IMAGE2_ENDPOINTS),
+                "1",
+                "0",
+                "@now",
+                "@now",
+                "0",
+            ]
+        )
+        + " WHERE @keep_model_id IS NULL;",
+        "SET @keep_model_id := IFNULL(@keep_model_id, LAST_INSERT_ID());",
+        "UPDATE models SET description = "
+        + sql_quote(STABLE_IMAGE2_DESCRIPTION)
+        + ", icon = "
+        + sql_quote("OpenAI")
+        + ", tags = "
+        + sql_quote(STABLE_IMAGE2_TAGS)
+        + ", vendor_id = 1, endpoints = "
+        + sql_quote(STABLE_IMAGE2_ENDPOINTS)
+        + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
+        "WHERE id = @keep_model_id;",
+        "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+        "WHERE model_name = @stable_image2_model AND id <> @keep_model_id;",
+        "COMMIT;",
+    ]
+    mysql_exec("\n".join(statements))
+
+
+def sync_public_image_pricing() -> None:
+    model_ratios = parse_json_option("ModelRatio")
+    completion_ratios = parse_json_option("CompletionRatio")
+    model_prices = parse_json_option("ModelPrice")
+    exchange_rate = usd_exchange_rate()
+
+    model_prices[STABLE_IMAGE2_PUBLIC_MODEL] = decimal_to_float(
+        STABLE_IMAGE2_PRICE_CNY / exchange_rate
+    )
+    model_ratios.pop(STABLE_IMAGE2_PUBLIC_MODEL, None)
+    completion_ratios.pop(STABLE_IMAGE2_PUBLIC_MODEL, None)
+
+    upsert_json_option("ModelRatio", model_ratios)
+    upsert_json_option("CompletionRatio", completion_ratios)
+    upsert_json_option("ModelPrice", model_prices)
 
 
 def sync_tokens(profiles: dict[str, list[str]]) -> None:
@@ -1408,6 +1484,35 @@ def sync_user_video_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
         statements.append(
             "UPDATE tokens SET model_limits_enabled = 1, model_limits = "
             + sql_quote(video_models)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    caches_deleted = delete_token_caches([token_key for _token_id, token_key in token_updates])
+    return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
+
+
+def sync_user_image_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
+    image_models = ",".join(sanitize_token_models(profiles["image"]))
+    token_names = TOKEN_PROFILES["image"]
+    token_rows = mysql(
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0) FROM tokens "
+        "WHERE deleted_at IS NULL AND name IN ("
+        + ", ".join(sql_quote(name) for name in token_names)
+        + ");"
+    )
+    token_updates: list[tuple[str, str]] = []
+    for token_id, token_key, raw_limits, raw_enabled in token_rows:
+        if raw_limits != image_models or raw_enabled != "1":
+            token_updates.append((token_id, token_key))
+
+    statements = ["START TRANSACTION;"]
+    for token_id, _token_key in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits_enabled = 1, model_limits = "
+            + sql_quote(image_models)
             + " WHERE id = "
             + sql_quote(token_id)
             + ";"
@@ -1752,8 +1857,10 @@ def refresh_codex() -> None:
 def main() -> int:
     ensure_public_video_models()
     ensure_discount_image2_backing_model()
+    ensure_stable_image2_backing_model()
     ensure_public_openai_text_models()
     sync_public_video_pricing()
+    sync_public_image_pricing()
     sync_public_openai_text_pricing()
     codex_text_channel_result = ensure_codex_text_channel_models()
     retired_codex_text_result = retire_codex_text_models()
@@ -1769,6 +1876,7 @@ def main() -> int:
     codex_token_result = sync_user_codex_tokens(profiles)
     codex_alias_token_result = sync_controlled_codex_alias_tokens()
     claude_token_result = sync_user_claude_tokens(profiles)
+    image_token_result = sync_user_image_tokens(profiles)
     video_token_result = sync_user_video_tokens(profiles)
     guard_result = enforce_gpt_image2_db_guard()
     env_changed = sync_codex_env(profiles)
@@ -1777,7 +1885,7 @@ def main() -> int:
     print(
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
-        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, codex_alias_token_sync={codex_alias_token_result}, claude_token_sync={claude_token_result}, video_token_sync={video_token_result}, gpt_image2_guard={guard_result}"
+        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, codex_alias_token_sync={codex_alias_token_result}, claude_token_sync={claude_token_result}, image_token_sync={image_token_result}, video_token_sync={video_token_result}, gpt_image2_guard={guard_result}"
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
         + f", retired_claude={retired_claude_result}"

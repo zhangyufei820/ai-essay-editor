@@ -94,6 +94,7 @@ const (
 	playgroundDiscountFallbackKey           = "playground_discount_fallback"
 	playgroundDiscountFallbackHeader        = "X-Aiphui-Discount-Fallback"
 	playgroundDiscountFallbackRequestHeader = "X-Aiphui-Discount-Fallback-Request"
+	playgroundAutoPricingFallbackHeader     = "X-Aiphui-Auto-Pricing-Fallback"
 	playgroundPricingGroupHeader            = "X-Aiphui-Pricing-Group"
 )
 
@@ -463,6 +464,12 @@ func shouldFallbackPlaygroundDiscount(c *gin.Context, info *relaycommon.RelayInf
 		return false
 	}
 	if c.Request.URL.Path != "/pg/chat/completions" || info.UsingGroup != service.DiscountPricingGroupName {
+		return false
+	}
+	// Pricing changes are user-controlled. The homepage no longer opts into
+	// automatic 0.05x -> 1x switching; keep the guarded mechanism available
+	// only for explicitly marked internal compatibility requests.
+	if strings.TrimSpace(c.GetHeader(playgroundAutoPricingFallbackHeader)) != "1" {
 		return false
 	}
 	if c.GetBool(playgroundDiscountFallbackKey) || service.HasTextOutputSent(c) {

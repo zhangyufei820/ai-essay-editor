@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/stretchr/testify/require"
 )
 
@@ -121,6 +122,7 @@ func TestNormalizeUserVisibleModelsHidesSupplierExposedImageModels(t *testing.T)
 	models := normalizeUserVisibleModels(2, []string{
 		"gpt-5.5",
 		"geek2api-image-2",
+		"internal-image2-stable-v1",
 		"特价 image-2",
 		"image 2电商商品图快速通道(1.5K)",
 		"ccapi-image-leak",
@@ -129,8 +131,9 @@ func TestNormalizeUserVisibleModelsHidesSupplierExposedImageModels(t *testing.T)
 		"moonapix-image-leak",
 	})
 
-	require.Equal(t, []string{"gpt-5.5", "特价 image-2", "image 2电商商品图快速通道(1.5K)"}, models)
+	require.Equal(t, []string{"gpt-5.5", "特价 image-2", "官转image 2稳定", "image 2电商商品图快速通道(1.5K)"}, models)
 	require.NotContains(t, models, "geek2api-image-2")
+	require.NotContains(t, models, "internal-image2-stable-v1")
 }
 
 func TestFilterUserVisibleModelNamesHidesSeedancePrivateVideoForNonRootUsers(t *testing.T) {
@@ -160,6 +163,35 @@ func TestFilterPricingByUsableGroupsHidesSupplierExposedModels(t *testing.T) {
 	require.Equal(t, []model.Pricing{
 		{ModelName: "gpt-5.5", EnableGroup: []string{"default"}},
 		{ModelName: "image 2电商商品图快速通道(1.5K)", Tags: "image,1.5k", EnableGroup: []string{"default"}},
+	}, pricing)
+}
+
+func TestFilterPricingByUsableGroupsSynthesizesStableImage2PublicPricing(t *testing.T) {
+	originalModelPrice := ratio_setting.ModelPrice2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(originalModelPrice))
+	})
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"官转image 2稳定":0.018493150685}`))
+
+	pricing := filterPricingByUsableGroups([]model.Pricing{
+		{
+			ModelName:              service.InternalStableImage2ModelName,
+			Description:            "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.135/张。",
+			Tags:                   "image,openai",
+			EnableGroup:            []string{"default"},
+			SupportedEndpointTypes: nil,
+		},
+	}, map[string]string{"default": "原价"})
+
+	require.Equal(t, []model.Pricing{
+		{
+			ModelName:   service.PublicStableImage2ModelName,
+			Description: "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.135/张。",
+			Tags:        "image,openai",
+			QuotaType:   1,
+			ModelPrice:  0.018493150685,
+			EnableGroup: []string{"default"},
+		},
 	}, pricing)
 }
 

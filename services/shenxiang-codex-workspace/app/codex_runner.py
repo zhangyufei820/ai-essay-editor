@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import signal
 import shutil
 import subprocess
 import time
@@ -35,6 +37,10 @@ from app.security import contains_forbidden_runtime_action, normalize_sandbox, p
 logger = logging.getLogger(__name__)
 
 RETRYABLE_UPSTREAM_STATUS_CODES = ("502", "503", "524")
+CODEX_STREAM_HEARTBEAT_SECONDS = 20.0
+MODEL_MINIMUM_TIMEOUT_SECONDS = {
+    "gpt-5.6-sol": 600,
+}
 PREVIEWABLE_OUTPUT_SUFFIXES = {
     ".png",
     ".jpg",
@@ -116,7 +122,7 @@ class CodexRunner:
                 "codex CLI is not available in the worker image.",
             )
 
-        timeout = int(task["skill"]["timeout"])
+        timeout = self._effective_timeout(task)
         logger.info(
             "running codex task_id=%s user=%s skill=%s timeout=%s",
             task_id,
@@ -216,7 +222,7 @@ class CodexRunner:
 
         command = self._build_command(task, workspace, prompt, task.get("_image_paths", []), json_events=True)
         write_codex_config(self.settings, self.settings.codex_home)
-        timeout = int(task["skill"]["timeout"])
+        timeout = self._effective_timeout(task)
         yield {"type": "status", "message": "连接模型并开始流式生成"}
 
         process = await asyncio.create_subprocess_exec(
@@ -226,6 +232,7 @@ class CodexRunner:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.PIPE,
+            start_new_session=True,
         )
         await self._write_prompt_stdin(process, prompt)
         stdout_chunks: list[str] = []
@@ -235,7 +242,10 @@ class CodexRunner:
         try:
             async with asyncio.timeout(timeout):
                 assert process.stdout is not None
-                async for raw_line in process.stdout:
+                async for raw_line in self._iter_stdout_with_heartbeats(process.stdout):
+                    if raw_line is None:
+                        yield {"type": "heartbeat", "task_id": task_id}
+                        continue
                     line = raw_line.decode("utf-8", errors="replace").strip()
                     if not line:
                         continue
@@ -243,8 +253,7 @@ class CodexRunner:
                     event = self._parse_codex_event(line, user_api_key)
                     fast_fail = self._deterministic_upstream_error(event)
                     if fast_fail:
-                        process.kill()
-                        await process.wait()
+                        await self._terminate_process_group(process)
                         self._write_output(workspace, "\n".join(stdout_chunks), "\n".join(stderr_chunks), user_api_key)
                         if self._is_retryable_upstream_error(fast_fail.get("message", "")):
                             async for fallback_event in self._stream_chat_completions_fallback(task, user_api_key):
@@ -266,12 +275,16 @@ class CodexRunner:
                     yield event
                 return_code = await process.wait()
         except TimeoutError:
-            process.kill()
-            await process.wait()
+            await self._terminate_process_group(process)
             self._write_output(workspace, "\n".join(stdout_chunks), "\n".join(stderr_chunks), user_api_key)
             yield {"type": "error", "code": "CODEX_TIMEOUT", "message": f"Codex task timed out after {timeout} seconds."}
             return
+        except asyncio.CancelledError:
+            await self._terminate_process_group(process)
+            raise
         finally:
+            if process.returncode is None:
+                await self._terminate_process_group(process)
             if not stderr_task.done():
                 stderr_task.cancel()
             await asyncio.gather(stderr_task, return_exceptions=True)
@@ -343,6 +356,69 @@ class CodexRunner:
             line = raw_line.decode("utf-8", errors="replace").rstrip()
             if line:
                 chunks.append(line)
+
+    def _effective_timeout(self, task: dict[str, Any]) -> int:
+        timeout = max(1, int(task["skill"]["timeout"]))
+        model = self._model_for_task(task).strip().lower()
+        return max(timeout, MODEL_MINIMUM_TIMEOUT_SECONDS.get(model, 0))
+
+    async def _iter_stdout_with_heartbeats(
+        self,
+        reader: asyncio.StreamReader,
+        *,
+        interval_seconds: float = CODEX_STREAM_HEARTBEAT_SECONDS,
+    ) -> AsyncIterator[bytes | None]:
+        interval = max(0.001, float(interval_seconds))
+        read_task: asyncio.Task[bytes] | None = None
+        try:
+            while True:
+                if read_task is None:
+                    read_task = asyncio.create_task(reader.readline())
+                done, _ = await asyncio.wait({read_task}, timeout=interval)
+                if not done:
+                    yield None
+                    continue
+                raw_line = read_task.result()
+                read_task = None
+                if not raw_line:
+                    return
+                yield raw_line
+        finally:
+            if read_task is not None and not read_task.done():
+                read_task.cancel()
+                await asyncio.gather(read_task, return_exceptions=True)
+
+    async def _terminate_process_group(
+        self,
+        process: asyncio.subprocess.Process,
+        *,
+        grace_seconds: float = 2.0,
+    ) -> None:
+        if process.returncode is not None:
+            return
+        try:
+            if os.name == "posix" and process.pid:
+                os.killpg(process.pid, signal.SIGTERM)
+            else:
+                process.terminate()
+        except ProcessLookupError:
+            return
+
+        wait_task = asyncio.create_task(process.wait())
+        try:
+            await asyncio.wait_for(asyncio.shield(wait_task), timeout=max(0.001, grace_seconds))
+            return
+        except TimeoutError:
+            pass
+
+        try:
+            if os.name == "posix" and process.pid:
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+        except ProcessLookupError:
+            pass
+        await wait_task
 
     async def _write_prompt_stdin(self, process: asyncio.subprocess.Process, prompt: str) -> None:
         if process.stdin is None:

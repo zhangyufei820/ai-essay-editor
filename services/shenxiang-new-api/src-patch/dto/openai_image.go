@@ -164,6 +164,8 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 	}
 	if priceCNY, ok := discountImage2PriceCNY(i); ok {
 		imagePriceCNY = priceCNY
+	} else if isStableImage2Model(i.Model) {
+		imagePriceCNY = 0.135
 	}
 
 	// n is NOT included here; it is handled via OtherRatio("n") in
@@ -176,6 +178,12 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 		ImagePriceRatio: sizeRatio * qualityRatio,
 		ImagePriceCNY:   imagePriceCNY,
 	}
+}
+
+func isStableImage2Model(model string) bool {
+	trimmed := strings.TrimSpace(model)
+	return strings.EqualFold(trimmed, "官转image 2稳定") ||
+		strings.EqualFold(trimmed, "internal-image2-stable-v1")
 }
 
 func discountImage2PriceCNY(request *ImageRequest) (float64, bool) {

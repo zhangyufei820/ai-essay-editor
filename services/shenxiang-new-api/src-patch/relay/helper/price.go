@@ -283,6 +283,9 @@ func HasModelBillingConfig(modelName string) bool {
 func modelBillingConfigCandidates(modelName string) []string {
 	trimmed := strings.TrimSpace(modelName)
 	candidates := []string{trimmed}
+	if publicName := service.PublicImageModelDisplayName(trimmed, ""); !strings.EqualFold(publicName, trimmed) {
+		candidates = append(candidates, publicName)
+	}
 	normalized, _, changed := service.NormalizeImageGenerationModelName(trimmed)
 	if changed && !strings.EqualFold(normalized, trimmed) {
 		candidates = append(candidates, normalized)

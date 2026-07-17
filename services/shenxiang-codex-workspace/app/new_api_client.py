@@ -337,7 +337,7 @@ class NewApiClient:
         token_group: str | None = None,
     ) -> int:
         resolved_group = self._token_group_for_profile(user, token_group)
-        cross_group_retry = token_group is None
+        cross_group_retry = False
         payload = {
             "name": token_name,
             "remain_quota": 0,
@@ -370,7 +370,7 @@ class NewApiClient:
     ) -> None:
         expected_models = ",".join(models)
         expected_group = self._token_group_for_profile(user, token_group)
-        expected_cross_group_retry = token_group is None
+        expected_cross_group_retry = False
         expected_expired_time = -1 if token_group == GROK_TOKEN_GROUP else int(token.get("expired_time") or -1)
         expected_allow_ips = "" if token_group == GROK_TOKEN_GROUP else str(token.get("allow_ips") or "")
         group_matches = str(token.get("group") or "") == expected_group
@@ -411,6 +411,19 @@ class NewApiClient:
     def _token_group_for_profile(user: dict[str, Any], token_group: str | None) -> str:
         if token_group is not None:
             return str(token_group).strip()
+        text_pricing_group = str(user.get("text_pricing_group") or "").strip().lower()
+        if text_pricing_group in PUBLIC_TOKEN_GROUPS:
+            return text_pricing_group
+        raw_setting = user.get("setting")
+        if isinstance(raw_setting, str) and raw_setting.strip():
+            try:
+                raw_setting = json.loads(raw_setting)
+            except (TypeError, ValueError):
+                raw_setting = None
+        if isinstance(raw_setting, dict):
+            text_pricing_group = str(raw_setting.get("text_pricing_group") or "").strip().lower()
+            if text_pricing_group in PUBLIC_TOKEN_GROUPS:
+                return text_pricing_group
         user_group = str(user.get("group") or "").strip()
         if user_group in PUBLIC_TOKEN_GROUPS:
             return user_group

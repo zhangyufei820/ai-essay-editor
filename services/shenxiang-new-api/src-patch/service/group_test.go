@@ -42,6 +42,13 @@ func TestIsPublicTokenGroupRejectsLegacyAndAutoGroups(t *testing.T) {
 	require.False(t, IsPublicTokenGroup("auto"))
 }
 
+func TestIsTextPricingPreferenceModel(t *testing.T) {
+	require.True(t, IsTextPricingPreferenceModel("gpt-5.5"))
+	require.True(t, IsTextPricingPreferenceModel(" GPT-5.6-LUNA "))
+	require.False(t, IsTextPricingPreferenceModel("grok-4.5"))
+	require.False(t, IsTextPricingPreferenceModel("claude-sonnet-4-6"))
+}
+
 func TestPublicPricingGroupsRequireManagedGrokEntitlement(t *testing.T) {
 	originalGroups := setting.UserUsableGroups2JSONString()
 	t.Cleanup(func() {

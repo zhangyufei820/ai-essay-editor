@@ -499,6 +499,47 @@ func (r *cancelOnCloseReadCloser) Close() error {
 	return err
 }
 
+var discountTextResponseHeaderTimeout = time.Duration(
+	common2.GetEnvOrDefault("DISCOUNT_TEXT_RESPONSE_HEADER_TIMEOUT_SECONDS", 90),
+) * time.Second
+
+func isDiscountTextRequest(c *gin.Context, info *common.RelayInfo) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil || info == nil {
+		return false
+	}
+	if strings.TrimSpace(info.UsingGroup) != "discount" {
+		return false
+	}
+	switch c.Request.URL.Path {
+	case "/v1/responses", "/v1/chat/completions":
+		return true
+	default:
+		return false
+	}
+}
+
+// withRelayRequestContext ties pre-response upstream work to the client
+// request. The discount text timeout only covers waiting for response headers;
+// once headers arrive, streaming may continue under the normal idle timeout.
+func withRelayRequestContext(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Request, context.CancelFunc, *time.Timer) {
+	if req == nil {
+		return nil, nil, nil
+	}
+
+	baseCtx := req.Context()
+	if _, hasDeadline := baseCtx.Deadline(); !hasDeadline && c != nil && c.Request != nil {
+		baseCtx = c.Request.Context()
+	}
+	ctx, cancel := context.WithCancel(baseCtx)
+	req = req.WithContext(ctx)
+
+	var headerTimer *time.Timer
+	if isDiscountTextRequest(c, info) && discountTextResponseHeaderTimeout > 0 {
+		headerTimer = time.AfterFunc(discountTextResponseHeaderTimeout, cancel)
+	}
+	return req, cancel, headerTimer
+}
+
 func withPlaygroundImageTimeout(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Request, context.CancelFunc) {
 	if c == nil || c.Request == nil || c.Request.URL == nil || req == nil || info == nil {
 		return req, nil
@@ -551,11 +592,18 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	}
 
 	req, cancelRequest := withPlaygroundImageTimeout(c, req, info)
+	req, cancelRelayRequest, headerTimer := withRelayRequestContext(c, req, info)
 
 	resp, err := client.Do(req)
+	if headerTimer != nil {
+		headerTimer.Stop()
+	}
 	if err != nil {
 		if cancelRequest != nil {
 			cancelRequest()
+		}
+		if cancelRelayRequest != nil {
+			cancelRelayRequest()
 		}
 		logger.LogError(c, "do request failed: "+err.Error())
 		return nil, types.NewError(err, types.ErrorCodeDoRequestFailed, types.ErrOptionWithHideErrMsg("upstream error: do request failed"))
@@ -564,13 +612,24 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		if cancelRequest != nil {
 			cancelRequest()
 		}
+		if cancelRelayRequest != nil {
+			cancelRelayRequest()
+		}
 		return nil, errors.New("resp is nil")
 	}
-	if cancelRequest != nil {
+	if cancelRelayRequest != nil {
 		if resp.Body != nil {
-			resp.Body = &cancelOnCloseReadCloser{ReadCloser: resp.Body, cancel: cancelRequest}
+			resp.Body = &cancelOnCloseReadCloser{ReadCloser: resp.Body, cancel: func() {
+				cancelRelayRequest()
+				if cancelRequest != nil {
+					cancelRequest()
+				}
+			}}
 		} else {
-			cancelRequest()
+			cancelRelayRequest()
+			if cancelRequest != nil {
+				cancelRequest()
+			}
 		}
 	}
 
