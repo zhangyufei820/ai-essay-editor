@@ -10,6 +10,7 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -1792,7 +1793,93 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 	if err != nil {
 		return nil, fmt.Errorf("new proxy http client failed: %w", err)
 	}
-	return client.Do(req)
+	if client == nil {
+		client = &http.Client{Timeout: 90 * time.Second}
+	}
+	statusResponse, err := client.Do(req)
+	if err != nil || statusResponse == nil || statusResponse.StatusCode >= http.StatusOK && statusResponse.StatusCode < http.StatusMultipleChoices {
+		return statusResponse, err
+	}
+	if !supportsVideoContentStatusFallback(body) || !isTemporaryVideoLookupStatus(statusResponse.StatusCode) {
+		return statusResponse, nil
+	}
+
+	contentURI := fmt.Sprintf("%s/v1/videos/%s/content", baseUrl, taskID)
+	contentRequest, err := http.NewRequest(http.MethodGet, contentURI, nil)
+	if err != nil {
+		return statusResponse, nil
+	}
+	contentRequest.Header.Set("Authorization", "Bearer "+key)
+	contentResponse, contentErr := client.Do(contentRequest)
+	if contentErr != nil || contentResponse == nil {
+		closeVideoLookupResponse(statusResponse)
+		return syntheticVideoTaskResponse(taskID, "queued", 0), nil
+	}
+	contentReady := videoContentResponseReady(contentResponse)
+	closeVideoLookupResponse(contentResponse)
+	closeVideoLookupResponse(statusResponse)
+	if contentReady {
+		return syntheticVideoTaskResponse(taskID, "completed", 100), nil
+	}
+	return syntheticVideoTaskResponse(taskID, "queued", 0), nil
+}
+
+func supportsVideoContentStatusFallback(body map[string]any) bool {
+	for _, key := range []string{"origin_model", "upstream_model"} {
+		modelName := strings.TrimSpace(fmt.Sprint(body[key]))
+		if modelName == "" || modelName == "<nil>" {
+			continue
+		}
+		if isGrok15VideoModel(modelName) || isSD2FastVideoModel(modelName) || modelName == seedanceLD17PublicModel || modelName == seedanceLD17UpstreamModel {
+			return true
+		}
+	}
+	return false
+}
+
+func isTemporaryVideoLookupStatus(status int) bool {
+	return status == http.StatusBadRequest || status == http.StatusForbidden || status == http.StatusNotFound ||
+		status == http.StatusRequestTimeout || status == http.StatusConflict || status == http.StatusTooEarly ||
+		status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
+}
+
+func videoContentResponseReady(response *http.Response) bool {
+	if response == nil || response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return false
+	}
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
+	if strings.HasPrefix(contentType, "video/") {
+		return true
+	}
+	if response.Body == nil {
+		return false
+	}
+	header := make([]byte, 16)
+	read, _ := io.ReadFull(response.Body, header)
+	return read >= 12 && bytes.Contains(header[:read], []byte("ftyp"))
+}
+
+func closeVideoLookupResponse(response *http.Response) {
+	if response == nil || response.Body == nil {
+		return
+	}
+	_, _ = io.CopyN(io.Discard, response.Body, 4096)
+	_ = response.Body.Close()
+}
+
+func syntheticVideoTaskResponse(taskID string, status string, progress int) *http.Response {
+	body, _ := common.Marshal(map[string]any{
+		"id":       taskID,
+		"task_id":  taskID,
+		"status":   status,
+		"progress": progress,
+	})
+	return &http.Response{
+		StatusCode:    http.StatusOK,
+		Body:          io.NopCloser(bytes.NewReader(body)),
+		ContentLength: int64(len(body)),
+		Header:        make(http.Header),
+	}
 }
 
 func (a *TaskAdaptor) GetModelList() []string {

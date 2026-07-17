@@ -409,7 +409,7 @@ func TestCachePlaygroundVideoTaskResultFallsBackToAuthenticatedUpstreamContent(t
 	var sawAuth bool
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/v1/videos/upstream_private_success/content", r.URL.Path)
-		if r.Header.Get("Authorization") == "Bearer sk-test" {
+		if r.Header.Get("Authorization") == "Bearer saved-task-key" {
 			sawAuth = true
 		}
 		w.Header().Set("Content-Type", "video/mp4")
@@ -436,7 +436,10 @@ func TestCachePlaygroundVideoTaskResultFallsBackToAuthenticatedUpstreamContent(t
 				"endpoint": "/pg/videos"
 			}
 		}`),
-		PrivateData: model.TaskPrivateData{UpstreamTaskID: "upstream_private_success"},
+		PrivateData: model.TaskPrivateData{
+			Key:            "saved-task-key",
+			UpstreamTaskID: "upstream_private_success",
+		},
 	}
 	require.NoError(t, model.DB.Create(task).Error)
 	require.NoError(t, model.LOG_DB.Create(&model.Log{
@@ -462,7 +465,7 @@ func TestCachePlaygroundVideoTaskResultFallsBackToAuthenticatedUpstreamContent(t
 	err = updateVideoSingleTask(
 		context.Background(),
 		&playgroundVideoTestAdaptor{body: body},
-		&model.Channel{Id: 23, Key: "sk-test", BaseURL: &upstream.URL},
+		&model.Channel{Id: 23, Key: "rotated-channel-key", BaseURL: &upstream.URL},
 		"upstream_private_success",
 		map[string]*model.Task{"upstream_private_success": task},
 	)
@@ -480,6 +483,49 @@ func TestCachePlaygroundVideoTaskResultFallsBackToAuthenticatedUpstreamContent(t
 	require.Equal(t, "completed", other["request_phase"])
 	require.Equal(t, "video", other["media_kind"])
 	require.Contains(t, other["cached_url"], "/pg/media/files/u-1003/")
+}
+
+func TestVideoPollingKeepsTemporaryLookupFailurePending(t *testing.T) {
+	truncate(t)
+	task := &model.Task{
+		TaskID:    "task_video_lookup_pending",
+		UserId:    1006,
+		ChannelId: 26,
+		Status:    model.TaskStatusInProgress,
+		Progress:  "50%",
+		Platform:  constant.TaskPlatform("relaydance-video"),
+		Quota:     443835,
+		PrivateData: model.TaskPrivateData{
+			Key:            "saved-task-key",
+			UpstreamTaskID: "upstream_lookup_pending",
+		},
+		Properties: model.Properties{
+			OriginModelName:   "seedance-2.0-ld-17",
+			UpstreamModelName: "seedance-2.0-wc-b-720p",
+		},
+	}
+	require.NoError(t, model.DB.Create(task).Error)
+	body, err := json.Marshal(map[string]any{
+		"status":   model.TaskStatusQueued,
+		"progress": 0,
+	})
+	require.NoError(t, err)
+
+	err = updateVideoSingleTask(
+		context.Background(),
+		&playgroundVideoTestAdaptor{body: body},
+		&model.Channel{Id: 26, Key: "rotated-channel-key"},
+		"upstream_lookup_pending",
+		map[string]*model.Task{"upstream_lookup_pending": task},
+	)
+	require.NoError(t, err)
+
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, "task_id = ?", task.TaskID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusQueued), reloaded.Status)
+	require.Equal(t, task.Quota, reloaded.Quota)
+	require.Zero(t, reloaded.FinishTime)
+	require.Empty(t, reloaded.FailReason)
 }
 
 func TestRedactVideoResponseBodyRemovesProviderDetailsAndDirectURLs(t *testing.T) {

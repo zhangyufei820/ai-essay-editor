@@ -509,8 +509,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		key = privateData.Key
 	}
 	resp, err := adaptor.FetchTask(baseURL, key, map[string]any{
-		"task_id": task.GetUpstreamTaskID(),
-		"action":  task.Action,
+		"task_id":        task.GetUpstreamTaskID(),
+		"action":         task.Action,
+		"origin_model":   task.Properties.OriginModelName,
+		"upstream_model": task.Properties.UpstreamModelName,
 	}, proxy)
 	if err != nil {
 		return fmt.Errorf("fetchTask failed for task %s: %w", taskId, err)
@@ -884,7 +886,11 @@ func cachePlaygroundVideoTaskResult(ctx context.Context, task *model.Task, marke
 		return nil, err
 	}
 	upstreamURL := fmt.Sprintf("%s/v1/videos/%s/content", baseURL, upstreamTaskID)
-	return cachePlaygroundVideoRemoteMediaWithValidation(ctx, task, marker, upstreamURL, ch.Key, ch.GetSetting().Proxy, false)
+	key := ch.Key
+	if strings.TrimSpace(task.PrivateData.Key) != "" {
+		key = task.PrivateData.Key
+	}
+	return cachePlaygroundVideoRemoteMediaWithValidation(ctx, task, marker, upstreamURL, key, ch.GetSetting().Proxy, false)
 }
 
 func shouldFallbackToUpstreamVideoContent(rawURL string, err error) bool {

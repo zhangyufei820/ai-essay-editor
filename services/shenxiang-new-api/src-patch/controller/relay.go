@@ -1399,6 +1399,16 @@ func RelayTask(c *gin.Context) {
 		respondTaskError(c, taskErr)
 		return
 	}
+	if relayInfo.LockedChannel == nil {
+		if routedChannelID := c.GetInt(middleware.DurationRoutedVideoChannelIDContextKey); routedChannelID > 0 {
+			routedChannel, channelErr := model.CacheGetChannel(routedChannelID)
+			if channelErr != nil || routedChannel == nil || routedChannel.Status != common.ChannelStatusEnabled {
+				respondTaskError(c, service.TaskErrorWrapperLocal(errors.New("duration-specific video channel is unavailable"), "service_unavailable", http.StatusServiceUnavailable))
+				return
+			}
+			relayInfo.LockedChannel = routedChannel
+		}
+	}
 
 	var result *relay.TaskSubmitResult
 	var taskErr *dto.TaskError
@@ -1483,6 +1493,7 @@ func RelayTask(c *gin.Context) {
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId
+		persistTaskPollingKey(c, task)
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
 			ModelPrice:      relayInfo.PriceData.ModelPrice,
 			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
@@ -1507,6 +1518,15 @@ func RelayTask(c *gin.Context) {
 
 	if taskErr != nil {
 		respondTaskError(c, taskErr)
+	}
+}
+
+func persistTaskPollingKey(c *gin.Context, task *model.Task) {
+	if c == nil || task == nil {
+		return
+	}
+	if key := strings.TrimSpace(common.GetContextKeyString(c, constant.ContextKeyChannelKey)); key != "" {
+		task.PrivateData.Key = key
 	}
 }
 

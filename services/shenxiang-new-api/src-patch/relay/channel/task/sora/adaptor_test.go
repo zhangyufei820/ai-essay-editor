@@ -207,6 +207,86 @@ func TestNewVideoModelsUseVideosEndpoint(t *testing.T) {
 	}
 }
 
+func TestFetchTaskFallsBackToCompletedContent(t *testing.T) {
+	var contentRequests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer saved-task-key" {
+			t.Fatalf("authorization = %q", request.Header.Get("Authorization"))
+		}
+		switch request.URL.Path {
+		case "/v1/videos/upstream-completed":
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"message":"status unavailable"}}`))
+		case "/v1/videos/upstream-completed/content":
+			contentRequests++
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("fake mp4 content"))
+		default:
+			t.Fatalf("unexpected path %q", request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	response, err := (&TaskAdaptor{}).FetchTask(server.URL, "saved-task-key", map[string]any{
+		"task_id":        "upstream-completed",
+		"origin_model":   seedanceLD17PublicModel,
+		"upstream_model": seedanceLD17UpstreamModel,
+	}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := (&TaskAdaptor{}).ParseTaskResult(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || result.Status != model.TaskStatusSuccess {
+		t.Fatalf("status=%d result=%#v body=%s", response.StatusCode, result, body)
+	}
+	if contentRequests != 1 {
+		t.Fatalf("content requests = %d, want 1", contentRequests)
+	}
+}
+
+func TestFetchTaskKeepsUnavailableStatusAndContentPending(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/videos/upstream-pending":
+			w.WriteHeader(http.StatusForbidden)
+		case "/v1/videos/upstream-pending/content":
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			t.Fatalf("unexpected path %q", request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	response, err := (&TaskAdaptor{}).FetchTask(server.URL, "saved-task-key", map[string]any{
+		"task_id":        "upstream-pending",
+		"origin_model":   seedanceLD17PublicModel,
+		"upstream_model": seedanceLD17UpstreamModel,
+	}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := (&TaskAdaptor{}).ParseTaskResult(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || result.Status != model.TaskStatusQueued {
+		t.Fatalf("status=%d result=%#v body=%s", response.StatusCode, result, body)
+	}
+}
+
 func TestDoResponseUsesPublicModelAndProxyURL(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)

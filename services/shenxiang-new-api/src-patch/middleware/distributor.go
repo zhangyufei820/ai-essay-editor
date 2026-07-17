@@ -25,11 +25,20 @@ import (
 )
 
 type ModelRequest struct {
-	Model string `json:"model"`
-	Group string `json:"group,omitempty"`
+	Model   string `json:"model" form:"model"`
+	Group   string `json:"group,omitempty" form:"group"`
+	Seconds string `json:"seconds,omitempty" form:"seconds"`
 }
 
-const PublicImageModelAliasContextKey = "public_image_model_alias"
+const (
+	PublicImageModelAliasContextKey        = "public_image_model_alias"
+	DurationRoutedVideoChannelIDContextKey = "duration_routed_video_channel_id"
+	grokVideo15PublicModel                 = "grok-video-1.5"
+	grokVideo15SixSecondChannelTag         = "xingren-grok-video-15-6s"
+	grokVideo15TenSecondChannelTag         = "xingren-grok-video-15-10s"
+)
+
+var errInvalidGrokVideo15Duration = errors.New("Grok Video 1.5 的 seconds 仅支持 6 或 10。")
 
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
@@ -136,32 +145,52 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
-				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
-					affinityUsable := false
-					preferred, err := model.CacheGetChannel(preferredChannelID)
-					if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled {
-						if usingGroup == "auto" {
-							userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
-							autoGroups := service.GetUserAutoGroup(userGroup)
-							for _, g := range autoGroups {
-								if model.IsChannelCurrentPriorityForGroupModel(g, modelRequest.Model, preferred.Id) {
-									selectGroup = g
-									common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
-									channel = preferred
-									affinityUsable = true
-									service.MarkChannelAffinityUsed(c, g, preferred.Id)
-									break
-								}
-							}
-						} else if model.IsChannelCurrentPriorityForGroupModel(usingGroup, modelRequest.Model, preferred.Id) {
-							channel = preferred
-							selectGroup = usingGroup
-							affinityUsable = true
-							service.MarkChannelAffinityUsed(c, usingGroup, preferred.Id)
+				if routedChannel, routedGroup, handled, routeErr := selectGrokVideo15DurationChannel(c, modelRequest, usingGroup); handled {
+					if routeErr != nil {
+						if errors.Is(routeErr, errInvalidGrokVideo15Duration) {
+							abortWithOpenAiMessage(c, http.StatusBadRequest, routeErr.Error())
+						} else {
+							logDistributorNoAvailableChannel(c, modelRequest.Model, usingGroup, "duration-specific channel unavailable")
+							abortWithOpenAiMessage(c, http.StatusServiceUnavailable, "视频生成服务暂时不可用，请稍后重试。", types.ErrorCodeModelNotFound)
 						}
+						return
 					}
-					if !affinityUsable && !service.ShouldKeepChannelAffinityOnChannelDisabled() {
-						service.ClearCurrentChannelAffinityCache(c)
+					channel = routedChannel
+					selectGroup = routedGroup
+					c.Set(DurationRoutedVideoChannelIDContextKey, routedChannel.Id)
+					if usingGroup == "auto" {
+						common.SetContextKey(c, constant.ContextKeyAutoGroup, routedGroup)
+					}
+				}
+
+				if channel == nil {
+					if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
+						affinityUsable := false
+						preferred, err := model.CacheGetChannel(preferredChannelID)
+						if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled {
+							if usingGroup == "auto" {
+								userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+								autoGroups := service.GetUserAutoGroup(userGroup)
+								for _, g := range autoGroups {
+									if model.IsChannelCurrentPriorityForGroupModel(g, modelRequest.Model, preferred.Id) {
+										selectGroup = g
+										common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
+										channel = preferred
+										affinityUsable = true
+										service.MarkChannelAffinityUsed(c, g, preferred.Id)
+										break
+									}
+								}
+							} else if model.IsChannelCurrentPriorityForGroupModel(usingGroup, modelRequest.Model, preferred.Id) {
+								channel = preferred
+								selectGroup = usingGroup
+								affinityUsable = true
+								service.MarkChannelAffinityUsed(c, usingGroup, preferred.Id)
+							}
+						}
+						if !affinityUsable && !service.ShouldKeepChannelAffinityOnChannelDisabled() {
+							service.ClearCurrentChannelAffinityCache(c)
+						}
 					}
 				}
 
@@ -202,6 +231,42 @@ func Distribute() func(c *gin.Context) {
 			service.RecordChannelAffinity(c, channel.Id)
 		}
 	}
+}
+
+func selectGrokVideo15DurationChannel(c *gin.Context, modelRequest *ModelRequest, usingGroup string) (*model.Channel, string, bool, error) {
+	if c == nil || c.Request == nil || c.Request.URL == nil || modelRequest == nil || modelRequest.Model != grokVideo15PublicModel || c.Request.Method != http.MethodPost {
+		return nil, "", false, nil
+	}
+	switch strings.TrimSpace(c.Request.URL.Path) {
+	case "/pg/videos", "/pg/video/generations", "/v1/videos", "/v1/video/generations":
+	default:
+		return nil, "", false, nil
+	}
+
+	var routingTag string
+	switch strings.TrimSpace(modelRequest.Seconds) {
+	case "6":
+		routingTag = grokVideo15SixSecondChannelTag
+	case "10":
+		routingTag = grokVideo15TenSecondChannelTag
+	default:
+		return nil, "", true, errInvalidGrokVideo15Duration
+	}
+
+	groups := []string{strings.TrimSpace(usingGroup)}
+	if strings.TrimSpace(usingGroup) == "auto" {
+		groups = service.GetUserAutoGroup(common.GetContextKeyString(c, constant.ContextKeyUserGroup))
+	}
+	for _, group := range groups {
+		channel, err := model.GetEnabledTaggedChannelForGroupModel(group, modelRequest.Model, routingTag)
+		if err != nil {
+			return nil, "", true, err
+		}
+		if channel != nil {
+			return channel, group, true, nil
+		}
+	}
+	return nil, "", true, errors.New("duration-specific video channel is unavailable")
 }
 
 func applyPlaygroundTextPricingPreference(c *gin.Context, modelRequest *ModelRequest) (string, error) {
@@ -281,7 +346,7 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 		return nil, errors.New("invalid JSON request body")
 	}
 
-	values := gjson.GetManyBytes(requestBody, "model", "group")
+	values := gjson.GetManyBytes(requestBody, "model", "group", "seconds")
 	model, err := getJSONStringValue(values[0], "model")
 	if err != nil {
 		return nil, err
@@ -290,6 +355,17 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	if err != nil {
 		return nil, err
 	}
+	seconds := ""
+	if values[2].Exists() && values[2].Type != gjson.Null {
+		switch values[2].Type {
+		case gjson.String:
+			seconds = values[2].String()
+		case gjson.Number:
+			seconds = values[2].Raw
+		default:
+			return nil, errors.New("field seconds must be a string or number")
+		}
+	}
 
 	if _, seekErr := storage.Seek(0, io.SeekStart); seekErr != nil {
 		return nil, seekErr
@@ -297,8 +373,9 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	c.Request.Body = io.NopCloser(storage)
 
 	return &ModelRequest{
-		Model: model,
-		Group: group,
+		Model:   model,
+		Group:   group,
+		Seconds: seconds,
 	}, nil
 }
 
@@ -374,6 +451,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			}
 			if req != nil {
 				modelRequest.Model = req.Model
+				modelRequest.Seconds = req.Seconds
 			}
 		} else if c.Request.Method == http.MethodGet {
 			relayMode = relayconstant.RelayModeVideoFetchByID
@@ -389,6 +467,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 				return nil, false, err
 			}
 			modelRequest.Model = req.Model
+			modelRequest.Seconds = req.Seconds
 			relayMode = relayconstant.RelayModeVideoSubmit
 		} else if c.Request.Method == http.MethodGet {
 			relayMode = relayconstant.RelayModeVideoFetchByID
@@ -472,6 +551,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		}
 		modelRequest.Model = req.Model
 		modelRequest.Group = req.Group
+		modelRequest.Seconds = req.Seconds
 		common.SetContextKey(c, constant.ContextKeyTokenGroup, modelRequest.Group)
 	}
 

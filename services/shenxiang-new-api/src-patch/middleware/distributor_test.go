@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,8 +15,137 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+func TestGetModelRequestReadsGrokVideoDurationFromMediaMultipart(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for field, value := range map[string]string{
+		"model":   "grok-video-1.5",
+		"group":   "default",
+		"prompt":  "text to video",
+		"seconds": "6",
+		"size":    "1280x720",
+	} {
+		if err := writer.WriteField(field, value); err != nil {
+			t.Fatalf("write %s: %v", field, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart: %v", err)
+	}
+
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, "/pg/videos", bytes.NewReader(body.Bytes()))
+	context.Request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	request, shouldSelect, err := getModelRequest(context)
+
+	if err != nil {
+		t.Fatalf("getModelRequest() error = %v", err)
+	}
+	if !shouldSelect {
+		t.Fatal("getModelRequest() shouldSelect = false, want true")
+	}
+	if request.Model != "grok-video-1.5" || request.Group != "default" || request.Seconds != "6" {
+		t.Fatalf("request = %#v, want Grok model/default group/6 seconds", request)
+	}
+}
+
+func TestSelectGrokVideo15DurationChannelRoutesMediaWorkshopRequests(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	require.NoError(t, model.DB.AutoMigrate(&model.Channel{}, &model.Ability{}))
+	originalMemoryCacheEnabled := common.MemoryCacheEnabled
+	common.MemoryCacheEnabled = false
+	t.Cleanup(func() {
+		common.MemoryCacheEnabled = originalMemoryCacheEnabled
+		model.DB.Where("model = ?", grokVideo15PublicModel).Delete(&model.Ability{})
+		model.DB.Where("tag IN ?", []string{grokVideo15SixSecondChannelTag, grokVideo15TenSecondChannelTag}).Delete(&model.Channel{})
+	})
+
+	createChannel := func(tag string) int {
+		channel := model.Channel{
+			Type:   constant.ChannelTypeOpenAI,
+			Key:    "test-video-key",
+			Status: common.ChannelStatusEnabled,
+			Name:   "duration-routed-video-test",
+			Models: grokVideo15PublicModel,
+			Group:  "default",
+			Tag:    &tag,
+		}
+		require.NoError(t, model.DB.Create(&channel).Error)
+		require.NoError(t, model.DB.Create(&model.Ability{
+			Group:     "default",
+			Model:     grokVideo15PublicModel,
+			ChannelId: channel.Id,
+			Enabled:   true,
+			Tag:       &tag,
+		}).Error)
+		return channel.Id
+	}
+
+	sixSecondChannelID := createChannel(grokVideo15SixSecondChannelTag)
+	tenSecondChannelID := createChannel(grokVideo15TenSecondChannelTag)
+	testCases := []struct {
+		name          string
+		seconds       string
+		withReference bool
+		wantChannelID int
+	}{
+		{name: "six second text to video", seconds: "6", wantChannelID: sixSecondChannelID},
+		{name: "six second image to video", seconds: "6", withReference: true, wantChannelID: sixSecondChannelID},
+		{name: "ten second text to video", seconds: "10", wantChannelID: tenSecondChannelID},
+		{name: "ten second image to video", seconds: "10", withReference: true, wantChannelID: tenSecondChannelID},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var body bytes.Buffer
+			writer := multipart.NewWriter(&body)
+			require.NoError(t, writer.WriteField("model", grokVideo15PublicModel))
+			require.NoError(t, writer.WriteField("group", "default"))
+			require.NoError(t, writer.WriteField("prompt", "media workshop request"))
+			require.NoError(t, writer.WriteField("seconds", testCase.seconds))
+			require.NoError(t, writer.WriteField("size", "1280x720"))
+			if testCase.withReference {
+				fileWriter, err := writer.CreateFormFile("input_reference", "reference.png")
+				require.NoError(t, err)
+				_, err = fileWriter.Write([]byte("test-image"))
+				require.NoError(t, err)
+			}
+			require.NoError(t, writer.Close())
+
+			context, _ := gin.CreateTestContext(httptest.NewRecorder())
+			context.Request = httptest.NewRequest(http.MethodPost, "/pg/videos", bytes.NewReader(body.Bytes()))
+			context.Request.Header.Set("Content-Type", writer.FormDataContentType())
+			request, _, err := getModelRequest(context)
+			require.NoError(t, err)
+
+			channel, group, handled, err := selectGrokVideo15DurationChannel(context, request, "default")
+
+			require.NoError(t, err)
+			require.True(t, handled)
+			require.Equal(t, "default", group)
+			require.NotNil(t, channel)
+			require.Equal(t, testCase.wantChannelID, channel.Id)
+		})
+	}
+}
+
+func TestGetModelRequestReadsNumericGrokVideoDurationFromJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/video/generations", bytes.NewBufferString(`{"model":"grok-video-1.5","seconds":10}`))
+	context.Request.Header.Set("Content-Type", "application/json")
+
+	request, _, err := getModelRequest(context)
+
+	require.NoError(t, err)
+	require.Equal(t, "10", request.Seconds)
+}
 
 func TestMain(m *testing.M) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})

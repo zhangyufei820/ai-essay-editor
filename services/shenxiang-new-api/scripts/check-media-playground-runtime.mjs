@@ -17,6 +17,7 @@ const requiredBundleMarkers = [
   '/pg/images/tasks/edits',
   'imageTaskTerminal',
   'grok-video-super-720p',
+  'grok-video-1.5',
   'seedance-2.0-dj-fast',
   'seedance-2.0-cl-mini',
   'seedance-2.0-ld-17',
@@ -24,6 +25,13 @@ const requiredBundleMarkers = [
   'public_reference',
   'reverse_prompt_upstream_url',
   'upstream_url',
+]
+
+const requiredBundlePatterns = [
+  {
+    label: 'Grok Video 1.5 text and image workflows',
+    pattern: /value:\s*["']grok-video-1\.5["'][\s\S]{0,1200}?workflows:\s*\[["']text["'],["']image["']\]/,
+  },
 ]
 
 const expectedChannels = [
@@ -124,6 +132,12 @@ async function checkBundle(baseUrl, timeoutMs) {
   for (const marker of requiredBundleMarkers) {
     if (!bundle.includes(marker)) {
       errors.push(`served bundle missing marker: ${marker}`)
+    }
+  }
+
+  for (const required of requiredBundlePatterns) {
+    if (!required.pattern.test(bundle)) {
+      errors.push(`served bundle missing behavior: ${required.label}`)
     }
   }
 

@@ -1,11 +1,49 @@
 package model
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGetEnabledTaggedChannelForGroupModelSelectsExactDurationPool(t *testing.T) {
+	sixSecondTag := "xingren-grok-video-15-6s"
+	tenSecondTag := "xingren-grok-video-15-10s"
+	withChannelSatisfyCacheForTest(t, map[string]map[string][]int{
+		"default": {
+			"grok-video-1.5": {31, 32},
+		},
+	}, map[int]*Channel{
+		31: testTaggedChannel(31, common.ChannelStatusEnabled, tenSecondTag),
+		32: testTaggedChannel(32, common.ChannelStatusEnabled, sixSecondTag),
+	})
+
+	channel, err := GetEnabledTaggedChannelForGroupModel("default", "grok-video-1.5", sixSecondTag)
+
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	require.Equal(t, 32, channel.Id)
+}
+
+func TestGetEnabledTaggedChannelForGroupModelRejectsAmbiguousPool(t *testing.T) {
+	tag := "xingren-grok-video-15-6s"
+	withChannelSatisfyCacheForTest(t, map[string]map[string][]int{
+		"default": {
+			"grok-video-1.5": {32, 33},
+		},
+	}, map[int]*Channel{
+		32: testTaggedChannel(32, common.ChannelStatusEnabled, tag),
+		33: testTaggedChannel(33, common.ChannelStatusEnabled, tag),
+	})
+
+	channel, err := GetEnabledTaggedChannelForGroupModel("default", "grok-video-1.5", tag)
+
+	require.Nil(t, channel)
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "multiple enabled channels"))
+}
 
 func TestIsChannelCurrentPriorityForGroupModelRejectsStaleAffinityChannel(t *testing.T) {
 	withChannelSatisfyCacheForTest(t, map[string]map[string][]int{
@@ -61,5 +99,13 @@ func testChannelWithPriority(id int, status int, priority int64) *Channel {
 		Id:       id,
 		Status:   status,
 		Priority: &priority,
+	}
+}
+
+func testTaggedChannel(id int, status int, tag string) *Channel {
+	return &Channel{
+		Id:     id,
+		Status: status,
+		Tag:    &tag,
 	}
 }

@@ -1,9 +1,81 @@
 package model
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
+
+func GetEnabledTaggedChannelForGroupModel(group string, modelName string, tag string) (*Channel, error) {
+	group = strings.TrimSpace(group)
+	modelName = strings.TrimSpace(modelName)
+	tag = strings.TrimSpace(tag)
+	if group == "" || modelName == "" || tag == "" {
+		return nil, nil
+	}
+
+	if common.MemoryCacheEnabled {
+		channelSyncLock.RLock()
+		defer channelSyncLock.RUnlock()
+
+		channelIDs := group2model2channels[group][modelName]
+		if len(channelIDs) == 0 {
+			normalizedModel := ratio_setting.FormatMatchingModelName(modelName)
+			if normalizedModel != "" && normalizedModel != modelName {
+				channelIDs = group2model2channels[group][normalizedModel]
+			}
+		}
+		var selected *Channel
+		for _, channelID := range channelIDs {
+			channel := channelsIDM[channelID]
+			if channel == nil || channel.Status != common.ChannelStatusEnabled || channel.Tag == nil || strings.TrimSpace(*channel.Tag) != tag {
+				continue
+			}
+			if selected != nil {
+				return nil, fmt.Errorf("multiple enabled channels use routing tag %q for group %q and model %q", tag, group, modelName)
+			}
+			selected = channel
+		}
+		return selected, nil
+	}
+
+	var channelIDs []int
+	query := DB.Model(&Ability{}).
+		Where(map[string]interface{}{"group": group, "model": modelName, "enabled": true}).
+		Pluck("channel_id", &channelIDs)
+	if query.Error != nil {
+		return nil, query.Error
+	}
+	if len(channelIDs) == 0 {
+		normalizedModel := ratio_setting.FormatMatchingModelName(modelName)
+		if normalizedModel != "" && normalizedModel != modelName {
+			query = DB.Model(&Ability{}).
+				Where(map[string]interface{}{"group": group, "model": normalizedModel, "enabled": true}).
+				Pluck("channel_id", &channelIDs)
+			if query.Error != nil {
+				return nil, query.Error
+			}
+		}
+	}
+
+	var selected *Channel
+	for _, channelID := range channelIDs {
+		channel, err := GetChannelById(channelID, true)
+		if err != nil {
+			return nil, err
+		}
+		if channel.Status != common.ChannelStatusEnabled || channel.Tag == nil || strings.TrimSpace(*channel.Tag) != tag {
+			continue
+		}
+		if selected != nil {
+			return nil, fmt.Errorf("multiple enabled channels use routing tag %q for group %q and model %q", tag, group, modelName)
+		}
+		selected = channel
+	}
+	return selected, nil
+}
 
 func IsChannelEnabledForGroupModel(group string, modelName string, channelID int) bool {
 	if group == "" || modelName == "" || channelID <= 0 {
