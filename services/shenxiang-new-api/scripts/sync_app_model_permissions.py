@@ -38,6 +38,9 @@ STABLE_IMAGE2_DESCRIPTION = "官转image 2稳定：支持 1K/2K/4K 输出，人�
 STABLE_IMAGE2_TAGS = "image,openai"
 STABLE_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
 STABLE_IMAGE2_PRICE_CNY = Decimal("0.135")
+GROK_IMAGE_MODEL = "grok-imagine-image"
+GROK_IMAGE_DESCRIPTION = "Grok Image Pro：仅支持 1K 输出，人民币 ¥0.12/张。"
+GROK_IMAGE_PRICE_CNY = Decimal("0.12")
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
@@ -1320,9 +1323,25 @@ def sync_public_image_pricing() -> None:
     model_ratios.pop(STABLE_IMAGE2_PUBLIC_MODEL, None)
     completion_ratios.pop(STABLE_IMAGE2_PUBLIC_MODEL, None)
 
+    model_prices[GROK_IMAGE_MODEL] = decimal_to_float(
+        GROK_IMAGE_PRICE_CNY / exchange_rate
+    )
+    model_ratios.pop(GROK_IMAGE_MODEL, None)
+    completion_ratios.pop(GROK_IMAGE_MODEL, None)
+
     upsert_json_option("ModelRatio", model_ratios)
     upsert_json_option("CompletionRatio", completion_ratios)
     upsert_json_option("ModelPrice", model_prices)
+
+
+def sync_grok_image_metadata() -> None:
+    mysql_exec(
+        "UPDATE models SET description = "
+        + sql_quote(GROK_IMAGE_DESCRIPTION)
+        + ", updated_time = UNIX_TIMESTAMP() WHERE deleted_at IS NULL AND model_name = "
+        + sql_quote(GROK_IMAGE_MODEL)
+        + ";"
+    )
 
 
 def sync_tokens(profiles: dict[str, list[str]]) -> None:
@@ -1858,6 +1877,7 @@ def main() -> int:
     ensure_public_video_models()
     ensure_discount_image2_backing_model()
     ensure_stable_image2_backing_model()
+    sync_grok_image_metadata()
     ensure_public_openai_text_models()
     sync_public_video_pricing()
     sync_public_image_pricing()

@@ -459,8 +459,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
     def test_sync_public_image_pricing_sets_fixed_cny_price(self) -> None:
         captured_options: dict[str, dict[str, float]] = {}
         self.module.parse_json_option = lambda key: {
-            "ModelRatio": {"官转image 2稳定": 9.9},
-            "CompletionRatio": {"官转image 2稳定": 2.0},
+            "ModelRatio": {"官转image 2稳定": 9.9, "grok-imagine-image": 8.8},
+            "CompletionRatio": {"官转image 2稳定": 2.0, "grok-imagine-image": 3.0},
             "ModelPrice": {"gpt-image-2-4K": 0.01},
         }[key].copy()
         self.module.option_value = lambda key: "7.3" if key == "USDExchangeRate" else ""
@@ -475,6 +475,24 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
         self.assertNotIn("官转image 2稳定", captured_options["ModelRatio"])
         self.assertNotIn("官转image 2稳定", captured_options["CompletionRatio"])
+        self.assertAlmostEqual(
+            captured_options["ModelPrice"]["grok-imagine-image"],
+            0.016438356164,
+            places=12,
+        )
+        self.assertNotIn("grok-imagine-image", captured_options["ModelRatio"])
+        self.assertNotIn("grok-imagine-image", captured_options["CompletionRatio"])
+
+    def test_sync_grok_image_metadata_sets_one_k_price_description(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_grok_image_metadata()
+
+        sql = "\n".join(captured)
+        self.assertIn("grok-imagine-image", sql)
+        self.assertIn("仅支持 1K 输出", sql)
+        self.assertIn("¥0.12/张", sql)
 
     def test_sync_tokens_updates_admin_system_tokens_only(self) -> None:
         captured: list[str] = []

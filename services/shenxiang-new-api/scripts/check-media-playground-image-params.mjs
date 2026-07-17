@@ -85,10 +85,15 @@ function main() {
   errors.push(
     ...markerErrors('Grok official ratio and resolution controls', classic, [
       'sizes: XAI_GROK_IMAGE_ASPECT_RATIOS',
-      "resolutions: ['1k', '2k']",
-      '官方按比例 + 1k/2k 分辨率控制，不公布固定像素表',
+      "resolutions: ['1k']",
+      "defaultResolution: '1k'",
+      '官方按比例 + 1k 分辨率控制，不公布固定像素表',
     ]),
   )
+
+  if (grokBlock.includes("'2k'")) {
+    errors.push('Grok Image Pro must not expose unsupported 2k resolution')
+  }
 
   errors.push(
     ...markerErrors('Visible pixel output spec', classic, [

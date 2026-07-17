@@ -89,8 +89,8 @@ const PRICING_DISPLAY_OVERRIDES = {
   },
   'grok-imagine-image': {
     display_name: 'Grok Image Pro',
-    description: 'Grok Image Pro：真实感、社媒配图和快速风格探索，人民币 ¥0.324/张。',
-    fixed_price_label: '¥0.324',
+    description: 'Grok Image Pro：仅支持 1K 输出，人民币 ¥0.12/张。',
+    fixed_price_label: '¥0.12',
     price_unit_label: '张',
     billing_label: '按张计费',
   },
