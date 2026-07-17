@@ -1,9 +1,12 @@
 import type { DifyFileObject, DifyFileType } from "@/lib/dify-types"
 import { isWorkflowSkillAgent, type WorkflowSkillId } from "@/lib/workflow-skill-agents"
+import { MAX_WORKFLOW_DOCUMENT_CHARS } from "@/lib/workflow-document-limits"
 
 type DifyFileMetadata = {
   id: string
   mimeType: string
+  name?: string
+  extractedText?: string
 }
 
 export type DifyUploadRouting = {
@@ -28,7 +31,14 @@ function parseDifyFileMetadata(value: unknown): DifyFileMetadata[] {
     const record = item as Record<string, unknown>
     const id = normalizeString(record.id)
     const mimeType = normalizeString(record.mimeType)
-    return id && mimeType ? [{ id, mimeType }] : []
+    const name = normalizeString(record.name)
+    const extractedText = normalizeString(record.extractedText)
+    return id && mimeType ? [{
+      id,
+      mimeType,
+      ...(name ? { name } : {}),
+      ...(extractedText ? { extractedText } : {}),
+    }] : []
   })
 }
 
@@ -79,6 +89,35 @@ export function hasCompleteDifyFileMetadata(fileIds: string[], value: unknown) {
   if (fileIds.length === 0) return true
   const metadataById = new Map(parseDifyFileMetadata(value).map((item) => [item.id, item.mimeType]))
   return fileIds.every((id) => metadataById.has(id))
+}
+
+export function hasCompleteWorkflowDocumentText(fileIds: string[], value: unknown) {
+  const metadataById = new Map(parseDifyFileMetadata(value).map((item) => [item.id, item]))
+  return fileIds.every((id) => {
+    const metadata = metadataById.get(id)
+    if (!metadata) return false
+    return getDifyFileTypeForMime(metadata.mimeType) !== "document" || Boolean(metadata.extractedText)
+  })
+}
+
+export function buildWorkflowSkillQuery(
+  query: string,
+  workflowSkillId: WorkflowSkillId,
+  fileIds: string[],
+  value: unknown,
+) {
+  const metadataById = new Map(parseDifyFileMetadata(value).map((item) => [item.id, item]))
+  const documentSections = fileIds.flatMap((id) => {
+    const metadata = metadataById.get(id)
+    if (!metadata?.extractedText || getDifyFileTypeForMime(metadata.mimeType) !== "document") return []
+    return [`【附件正文：${metadata.name || "未命名文档"}】\n${metadata.extractedText.slice(0, MAX_WORKFLOW_DOCUMENT_CHARS)}`]
+  })
+
+  return [
+    `【指定技能】${workflowSkillId}`,
+    `【用户要求】${query}`,
+    ...documentSections,
+  ].join("\n\n")
 }
 
 export function buildDifyLocalFileObjects(fileIds: string[], value: unknown): DifyFileObject[] {

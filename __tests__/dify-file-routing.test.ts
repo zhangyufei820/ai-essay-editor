@@ -1,10 +1,13 @@
 import {
   buildDifyLocalFileObjects,
+  buildWorkflowSkillQuery,
   getDifyFileTypeForMime,
   hasCompleteDifyFileMetadata,
+  hasCompleteWorkflowDocumentText,
   resolveDifyUploadRouting,
 } from "@/lib/dify-file-routing"
 import { getDifyTerminalFailure } from "@/lib/dify-stream-failure"
+import { extractWorkflowDocumentText, WorkflowDocumentError } from "@/lib/workflow-document-content"
 import { readFileSync } from "fs"
 import path from "path"
 
@@ -62,6 +65,34 @@ describe("Dify file routing", () => {
       [{ id: "doc-file-id", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }],
     )).toBe(true)
   })
+
+  it("requires extracted text for workflow documents", () => {
+    const metadata = {
+      id: "doc-file-id",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      name: "essay.docx",
+    }
+    expect(hasCompleteWorkflowDocumentText([metadata.id], [metadata])).toBe(false)
+    expect(hasCompleteWorkflowDocumentText([metadata.id], [{ ...metadata, extractedText: "作文正文" }])).toBe(true)
+    expect(hasCompleteWorkflowDocumentText(
+      ["image-file-id"],
+      [{ id: "image-file-id", mimeType: "image/png" }],
+    )).toBe(true)
+  })
+
+  it("injects the selected skill and extracted document text into the workflow query", () => {
+    expect(buildWorkflowSkillQuery(
+      "请完整批阅",
+      "shenxiang-gaozhong-lunshuowen",
+      ["doc-file-id"],
+      [{
+        id: "doc-file-id",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        name: "essay.docx",
+        extractedText: "在信息洪流中保持独立判断",
+      }],
+    )).toContain("【指定技能】shenxiang-gaozhong-lunshuowen\n\n【用户要求】请完整批阅\n\n【附件正文：essay.docx】\n在信息洪流中保持独立判断")
+  })
 })
 
 describe("Dify terminal failures", () => {
@@ -94,6 +125,21 @@ describe("Dify terminal failures", () => {
   })
 })
 
+describe("Workflow document extraction", () => {
+  it("normalizes text documents before they enter the workflow query", async () => {
+    const file = new File([" 第一段。\r\n\r\n\r\n第二段。 "], "essay.txt", { type: "text/plain" })
+    await expect(extractWorkflowDocumentText(file)).resolves.toBe("第一段。\n\n第二段。")
+  })
+
+  it("rejects unsupported workflow documents before uploading to Dify", async () => {
+    const file = new File(["%PDF"], "essay.pdf", { type: "application/pdf" })
+    await expect(extractWorkflowDocumentText(file)).rejects.toMatchObject<Partial<WorkflowDocumentError>>({
+      code: "WORKFLOW_DOCUMENT_UNSUPPORTED",
+      status: 415,
+    })
+  })
+})
+
 describe("Dify file routing integration", () => {
   it("keeps upload and chat credential scopes aligned", () => {
     const chat = read("components/chat/enhanced-chat-interface.tsx")
@@ -111,6 +157,8 @@ describe("Dify file routing integration", () => {
     expect(chat).toContain("fileAttachments,")
     expect(route).toContain("difyRequest.files = difyFiles")
     expect(route).toContain("hasCompleteDifyFileMetadata(difyFileIds, fileAttachments)")
+    expect(route).toContain("hasCompleteWorkflowDocumentText(difyFileIds, fileAttachments)")
+    expect(route).toContain("buildWorkflowSkillQuery(effectiveQuery, workflowSkillId")
     expect(route).toContain("const terminalFailure = getDifyTerminalFailure(json)")
     expect(route).toContain("controller.terminate()")
   })

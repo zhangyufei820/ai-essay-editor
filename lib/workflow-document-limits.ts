@@ -1,0 +1,1 @@
+export const MAX_WORKFLOW_DOCUMENT_CHARS = 80_000

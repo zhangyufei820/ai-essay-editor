@@ -6,10 +6,11 @@ import sharp from "sharp"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
-import { resolveDifyUploadRouting } from "@/lib/dify-file-routing"
+import { getDifyFileTypeForMime, resolveDifyUploadRouting } from "@/lib/dify-file-routing"
 import { createRequestId, sanitizeForTrace } from "@/lib/ai-task-trace"
 import { requireUser } from "@/lib/auth/verified-user"
 import { sanitizePublicAiErrorCode } from "@/lib/chat-error-sanitizer"
+import { extractWorkflowDocumentText, WorkflowDocumentError } from "@/lib/workflow-document-content"
 
 // ✅ 修改 1: 切换回 Node.js 运行时，以支持更大的文件和更稳定的上传
 export const runtime = "nodejs" 
@@ -367,6 +368,27 @@ export async function POST(request: NextRequest) {
     const normalizedUpload = await normalizeUploadFile(file, extCheck.safeExt!)
     const uploadFile = normalizedUpload.file
     const safeFileName = generateSafeFileName(normalizedUpload.safeExt)
+    let extractedText: string | null = null
+    if (uploadRouting.workflowSkillId && getDifyFileTypeForMime(uploadFile.type) === "document") {
+      try {
+        extractedText = await extractWorkflowDocumentText(uploadFile)
+      } catch (error) {
+        const documentError = error instanceof WorkflowDocumentError
+          ? error
+          : new WorkflowDocumentError(
+              "WORKFLOW_DOCUMENT_EXTRACTION_FAILED",
+              422,
+              "文档正文读取失败，请确认文件未损坏后重新上传。",
+            )
+        return new Response(JSON.stringify({
+          error: documentError.message,
+          code: documentError.code,
+        }), {
+          status: documentError.status,
+          headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
+        })
+      }
+    }
     console.log(`[Upload] 安全校验通过: ${file.name} -> ${safeFileName} | 用户: ${userId} | 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB | requestId=${requestId}`, {
       convertedFrom: normalizedUpload.convertedFrom,
       uploadType: uploadFile.type,
@@ -417,6 +439,8 @@ export async function POST(request: NextRequest) {
             original_content_type: file.type,
             original_size: file.size,
             converted_from: normalizedUpload.convertedFrom,
+            extracted_text: extractedText,
+            extracted_char_count: extractedText?.length || 0,
           },
         }), {
           status: 200,

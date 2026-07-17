@@ -322,6 +322,7 @@ type UploadedFile = {
   gatewayUrl?: string
   modelUrl?: string
   storageUrl?: string
+  extractedText?: string
 }
 // 🔥 消息类型 - 支持 metadata 存储音乐等附加数据，支持 files 显示上传的文件
 type Message = {
@@ -2292,7 +2293,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             if (!res.ok) {
               const errData = await res.json().catch(() => ({}))
               if (res.status === 413) {
-                throw new Error(`文件超过 ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB 限制`)
+                throw new Error(errData.error || `文件超过 ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB 限制`)
               }
               throw new Error(errData.error || `上传失败: ${res.status}`)
             }
@@ -2301,6 +2302,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             const gatewayUrl = data.gatewayUrl || data.data?.gateway_url
             const modelUrl = data.modelUrl || data.data?.model_url || data.data?.url || gatewayUrl
             const resolvedMimeType = data.data?.content_type || fileToUpload.type
+            const extractedText = typeof data.data?.extracted_text === "string"
+              ? data.data.extracted_text
+              : undefined
 
             // 🔥 更新进度
             setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
@@ -2316,6 +2320,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         gatewayUrl,
                         modelUrl,
                         storageUrl: modelUrl || gatewayUrl || (data.id ? `dify-file://${data.id}` : ""),
+                        extractedText,
                         preview: URL.createObjectURL(fileToUpload)
                     });
                 } else {
@@ -2328,6 +2333,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         gatewayUrl,
                         modelUrl,
                         storageUrl: data.id ? `dify-file://${data.id}` : "",
+                        extractedText,
                         preview: undefined
                     })
                 }
@@ -2624,7 +2630,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             sessionId: sid,
             role: "user",
             content: userMsg.content,
-            files: activeFiles,
+            files: activeFiles.map(({ extractedText: _extractedText, ...file }) => file),
             metadata: {
               requestId,
               clientMessageId: userMsg.id,
@@ -2703,7 +2709,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
     try {
         const fileAttachments = activeFiles.flatMap((file) => file.difyFileId
-          ? [{ id: file.difyFileId, mimeType: file.type }]
+          ? [{
+              id: file.difyFileId,
+              mimeType: file.type,
+              name: file.name,
+              extractedText: file.extractedText,
+            }]
           : [])
         const fileIds = fileAttachments.map((file) => file.id)
         const fileUrls = activeFiles

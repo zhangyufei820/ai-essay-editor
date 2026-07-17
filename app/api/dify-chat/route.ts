@@ -36,7 +36,12 @@ import { hasUsefulOpenClawResult, sanitizeDifyAnswerForModel } from "@/lib/dify-
 import { getSafeUpstreamErrorMessage, sanitizePublicAiError, sanitizePublicAiErrorCode, sanitizePublicAiStatus, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
 import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
-import { buildDifyLocalFileObjects, hasCompleteDifyFileMetadata } from "@/lib/dify-file-routing"
+import {
+  buildDifyLocalFileObjects,
+  buildWorkflowSkillQuery,
+  hasCompleteDifyFileMetadata,
+  hasCompleteWorkflowDocumentText,
+} from "@/lib/dify-file-routing"
 import { getDifyTerminalFailure } from "@/lib/dify-stream-failure"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
@@ -3544,6 +3549,18 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: message, code: "FILE_REUPLOAD_REQUIRED" }, { status: 400 })
     }
 
+    if (workflowSkillId && difyFileIds.length > 0 && !hasCompleteWorkflowDocumentText(difyFileIds, fileAttachments)) {
+      const message = "附件正文未能读取，请重新上传文件后再试。"
+      console.warn(`🚫 [Dify-Chat] 工作流文档缺少正文: requestId=${requestId} files=${difyFileIds.length}`)
+      await settlePreflightFailure({
+        stage: "附件正文未能读取",
+        errorMessage: message,
+        errorCode: "DIFY_DOCUMENT_TEXT_MISSING",
+        metadata: { file_count: difyFileIds.length },
+      })
+      return Response.json({ error: message, code: "FILE_REUPLOAD_REQUIRED" }, { status: 400 })
+    }
+
     if (!isDirectImageGatewayRequest && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
       console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "general-chat"} urls=${fileUrls.length}`)
       await settlePreflightFailure({
@@ -4129,7 +4146,9 @@ export async function POST(request: NextRequest) {
                 ? (query || "你好")
                 : normalizedCodexSkill?.skillId
                   ? allInOneQuery
-                : effectiveQuery
+                : workflowSkillId
+                  ? buildWorkflowSkillQuery(effectiveQuery, workflowSkillId, difyFileIds, fileAttachments)
+                  : effectiveQuery
 
             difyRequest = {
                 inputs: chatInputs,
