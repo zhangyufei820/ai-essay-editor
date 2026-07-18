@@ -518,7 +518,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("grok-imagine-image", captured_options["ModelRatio"])
         self.assertNotIn("grok-imagine-image", captured_options["CompletionRatio"])
 
-    def test_sync_grok_image_metadata_sets_resolutions_and_price_description(self) -> None:
+    def test_sync_grok_image_metadata_sets_verified_capability_description(self) -> None:
         captured: list[str] = []
         self.module.mysql_exec = captured.append
 
@@ -526,7 +526,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         sql = "\n".join(captured)
         self.assertIn("grok-imagine-image", sql)
-        self.assertIn("支持 1K/2K 输出", sql)
+        self.assertIn("实际仅返回约 1K", sql)
+        self.assertNotIn("2K", sql)
         self.assertIn("仅支持文生图", sql)
         self.assertNotIn("图生图", sql)
         self.assertIn("¥0.10/张", sql)

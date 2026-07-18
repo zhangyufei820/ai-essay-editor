@@ -85,9 +85,9 @@ function main() {
   errors.push(
     ...markerErrors('Grok official ratio and resolution controls', classic, [
       'sizes: XAI_GROK_IMAGE_ASPECT_RATIOS',
-      "resolutions: ['1k', '2k']",
+      "resolutions: ['1k']",
       "defaultResolution: '1k'",
-      '1k/2k 同价',
+      '当前供应商实际仅返回约 1K',
     ]),
   )
 
@@ -95,8 +95,12 @@ function main() {
     errors.push('Grok Image Pro must remain text-to-image only')
   }
 
+  if (grokBlock.includes("'2k'")) {
+    errors.push('Grok Image Pro must not expose unverified 2k output')
+  }
+
   if (!grokBlock.includes("priceLabel: '¥0.10/张'")) {
-    errors.push('Grok Image Pro must show ¥0.10 fixed price for 1k/2k')
+    errors.push('Grok Image Pro must show ¥0.10 fixed price')
   }
 
   errors.push(

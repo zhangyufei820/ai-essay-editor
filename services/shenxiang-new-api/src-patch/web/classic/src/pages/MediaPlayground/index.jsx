@@ -298,7 +298,7 @@ const IMAGE_MODELS = [
     vendor: '星人图像',
     sizes: XAI_GROK_IMAGE_ASPECT_RATIOS,
     aspectRatios: XAI_GROK_IMAGE_ASPECT_RATIOS,
-    resolutions: ['1k', '2k'],
+    resolutions: ['1k'],
     qualities: ['low', 'medium', 'high'],
     formats: ['url', 'b64_json'],
     defaultSize: '1:1',
@@ -311,7 +311,7 @@ const IMAGE_MODELS = [
     edit: false,
     priceLabel: '¥0.10/张',
     billingLabel: '按张计费',
-    hint: '仅支持文生图，1k/2k 同价。官方按比例 + 分辨率控制，不公布固定像素表。',
+    hint: '仅支持文生图，当前供应商实际仅返回约 1K。官方支持分辨率参数，但该线路暂未兑现 2K 输出。',
   },
 ];
 
