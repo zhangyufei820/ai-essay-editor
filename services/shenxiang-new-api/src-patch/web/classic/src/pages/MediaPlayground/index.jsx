@@ -309,7 +309,7 @@ const IMAGE_MODELS = [
     countParam: 'n',
     sizeParam: 'aspect_ratio',
     edit: true,
-    priceLabel: '¥0.324/张',
+    priceLabel: '¥0.12/张',
     billingLabel: '按张计费',
     hint: '适合真实感、社媒封面和快速创意探索。官方按比例 + 1k/2k 分辨率控制，不公布固定像素表。',
   },

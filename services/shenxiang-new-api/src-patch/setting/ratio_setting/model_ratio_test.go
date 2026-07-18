@@ -21,3 +21,26 @@ func TestGPT56CompletionRatioAllowsExplicitOverride(t *testing.T) {
 		t.Fatalf("gpt-5.6-sol completion ratio = %v, want default 6", got)
 	}
 }
+
+func TestGPT54MiniCompletionRatioAllowsExplicitOverride(t *testing.T) {
+	previous := CompletionRatio2JSONString()
+	t.Cleanup(func() {
+		if err := UpdateCompletionRatioByJSONString(previous); err != nil {
+			t.Fatalf("restore completion ratio: %v", err)
+		}
+	})
+
+	if err := UpdateCompletionRatioByJSONString(`{"gpt-5.4-mini":5.714286}`); err != nil {
+		t.Fatalf("update completion ratio: %v", err)
+	}
+
+	if got := GetCompletionRatio("gpt-5.4-mini"); got != 5.714286 {
+		t.Fatalf("gpt-5.4-mini completion ratio = %v, want 5.714286", got)
+	}
+	if info := GetCompletionRatioInfo("gpt-5.4-mini"); info.Locked || info.Ratio != 5.714286 {
+		t.Fatalf("gpt-5.4-mini completion ratio info = %+v, want unlocked 5.714286", info)
+	}
+	if got := GetCompletionRatio("gpt-5.4"); got != 6 {
+		t.Fatalf("gpt-5.4 completion ratio = %v, want locked default 6", got)
+	}
+}

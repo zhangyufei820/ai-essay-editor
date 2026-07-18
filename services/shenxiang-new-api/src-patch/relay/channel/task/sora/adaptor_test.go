@@ -1,13 +1,29 @@
 package sora
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
 
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 )
+
+func TestFetchTaskContextHonorsCancellation(t *testing.T) {
+	service.InitHttpClient()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := (&TaskAdaptor{}).FetchTaskContext(ctx, "https://example.invalid", "test-key", map[string]any{
+		"task_id": "task-cancelled",
+	}, "")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("FetchTaskContext() error = %v, want context canceled", err)
+	}
+}
 
 func TestNormalizeSeedanceVideoRequestBodyUsesOfficialFirstFramePayload(t *testing.T) {
 	body := map[string]interface{}{

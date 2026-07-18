@@ -2,6 +2,7 @@ package sora
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1459,6 +1460,13 @@ func seedanceGatewayTaskError(dResp responseTask, httpStatus int) *dto.TaskError
 
 // FetchTask fetch task status
 func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy string) (*http.Response, error) {
+	return a.FetchTaskContext(context.Background(), baseUrl, key, body, proxy)
+}
+
+func (a *TaskAdaptor) FetchTaskContext(ctx context.Context, baseUrl, key string, body map[string]any, proxy string) (*http.Response, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	taskID, ok := body["task_id"].(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid task_id")
@@ -1466,7 +1474,7 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 
 	uri := fmt.Sprintf("%s/v1/videos/%s", baseUrl, taskID)
 
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	if err != nil {
 		return nil, err
 	}
