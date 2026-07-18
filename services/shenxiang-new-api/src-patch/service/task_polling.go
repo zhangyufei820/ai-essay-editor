@@ -76,6 +76,8 @@ type TaskPollingSummary struct {
 const (
 	asyncVideoWatchInterval = 15 * time.Second
 	asyncVideoWatchTimeout  = 35 * time.Minute
+	asyncVideoFetchTimeout  = 30 * time.Second
+	asyncVideoTimeoutReason = "视频任务超过35分钟未完成，已自动退款"
 )
 
 var activeAsyncVideoWatchers sync.Map
@@ -88,6 +90,10 @@ type TaskPollingAdaptor interface {
 	// AdjustBillingOnComplete 在任务到达终态（成功/失败）时由轮询循环调用。
 	// 返回正数触发差额结算（补扣/退还），返回 0 保持预扣费金额不变。
 	AdjustBillingOnComplete(task *model.Task, taskResult *relaycommon.TaskInfo) int
+}
+
+type taskPollingContextAdaptor interface {
+	FetchTaskContext(ctx context.Context, baseURL string, key string, body map[string]any, proxy string) (*http.Response, error)
 }
 
 // GetTaskAdaptorFunc 由 main 包注入，用于获取指定平台的任务适配器。
@@ -171,8 +177,21 @@ func RunTaskPollingOnce(ctx context.Context, progress func(processed, total int)
 	}
 	platformTask := make(map[constant.TaskPlatform][]*model.Task)
 	for _, t := range allTasks {
-		platformTask[t.Platform] = append(platformTask[t.Platform], t)
 		summary.PlatformCount[string(t.Platform)]++
+		if isAsyncVideoTask(t) && asyncVideoTaskExpired(t, time.Now()) {
+			done, err := finalizeAsyncVideoTaskTimeout(ctx, t.TaskID)
+			if err != nil {
+				logger.LogWarn(ctx, fmt.Sprintf("failed to finalize timed out async video task %s: %s", t.TaskID, err.Error()))
+			}
+			if done {
+				summary.Processed++
+				if progress != nil {
+					progress(summary.Processed, summary.Total)
+				}
+				continue
+			}
+		}
+		platformTask[t.Platform] = append(platformTask[t.Platform], t)
 	}
 	for platform, tasks := range platformTask {
 		if len(tasks) == 0 {
@@ -243,7 +262,13 @@ func WatchAsyncVideoTask(taskID string) {
 	for {
 		select {
 		case <-timer.C:
-			logger.LogWarn(context.Background(), fmt.Sprintf("async video watcher timed out for task %s", taskID))
+			ctx := context.Background()
+			done, err := finalizeAsyncVideoTaskTimeout(ctx, taskID)
+			if err != nil {
+				logger.LogWarn(ctx, fmt.Sprintf("async video watcher timeout finalization failed for task %s: %s", taskID, err.Error()))
+			} else if done {
+				logger.LogWarn(ctx, fmt.Sprintf("async video watcher timed out and finalized task %s", taskID))
+			}
 			return
 		case <-ticker.C:
 			done, err := pollAsyncVideoTaskByPublicID(context.Background(), taskID)
@@ -256,6 +281,94 @@ func WatchAsyncVideoTask(taskID string) {
 			}
 		}
 	}
+}
+
+func isAsyncVideoTask(task *model.Task) bool {
+	if task == nil {
+		return false
+	}
+	return task.Platform != constant.TaskPlatformMidjourney &&
+		task.Platform != constant.TaskPlatformSuno &&
+		task.Platform != constant.TaskPlatformPlaygroundImage
+}
+
+func asyncVideoTaskExpired(task *model.Task, now time.Time) bool {
+	if !isAsyncVideoTask(task) {
+		return false
+	}
+	startedAt := task.SubmitTime
+	if startedAt <= 0 {
+		startedAt = task.CreatedAt
+	}
+	return startedAt > 0 && now.Unix()-startedAt >= int64(asyncVideoWatchTimeout/time.Second)
+}
+
+func finalizeAsyncVideoTaskTimeout(ctx context.Context, taskID string) (bool, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	done, pollErr := pollAsyncVideoTaskByPublicID(ctx, taskID)
+	if done {
+		return true, nil
+	}
+	if pollErr != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("final async video poll failed for task %s: %s", taskID, pollErr.Error()))
+	}
+
+	task, exists, err := model.GetByOnlyTaskId(taskID)
+	if err != nil {
+		return false, err
+	}
+	if !exists || task == nil {
+		return true, nil
+	}
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		return true, nil
+	}
+
+	oldStatus := task.Status
+	now := time.Now().Unix()
+	task.Status = model.TaskStatusFailure
+	task.Progress = taskcommon.ProgressComplete
+	task.FinishTime = now
+	task.FailReason = asyncVideoTimeoutReason
+	won, err := task.UpdateWithStatus(oldStatus)
+	if err != nil {
+		return false, err
+	}
+	if !won {
+		return true, nil
+	}
+
+	extra := map[string]interface{}{
+		"fail_reason":        asyncVideoTimeoutReason,
+		"failure_kind":       "media_task_timeout",
+		"final_log_type":     "error",
+		"refund_reason":      "media_task_timeout",
+		"billing_settlement": "preconsume_refund_task_timeout",
+		"model_name":         taskModelName(task),
+		"group":              task.Group,
+	}
+	if task.ChannelId > 0 {
+		extra["channel_id"] = task.ChannelId
+	}
+	if upstreamTaskID := strings.TrimSpace(task.GetUpstreamTaskID()); upstreamTaskID != "" {
+		extra["upstream_task_id"] = upstreamTaskID
+	}
+	if task.StartTime > 0 && task.FinishTime >= task.StartTime {
+		extra["use_time"] = int(task.FinishTime - task.StartTime)
+	}
+	if task.Quota > 0 {
+		extra["pre_refund_quota"] = task.Quota
+	}
+	if task.PrivateData.TokenId > 0 {
+		extra["token_id"] = task.PrivateData.TokenId
+	}
+	if err := model.UpdatePlaygroundVideoTaskConsumeLogResult(task.UserId, task.TaskID, "", task.FinishTime, string(model.TaskStatusFailure), extra); err != nil {
+		logger.LogError(ctx, fmt.Sprintf("failed to update timed out playground video task log %s: %s", task.TaskID, err.Error()))
+	}
+	RefundTaskQuota(ctx, task, asyncVideoTimeoutReason)
+	return true, nil
 }
 
 func pollAsyncVideoTaskByPublicID(ctx context.Context, taskID string) (bool, error) {
@@ -470,6 +583,9 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 		}
 		return fmt.Errorf("CacheGetChannel failed: %w", err)
 	}
+	if GetTaskAdaptorFunc == nil {
+		return fmt.Errorf("video adaptor factory not initialized")
+	}
 	adaptor := GetTaskAdaptorFunc(platform)
 	if adaptor == nil {
 		return fmt.Errorf("video adaptor not found")
@@ -491,6 +607,9 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 }
 
 func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *model.Channel, taskId string, taskM map[string]*model.Task) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	baseURL := constant.ChannelBaseURLs[ch.Type]
 	if ch.GetBaseURL() != "" {
 		baseURL = ch.GetBaseURL()
@@ -508,12 +627,21 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	if privateData.Key != "" {
 		key = privateData.Key
 	}
-	resp, err := adaptor.FetchTask(baseURL, key, map[string]any{
+	fetchCtx, cancelFetch := context.WithTimeout(ctx, asyncVideoFetchTimeout)
+	defer cancelFetch()
+	fetchBody := map[string]any{
 		"task_id":        task.GetUpstreamTaskID(),
 		"action":         task.Action,
 		"origin_model":   task.Properties.OriginModelName,
 		"upstream_model": task.Properties.UpstreamModelName,
-	}, proxy)
+	}
+	var resp *http.Response
+	var err error
+	if contextAdaptor, ok := adaptor.(taskPollingContextAdaptor); ok {
+		resp, err = contextAdaptor.FetchTaskContext(fetchCtx, baseURL, key, fetchBody, proxy)
+	} else {
+		resp, err = adaptor.FetchTask(baseURL, key, fetchBody, proxy)
+	}
 	if err != nil {
 		return fmt.Errorf("fetchTask failed for task %s: %w", taskId, err)
 	}

@@ -56,8 +56,10 @@ PLANS = [
     MonthlyCardPlan("¥1000 月卡", 1000, 10, 1000),
 ]
 
+LEGACY_MONTHLY_CARD_PLAN = MonthlyCardPlan("VIP 旧版 ¥500 月卡", 500, 8, 500)
+
 LEGACY_MONTHLY_CARD_CONCURRENCY = {
-    "VIP 旧版 ¥500 月卡": 8,
+    LEGACY_MONTHLY_CARD_PLAN.title: LEGACY_MONTHLY_CARD_PLAN.concurrency_limit,
 }
 
 def load_dotenv(path: Path) -> None:
@@ -153,8 +155,35 @@ WHERE title = {title} AND ABS(price_amount - {plan.price_cny}) < 0.000001;
 """
 
 
+def build_legacy_plan_sql() -> str:
+    plan = LEGACY_MONTHLY_CARD_PLAN
+    title = sql_quote(plan.title)
+    subtitle = sql_quote(plan.subtitle)
+    return f"""
+UPDATE subscription_plans
+SET subtitle = {subtitle},
+    price_amount = {plan.price_cny},
+    currency = 'CNY',
+    duration_unit = 'day',
+    duration_value = 30,
+    custom_seconds = 0,
+    enabled = 0,
+    allow_balance_pay = 0,
+    allow_wallet_overflow = 0,
+    total_amount = {plan.monthly_quota},
+    monthly_amount_total = {plan.monthly_quota},
+    concurrency_limit = {plan.concurrency_limit},
+    quota_reset_period = 'never',
+    quota_reset_custom_seconds = 0,
+    updated_at = @now
+WHERE title = {title};
+"""
+
+
 def build_active_subscription_sql() -> str:
-    plan_titles = ", ".join(sql_quote(plan.title) for plan in PLANS)
+    plan_titles = ", ".join(
+        sql_quote(plan.title) for plan in (*PLANS, LEGACY_MONTHLY_CARD_PLAN)
+    )
     legacy_updates = "\n".join(
         f"""
 UPDATE user_subscriptions us
@@ -223,6 +252,8 @@ SET @now := UNIX_TIMESTAMP();
 START TRANSACTION;
 
 {plan_sql}
+
+{build_legacy_plan_sql()}
 
 {build_active_subscription_sql()}
 

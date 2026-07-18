@@ -77,6 +77,31 @@ class StableImage2ChannelTest(unittest.TestCase):
         self.assertIn("xingren-stable-image2", sql)
         self.assertNotIn("官转image 2稳定", sql)
 
+    def test_uniqueness_allows_same_endpoint_for_other_models(self) -> None:
+        queries: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            queries.append(query)
+            return [["0"]]
+
+        self.module.mysql = fake_mysql
+
+        self.module.validate_channel_uniqueness()
+
+        self.assertEqual(len(queries), 2)
+        self.assertIn("xingren-stable-image2", queries[0])
+        self.assertIn("internal-image2-stable-v1", queries[1])
+        self.assertNotIn("base_url", queries[1])
+
+    def test_uniqueness_rejects_internal_model_on_another_channel(self) -> None:
+        self.module.mysql = mock.Mock(side_effect=[[["0"]], [["1"]]])
+
+        with self.assertRaisesRegex(
+            self.module.ConfigurationError,
+            "internal image model is already assigned",
+        ):
+            self.module.validate_channel_uniqueness()
+
 
 if __name__ == "__main__":
     unittest.main()

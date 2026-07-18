@@ -46,6 +46,7 @@ class SetupMonthlyCardPlansTest(unittest.TestCase):
     def test_generated_sql_uses_cny_currency_and_disables_legacy_vip_sales(self) -> None:
         sql = self.module.build_sql()
         first_plan_sql = self.module.build_plan_sql(self.module.PLANS[0])
+        legacy_plan_sql = self.module.build_legacy_plan_sql()
 
         self.assertIn("currency = 'CNY'", sql)
         self.assertIn("100, 'CNY'", first_plan_sql)
@@ -53,6 +54,11 @@ class SetupMonthlyCardPlansTest(unittest.TestCase):
         self.assertIn("allow_wallet_overflow = 0", sql)
         self.assertIn("UPDATE subscription_plans", sql)
         self.assertIn("WHERE title LIKE 'VIP 旧版%'", sql)
+        self.assertIn("price_amount = 500", legacy_plan_sql)
+        self.assertIn("currency = 'CNY'", legacy_plan_sql)
+        self.assertIn("total_amount = 34246575", legacy_plan_sql)
+        self.assertIn("monthly_amount_total = 34246575", legacy_plan_sql)
+        self.assertIn("enabled = 0", legacy_plan_sql)
         self.assertNotIn("sp.enabled = 0 OR sp.title LIKE 'VIP 旧版%'", sql)
         self.assertNotIn("currency = 'USD'", sql)
         self.assertNotIn("折", sql)
@@ -67,6 +73,10 @@ class SetupMonthlyCardPlansTest(unittest.TestCase):
         self.assertEqual(
             self.module.LEGACY_MONTHLY_CARD_CONCURRENCY["VIP 旧版 ¥500 月卡"],
             8,
+        )
+        self.assertEqual(
+            self.module.LEGACY_MONTHLY_CARD_PLAN.monthly_quota,
+            34246575,
         )
 
         sql = self.module.build_sql()

@@ -2,6 +2,8 @@ package sora
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -15,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -425,6 +428,19 @@ func TestSD2FastUsesDocumentedJSONPayloadShape(t *testing.T) {
 		if _, ok := sdPayload[forbidden]; ok {
 			t.Fatalf("Seedance payload must not contain %q: %#v", forbidden, sdPayload)
 		}
+	}
+}
+
+func TestFetchTaskContextHonorsCancellation(t *testing.T) {
+	service.InitHttpClient()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := (&TaskAdaptor{}).FetchTaskContext(ctx, "https://example.invalid", "test-key", map[string]any{
+		"task_id": "task-cancelled",
+	}, "")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("FetchTaskContext() error = %v, want context canceled", err)
 	}
 }
 

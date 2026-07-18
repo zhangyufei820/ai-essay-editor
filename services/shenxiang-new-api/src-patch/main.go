@@ -161,6 +161,7 @@ func main() {
 
 	// Channel upstream model update check task
 	controller.StartChannelUpstreamModelUpdateTask()
+	service.StartSystemTaskRunner()
 
 	if common.IsMasterNode {
 		controller.FailInterruptedPlaygroundImageTasksOnStartup()
