@@ -70,6 +70,8 @@ io.shenxiang.new-api.policy-sha256
 io.shenxiang.new-api.release-schema
 ```
 
+The upstream ref in `release/upstream-ref` is immutable release input. It may change only after a zero-difference comparison against the known production base or an explicitly reviewed upstream migration. Never build from the moving upstream default branch.
+
 The live manifest is stored at:
 
 ```text
