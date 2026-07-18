@@ -387,7 +387,7 @@ class Release:
                 self.args.test_image,
                 "sh",
                 "-lc",
-                "go test ./middleware ./relay/channel/task/sora ./service",
+                "/usr/local/go/bin/go test ./middleware ./relay/channel/task/sora ./service",
             ]
         )
 
