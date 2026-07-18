@@ -433,13 +433,6 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 	}
 }
 
-func imageEditFileFieldName(model string, imageCount int) string {
-	if imageCount > 1 || strings.EqualFold(strings.TrimSpace(model), "grok-imagine-image") {
-		return "image[]"
-	}
-	return "image"
-}
-
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
 	switch info.RelayMode {
 	case relayconstant.RelayModeImagesEdits:
@@ -466,7 +459,7 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 		// 写入所有非文件字段
 		if mf != nil {
 			for key, values := range mf.Value {
-				if key == "model" {
+				if key == "model" || key == "group" {
 					continue
 				}
 				for _, value := range values {
@@ -507,7 +500,11 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 					return nil, fmt.Errorf("failed to open image file %d: %w", i, err)
 				}
 
-				fieldName := imageEditFileFieldName(request.Model, len(imageFiles))
+				// If multiple images, use image[] as the field name
+				fieldName := "image"
+				if len(imageFiles) > 1 {
+					fieldName = "image[]"
+				}
 
 				// Determine MIME type based on file extension
 				mimeType := detectImageMimeType(fileHeader.Filename)

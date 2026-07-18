@@ -15,12 +15,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConvertGrokImageEditUsesArrayFileField(t *testing.T) {
+func TestConvertGrokImageEditStripsRoutingGroup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	require.NoError(t, writer.WriteField("model", "grok-imagine-image"))
+	require.NoError(t, writer.WriteField("group", "internal"))
 	require.NoError(t, writer.WriteField("prompt", "edit this image"))
 	part, err := writer.CreateFormFile("image", "input.jpg")
 	require.NoError(t, err)
@@ -44,6 +45,7 @@ func TestConvertGrokImageEditUsesArrayFileField(t *testing.T) {
 	replayed := httptest.NewRequest(http.MethodPost, "/v1/images/edits", bytes.NewReader(convertedBody.Bytes()))
 	replayed.Header.Set("Content-Type", context.Request.Header.Get("Content-Type"))
 	require.NoError(t, replayed.ParseMultipartForm(32<<20))
-	require.Empty(t, replayed.MultipartForm.File["image"])
-	require.Len(t, replayed.MultipartForm.File["image[]"], 1)
+	require.Empty(t, replayed.PostForm.Get("group"))
+	require.Len(t, replayed.MultipartForm.File["image"], 1)
+	require.Empty(t, replayed.MultipartForm.File["image[]"])
 }

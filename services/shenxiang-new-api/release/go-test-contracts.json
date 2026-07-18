@@ -21,7 +21,7 @@
   },
   {
     "package": "./relay/channel/openai",
-    "run": "^TestConvertGrokImageEditUsesArrayFileField$"
+    "run": "^TestConvertGrokImageEditStripsRoutingGroup$"
   },
   {
     "package": "./service",
