@@ -18,6 +18,7 @@ const requiredBundleMarkers = [
   'imageTaskTerminal',
   'grok-video-super-720p',
   'grok-video-1.5',
+  'grok-video-1.5-1080p',
   'seedance-2.0-ld-17',
   'seedance-nsfw',
   'public_reference',
@@ -31,6 +32,10 @@ const requiredBundlePatterns = [
   {
     label: 'Grok Video 1.5 text and image workflows',
     pattern: /value:\s*["']grok-video-1\.5["'][\s\S]{0,1200}?workflows:\s*\[["']text["'],["']image["']\]/,
+  },
+  {
+    label: 'Grok Video 1.5 1080P official image workflow',
+    pattern: /value:\s*["']grok-video-1\.5-1080p["'][\s\S]{0,1800}?resolutions:\s*\[["']1080p["']\][\s\S]{0,600}?workflows:\s*\[["']image["']\]/,
   },
   {
     label: 'Seedance LD-17 WC-B media constraints',
@@ -48,6 +53,13 @@ const expectedChannels = [
     label: 'Gemini 3 Pro Image MoonApiX channel',
     model: 'gemini-3-pro-image-preview',
     upstream: 'gemini-3-pro-image-preview',
+  },
+  {
+    label: 'Grok Video 1.5 1080P channel',
+    model: 'grok-video-1.5-1080p',
+    upstream: 'grok-imagine-video-1.5',
+    optionalUntilStaged: true,
+    baseUrlPattern: /^https:\/\//i,
   },
 ]
 
@@ -192,6 +204,7 @@ function checkChannelRows(rows) {
   for (const expected of expectedChannels) {
     const matchingRows = rows.filter((row) => row.models.split(',').map((item) => item.trim()).includes(expected.model))
     if (matchingRows.length === 0) {
+      if (expected.optionalUntilStaged) continue
       errors.push(`${expected.label}: missing channel model ${expected.model}`)
       continue
     }
@@ -200,7 +213,7 @@ function checkChannelRows(rows) {
       const upstream = row.mapping[expected.model] || expected.model
       return (
         row.status === '1' &&
-        /moonapix\.com/i.test(row.baseUrl) &&
+        (expected.baseUrlPattern || /moonapix\.com/i).test(row.baseUrl) &&
         upstream === expected.upstream
       )
     })

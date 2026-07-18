@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -244,9 +245,83 @@ func TestBuildRequestBodyForGrok15TextToVideoOmitsReference(t *testing.T) {
 	}
 }
 
+func TestGrok15Video1080UsesOfficialImageToVideoContract(t *testing.T) {
+	for _, duration := range []int{1, 6, 15} {
+		body := fmt.Sprintf(`{
+			"model":%q,
+			"prompt":"Animate the reference image.",
+			"image":{"url":"https://cdn.test/reference.png"},
+			"resolution":"1080p",
+			"duration":%d,
+			"size":"1920x1080",
+			"seconds":"10",
+			"watermark":true
+		}`, grok15Video1080PublicModel, duration)
+		context, _ := gin.CreateTestContext(httptest.NewRecorder())
+		context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(body))
+		context.Request.Header.Set("Content-Type", "application/json")
+		defer common.CleanupBodyStorage(context)
+		info := &relaycommon.RelayInfo{
+			OriginModelName: grok15Video1080PublicModel,
+			ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: grok15Video1080UpstreamModel},
+			TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+		}
+		if taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, info); taskErr != nil {
+			t.Fatalf("duration=%d validation failed: %#v", duration, taskErr)
+		}
+		reader, err := (&TaskAdaptor{}).BuildRequestBody(context, info)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got map[string]interface{}
+		normalizedBody, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := common.Unmarshal(normalizedBody, &got); err != nil {
+			t.Fatal(err)
+		}
+		want := map[string]interface{}{
+			"model":      grok15Video1080UpstreamModel,
+			"prompt":     "Animate the reference image.",
+			"image":      map[string]interface{}{"url": "https://cdn.test/reference.png"},
+			"resolution": "1080p",
+			"duration":   float64(duration),
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("normalized request = %#v, want %#v", got, want)
+		}
+	}
+}
+
+func TestGrok15Video1080RejectsUnsupportedInputs(t *testing.T) {
+	tests := []string{
+		`{"model":"grok-video-1.5-1080p","prompt":"test","image":{"url":"https://cdn.test/reference.png"},"resolution":"720p","duration":6}`,
+		`{"model":"grok-video-1.5-1080p","prompt":"test","image":{"url":"https://cdn.test/reference.png"},"resolution":"1080p","duration":0}`,
+		`{"model":"grok-video-1.5-1080p","prompt":"test","image":{"url":"https://cdn.test/reference.png"},"resolution":"1080p","duration":16}`,
+		`{"model":"grok-video-1.5-1080p","prompt":"test","resolution":"1080p","duration":6}`,
+		`{"model":"grok-video-1.5-1080p","prompt":"test","image":{"url":"file:///tmp/reference.png"},"resolution":"1080p","duration":6}`,
+	}
+	for _, body := range tests {
+		context, _ := gin.CreateTestContext(httptest.NewRecorder())
+		context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(body))
+		context.Request.Header.Set("Content-Type", "application/json")
+		info := &relaycommon.RelayInfo{
+			OriginModelName: grok15Video1080PublicModel,
+			ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: grok15Video1080UpstreamModel},
+			TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+		}
+		taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, info)
+		common.CleanupBodyStorage(context)
+		if taskErr == nil || taskErr.Code != "invalid_request" {
+			t.Fatalf("body=%s taskErr=%#v, want local invalid_request", body, taskErr)
+		}
+	}
+}
+
 func TestNewVideoModelsUseVideosEndpoint(t *testing.T) {
 	adaptor := TaskAdaptor{baseURL: "https://provider.test"}
-	for _, modelName := range []string{seedanceSD2FastUpstreamModel, grok15VideoUpstreamModel} {
+	for _, modelName := range []string{seedanceSD2FastUpstreamModel, grok15VideoUpstreamModel, grok15Video1080UpstreamModel} {
 		url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
 			ChannelMeta:   &relaycommon.ChannelMeta{UpstreamModelName: modelName},
 			TaskRelayInfo: &relaycommon.TaskRelayInfo{},

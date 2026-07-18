@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,8 @@ const (
 	grok15VideoUpstreamModel     = "grok-imagine-1.5-video"
 	grok15Video6sUpstreamModel   = "grok-imagine-1.5-video-6s"
 	grok15Video10sUpstreamModel  = "grok-imagine-1.5-video-10s"
+	grok15Video1080PublicModel   = "grok-video-1.5-1080p"
+	grok15Video1080UpstreamModel = "grok-imagine-video-1.5"
 	videoReferenceMaxBytes       = 20 << 20
 )
 
@@ -254,6 +257,9 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	if info.Action == constant.TaskActionRemix {
 		return validateRemixRequest(c)
 	}
+	if isGrok15Video1080Model(info.OriginModelName) || isGrok15Video1080Model(info.UpstreamModelName) {
+		return validateGrok15Video1080Request(c, info)
+	}
 	if isGrok15VideoModel(info.OriginModelName) || isGrok15VideoModel(info.UpstreamModelName) {
 		return validateGrok15VideoRequest(c, info)
 	}
@@ -335,6 +341,53 @@ func validateGrok15VideoRequest(c *gin.Context, info *relaycommon.RelayInfo) *dt
 	info.Action = constant.TaskActionGenerate
 	c.Set("task_request", req)
 	return nil
+}
+
+func validateGrok15Video1080Request(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
+	if !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "application/json") {
+		return localVideoValidationError("Grok Video 1.5 1080P 必须使用 application/json。")
+	}
+	var bodyMap map[string]interface{}
+	if err := common.UnmarshalBodyReusable(c, &bodyMap); err != nil {
+		return localVideoValidationError("视频请求格式无效，请重新提交。")
+	}
+	prompt := strings.TrimSpace(trimmedString(bodyMap["prompt"]))
+	if prompt == "" {
+		return localVideoValidationError("prompt 不能为空。")
+	}
+	duration, ok := integerFromAny(bodyMap["duration"])
+	if !ok || duration < 1 || duration > 15 {
+		return localVideoValidationError("Grok Video 1.5 1080P 的 duration 仅支持 1 到 15 秒整数。")
+	}
+	if !strings.EqualFold(strings.TrimSpace(trimmedString(bodyMap["resolution"])), "1080p") {
+		return localVideoValidationError("Grok Video 1.5 1080P 的 resolution 仅支持 1080p。")
+	}
+	image := mapFromAny(bodyMap["image"])
+	imageURL := strings.TrimSpace(trimmedString(image["url"]))
+	if !validGrok15VideoImageURL(imageURL) {
+		return localVideoValidationError("Grok Video 1.5 1080P 必须提供有效的 image.url。")
+	}
+	req := relaycommon.TaskSubmitReq{
+		Prompt:   prompt,
+		Model:    strings.TrimSpace(trimmedString(bodyMap["model"])),
+		Duration: duration,
+		Seconds:  strconv.Itoa(duration),
+		Metadata: map[string]interface{}{"resolution": "1080p"},
+	}
+	info.Action = constant.TaskActionGenerate
+	c.Set("task_request", req)
+	return nil
+}
+
+func validGrok15VideoImageURL(value string) bool {
+	if strings.HasPrefix(strings.ToLower(value), "data:image/") {
+		return strings.Contains(value, ";base64,")
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.User != nil || parsed.Host == "" {
+		return false
+	}
+	return parsed.Scheme == "https" || parsed.Scheme == "http"
 }
 
 func validateSD2FastVideoRequest(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
@@ -508,7 +561,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		var bodyMap map[string]interface{}
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
 			bodyMap["model"] = info.UpstreamModelName
-			if isGrok15VideoModel(info.UpstreamModelName) {
+			if isGrok15Video1080Model(info.UpstreamModelName) {
+				bodyMap = normalizeGrok15Video1080RequestBody(bodyMap)
+			} else if isGrok15VideoModel(info.UpstreamModelName) {
 				return nil, errors.New("Grok Video 1.5 requires multipart/form-data")
 			} else if isSD2FastVideoModel(info.UpstreamModelName) {
 				bodyMap = normalizeSD2FastVideoRequestBody(bodyMap)
@@ -718,6 +773,15 @@ func isGrok15VideoModel(modelName string) bool {
 	}
 }
 
+func isGrok15Video1080Model(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case grok15Video1080PublicModel, grok15Video1080UpstreamModel:
+		return true
+	default:
+		return false
+	}
+}
+
 func isGrokVideoModel(modelName string) bool {
 	modelName = strings.ToLower(strings.TrimSpace(modelName))
 	return strings.Contains(modelName, "grok") && strings.Contains(modelName, "video")
@@ -726,7 +790,7 @@ func isGrokVideoModel(modelName string) bool {
 func usesVideosEndpoint(modelName string) bool {
 	switch strings.ToLower(strings.TrimSpace(modelName)) {
 	case seedanceSD2FastPublicModel, seedanceSD2FastUpstreamModel, grok15VideoPublicModel, grok15VideoUpstreamModel,
-		grok15Video6sUpstreamModel, grok15Video10sUpstreamModel:
+		grok15Video6sUpstreamModel, grok15Video10sUpstreamModel, grok15Video1080PublicModel, grok15Video1080UpstreamModel:
 		return true
 	default:
 		return false
@@ -812,6 +876,17 @@ func normalizeGrokVideoRequestBody(bodyMap map[string]interface{}) map[string]in
 		cleaned["callback_url"] = callbackURL
 	}
 	return cleaned
+}
+
+func normalizeGrok15Video1080RequestBody(bodyMap map[string]interface{}) map[string]interface{} {
+	image := mapFromAny(bodyMap["image"])
+	return map[string]interface{}{
+		"model":      grok15Video1080UpstreamModel,
+		"prompt":     strings.TrimSpace(trimmedString(bodyMap["prompt"])),
+		"image":      map[string]interface{}{"url": strings.TrimSpace(trimmedString(image["url"]))},
+		"resolution": "1080p",
+		"duration":   bodyMap["duration"],
+	}
 }
 
 func grokVideoSize(bodyMap map[string]interface{}) string {
@@ -1898,7 +1973,7 @@ func supportsVideoContentStatusFallback(body map[string]any) bool {
 		if modelName == "" || modelName == "<nil>" {
 			continue
 		}
-		if isGrok15VideoModel(modelName) || isSD2FastVideoModel(modelName) || modelName == seedanceLD17PublicModel || modelName == seedanceLD17UpstreamModel {
+		if isGrok15VideoModel(modelName) || isGrok15Video1080Model(modelName) || isSD2FastVideoModel(modelName) || modelName == seedanceLD17PublicModel || modelName == seedanceLD17UpstreamModel {
 			return true
 		}
 	}

@@ -121,6 +121,10 @@ PUBLIC_SD2_FAST_MODEL = "seedance-sd2-fast-720p"
 UPSTREAM_SD2_FAST_MODEL = "sd2-fast-720p"
 PUBLIC_GROK15_VIDEO_MODEL = "grok-video-1.5"
 UPSTREAM_GROK15_VIDEO_MODEL = "grok-imagine-1.5-video"
+PUBLIC_GROK15_1080_VIDEO_MODEL = "grok-video-1.5-1080p"
+UPSTREAM_GROK15_1080_VIDEO_MODEL = "grok-imagine-video-1.5"
+PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG = "xingren-grok15-video-1080p"
+PUBLIC_GROK15_1080_VIDEO_CHANNEL_GROUPS = "default,standard,pro,code,internal"
 PUBLIC_VIDEO_MODEL_CONFIGS = {
     "grok-video-super-720p": {
         "description": "星人 Grok 视频生成｜人民币 ¥6.50/次｜固定按次计费，支持 5/10/15 秒，生成后请及时下载",
@@ -142,6 +146,12 @@ PUBLIC_VIDEO_MODEL_CONFIGS = {
     },
     PUBLIC_GROK15_VIDEO_MODEL: {
         "description": "Grok Video 1.5｜人民币 ¥0.20/次｜固定 720P，支持 6/10 秒文生视频和图生视频｜图生模式可上传 1 张图片（最大 20MB），不支持视频或音频参考｜人脸能力未承诺，不保证",
+        "icon": "Grok",
+        "tags": "video,grok",
+        "vendor_id": 3,
+    },
+    PUBLIC_GROK15_1080_VIDEO_MODEL: {
+        "description": "Grok Video 1.5 1080P｜人民币 ¥0.40/次｜仅支持图生视频，固定 1080P｜官网 duration 开放 1-15 秒整数｜必须上传 1 张图片，不支持视频或音频参考",
         "icon": "Grok",
         "tags": "video,grok",
         "vendor_id": 3,
@@ -191,6 +201,15 @@ PUBLIC_VIDEO_CHANNEL_CONFIGS = (
         [PUBLIC_GROK15_VIDEO_MODEL],
         json.dumps({PUBLIC_GROK15_VIDEO_MODEL: UPSTREAM_GROK15_VIDEO_MODEL}, separators=(",", ":")),
     ),
+    (
+        "tag",
+        PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG,
+        [PUBLIC_GROK15_1080_VIDEO_MODEL],
+        json.dumps(
+            {PUBLIC_GROK15_1080_VIDEO_MODEL: UPSTREAM_GROK15_1080_VIDEO_MODEL},
+            separators=(",", ":"),
+        ),
+    ),
 )
 CODEX_TEXT_CHANNEL_ID = "21"
 CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
@@ -208,6 +227,7 @@ PUBLIC_VIDEO_FIXED_PRICES_CNY = {
     "seedance-2.0-ld-17": Decimal("6.48"),
     PUBLIC_SD2_FAST_MODEL: Decimal("0.25"),
     PUBLIC_GROK15_VIDEO_MODEL: Decimal("0.20"),
+    PUBLIC_GROK15_1080_VIDEO_MODEL: Decimal("0.40"),
 }
 OPENAI_TEXT_LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
 PUBLIC_OPENAI_TEXT_MODELS = {
@@ -1063,6 +1083,7 @@ def sync_supplier_safe_public_metadata() -> dict[str, int]:
 
 
 def model_lists() -> dict[str, list[str]]:
+    grok1080_state = grok15_1080_video_release_state()
     rows = mysql(
         """
         SELECT id, model_name, COALESCE(tags, '')
@@ -1090,6 +1111,8 @@ def model_lists() -> dict[str, list[str]]:
         if "video" in tags:
             if model in PRIVATE_VIDEO_MODELS:
                 continue
+            if model == PUBLIC_GROK15_1080_VIDEO_MODEL and grok1080_state != "published":
+                continue
             append_model("video", model)
             continue
         if "image" in tags:
@@ -1108,9 +1131,34 @@ def model_lists() -> dict[str, list[str]]:
         if public_image_model not in profiles["image"]:
             profiles["image"].append(public_image_model)
     for model in PUBLIC_VIDEO_MODELS:
+        if model == PUBLIC_GROK15_1080_VIDEO_MODEL and grok1080_state != "published":
+            continue
         if model not in profiles["video"]:
             profiles["video"].append(model)
     return profiles
+
+
+def grok15_1080_video_release_state() -> str:
+    rows = mysql(
+        "SELECT status, REPLACE(COALESCE(`group`, ''), ' ', '') FROM channels WHERE tag = "
+        + sql_quote(PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG)
+        + " ORDER BY id"
+    )
+    if len(rows) != 1 or rows[0][0] != "1":
+        return "unavailable"
+    groups = rows[0][1]
+    if groups == "internal":
+        return "staged"
+    if groups == PUBLIC_GROK15_1080_VIDEO_CHANNEL_GROUPS:
+        return "published"
+    return "invalid"
+
+
+def system_token_profiles(profiles: dict[str, list[str]]) -> dict[str, list[str]]:
+    result = {name: list(models) for name, models in profiles.items()}
+    if grok15_1080_video_release_state() == "staged" and PUBLIC_GROK15_1080_VIDEO_MODEL not in result["video"]:
+        result["video"].append(PUBLIC_GROK15_1080_VIDEO_MODEL)
+    return result
 
 
 def active_groups() -> list[str]:
@@ -1491,7 +1539,7 @@ def sync_user_video_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
         "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0) FROM tokens "
         "WHERE deleted_at IS NULL AND name IN ("
         + ", ".join(sql_quote(name) for name in token_names)
-        + ");"
+        + ") AND user_id <> 1;"
     )
     token_updates: list[tuple[str, str]] = []
     for token_id, token_key, raw_limits, raw_enabled in token_rows:
@@ -1584,9 +1632,15 @@ def sync_abilities() -> None:
         + " AND FIND_IN_SET("
         + sql_quote(GROK45_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
+        "UPDATE channels SET status = 2 WHERE tag = "
+        + sql_quote(PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG)
+        + " AND REPLACE(COALESCE(`group`, ''), ' ', '') NOT IN ('internal', "
+        + sql_quote(PUBLIC_GROK15_1080_VIDEO_CHANNEL_GROUPS)
+        + ");",
     ]
     invalid_discount_channels: list[str] = []
     invalid_grok_channels: list[str] = []
+    invalid_grok1080_channels: list[str] = []
     for channel_id, raw_models, _priority, _weight, tag, raw_groups in channel_rows:
         channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
         channel_models = [item.strip() for item in raw_models.split(",") if item.strip()]
@@ -1612,6 +1666,19 @@ def sync_abilities() -> None:
         elif GROK45_GROUP in channel_groups:
             invalid_grok_channels.append(channel_id)
             sync_groups = []
+        elif tag == PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG:
+            normalized_groups = ",".join(channel_groups)
+            if normalized_groups == "internal":
+                sync_groups = ["internal"]
+            elif normalized_groups == PUBLIC_GROK15_1080_VIDEO_CHANNEL_GROUPS:
+                sync_groups = [
+                    group
+                    for group in groups
+                    if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
+                ]
+            else:
+                invalid_grok1080_channels.append(channel_id)
+                sync_groups = []
         else:
             sync_groups = [
                 group
@@ -1727,6 +1794,11 @@ def sync_abilities() -> None:
             + "(SELECT id FROM channels WHERE status <> 1 AND tag = "
             + sql_quote(GROK45_CHANNEL_TAG)
             + ");",
+            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+            "SET ability.enabled = 0 WHERE channel.tag = "
+            + sql_quote(PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG)
+            + " AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = 'internal' "
+            "AND ability.`group` <> 'internal';",
         ]
     )
     statements.append("COMMIT;")
@@ -1740,6 +1812,11 @@ def sync_abilities() -> None:
         raise RuntimeError(
             "Grok group isolation violation; disabled channel count: "
             + str(len(invalid_grok_channels))
+        )
+    if invalid_grok1080_channels:
+        raise RuntimeError(
+            "Grok 1080P staging isolation violation; invalid channel count: "
+            + str(len(invalid_grok1080_channels))
         )
 
 
@@ -1892,7 +1969,7 @@ def main() -> int:
         print(f"refuse to sync empty model profiles: {', '.join(missing)}", file=sys.stderr)
         return 2
     sync_abilities()
-    sync_tokens(profiles)
+    sync_tokens(system_token_profiles(profiles))
     codex_token_result = sync_user_codex_tokens(profiles)
     codex_alias_token_result = sync_controlled_codex_alias_tokens()
     claude_token_result = sync_user_claude_tokens(profiles)
