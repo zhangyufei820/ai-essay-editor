@@ -487,7 +487,11 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
-		if !canUseSubscriptionFundingForModel(hasMonthlyCard, relayInfo.OriginModelName) {
+		if !canUseSubscriptionFundingForModel(
+			hasMonthlyCard,
+			relayInfo.UserSetting.LegacyMonthlyCardClaudeEnabled,
+			relayInfo.OriginModelName,
+		) {
 			return monthlyCardModelDenied()
 		}
 		return nil
@@ -582,7 +586,11 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		hasMonthlyCard, _ := getUserMonthlyCard()
 		if isMonthlyCardToken {
 			skipTokenQuota = true
-		} else if hasMonthlyCard && MonthlyCardChannelSupportsModel(relayInfo.OriginModelName) {
+		} else if hasMonthlyCard && canUseSubscriptionFundingForModel(
+			hasMonthlyCard,
+			relayInfo.UserSetting.LegacyMonthlyCardClaudeEnabled,
+			relayInfo.OriginModelName,
+		) {
 			skipTokenQuota = true
 		}
 		session := &BillingSession{
@@ -611,7 +619,11 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		if err != nil {
 			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
-		if hasMonthlyCard && MonthlyCardChannelSupportsModel(relayInfo.OriginModelName) {
+		if hasMonthlyCard && canUseSubscriptionFundingForModel(
+			hasMonthlyCard,
+			relayInfo.UserSetting.LegacyMonthlyCardClaudeEnabled,
+			relayInfo.OriginModelName,
+		) {
 			return trySubscription()
 		}
 		return tryWallet()
