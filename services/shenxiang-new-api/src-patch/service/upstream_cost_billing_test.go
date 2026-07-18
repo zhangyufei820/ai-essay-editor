@@ -14,11 +14,12 @@ import (
 )
 
 func TestApplyUpstreamCostBillingUsesUSDPlusMarkup(t *testing.T) {
+	t.Setenv(upstreamCostChannelCurrenciesEnvName, "21:USD")
 	oldQuotaPerUnit := common.QuotaPerUnit
 	common.QuotaPerUnit = 500_000
 	defer func() { common.QuotaPerUnit = oldQuotaPerUnit }()
 
-	quota, result := ApplyUpstreamCostBilling(nil, &dto.Usage{
+	quota, result := ApplyUpstreamCostBilling(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 21}}, &dto.Usage{
 		Cost: 1.0,
 	}, 123)
 
@@ -31,6 +32,7 @@ func TestApplyUpstreamCostBillingUsesUSDPlusMarkup(t *testing.T) {
 }
 
 func TestApplyUpstreamCostBillingConvertsCNYPlusMarkup(t *testing.T) {
+	t.Setenv(upstreamCostChannelCurrenciesEnvName, "22:CNY")
 	oldQuotaPerUnit := common.QuotaPerUnit
 	oldExchangeRate := operation_setting.USDExchangeRate
 	common.QuotaPerUnit = 500_000
@@ -40,7 +42,7 @@ func TestApplyUpstreamCostBillingConvertsCNYPlusMarkup(t *testing.T) {
 		operation_setting.USDExchangeRate = oldExchangeRate
 	}()
 
-	quota, result := ApplyUpstreamCostBilling(nil, &dto.Usage{
+	quota, result := ApplyUpstreamCostBilling(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 22}}, &dto.Usage{
 		CostCNY: 7.3,
 	}, 123)
 
@@ -51,7 +53,8 @@ func TestApplyUpstreamCostBillingConvertsCNYPlusMarkup(t *testing.T) {
 }
 
 func TestApplyUpstreamCostBillingFallsBackWhenCostMissing(t *testing.T) {
-	quota, result := ApplyUpstreamCostBilling(nil, &dto.Usage{
+	t.Setenv(upstreamCostChannelCurrenciesEnvName, "23:USD")
+	quota, result := ApplyUpstreamCostBilling(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 23}}, &dto.Usage{
 		PromptTokens:     100,
 		CompletionTokens: 20,
 	}, 321)
@@ -60,6 +63,61 @@ func TestApplyUpstreamCostBillingFallsBackWhenCostMissing(t *testing.T) {
 	require.Equal(t, "missing_upstream_cost", result.FallbackReason)
 	require.Equal(t, 321, quota)
 	require.Equal(t, 321, result.FinalQuota)
+}
+
+func TestApplyUpstreamCostBillingRejectsUnapprovedChannel(t *testing.T) {
+	t.Setenv(upstreamCostChannelCurrenciesEnvName, "21:USD")
+
+	quota, result := ApplyUpstreamCostBilling(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 24}}, &dto.Usage{
+		CostUSD: 0.25,
+	}, 321)
+
+	require.False(t, result.Applied)
+	require.Equal(t, "unapproved_cost_channel", result.FallbackReason)
+	require.Equal(t, 321, quota)
+}
+
+func TestApplyUpstreamCostBillingRejectsMissingChannel(t *testing.T) {
+	t.Setenv(upstreamCostChannelCurrenciesEnvName, "21:USD")
+
+	quota, result := ApplyUpstreamCostBilling(&relaycommon.RelayInfo{}, &dto.Usage{
+		CostUSD: 0.25,
+	}, 321)
+
+	require.False(t, result.Applied)
+	require.Equal(t, "missing_cost_channel", result.FallbackReason)
+	require.Equal(t, 321, quota)
+}
+
+func TestApplyUpstreamCostBillingRejectsInvalidChannelCurrency(t *testing.T) {
+	t.Setenv(upstreamCostChannelCurrenciesEnvName, "24:EUR")
+
+	quota, result := ApplyUpstreamCostBilling(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 24}}, &dto.Usage{
+		Cost: 0.25,
+	}, 321)
+
+	require.False(t, result.Applied)
+	require.Equal(t, "invalid_cost_channel_currency", result.FallbackReason)
+	require.Equal(t, 321, quota)
+}
+
+func TestApplyUpstreamCostBillingRejectsCurrencyMismatch(t *testing.T) {
+	t.Setenv(upstreamCostChannelCurrenciesEnvName, "24:CNY")
+
+	quota, result := ApplyUpstreamCostBilling(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 24}}, &dto.Usage{
+		CostUSD: 0.25,
+	}, 321)
+
+	require.False(t, result.Applied)
+	require.Equal(t, "upstream_cost_currency_mismatch", result.FallbackReason)
+	require.Equal(t, 321, quota)
+}
+
+func TestExtractUpstreamCostRejectsGenericCostWithoutCurrency(t *testing.T) {
+	_, _, _, ok, reason := ExtractUpstreamCostFromUsage(&dto.Usage{Cost: 0.25})
+
+	require.False(t, ok)
+	require.Equal(t, "missing_upstream_cost_currency", reason)
 }
 
 func TestApplyUpstreamCostBillingKeepsMarketplacePriceForDiscountGroup(t *testing.T) {

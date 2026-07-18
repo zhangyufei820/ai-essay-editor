@@ -24,6 +24,7 @@ services:
       CODEX_WORKSPACE_UPSTREAM: ${CODEX_WORKSPACE_UPSTREAM:-http://shenxiang-codex-workspace:8000}
       TASK_PRICE_PATCH: grok-video-super-720p
       UPSTREAM_COST_MARKUP_RATE: ${UPSTREAM_COST_MARKUP_RATE:-0.08}
+      UPSTREAM_COST_BILLING_CHANNEL_CURRENCIES: ${UPSTREAM_COST_BILLING_CHANNEL_CURRENCIES:-}
     volumes:
       - ./data:/data
     healthcheck:

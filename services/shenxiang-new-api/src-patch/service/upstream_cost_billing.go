@@ -15,7 +15,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const DefaultUpstreamCostMarkupRate = 0.08
+const (
+	DefaultUpstreamCostMarkupRate        = 0.08
+	upstreamCostChannelCurrenciesEnvName = "UPSTREAM_COST_BILLING_CHANNEL_CURRENCIES"
+)
 
 type UpstreamCostBillingResult struct {
 	Applied              bool
@@ -46,6 +49,29 @@ func upstreamCostMarkupRate() float64 {
 		return DefaultUpstreamCostMarkupRate
 	}
 	return parsed
+}
+
+func upstreamCostCurrencyForChannel(relayInfo *relaycommon.RelayInfo) (string, string) {
+	if relayInfo == nil || relayInfo.ChannelMeta == nil || relayInfo.ChannelId <= 0 {
+		return "", "missing_cost_channel"
+	}
+	configured := common.GetEnvOrDefaultString(upstreamCostChannelCurrenciesEnvName, "")
+	for _, entry := range strings.Split(configured, ",") {
+		channelIDText, currencyText, found := strings.Cut(strings.TrimSpace(entry), ":")
+		if !found {
+			continue
+		}
+		channelID, err := strconv.Atoi(strings.TrimSpace(channelIDText))
+		if err != nil || channelID != relayInfo.ChannelId {
+			continue
+		}
+		currency := normalizeCostCurrency(currencyText)
+		if currency != "USD" && currency != "CNY" {
+			return "", "invalid_cost_channel_currency"
+		}
+		return currency, ""
+	}
+	return "", "unapproved_cost_channel"
 }
 
 var responseHeaderCostFields = []string{
@@ -97,9 +123,18 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 		result.FallbackReason = "grok45_static_pricing"
 		return currentQuota, result
 	}
-	cost, currency, source, ok, reason := ExtractUpstreamCostFromUsage(usage)
+	declaredCurrency, reason := upstreamCostCurrencyForChannel(relayInfo)
+	if reason != "" {
+		result.FallbackReason = reason
+		return currentQuota, result
+	}
+	cost, currency, source, ok, reason := extractUpstreamCostFromUsage(usage, declaredCurrency)
 	if !ok {
 		result.FallbackReason = reason
+		return currentQuota, result
+	}
+	if currency != declaredCurrency {
+		result.FallbackReason = "upstream_cost_currency_mismatch"
 		return currentQuota, result
 	}
 
@@ -136,11 +171,18 @@ func ApplyRealtimeUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *d
 }
 
 func ExtractUpstreamCostFromUsage(usage *dto.Usage) (cost float64, currency string, source string, ok bool, reason string) {
+	return extractUpstreamCostFromUsage(usage, "")
+}
+
+func extractUpstreamCostFromUsage(usage *dto.Usage, declaredCurrency string) (cost float64, currency string, source string, ok bool, reason string) {
 	if usage == nil {
 		return 0, "", "", false, "missing_usage"
 	}
 
 	defaultCurrency := normalizeCostCurrency(firstNonEmpty(usage.CostCurrency, usage.Currency))
+	if defaultCurrency == "" {
+		defaultCurrency = normalizeCostCurrency(declaredCurrency)
+	}
 	candidates := []upstreamCostCandidate{
 		{source: "usage.cost_usd", currency: "USD", value: usage.CostUSD},
 		{source: "usage.cost_cny", currency: "CNY", value: usage.CostCNY},
@@ -169,6 +211,8 @@ func ExtractUpstreamCostFromUsage(usage *dto.Usage) (cost float64, currency stri
 		)
 	}
 
+	missingCurrency := false
+	unsupportedCurrency := false
 	for _, candidate := range candidates {
 		parsed, parsedOK := parsePositiveCost(candidate.value)
 		if !parsedOK {
@@ -176,9 +220,20 @@ func ExtractUpstreamCostFromUsage(usage *dto.Usage) (cost float64, currency stri
 		}
 		currency = normalizeCostCurrency(candidate.currency)
 		if currency == "" {
-			currency = "USD"
+			missingCurrency = true
+			continue
+		}
+		if currency != "USD" && currency != "CNY" {
+			unsupportedCurrency = true
+			continue
 		}
 		return parsed, currency, candidate.source, true, ""
+	}
+	if missingCurrency {
+		return 0, "", "", false, "missing_upstream_cost_currency"
+	}
+	if unsupportedCurrency {
+		return 0, "", "", false, "unsupported_currency"
 	}
 	return 0, "", "", false, "missing_upstream_cost"
 }
@@ -376,7 +431,7 @@ func InjectUpstreamCostBillingInfo(other map[string]interface{}, result *Upstrea
 func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (quota int, billedCostUSD float64, ok bool) {
 	currency = normalizeCostCurrency(currency)
 	if currency == "" {
-		currency = "USD"
+		return 0, 0, false
 	}
 	costDecimal := decimal.NewFromFloat(cost)
 	switch currency {
@@ -471,7 +526,9 @@ func parseCost(value any) (float64, bool) {
 func normalizeCostCurrency(currency string) string {
 	currency = strings.TrimSpace(strings.ToUpper(currency))
 	switch currency {
-	case "", "DOLLAR", "DOLLARS", "US DOLLAR", "US DOLLARS", "US$", "$":
+	case "":
+		return ""
+	case "DOLLAR", "DOLLARS", "US DOLLAR", "US DOLLARS", "US$", "$":
 		return "USD"
 	case "USD":
 		return "USD"
