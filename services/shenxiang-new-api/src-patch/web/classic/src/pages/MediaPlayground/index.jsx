@@ -309,9 +309,9 @@ const IMAGE_MODELS = [
     countParam: 'n',
     sizeParam: 'aspect_ratio',
     edit: false,
-    priceLabel: '¥0.10/张',
+    priceLabel: '¥0.055/张',
     billingLabel: '按张计费',
-    hint: '仅支持文生图，当前供应商实际仅返回约 1K。官方支持分辨率参数，但该线路暂未兑现 2K 输出。',
+    hint: '仅支持文生图，当前供应商实际仅返回约 1K，人民币 ¥0.055/张。官方支持分辨率参数，但该线路暂未兑现 2K 输出。',
   },
 ];
 

@@ -512,7 +512,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("官转image 2稳定", captured_options["CompletionRatio"])
         self.assertAlmostEqual(
             captured_options["ModelPrice"]["grok-imagine-image"],
-            0.013698630137,
+            0.007534246575,
             places=12,
         )
         self.assertNotIn("grok-imagine-image", captured_options["ModelRatio"])
@@ -530,7 +530,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("2K", sql)
         self.assertIn("仅支持文生图", sql)
         self.assertNotIn("图生图", sql)
-        self.assertIn("¥0.10/张", sql)
+        self.assertIn("¥0.055/张", sql)
         self.assertIn('/v1/images/generations', sql)
         self.assertNotIn('/v1/images/edits', sql)
 

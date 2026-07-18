@@ -89,8 +89,8 @@ const PRICING_DISPLAY_OVERRIDES = {
   },
   'grok-imagine-image': {
     display_name: 'Grok Image Pro',
-    description: 'Grok Image Pro：当前供应商实际仅返回约 1K，仅支持文生图，人民币 ¥0.10/张。',
-    fixed_price_label: '¥0.10',
+    description: 'Grok Image Pro：当前供应商实际仅返回约 1K，仅支持文生图，人民币 ¥0.055/张。',
+    fixed_price_label: '¥0.055',
     price_unit_label: '张',
     billing_label: '按张计费',
   },
