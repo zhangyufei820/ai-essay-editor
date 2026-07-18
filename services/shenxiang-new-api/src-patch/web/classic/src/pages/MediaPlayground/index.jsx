@@ -471,6 +471,7 @@ const VIDEO_REFERENCE_ACCEPT = [
 const GROK_VIDEO_PRICE_PER_CALL = 6.5;
 const SEEDANCE_SD2_FAST_PRICE_PER_SECOND = 0.25;
 const GROK_VIDEO_15_PRICE_PER_CALL = 0.2;
+const GROK_VIDEO_15_1080_PRICE_PER_CALL = 0.4;
 const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1';
 const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -767,6 +768,25 @@ const VIDEO_MODELS = [
     billingLabel: '按次计费',
     priceLabel: `¥${GROK_VIDEO_15_PRICE_PER_CALL.toFixed(2)}/次`,
     hint: '固定 ¥0.20/次；固定 720P，支持 6/10 秒文生视频和图生视频；图生模式可上传 1 张图片，不支持视频/音频参考；人脸能力未承诺。',
+  },
+  {
+    value: 'grok-video-1.5-1080p',
+    label: 'Grok Video 1.5 1080P',
+    badge: '1080P',
+    sizes: ['跟随参考图'],
+    durations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultSize: '跟随参考图',
+    defaultDuration: 6,
+    defaultFps: 24,
+    fpsOptions: [24],
+    resolutions: ['1080p'],
+    defaultResolution: '1080p',
+    referenceLimits: { image: 1, video: 0, audio: 0 },
+    workflows: ['image'],
+    supportsAdvancedVideoParams: false,
+    billingLabel: '按次计费',
+    priceLabel: `¥${GROK_VIDEO_15_1080_PRICE_PER_CALL.toFixed(2)}/次`,
+    hint: '固定 ¥0.40/次；仅支持图生视频，固定 1080P；官网 duration 开放 1–15 秒整数；必须上传 1 张图片，不支持视频/音频参考。',
   },
   {
     value: 'seedance-2.0-ld-17',
@@ -4005,7 +4025,21 @@ const MediaPlayground = () => {
 
   async function submitVideo() {
     let payload;
-    if (videoModel === 'grok-video-1.5') {
+    if (videoModel === 'grok-video-1.5-1080p') {
+      const reference = referenceFiles.find(
+        (item) => referenceMediaTypeOf(item) === 'image',
+      );
+      const file = referenceFileOf(reference);
+      if (!file) throw new Error('图生视频需要上传一张参考图片。');
+      const imageUrl = await cacheReferenceMedia(reference, 'image', 'reference_image', 0);
+      payload = {
+        model: videoModel,
+        prompt: prompt.trim(),
+        image: { url: imageUrl },
+        resolution: '1080p',
+        duration,
+      };
+    } else if (videoModel === 'grok-video-1.5') {
       payload = new FormData();
       payload.set('model', videoModel);
       payload.set('prompt', prompt.trim());
@@ -4128,6 +4162,9 @@ const MediaPlayground = () => {
       }
       if (videoModel === 'grok-video-1.5' && counts.image !== 1) {
         return Toast.error('Grok Video 1.5 图生模式必须且只能上传一张图片。');
+      }
+      if (videoModel === 'grok-video-1.5-1080p' && counts.image !== 1) {
+        return Toast.error('Grok Video 1.5 1080P 必须且只能上传一张图片。');
       }
       if (videoModel === 'seedance-2.0-ld-17' && counts.image + counts.video === 0) {
         return Toast.error('Seedance LD-17 需要至少上传一张图片或一个视频素材。');
@@ -5028,10 +5065,10 @@ const MediaPlayground = () => {
                     <NativeSelect
                       label='帧率'
                       value={fps}
-                      options={[
-                        { value: 24, label: '24 fps' },
-                        { value: 30, label: '30 fps' },
-                      ]}
+                      options={(activeVideoModel.fpsOptions || [24, 30]).map((value) => ({
+                        value,
+                        label: `${value} fps`,
+                      }))}
                       onChange={setFps}
                       agentKey='media-fps'
                       className='mp-param-control'
@@ -5092,7 +5129,7 @@ const MediaPlayground = () => {
                 </div>
                 {showAdvancedParams ? (
                   <div className='mp-advanced-params mp-advanced-params-drawer'>
-                    {mode === 'video' ? (
+                    {mode === 'video' && activeVideoModel.supportsAdvancedVideoParams !== false ? (
                       <NativeSelect
                         label='分组'
                         value={effectiveGroup}

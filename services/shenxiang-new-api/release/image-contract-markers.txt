@@ -1,4 +1,5 @@
 grok-video-1.5
+grok-video-1.5-1080p
 seedance-2.0-ld-17
 seedance-nsfw
 imageTaskTerminal

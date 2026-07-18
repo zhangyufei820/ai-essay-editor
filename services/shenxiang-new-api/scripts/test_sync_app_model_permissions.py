@@ -67,6 +67,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 "seedance-2.0-ld-17",
                 "seedance-sd2-fast-720p",
                 "grok-video-1.5",
+                "grok-video-1.5-1080p",
             ),
         )
         self.assertTrue(
@@ -80,16 +81,44 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("sd2-fast-720p", self.module.PUBLIC_VIDEO_MODELS)
         self.assertNotIn("grok-imagine-1.5-video", self.module.PUBLIC_VIDEO_MODELS)
 
+    def test_staged_grok1080_is_admin_only_until_published(self) -> None:
+        self.module.grok15_1080_video_release_state = lambda: "staged"
+        profiles = {
+            "codex": ["gpt-5.5"],
+            "claude": ["claude-opus-4-8"],
+            "image": ["gpt-image-2-4K"],
+            "video": ["grok-video-1.5"],
+        }
+
+        system_profiles = self.module.system_token_profiles(profiles)
+
+        self.assertNotIn("grok-video-1.5-1080p", profiles["video"])
+        self.assertIn("grok-video-1.5-1080p", system_profiles["video"])
+
+    def test_grok1080_release_state_requires_exact_managed_groups(self) -> None:
+        for rows, expected in (
+            ([], "unavailable"),
+            ([['1', 'internal']], "staged"),
+            ([['1', 'default,standard,pro,code,internal']], "published"),
+            ([['1', 'default,internal']], "invalid"),
+            ([['2', 'default,standard,pro,code,internal']], "unavailable"),
+        ):
+            self.module.mysql = lambda _query, rows=rows: rows
+            self.assertEqual(self.module.grok15_1080_video_release_state(), expected)
+
     def test_new_video_catalog_describes_price_inputs_and_face_support_without_provider_details(self) -> None:
         sd_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["seedance-sd2-fast-720p"]["description"]
         grok_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["grok-video-1.5"]["description"]
+        grok_1080_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["grok-video-1.5-1080p"]["description"]
 
         for expected in ("¥0.25/秒", "720P", "5/10/15", "文生视频", "图生视频", "图片", "不支持视频或音频", "人脸能力未承诺"):
             self.assertIn(expected, sd_description)
         for expected in ("¥0.20/次", "720P", "6/10", "文生视频", "图生视频", "可上传 1 张图片", "不支持视频或音频", "人脸能力未承诺"):
             self.assertIn(expected, grok_description)
-        combined = f"{sd_description}\n{grok_description}".lower()
-        for forbidden in ("smile-ai", "api.smile", "sd2-fast-720p", "grok-imagine-1.5-video", "provider", "supplier", "上游", "渠道"):
+        for expected in ("¥0.40/次", "1080P", "1-15", "仅支持图生视频", "必须上传 1 张图片", "不支持视频或音频"):
+            self.assertIn(expected, grok_1080_description)
+        combined = f"{sd_description}\n{grok_description}\n{grok_1080_description}".lower()
+        for forbidden in ("smile-ai", "api.smile", "sd2-fast-720p", "grok-imagine-1.5-video", "grok-imagine-video-1.5", "provider", "supplier", "上游", "渠道"):
             self.assertNotIn(forbidden, combined)
 
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
@@ -306,6 +335,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("model_mapping = '{\"seedance-sd2-fast-720p\":\"sd2-fast-720p\"}'", sql)
         self.assertIn("models = 'grok-video-1.5'", sql)
         self.assertIn("model_mapping = '{\"grok-video-1.5\":\"grok-imagine-1.5-video\"}'", sql)
+        self.assertIn("models = 'grok-video-1.5-1080p'", sql)
+        self.assertIn("model_mapping = '{\"grok-video-1.5-1080p\":\"grok-imagine-video-1.5\"}'", sql)
         self.assertIn("UPDATE channels SET status = 2 WHERE id IN (5, 25)", sql)
         self.assertNotIn(
             "SET @public_video_model := 'seedance-2.0-wc-b-720p'",
@@ -350,6 +381,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(
             captured_options["ModelPrice"]["grok-video-1.5"],
             0.027397260274,
+        )
+        self.assertEqual(
+            captured_options["ModelPrice"]["grok-video-1.5-1080p"],
+            0.054794520548,
         )
         for model in self.module.PUBLIC_VIDEO_FIXED_PRICES_CNY:
             self.assertNotIn(model, captured_options["ModelRatio"])
@@ -609,6 +644,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         def fake_mysql(query: str) -> list[list[str]]:
             self.assertIn("name IN ('星人视频生成令牌')", query)
+            self.assertIn("user_id <> 1", query)
             self.assertNotIn("Seedance 私测视频令牌", query)
             return [
                 ["211", "key-211", "seedance-2.0-cl-mini,seedance-2.0", "1"],
@@ -626,6 +662,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     "seedance-2.0-ld-17",
                     "seedance-sd2-fast-720p",
                     "grok-video-1.5",
+                    "grok-video-1.5-1080p",
                 ]
             }
         )
@@ -636,12 +673,41 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '212'", sql)
         self.assertIn("model_limits_enabled = 1", sql)
         self.assertIn(
-            "grok-video-super-720p,seedance-2.0-ld-17,seedance-sd2-fast-720p,grok-video-1.5",
+            "grok-video-super-720p,seedance-2.0-ld-17,seedance-sd2-fast-720p,grok-video-1.5,grok-video-1.5-1080p",
             sql,
         )
         self.assertNotIn("seedance-2.0'", sql)
         self.assertNotIn("seedance-nsfw", sql)
         self.assertIn("CACHE:key-211,key-212", sql)
+
+    def test_sync_abilities_keeps_staged_grok1080_internal_only(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "44",
+                    "grok-video-1.5-1080p",
+                    "0",
+                    "100",
+                    "xingren-grok15-video-1080p",
+                    "internal",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["grok-video-1.5-1080p"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "internal", "pro"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        self.assertIn("SELECT 'internal', 'grok-video-1.5-1080p', 44", sql)
+        self.assertNotIn("SELECT 'default', 'grok-video-1.5-1080p', 44", sql)
+        self.assertNotIn("SELECT 'pro', 'grok-video-1.5-1080p', 44", sql)
+        self.assertIn("ability.`group` <> 'internal'", sql)
 
     def test_sync_user_image_tokens_replaces_all_public_image_limits(self) -> None:
         captured: list[str] = []
