@@ -7,6 +7,10 @@ APP_DIR="${APP_DIR:-/opt/shenxiang-new-api}"
 
 cd "$APP_DIR"
 
+if [ -f "${APP_DIR}/release-manifest.json" ]; then
+  die "检测到受管发布清单，禁止直接部署。请先阅读 docs/RELEASE-GOVERNANCE.md，再使用 scripts/release-new-api.sh。"
+fi
+
 ./scripts/preflight.sh
 load_env
 require_local_bind

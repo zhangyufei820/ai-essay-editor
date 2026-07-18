@@ -54,6 +54,9 @@ Use when the user says `new api`, `api.aiphui.top`, media playground, media fact
 - health: `http://127.0.0.1:3120`, `https://api.aiphui.top`
 - evidence_first: New API MySQL `logs`, token/channel/user/order tables, New API app logs, relay gateway logs, media task rows
 - forbidden_paths: `/data/ai-essay-editor`, `shenxiang.school` main-site config, Supabase, unrelated containers
+- mandatory_release_policy: read `services/shenxiang-new-api/docs/RELEASE-GOVERNANCE.md` before every fix, commit, and deploy; run `bash services/shenxiang-new-api/scripts/new-api-task-start.sh`
+- release_branch: only `production/new-api`; every feature worktree must contain the current production manifest commit
+- release_command: only `/opt/shenxiang-new-api/scripts/release-new-api.sh`; direct Compose image edits and feature-branch deploys are forbidden
 
 ### Cloud Codex Service Platform
 
@@ -116,12 +119,14 @@ When an upstream-backed model needs to be exposed to users, use a product/public
 
 ### Isolated New API Done
 
-1. Relevant local or container tests pass.
-2. Commit the fix.
-3. Deploy only the intended New API service or gateway.
-4. Verify `shenxiang-new-api` health, `127.0.0.1:3120`, `https://api.aiphui.top`, and main-site health as a non-regression.
-5. Verify the real UI/API path and the related logs or billing rows.
-6. Confirm local and server worktrees are clean or explain unrelated dirty files.
+1. Reread `services/shenxiang-new-api/docs/RELEASE-GOVERNANCE.md` and confirm the worktree contains the live manifest commit.
+2. Relevant local or container tests pass.
+3. Commit the fix, merge it into `production/new-api`, and push that unique release branch.
+4. Deploy only through the guarded New API release script; it must acquire the production lock and pass the ancestry gate.
+5. Verify `shenxiang-new-api` health, `127.0.0.1:3120`, `https://api.aiphui.top`, and main-site health as a non-regression.
+6. Verify the real UI/API path and the related logs or billing rows.
+7. Verify `/opt/shenxiang-new-api/release-manifest.json` matches the running image labels.
+8. Confirm local and server release worktrees are clean or explain unrelated dirty files.
 
 ### Cloud Codex Service Done
 

@@ -14,6 +14,8 @@
 4. 给出本次 skill 调用链，例如：`codebase-recon -> architect -> backend -> qa -> webapp-testing`。
 5. 按“八步作业流”推进：问题分析、计划、方案、预验证、实施、验证、审查、交付。
 
+若任务属于隔离 New API，任何修复开始前、提交前和部署前都必须完整阅读 `services/shenxiang-new-api/docs/RELEASE-GOVERNANCE.md`，并运行 `bash services/shenxiang-new-api/scripts/new-api-task-start.sh` 读取线上 release manifest。禁止从功能分支或旧 worktree 直接部署。
+
 本 SOP 已整合来自 Claude 项目记忆的三份历史规范：
 
 - `/Users/aixingren/.claude/projects/-Users-aixingren-ai-essay-editor/memory/2026-04-04-skill-usage-guide.md`
