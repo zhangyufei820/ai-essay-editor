@@ -53,6 +53,14 @@ var monthlyCardTextDiscountModels = []string{
 	"codex-auto-review",
 }
 
+var legacyMonthlyCardClaudeModels = []string{
+	"claude-opus-4-6",
+	"claude-opus-4-7",
+	"claude-opus-4-8",
+	"claude-sonnet-4-6",
+	"claude-sonnet-5",
+}
+
 type monthlyCardTextPlanSelection struct {
 	PlanId      int
 	PlanTitle   string
@@ -121,6 +129,19 @@ func MonthlyCardTextSupportsModel(modelName string) bool {
 		return false
 	}
 	for _, allowed := range monthlyCardTextDiscountModels {
+		if normalizeMonthlyCardModelName(allowed) == name {
+			return true
+		}
+	}
+	return false
+}
+
+func LegacyMonthlyCardClaudeSupportsModel(modelName string) bool {
+	name := normalizeMonthlyCardModelName(modelName)
+	if name == "" {
+		return false
+	}
+	for _, allowed := range legacyMonthlyCardClaudeModels {
 		if normalizeMonthlyCardModelName(allowed) == name {
 			return true
 		}
@@ -281,6 +302,8 @@ func InjectMonthlyCardTextBillingInfo(other map[string]interface{}, relayInfo *r
 	}
 }
 
-func canUseSubscriptionFundingForModel(hasMonthlyCard bool, modelName string) bool {
-	return !hasMonthlyCard || MonthlyCardChannelSupportsModel(modelName)
+func canUseSubscriptionFundingForModel(hasMonthlyCard bool, legacyClaudeEnabled bool, modelName string) bool {
+	return !hasMonthlyCard ||
+		MonthlyCardChannelSupportsModel(modelName) ||
+		(legacyClaudeEnabled && LegacyMonthlyCardClaudeSupportsModel(modelName))
 }

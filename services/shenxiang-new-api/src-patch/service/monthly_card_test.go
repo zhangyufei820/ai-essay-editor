@@ -39,18 +39,21 @@ func TestMonthlyCardChannelSupportsModelNormalizesCaseAndSpace(t *testing.T) {
 
 func TestMonthlyCardChannelRejectsClaudeModels(t *testing.T) {
 	require.False(t, MonthlyCardChannelSupportsModel("claude-opus-4-6"))
-	require.False(t, canUseSubscriptionFundingForModel(true, "claude-opus-4-6"))
+	require.False(t, canUseSubscriptionFundingForModel(true, false, "claude-opus-4-6"))
+	require.True(t, canUseSubscriptionFundingForModel(true, true, "claude-opus-4-6"))
+	require.True(t, LegacyMonthlyCardClaudeSupportsModel(" claude-sonnet-5 "))
+	require.False(t, LegacyMonthlyCardClaudeSupportsModel("grok-4.5"))
 }
 
 func TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers(t *testing.T) {
-	require.True(t, canUseSubscriptionFundingForModel(false, "claude-opus-4-6"))
-	require.True(t, canUseSubscriptionFundingForModel(true, "gpt-5.5"))
-	require.True(t, canUseSubscriptionFundingForModel(true, "gpt-5.6-luna"))
-	require.True(t, canUseSubscriptionFundingForModel(true, "gpt-5.6-terra"))
-	require.True(t, canUseSubscriptionFundingForModel(true, "gpt-5.6-sol"))
-	require.True(t, canUseSubscriptionFundingForModel(true, "image 2电商商品图快速通道(1.5K)"))
-	require.False(t, canUseSubscriptionFundingForModel(true, "claude-opus-4-6"))
-	require.False(t, canUseSubscriptionFundingForModel(true, "seedance-2.0-cl-mini"))
+	require.True(t, canUseSubscriptionFundingForModel(false, false, "claude-opus-4-6"))
+	require.True(t, canUseSubscriptionFundingForModel(true, false, "gpt-5.5"))
+	require.True(t, canUseSubscriptionFundingForModel(true, false, "gpt-5.6-luna"))
+	require.True(t, canUseSubscriptionFundingForModel(true, false, "gpt-5.6-terra"))
+	require.True(t, canUseSubscriptionFundingForModel(true, false, "gpt-5.6-sol"))
+	require.True(t, canUseSubscriptionFundingForModel(true, false, "image 2电商商品图快速通道(1.5K)"))
+	require.False(t, canUseSubscriptionFundingForModel(true, false, "claude-opus-4-6"))
+	require.False(t, canUseSubscriptionFundingForModel(true, true, "seedance-2.0-cl-mini"))
 }
 
 func TestMonthlyCardAllowedModelsReturnsCopy(t *testing.T) {

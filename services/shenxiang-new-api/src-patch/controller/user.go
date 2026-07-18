@@ -1458,6 +1458,8 @@ func UpdateUserSetting(c *gin.Context) {
 		UpstreamModelUpdateNotifyEnabled: upstreamModelUpdateNotifyEnabled,
 		AcceptUnsetRatioModel:            req.AcceptUnsetModelRatioModel,
 		RecordIpLog:                      req.RecordIpLog,
+		BillingPreference:                existingSettings.BillingPreference,
+		LegacyMonthlyCardClaudeEnabled:   existingSettings.LegacyMonthlyCardClaudeEnabled,
 		TextPricingGroup:                 existingSettings.TextPricingGroup,
 	}
 

@@ -22,6 +22,7 @@ func TestMonthlyCardAndWalletBillingPreferenceSplitsFunding(t *testing.T) {
 		subscriptionID       int
 		userQuota            int
 		monthlyCard          bool
+		legacyClaudeEnabled  bool
 		modelName            string
 		subscriptionTotal    int64
 		subscriptionUsed     int64
@@ -51,6 +52,34 @@ func TestMonthlyCardAndWalletBillingPreferenceSplitsFunding(t *testing.T) {
 			userQuota:            500,
 			monthlyCard:          true,
 			modelName:            "claude-opus-4-6",
+			subscriptionTotal:    1_000,
+			wantBillingSource:    BillingSourceWallet,
+			wantSubscriptionUsed: 0,
+			wantUserQuota:        400,
+		},
+		{
+			name:                 "uses_monthly_card_for_legacy_claude_entitlement",
+			userID:               1_105,
+			planID:               1_205,
+			subscriptionID:       1_305,
+			userQuota:            500,
+			monthlyCard:          true,
+			legacyClaudeEnabled:  true,
+			modelName:            "claude-opus-4-6",
+			subscriptionTotal:    1_000,
+			wantBillingSource:    BillingSourceSubscription,
+			wantSubscriptionUsed: 100,
+			wantUserQuota:        500,
+		},
+		{
+			name:                 "legacy_claude_entitlement_does_not_open_other_models",
+			userID:               1_106,
+			planID:               1_206,
+			subscriptionID:       1_306,
+			userQuota:            500,
+			monthlyCard:          true,
+			legacyClaudeEnabled:  true,
+			modelName:            "grok-4.5",
 			subscriptionTotal:    1_000,
 			wantBillingSource:    BillingSourceWallet,
 			wantSubscriptionUsed: 0,
@@ -122,6 +151,7 @@ func TestMonthlyCardAndWalletBillingPreferenceSplitsFunding(t *testing.T) {
 				IsPlayground:    true,
 			}
 			relayInfo.UserSetting.BillingPreference = "monthly_card_and_wallet"
+			relayInfo.UserSetting.LegacyMonthlyCardClaudeEnabled = testCase.legacyClaudeEnabled
 			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 			session, apiErr := NewBillingSession(ctx, relayInfo, 100)
