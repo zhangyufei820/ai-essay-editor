@@ -20,6 +20,10 @@
     "run": ""
   },
   {
+    "package": "./relay/channel/openai",
+    "run": "^TestConvertGrokImageEditUsesArrayFileField$"
+  },
+  {
     "package": "./service",
     "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestMergeModelLimits.*|TestEnsureSystemTokensRejectsNonAdminUser|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize)$"
   }
