@@ -512,13 +512,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("官转image 2稳定", captured_options["CompletionRatio"])
         self.assertAlmostEqual(
             captured_options["ModelPrice"]["grok-imagine-image"],
-            0.016438356164,
+            0.013698630137,
             places=12,
         )
         self.assertNotIn("grok-imagine-image", captured_options["ModelRatio"])
         self.assertNotIn("grok-imagine-image", captured_options["CompletionRatio"])
 
-    def test_sync_grok_image_metadata_sets_one_k_price_description(self) -> None:
+    def test_sync_grok_image_metadata_sets_resolutions_and_price_description(self) -> None:
         captured: list[str] = []
         self.module.mysql_exec = captured.append
 
@@ -526,8 +526,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         sql = "\n".join(captured)
         self.assertIn("grok-imagine-image", sql)
-        self.assertIn("仅支持 1K 输出", sql)
-        self.assertIn("¥0.12/张", sql)
+        self.assertIn("支持 1K/2K 输出", sql)
+        self.assertIn("仅支持文生图", sql)
+        self.assertNotIn("图生图", sql)
+        self.assertIn("¥0.10/张", sql)
+        self.assertIn('/v1/images/generations', sql)
+        self.assertNotIn('/v1/images/edits', sql)
 
     def test_sync_tokens_updates_admin_system_tokens_only(self) -> None:
         captured: list[str] = []

@@ -298,7 +298,7 @@ const IMAGE_MODELS = [
     vendor: '星人图像',
     sizes: XAI_GROK_IMAGE_ASPECT_RATIOS,
     aspectRatios: XAI_GROK_IMAGE_ASPECT_RATIOS,
-    resolutions: ['1k'],
+    resolutions: ['1k', '2k'],
     qualities: ['low', 'medium', 'high'],
     formats: ['url', 'b64_json'],
     defaultSize: '1:1',
@@ -308,10 +308,10 @@ const IMAGE_MODELS = [
     maxCount: 10,
     countParam: 'n',
     sizeParam: 'aspect_ratio',
-    edit: true,
-    priceLabel: '¥0.12/张',
+    edit: false,
+    priceLabel: '¥0.10/张',
     billingLabel: '按张计费',
-    hint: '适合真实感、社媒封面和快速创意探索。官方按比例 + 1k 分辨率控制，不公布固定像素表。',
+    hint: '仅支持文生图，1k/2k 同价。官方按比例 + 分辨率控制，不公布固定像素表。',
   },
 ];
 

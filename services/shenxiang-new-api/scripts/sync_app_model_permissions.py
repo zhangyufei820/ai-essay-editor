@@ -39,8 +39,9 @@ STABLE_IMAGE2_TAGS = "image,openai"
 STABLE_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
 STABLE_IMAGE2_PRICE_CNY = Decimal("0.135")
 GROK_IMAGE_MODEL = "grok-imagine-image"
-GROK_IMAGE_DESCRIPTION = "Grok Image Pro：仅支持 1K 输出，人民币 ¥0.12/张。"
-GROK_IMAGE_PRICE_CNY = Decimal("0.12")
+GROK_IMAGE_DESCRIPTION = "Grok Image Pro：支持 1K/2K 输出，仅支持文生图，人民币 ¥0.10/张。"
+GROK_IMAGE_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
+GROK_IMAGE_PRICE_CNY = Decimal("0.10")
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
@@ -1386,6 +1387,8 @@ def sync_grok_image_metadata() -> None:
     mysql_exec(
         "UPDATE models SET description = "
         + sql_quote(GROK_IMAGE_DESCRIPTION)
+        + ", endpoints = "
+        + sql_quote(GROK_IMAGE_ENDPOINTS)
         + ", updated_time = UNIX_TIMESTAMP() WHERE deleted_at IS NULL AND model_name = "
         + sql_quote(GROK_IMAGE_MODEL)
         + ";"
