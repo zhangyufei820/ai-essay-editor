@@ -99,8 +99,8 @@ function main() {
     errors.push('Grok Image Pro must not expose unverified 2k output')
   }
 
-  if (!grokBlock.includes("priceLabel: '¥0.10/张'")) {
-    errors.push('Grok Image Pro must show ¥0.10 fixed price')
+  if (!grokBlock.includes("priceLabel: '¥0.055/张'")) {
+    errors.push('Grok Image Pro must show ¥0.055 fixed price')
   }
 
   errors.push(
