@@ -54,6 +54,8 @@ The release script fails closed unless all of these conditions hold:
 
 The script changes only the `shenxiang-new-api` application image. It does not recreate MySQL or Redis and does not modify their data.
 
+The versioned test contract lives at `release/go-test-contracts.json`. Every fix must add or retain the package and test pattern that proves its behavior. The release script checks that each targeted pattern matches real tests before running it; an empty match cannot pass the gate.
+
 ## Immutable Release Identity
 
 Every released image must use an immutable tag derived from the full repository commit and carry these labels:

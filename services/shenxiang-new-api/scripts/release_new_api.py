@@ -138,6 +138,27 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     atomic_write(path, content, 0o644)
 
 
+def load_test_contracts(path: Path) -> list[dict[str, str]]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ReleaseError(f"cannot read Go test contracts: {error}") from error
+    if not isinstance(value, list) or not value:
+        raise ReleaseError("Go test contracts must be a non-empty JSON array")
+    contracts: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ReleaseError("each Go test contract must be an object")
+        package = item.get("package")
+        pattern = item.get("run", "")
+        if not isinstance(package, str) or not re.fullmatch(r"\./[A-Za-z0-9_./-]+", package):
+            raise ReleaseError(f"invalid Go test package: {package}")
+        if not isinstance(pattern, str) or "\n" in pattern or len(pattern) > 4096:
+            raise ReleaseError(f"invalid Go test pattern for {package}")
+        contracts.append({"package": package, "run": pattern})
+    return contracts
+
+
 class Release:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
@@ -365,31 +386,41 @@ class Release:
         build_cache = self.build_root / "go-build-cache"
         module_cache.mkdir(parents=True, exist_ok=True)
         build_cache.mkdir(parents=True, exist_ok=True)
-        run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "-e",
-                "CGO_ENABLED=0",
-                "-e",
-                "GOMODCACHE=/go/pkg/mod",
-                "-e",
-                "GOCACHE=/root/.cache/go-build",
-                "-v",
-                f"{self.source_dir}:/src:ro",
-                "-v",
-                f"{module_cache}:/go/pkg/mod",
-                "-v",
-                f"{build_cache}:/root/.cache/go-build",
-                "-w",
-                "/src",
-                self.args.test_image,
-                "sh",
-                "-lc",
-                "/usr/local/go/bin/go test ./middleware ./relay/channel/task/sora ./service",
-            ]
-        )
+        contracts_path = self.checkout / "services/shenxiang-new-api/release/go-test-contracts.json"
+        contracts = load_test_contracts(contracts_path)
+        docker_go = [
+            "docker",
+            "run",
+            "--rm",
+            "-e",
+            "CGO_ENABLED=0",
+            "-e",
+            "GOMODCACHE=/go/pkg/mod",
+            "-e",
+            "GOCACHE=/root/.cache/go-build",
+            "-v",
+            f"{self.source_dir}:/src:ro",
+            "-v",
+            f"{module_cache}:/go/pkg/mod",
+            "-v",
+            f"{build_cache}:/root/.cache/go-build",
+            "-w",
+            "/src",
+            "--entrypoint",
+            "/usr/local/go/bin/go",
+            self.args.test_image,
+            "test",
+        ]
+        for contract in contracts:
+            package = contract["package"]
+            pattern = contract["run"]
+            if pattern:
+                listed = output([*docker_go, "-list", pattern, package])
+                if not any(line.startswith("Test") for line in listed.splitlines()):
+                    raise ReleaseError(f"Go test contract matched no tests: {package} {pattern}")
+                run([*docker_go, "-count=1", "-run", pattern, package])
+            else:
+                run([*docker_go, "-count=1", package])
 
     def build_image(self) -> None:
         labels = self.image_labels(self.image)
@@ -505,6 +536,7 @@ WHERE platform IN ('playground_image', 'playground_video')
             "docs/RELEASE-GOVERNANCE.md",
             "release/upstream-ref",
             "release/image-contract-markers.txt",
+            "release/go-test-contracts.json",
             "scripts/release-new-api.sh",
             "scripts/release_new_api.py",
             "scripts/new-api-task-start.sh",

@@ -64,6 +64,18 @@ class ReleaseNewApiTest(unittest.TestCase):
         args = MODULE.parse_args(["--app-dir", "/tmp/new-api", "--policy-ack", "a" * 64])
         self.assertEqual(args.state_dir, Path("/tmp/new-api/release-state"))
 
+    def test_load_test_contracts_validates_packages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            contracts = Path(directory) / "contracts.json"
+            contracts.write_text('[{"package":"./middleware","run":"^TestRoute$"}]', encoding="utf-8")
+            self.assertEqual(
+                MODULE.load_test_contracts(contracts),
+                [{"package": "./middleware", "run": "^TestRoute$"}],
+            )
+            contracts.write_text('[{"package":"../../escape","run":""}]', encoding="utf-8")
+            with self.assertRaises(MODULE.ReleaseError):
+                MODULE.load_test_contracts(contracts)
+
 
 if __name__ == "__main__":
     unittest.main()
