@@ -34,6 +34,19 @@ LABELS = {
     "policy": "io.shenxiang.new-api.policy-sha256",
     "schema": "io.shenxiang.new-api.release-schema",
 }
+GOVERNANCE_FILES = (
+    "docs/RELEASE-GOVERNANCE.md",
+    "release/upstream-ref",
+    "release/image-contract-markers.txt",
+    "release/go-test-contracts.json",
+    "scripts/release-new-api.sh",
+    "scripts/release_new_api.py",
+    "scripts/new-api-task-start.sh",
+    "scripts/check-new-api-release-state.sh",
+    "scripts/deploy.sh",
+    "scripts/codex_entry_guard.sh",
+    "scripts/sync_app_model_permissions.sh",
+)
 
 
 class ReleaseError(RuntimeError):
@@ -532,19 +545,7 @@ WHERE platform IN ('playground_image', 'playground_video')
 
     def sync_governance_files(self) -> None:
         service = self.checkout / "services/shenxiang-new-api"
-        relative_files = (
-            "docs/RELEASE-GOVERNANCE.md",
-            "release/upstream-ref",
-            "release/image-contract-markers.txt",
-            "release/go-test-contracts.json",
-            "scripts/release-new-api.sh",
-            "scripts/release_new_api.py",
-            "scripts/new-api-task-start.sh",
-            "scripts/check-new-api-release-state.sh",
-            "scripts/deploy.sh",
-            "scripts/codex_entry_guard.sh",
-        )
-        for relative in relative_files:
+        for relative in GOVERNANCE_FILES:
             source = service / relative
             if not source.is_file():
                 raise ReleaseError(f"candidate governance file is missing: {relative}")

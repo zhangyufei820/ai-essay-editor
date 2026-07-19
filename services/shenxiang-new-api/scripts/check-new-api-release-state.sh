@@ -13,6 +13,7 @@ expected_commit="$(jq -er '.repo_commit' "$MANIFEST")"
 expected_upstream="$(jq -er '.upstream_commit' "$MANIFEST")"
 expected_patch="$(jq -er '.patch_sha256' "$MANIFEST")"
 expected_policy="$(jq -er '.policy_sha256' "$MANIFEST")"
+expected_model_sync_runner="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/sync_app_model_permissions.sh"
 
 actual_image="$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')"
 actual_image_id="$(docker inspect "$CONTAINER" --format '{{.Image}}')"
@@ -28,5 +29,10 @@ label_policy="$(docker image inspect "$actual_image" --format '{{index .Config.L
 [ "$label_upstream" = "$expected_upstream" ] || { printf 'release upstream label drift\n' >&2; exit 1; }
 [ "$label_patch" = "$expected_patch" ] || { printf 'release patch label drift\n' >&2; exit 1; }
 [ "$label_policy" = "$expected_policy" ] || { printf 'release policy label drift\n' >&2; exit 1; }
+[ -r "$expected_model_sync_runner" ] || { printf 'release model-permission runner missing\n' >&2; exit 1; }
+cmp -s "${APP_DIR}/scripts/sync_app_model_permissions.sh" "$expected_model_sync_runner" || {
+  printf 'release model-permission runner drift\n' >&2
+  exit 1
+}
 
 printf 'release state verified: %s %s\n' "$expected_commit" "$expected_image"

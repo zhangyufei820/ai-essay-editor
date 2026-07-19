@@ -76,6 +76,19 @@ class ReleaseNewApiTest(unittest.TestCase):
             with self.assertRaises(MODULE.ReleaseError):
                 MODULE.load_test_contracts(contracts)
 
+    def test_release_syncs_manifest_pinned_model_permission_runner(self) -> None:
+        self.assertIn("scripts/sync_app_model_permissions.sh", MODULE.GOVERNANCE_FILES)
+
+        runner = MODULE_PATH.with_name("sync_app_model_permissions.sh").read_text(encoding="utf-8")
+        self.assertIn('MANIFEST="$ROOT/release-manifest.json"', runner)
+        self.assertIn('CHECKOUT="$ROOT/release-state/checkouts/$RELEASE_COMMIT"', runner)
+        self.assertIn('python3 "$SYNC_SCRIPT"', runner)
+        self.assertNotIn('python3 "$ROOT/scripts/sync_app_model_permissions.py"', runner)
+
+        release_guard = MODULE_PATH.with_name("check-new-api-release-state.sh").read_text(encoding="utf-8")
+        self.assertIn("release model-permission runner drift", release_guard)
+        self.assertIn('cmp -s "${APP_DIR}/scripts/sync_app_model_permissions.sh"', release_guard)
+
 
 if __name__ == "__main__":
     unittest.main()
