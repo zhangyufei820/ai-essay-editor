@@ -29,6 +29,14 @@ function modelBlock(text, model) {
   return end === -1 ? text.slice(start) : text.slice(start, end)
 }
 
+function arrayBlock(text, name) {
+  const marker = `const ${name} = [`
+  const start = text.indexOf(marker)
+  if (start === -1) return ''
+  const end = text.indexOf('\n];', start)
+  return end === -1 ? text.slice(start) : text.slice(start, end)
+}
+
 function main() {
   const sourceRoot = path.resolve(sourceRootFromArgs())
   const root = fs.existsSync(path.join(sourceRoot, 'web'))
@@ -47,6 +55,7 @@ function main() {
   const banana2Block = modelBlock(classic, 'banana-2')
   const geminiProBlock = modelBlock(classic, 'gemini-3-pro-image-preview')
   const grokBlock = modelBlock(classic, 'grok-imagine-image')
+  const grokRatioBlock = arrayBlock(classic, 'XAI_GROK_IMAGE_ASPECT_RATIOS')
   const errors = []
 
   errors.push(
@@ -84,10 +93,17 @@ function main() {
 
   errors.push(
     ...markerErrors('Grok official ratio and resolution controls', classic, [
+      'const XAI_GROK_IMAGE_SIZE_BY_ASPECT_RATIO = {',
+      "'1:1': '960x960'",
+      "'9:16': '720x1280'",
+      "'16:9': '1280x720'",
+      "'3:2': '1168x784'",
+      "'2:3': '784x1168'",
       'sizes: XAI_GROK_IMAGE_ASPECT_RATIOS',
       "resolutions: ['1k']",
       "defaultResolution: '1k'",
       '当前供应商实际仅返回约 1K',
+      'payload.size = grokImageSizeFor(effectiveAspectRatio)',
     ]),
   )
 
@@ -97,6 +113,12 @@ function main() {
 
   if (grokBlock.includes("'2k'")) {
     errors.push('Grok Image Pro must not expose unverified 2k output')
+  }
+
+  for (const unsupportedRatio of ["'auto'", "'2:1'", "'20:9'", "'9:20'"]) {
+    if (grokRatioBlock.includes(unsupportedRatio)) {
+      errors.push(`Grok Image Pro must not expose unverified ratio ${unsupportedRatio}`)
+    }
   }
 
   if (!grokBlock.includes("priceLabel: '¥0.055/张'")) {

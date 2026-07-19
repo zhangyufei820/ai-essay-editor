@@ -41,6 +41,14 @@ type Adaptor struct {
 	ResponseFormat string
 }
 
+var grokImageSizeByAspectRatio = map[string]string{
+	"1:1":  "960x960",
+	"9:16": "720x1280",
+	"16:9": "1280x720",
+	"3:2":  "1168x784",
+	"2:3":  "784x1168",
+}
+
 func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
 	result, err := service.ConvertRequest(c, info, types.RelayFormatOpenAI, request)
 	if err != nil {
@@ -434,6 +442,17 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	if info.RelayMode == relayconstant.RelayModeImagesGenerations && request.Model == "grok-imagine-image" {
+		aspectRatio := strings.TrimSpace(request.AspectRatio)
+		if aspectRatio != "" {
+			verifiedSize, ok := grokImageSizeByAspectRatio[aspectRatio]
+			if !ok {
+				return nil, fmt.Errorf("unsupported aspect_ratio %q for grok-imagine-image", aspectRatio)
+			}
+			request.Size = verifiedSize
+		}
+	}
+
 	switch info.RelayMode {
 	case relayconstant.RelayModeImagesEdits:
 		if isJSONRequest(c) {
