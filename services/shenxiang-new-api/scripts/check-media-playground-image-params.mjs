@@ -93,17 +93,18 @@ function main() {
 
   errors.push(
     ...markerErrors('Grok official ratio and resolution controls', classic, [
-      'const XAI_GROK_IMAGE_SIZE_BY_ASPECT_RATIO = {',
+      'const XAI_GROK_IMAGE_REQUEST_SIZE_BY_ASPECT_RATIO = {',
+      "'1:1': '1024x1024'",
+      "'2:3': '768x1152'",
+      'const XAI_GROK_IMAGE_OUTPUT_SIZE_BY_ASPECT_RATIO = {',
       "'1:1': '960x960'",
       "'9:16': '720x1280'",
       "'16:9': '1280x720'",
-      "'3:2': '1168x784'",
-      "'2:3': '784x1168'",
       'sizes: XAI_GROK_IMAGE_ASPECT_RATIOS',
       "resolutions: ['1k']",
       "defaultResolution: '1k'",
       '当前供应商实际仅返回约 1K',
-      'payload.size = grokImageSizeFor(effectiveAspectRatio)',
+      'payload.size = grokImageRequestSizeFor(effectiveAspectRatio)',
     ]),
   )
 
@@ -115,7 +116,7 @@ function main() {
     errors.push('Grok Image Pro must not expose unverified 2k output')
   }
 
-  for (const unsupportedRatio of ["'auto'", "'2:1'", "'20:9'", "'9:20'"]) {
+  for (const unsupportedRatio of ["'auto'", "'2:1'", "'3:2'", "'20:9'", "'9:20'"]) {
     if (grokRatioBlock.includes(unsupportedRatio)) {
       errors.push(`Grok Image Pro must not expose unverified ratio ${unsupportedRatio}`)
     }

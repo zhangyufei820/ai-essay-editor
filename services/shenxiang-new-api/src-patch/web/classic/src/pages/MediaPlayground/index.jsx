@@ -109,15 +109,20 @@ const XAI_GROK_IMAGE_ASPECT_RATIOS = [
   '9:16',
   '16:9',
   '2:3',
-  '3:2',
 ];
 
-const XAI_GROK_IMAGE_SIZE_BY_ASPECT_RATIO = {
+const XAI_GROK_IMAGE_REQUEST_SIZE_BY_ASPECT_RATIO = {
+  '1:1': '1024x1024',
+  '9:16': '720x1280',
+  '16:9': '1280x720',
+  '2:3': '768x1152',
+};
+
+const XAI_GROK_IMAGE_OUTPUT_SIZE_BY_ASPECT_RATIO = {
   '1:1': '960x960',
   '9:16': '720x1280',
   '16:9': '1280x720',
-  '3:2': '1168x784',
-  '2:3': '784x1168',
+  '2:3': '768x1152',
 };
 
 const openMediaUrl = (url) => {
@@ -310,7 +315,7 @@ const IMAGE_MODELS = [
     edit: false,
     priceLabel: '¥0.055/张',
     billingLabel: '按张计费',
-    hint: '仅支持文生图，当前供应商实际仅返回约 1K；已验证 1:1、9:16、16:9、2:3、3:2，人民币 ¥0.055/张。',
+    hint: '仅支持文生图，当前供应商实际仅返回约 1K；已验证 1:1、9:16、16:9、2:3，人民币 ¥0.055/张。',
   },
 ];
 
@@ -689,8 +694,12 @@ function geminiProImageSizeFor(aspectRatio, imageSize) {
   return GOOGLE_GEMINI_PRO_IMAGE_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] || '';
 }
 
-function grokImageSizeFor(aspectRatio) {
-  return XAI_GROK_IMAGE_SIZE_BY_ASPECT_RATIO[aspectRatio] || '';
+function grokImageRequestSizeFor(aspectRatio) {
+  return XAI_GROK_IMAGE_REQUEST_SIZE_BY_ASPECT_RATIO[aspectRatio] || '';
+}
+
+function grokImageOutputSizeFor(aspectRatio) {
+  return XAI_GROK_IMAGE_OUTPUT_SIZE_BY_ASPECT_RATIO[aspectRatio] || '';
 }
 
 function imagePixelSizeForModel(modelValue, aspectRatio, imageSize, customSize = '') {
@@ -703,7 +712,7 @@ function imagePixelSizeForModel(modelValue, aspectRatio, imageSize, customSize =
     return geminiProImageSizeFor(aspectRatio, imageSize);
   }
   if (isGrokImageModel(modelValue)) {
-    return grokImageSizeFor(aspectRatio);
+    return grokImageOutputSizeFor(aspectRatio);
   }
   return '';
 }
@@ -3263,7 +3272,7 @@ const MediaPlayground = () => {
       if (isGrokImageModel(imageModel)) {
         payload.n = effectiveCount;
         if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio;
-        payload.size = grokImageSizeFor(effectiveAspectRatio);
+        payload.size = grokImageRequestSizeFor(effectiveAspectRatio);
         if (resolution && resolution !== 'auto') payload.resolution = resolution;
         if (format && format !== 'url') payload.response_format = format;
         return payload;

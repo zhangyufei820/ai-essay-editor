@@ -41,12 +41,11 @@ type Adaptor struct {
 	ResponseFormat string
 }
 
-var grokImageSizeByAspectRatio = map[string]string{
-	"1:1":  "960x960",
+var grokImageRequestSizeByAspectRatio = map[string]string{
+	"1:1":  "1024x1024",
 	"9:16": "720x1280",
 	"16:9": "1280x720",
-	"3:2":  "1168x784",
-	"2:3":  "784x1168",
+	"2:3":  "768x1152",
 }
 
 func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
@@ -445,7 +444,7 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 	if info.RelayMode == relayconstant.RelayModeImagesGenerations && request.Model == "grok-imagine-image" {
 		aspectRatio := strings.TrimSpace(request.AspectRatio)
 		if aspectRatio != "" {
-			verifiedSize, ok := grokImageSizeByAspectRatio[aspectRatio]
+			verifiedSize, ok := grokImageRequestSizeByAspectRatio[aspectRatio]
 			if !ok {
 				return nil, fmt.Errorf("unsupported aspect_ratio %q for grok-imagine-image", aspectRatio)
 			}
