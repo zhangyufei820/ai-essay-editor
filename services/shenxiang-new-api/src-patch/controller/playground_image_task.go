@@ -226,6 +226,10 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid image request"})
 		return
 	}
+	if service.IsRetiredImageModelName(imageReq.Model) {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "该模型已下架，请选择其他模型。"})
+		return
+	}
 	displayModel := service.PublicImageModelDisplayName(imageReq.Model, "")
 	if normalizedModel, publicAlias, changed := normalizePlaygroundImageProductModelNameForRelay(imageReq.Model); changed {
 		imageReq.Model = normalizedModel

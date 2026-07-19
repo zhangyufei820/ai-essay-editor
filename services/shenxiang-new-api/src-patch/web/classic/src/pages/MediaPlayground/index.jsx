@@ -183,29 +183,6 @@ const IMAGE_MODELS = [
     hint: '稳定图像生成线路，支持 1K / 2K / 4K 和合法自定义 WxH，固定 ¥0.135/张。',
   },
   {
-    value: '特价 image-2',
-    label: '特价 image-2',
-    badge: '4K',
-    vendor: '星人图像',
-    sizes: OPENAI_IMAGE_ASPECT_RATIOS,
-    aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS,
-    resolutions: GPT_IMAGE_2_RESOLUTIONS,
-    qualities: ['auto', 'low', 'medium', 'high'],
-    formats: ['png', 'jpeg', 'webp'],
-    defaultSize: '1:1',
-    defaultResolution: '1K',
-    defaultQuality: 'high',
-    maxCount: 4,
-    countParam: 'n',
-    sizeParam: 'size',
-    backgroundOptions: ['auto', 'opaque'],
-    edit: true,
-    statusLabel: '稳定',
-    priceLabel: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
-    billingLabel: '按张计费',
-    hint: '特价 image-2 重新上线，支持 1K / 2K / 4K 和合法自定义 WxH；费用：1K ¥0.03，2K ¥0.06，4K ¥0.10。',
-  },
-  {
     value: 'banana-2',
     label: 'Banana 2',
     badge: '4K',
@@ -505,7 +482,6 @@ function isGptImage2Model(model) {
   return (
     model === 'gpt-image-2-4K' ||
     model === '官转image 2稳定' ||
-    model === '特价 image-2' ||
     model === 'image 2电商商品图快速通道(1.5K)'
   );
 }

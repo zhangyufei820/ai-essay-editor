@@ -26,7 +26,7 @@ func TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels(t *testing.T) {
 			Type:   constant.ChannelTypeOpenAI,
 			Status: common.ChannelStatusEnabled,
 			Group:  "default",
-			Models: "visible-model," + service.InternalDiscountImage2ModelName,
+			Models: "visible-model," + service.InternalStableImage2ModelName + "," + service.InternalDiscountImage2ModelName,
 		},
 		{
 			Id:     102,
@@ -39,6 +39,7 @@ func TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels(t *testing.T) {
 	}).Error)
 	require.NoError(t, db.Create(&[]model.Ability{
 		{Group: "default", Model: "visible-model", ChannelId: 101, Enabled: true},
+		{Group: "default", Model: service.InternalStableImage2ModelName, ChannelId: 101, Enabled: true},
 		{Group: "default", Model: service.InternalDiscountImage2ModelName, ChannelId: 101, Enabled: true},
 		{Group: "default", Model: "disabled-model", ChannelId: 102, Enabled: true},
 	}).Error)
@@ -53,15 +54,17 @@ func TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels(t *testing.T) {
 		"visible-model":                       true,
 		"token-only-model":                    true,
 		"disabled-model":                      true,
+		service.PublicStableImage2ModelName:   true,
 		service.PublicDiscountImage2ModelName: true,
 	})
 
 	ListVisibleModels(context, constant.ChannelTypeOpenAI)
 
 	models := decodeListModelsResponse(t, recorder)
-	_, publicAliasVisible := models[service.PublicDiscountImage2ModelName]
+	_, publicAliasVisible := models[service.PublicStableImage2ModelName]
 	require.Contains(t, models, "visible-model")
 	require.True(t, publicAliasVisible)
+	require.NotContains(t, models, service.PublicDiscountImage2ModelName)
 	require.NotContains(t, models, "token-only-model")
 	require.NotContains(t, models, "disabled-model")
 	require.NotContains(t, models, service.InternalDiscountImage2ModelName)
@@ -77,19 +80,37 @@ func TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility(t *testing.T) {
 		Type:   constant.ChannelTypeOpenAI,
 		Status: common.ChannelStatusEnabled,
 		Group:  "default",
-		Models: service.InternalDiscountImage2ModelName,
+		Models: service.InternalStableImage2ModelName + "," + service.InternalDiscountImage2ModelName,
 	}).Error)
-	require.NoError(t, db.Create(&model.Ability{
-		Group:     "default",
-		Model:     service.InternalDiscountImage2ModelName,
-		ChannelId: 201,
-		Enabled:   true,
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: service.InternalStableImage2ModelName, ChannelId: 201, Enabled: true},
+		{Group: "default", Model: service.InternalDiscountImage2ModelName, ChannelId: 201, Enabled: true},
 	}).Error)
 
 	t.Run("returns a visible public alias", func(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		context, _ := gin.CreateTestContext(recorder)
 		context.Request = httptest.NewRequest(http.MethodGet, "/v1/models/public", nil)
+		context.Params = gin.Params{{Key: "model", Value: service.PublicStableImage2ModelName}}
+		context.Set("id", 201)
+		common.SetContextKey(context, constant.ContextKeyUserGroup, "default")
+		common.SetContextKey(context, constant.ContextKeyTokenModelLimitEnabled, true)
+		common.SetContextKey(context, constant.ContextKeyTokenModelLimit, map[string]bool{
+			service.PublicStableImage2ModelName: true,
+		})
+
+		RetrieveVisibleModel(context, constant.ChannelTypeOpenAI)
+
+		var response dto.OpenAIModels
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+		require.Equal(t, service.PublicStableImage2ModelName, response.Id)
+		require.NotContains(t, recorder.Body.String(), service.InternalStableImage2ModelName)
+	})
+
+	t.Run("hides the retired public alias even with a current route", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		context, _ := gin.CreateTestContext(recorder)
+		context.Request = httptest.NewRequest(http.MethodGet, "/v1/models/retired", nil)
 		context.Params = gin.Params{{Key: "model", Value: service.PublicDiscountImage2ModelName}}
 		context.Set("id", 201)
 		common.SetContextKey(context, constant.ContextKeyUserGroup, "default")
@@ -100,9 +121,11 @@ func TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility(t *testing.T) {
 
 		RetrieveVisibleModel(context, constant.ChannelTypeOpenAI)
 
-		var response dto.OpenAIModels
+		var response struct {
+			Error types.OpenAIError `json:"error"`
+		}
 		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
-		require.Equal(t, service.PublicDiscountImage2ModelName, response.Id)
+		require.Equal(t, "model_not_found", response.Error.Code)
 		require.NotContains(t, recorder.Body.String(), service.InternalDiscountImage2ModelName)
 	})
 

@@ -29,9 +29,10 @@ RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
 INTERNAL_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
 DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
-DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：支持 1K/2K/4K 输出，人民币 1K ¥0.03、2K ¥0.06、4K ¥0.10/张。"
-DISCOUNT_IMAGE2_TAGS = "image,openai"
-DISCOUNT_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations","image-edit":"/v1/images/edits"}'
+RETIRED_IMAGE_MODELS = (
+    INTERNAL_DISCOUNT_IMAGE2_MODEL,
+    DISCOUNT_IMAGE2_PUBLIC_MODEL,
+)
 INTERNAL_STABLE_IMAGE2_MODEL = "internal-image2-stable-v1"
 STABLE_IMAGE2_PUBLIC_MODEL = "官转image 2稳定"
 STABLE_IMAGE2_DESCRIPTION = "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.135/张。"
@@ -425,6 +426,11 @@ def is_retired_codex_text_model(model: str) -> bool:
     return model.strip() in RETIRED_CODEX_TEXT_MODELS
 
 
+def is_retired_image_model(model: str) -> bool:
+    normalized = model.strip().lower()
+    return any(normalized == retired.lower() for retired in RETIRED_IMAGE_MODELS)
+
+
 def is_claude_model(model: str) -> bool:
     return model.strip().lower().startswith("claude-")
 
@@ -442,6 +448,8 @@ def sanitize_token_models(models: list[str]) -> list[str]:
         if not model:
             continue
         model = TOKEN_MODEL_REPLACEMENTS.get(model, model)
+        if is_retired_image_model(model):
+            continue
         if is_retired_codex_text_model(model):
             continue
         if is_retired_claude_model(model):
@@ -506,6 +514,8 @@ def is_public_alias_backing_model(model: str) -> bool:
 
 
 def should_sync_ability_model(model: str) -> bool:
+    if is_retired_image_model(model):
+        return False
     if is_retired_codex_text_model(model):
         return False
     if is_retired_claude_model(model):
@@ -516,6 +526,7 @@ def should_sync_ability_model(model: str) -> bool:
 def is_hidden_pricing_model(model: str) -> bool:
     return (
         model.strip() == RAW_GPT_IMAGE2_MODEL
+        or is_retired_image_model(model)
         or is_retired_codex_text_model(model)
         or is_retired_claude_model(model)
         or is_supplier_exposed_model(model)
@@ -616,8 +627,12 @@ def parse_json_string_option(key: str) -> dict[str, str]:
 
 
 def upsert_json_option(key: str, values: dict[str, float]) -> None:
+    mysql_exec(json_option_upsert_statement(key, values))
+
+
+def json_option_upsert_statement(key: str, values: dict[str, float] | dict[str, str]) -> str:
     payload = json.dumps(values, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    mysql_exec(
+    return (
         "INSERT INTO options (`key`, `value`) VALUES ("
         + sql_quote(key)
         + ", "
@@ -627,14 +642,7 @@ def upsert_json_option(key: str, values: dict[str, float]) -> None:
 
 
 def upsert_json_string_option(key: str, values: dict[str, str]) -> None:
-    payload = json.dumps(values, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    mysql_exec(
-        "INSERT INTO options (`key`, `value`) VALUES ("
-        + sql_quote(key)
-        + ", "
-        + sql_quote(payload)
-        + ") ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);"
-    )
+    mysql_exec(json_option_upsert_statement(key, values))
 
 
 def decimal_to_float(value: Decimal, places: str = "0.000000000001") -> float:
@@ -1096,6 +1104,8 @@ def model_lists() -> dict[str, list[str]]:
     profiles = {"codex": [], "claude": [], "image": [], "video": []}
 
     def append_model(profile: str, model: str) -> None:
+        if is_retired_image_model(model):
+            return
         if is_retired_codex_text_model(model):
             return
         if is_retired_claude_model(model):
@@ -1128,7 +1138,7 @@ def model_lists() -> dict[str, list[str]]:
             append_model("codex", model)
     available_codex_models = set(profiles["codex"]) | set(profiles["image"])
     profiles["codex"] = [model for model in CODEX_ALLOWED_MODELS if model in available_codex_models]
-    for public_image_model in (DISCOUNT_IMAGE2_PUBLIC_MODEL, STABLE_IMAGE2_PUBLIC_MODEL):
+    for public_image_model in (STABLE_IMAGE2_PUBLIC_MODEL,):
         if public_image_model not in profiles["image"]:
             profiles["image"].append(public_image_model)
     for model in PUBLIC_VIDEO_MODELS:
@@ -1259,55 +1269,107 @@ def ensure_public_video_models() -> None:
     mysql_exec("\n".join(statements))
 
 
-def ensure_discount_image2_backing_model() -> None:
+def retire_discount_image2() -> dict[str, int]:
+    retired_models = ", ".join(sql_quote(model) for model in RETIRED_IMAGE_MODELS)
+    channel_predicate = " OR ".join(
+        "FIND_IN_SET("
+        + sql_quote(model)
+        + ", COALESCE(models, '')) > 0"
+        for model in RETIRED_IMAGE_MODELS
+    )
+    token_predicate = " OR ".join(
+        "FIND_IN_SET("
+        + sql_quote(model)
+        + ", COALESCE(model_limits, '')) > 0"
+        for model in RETIRED_IMAGE_MODELS
+    )
+    token_rows = mysql(
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND ("
+        + token_predicate
+        + ");"
+    )
+    token_updates: list[tuple[str, str, str]] = []
+    for token_id, token_key, raw_limits in token_rows:
+        next_limits = sanitize_model_limits(raw_limits)
+        if next_limits != raw_limits:
+            token_updates.append((token_id, next_limits, token_key))
+
+    pricing_statements: list[str] = []
+    for key in (
+        "ModelRatio",
+        "CompletionRatio",
+        "CacheRatio",
+        "CreateCacheRatio",
+        "ModelPrice",
+        "ImageRatio",
+    ):
+        values = parse_json_option(key)
+        sanitized = {
+            model: value
+            for model, value in values.items()
+            if not is_retired_image_model(model)
+        }
+        if sanitized != values:
+            pricing_statements.append(json_option_upsert_statement(key, sanitized))
+    for key in ("billing_setting.billing_mode", "billing_setting.billing_expr"):
+        values = parse_json_string_option(key)
+        sanitized = {
+            model: value
+            for model, value in values.items()
+            if not is_retired_image_model(model)
+        }
+        if sanitized != values:
+            pricing_statements.append(json_option_upsert_statement(key, sanitized))
+
     statements = [
         "START TRANSACTION;",
-        "SET @now := UNIX_TIMESTAMP();",
-        "SET @discount_image2_model := "
-        + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
-        + " COLLATE utf8mb4_unicode_ci;",
-        "SET @keep_model_id := ("
-        "SELECT MIN(id) FROM models WHERE model_name = @discount_image2_model AND deleted_at IS NULL"
-        ");",
-        "SET @keep_model_id := IFNULL(@keep_model_id, ("
-        "SELECT MIN(id) FROM models WHERE model_name = @discount_image2_model"
-        "));",
-        "INSERT INTO models "
-        "(model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) "
-        "SELECT "
-        + ", ".join(
-            [
-                "@discount_image2_model",
-                sql_quote(DISCOUNT_IMAGE2_DESCRIPTION),
-                sql_quote("OpenAI"),
-                sql_quote(DISCOUNT_IMAGE2_TAGS),
-                "1",
-                sql_quote(DISCOUNT_IMAGE2_ENDPOINTS),
-                "1",
-                "0",
-                "@now",
-                "@now",
-                "0",
-            ]
-        )
-        + " WHERE @keep_model_id IS NULL;",
-        "SET @keep_model_id := IFNULL(@keep_model_id, LAST_INSERT_ID());",
-        "UPDATE models SET "
-        "description = "
-        + sql_quote(DISCOUNT_IMAGE2_DESCRIPTION)
-        + ", icon = "
-        + sql_quote("OpenAI")
-        + ", tags = "
-        + sql_quote(DISCOUNT_IMAGE2_TAGS)
-        + ", vendor_id = 1, endpoints = "
-        + sql_quote(DISCOUNT_IMAGE2_ENDPOINTS)
-        + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
-        "WHERE id = @keep_model_id;",
-        "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
-        "WHERE model_name = @discount_image2_model AND id <> @keep_model_id;",
-        "COMMIT;",
+        "UPDATE channels SET status = 2, priority = 0, weight = 0 WHERE "
+        + channel_predicate
+        + ";",
+        "UPDATE abilities SET enabled = 0 WHERE model IN ("
+        + retired_models
+        + ") OR channel_id IN (SELECT id FROM channels WHERE "
+        + channel_predicate
+        + ");",
+        "UPDATE models SET status = 0 WHERE model_name IN ("
+        + retired_models
+        + ");",
+        *pricing_statements,
     ]
+    for token_id, next_limits, _token_key in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits = "
+            + sql_quote(next_limits)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
+    caches_deleted = delete_token_caches(
+        [token_key for _token_id, _next_limits, token_key in token_updates]
+    )
+    return {
+        "channels_disabled": len(
+            mysql("SELECT id FROM channels WHERE status = 2 AND (" + channel_predicate + ");")
+        ),
+        "models_disabled": len(
+            mysql("SELECT id FROM models WHERE status = 0 AND model_name IN (" + retired_models + ");")
+        ),
+        "abilities_disabled": len(
+            mysql(
+                "SELECT channel_id FROM abilities WHERE enabled = 0 AND (model IN ("
+                + retired_models
+                + ") OR channel_id IN (SELECT id FROM channels WHERE "
+                + channel_predicate
+                + "));"
+            )
+        ),
+        "tokens_rewritten": len(token_updates),
+        "token_caches_deleted": caches_deleted,
+        "pricing_options_sanitized": len(pricing_statements),
+    }
 
 
 def ensure_stable_image2_backing_model() -> None:
@@ -1955,7 +2017,7 @@ def refresh_codex() -> None:
 
 def main() -> int:
     ensure_public_video_models()
-    ensure_discount_image2_backing_model()
+    retired_discount_image2_result = retire_discount_image2()
     ensure_stable_image2_backing_model()
     sync_grok_image_metadata()
     ensure_public_openai_text_models()
@@ -1989,6 +2051,7 @@ def main() -> int:
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
         + f", retired_claude={retired_claude_result}"
+        + f", retired_discount_image2={retired_discount_image2_result}"
     )
     return 0
 

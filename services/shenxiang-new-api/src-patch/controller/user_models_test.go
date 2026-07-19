@@ -131,7 +131,8 @@ func TestNormalizeUserVisibleModelsHidesSupplierExposedImageModels(t *testing.T)
 		"moonapix-image-leak",
 	})
 
-	require.Equal(t, []string{"gpt-5.5", "特价 image-2", "官转image 2稳定", "image 2电商商品图快速通道(1.5K)"}, models)
+	require.Equal(t, []string{"gpt-5.5", "官转image 2稳定", "image 2电商商品图快速通道(1.5K)"}, models)
+	require.NotContains(t, models, "特价 image-2")
 	require.NotContains(t, models, "geek2api-image-2")
 	require.NotContains(t, models, "internal-image2-stable-v1")
 }

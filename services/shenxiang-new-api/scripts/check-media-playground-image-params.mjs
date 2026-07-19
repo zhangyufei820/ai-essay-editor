@@ -51,7 +51,6 @@ function main() {
   const classic = readText(classicPath)
   const gptImage2Block = modelBlock(classic, 'gpt-image-2-4K')
   const stableImage2Block = modelBlock(classic, '官转image 2稳定')
-  const discountImage2Block = modelBlock(classic, '特价 image-2')
   const banana2Block = modelBlock(classic, 'banana-2')
   const geminiProBlock = modelBlock(classic, 'gemini-3-pro-image-preview')
   const grokBlock = modelBlock(classic, 'grok-imagine-image')
@@ -142,15 +141,8 @@ function main() {
     errors.push('gpt-image-2-4K must use GPT_IMAGE_2_RESOLUTIONS')
   }
 
-  if (!discountImage2Block) {
-    errors.push('classic media playground must expose public model 特价 image-2')
-  } else {
-    if (!discountImage2Block.includes('resolutions: GPT_IMAGE_2_RESOLUTIONS')) {
-      errors.push('特价 image-2 must use GPT_IMAGE_2_RESOLUTIONS')
-    }
-    if (!discountImage2Block.includes('1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10')) {
-      errors.push('特价 image-2 must show original 1K/2K/4K tier prices')
-    }
+  if (classic.includes('特价 image-2')) {
+    errors.push('classic media playground must not expose retired model 特价 image-2')
   }
 
   if (!stableImage2Block) {
