@@ -21,7 +21,7 @@
   },
   {
     "package": "./relay/channel/openai",
-    "run": "^TestConvertGrokImageEditStripsRoutingGroup$"
+    "run": "^(TestConvertGrokImageEditStripsRoutingGroup|TestConvertGrokImageGenerationMapsAspectRatioToVerifiedProviderSize|TestConvertGrokImageGenerationRejectsUnsupportedAspectRatio)$"
   },
   {
     "package": "./service",

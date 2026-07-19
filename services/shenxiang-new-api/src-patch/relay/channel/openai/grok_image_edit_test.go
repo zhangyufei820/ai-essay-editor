@@ -49,3 +49,50 @@ func TestConvertGrokImageEditStripsRoutingGroup(t *testing.T) {
 	require.Len(t, replayed.MultipartForm.File["image"], 1)
 	require.Empty(t, replayed.MultipartForm.File["image[]"])
 }
+
+func TestConvertGrokImageGenerationMapsAspectRatioToVerifiedProviderSize(t *testing.T) {
+	tests := map[string]string{
+		"1:1":  "960x960",
+		"9:16": "720x1280",
+		"16:9": "1280x720",
+		"3:2":  "1168x784",
+		"2:3":  "784x1168",
+	}
+
+	for aspectRatio, expectedSize := range tests {
+		t.Run(aspectRatio, func(t *testing.T) {
+			converted, err := (&Adaptor{}).ConvertImageRequest(
+				nil,
+				&relaycommon.RelayInfo{RelayMode: relayconstant.RelayModeImagesGenerations},
+				dto.ImageRequest{
+					Model:       "grok-imagine-image",
+					Prompt:      "test image",
+					AspectRatio: aspectRatio,
+					Resolution:  "1k",
+					Size:        "1280x640",
+				},
+			)
+			require.NoError(t, err)
+
+			request, ok := converted.(dto.ImageRequest)
+			require.True(t, ok)
+			require.Equal(t, expectedSize, request.Size)
+		})
+	}
+}
+
+func TestConvertGrokImageGenerationRejectsUnsupportedAspectRatio(t *testing.T) {
+	converted, err := (&Adaptor{}).ConvertImageRequest(
+		nil,
+		&relaycommon.RelayInfo{RelayMode: relayconstant.RelayModeImagesGenerations},
+		dto.ImageRequest{
+			Model:       "grok-imagine-image",
+			Prompt:      "test image",
+			AspectRatio: "2:1",
+			Resolution:  "1k",
+		},
+	)
+
+	require.Nil(t, converted)
+	require.EqualError(t, err, `unsupported aspect_ratio "2:1" for grok-imagine-image`)
+}
