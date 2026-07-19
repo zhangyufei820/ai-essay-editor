@@ -167,6 +167,8 @@ function main() {
     errors.push('classic media playground must expose public model 特价 image-2')
   } else {
     for (const marker of [
+      'sizes: OPENAI_IMAGE_ASPECT_RATIOS',
+      'aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS',
       'resolutions: DISCOUNT_IMAGE_2_RESOLUTIONS',
       "qualities: ['high']",
       "formats: ['png']",
