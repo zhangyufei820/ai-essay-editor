@@ -448,7 +448,9 @@ func normalizePlaygroundImageTaskRequest(imageReq *dto.ImageRequest, payload map
 		payload["image_size"] = imageSize
 		changed = true
 	}
-	if aspectRatio != "" || imageSize != "" {
+	isDiscountImage2 := strings.EqualFold(imageReq.Model, service.PublicDiscountImage2ModelName) ||
+		strings.EqualFold(imageReq.Model, service.InternalDiscountImage2ModelName)
+	if (aspectRatio != "" || imageSize != "") && !isDiscountImage2 {
 		if ensureGoogleImageConfig(payload, aspectRatio, imageSize) {
 			changed = true
 		}

@@ -5,7 +5,7 @@
   },
   {
     "package": "./controller",
-    "run": "^(TestCreateImageTaskRejectsRetiredImage2BeforePersistence|TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel|TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility|TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing)$"
+    "run": "^(TestCreateImageTaskRejectsRetiredImage2BeforePersistence|TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel|TestNormalizePlaygroundImageTaskPayloadPreservesExplicitDiscountImage2ExtraBody|TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility|TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing)$"
   },
   {
     "package": "./relay/channel/task/sora",

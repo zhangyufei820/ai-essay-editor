@@ -152,7 +152,32 @@ func TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInter
 	require.NoError(t, json.Unmarshal(normalized, &payload))
 	require.Equal(t, "internal-image2-discount-v2", payload["model"])
 	require.Equal(t, "2K", payload["resolution"])
+	require.NotContains(t, payload, "extra_body")
+	require.Empty(t, request.ExtraBody)
 	require.NotContains(t, payload, "display_model")
+}
+
+func TestNormalizePlaygroundImageTaskPayloadPreservesExplicitDiscountImage2ExtraBody(t *testing.T) {
+	raw := []byte(`{
+		"model":"特价 image-2",
+		"prompt":"poster",
+		"resolution":"2K",
+		"extra_body":{"custom":true}
+	}`)
+	request := dto.ImageRequest{
+		Model:      "特价 image-2",
+		Prompt:     "poster",
+		Resolution: "2K",
+		ExtraBody:  json.RawMessage(`{"custom":true}`),
+	}
+
+	normalized, changed := normalizePlaygroundImageTaskPayload(raw, &request)
+	require.True(t, changed)
+	require.JSONEq(t, `{"custom":true}`, string(request.ExtraBody))
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(normalized, &payload))
+	require.Contains(t, payload, "extra_body")
 }
 
 func TestCreateImageTaskRejectsRetiredImage2BeforePersistence(t *testing.T) {
