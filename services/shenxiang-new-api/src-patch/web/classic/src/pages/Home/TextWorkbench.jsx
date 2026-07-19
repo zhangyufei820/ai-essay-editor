@@ -52,6 +52,9 @@ import {
   Upload,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import RemarkBreaks from 'remark-breaks';
+import RemarkGfm from 'remark-gfm';
 import { API, copy } from '../../helpers';
 import {
   getDefaultReasoningEffort,
@@ -696,52 +699,39 @@ function CodeBlock({ code, language }) {
 
 function MarkdownContent({ content }) {
   const source = contentToPlainText(content);
-  const blocks = source.split(/```([^\n`]*)\n?([\s\S]*?)```/g);
 
   return (
     <div className='sx-gpt-markdown'>
-      {blocks.map((block, index) => {
-        if (index % 3 === 1) return null;
-        if (index % 3 === 2) {
-          const language = String(blocks[index - 1] || '').trim();
-          return <CodeBlock key={`code-${index}`} code={block.replace(/\n$/, '')} language={language} />;
-        }
-
-        return String(block || '')
-          .split(/\n{2,}/)
-          .filter((paragraph) => paragraph.trim())
-          .map((paragraph, paragraphIndex) => {
-            const trimmed = paragraph.trim();
-            const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-            if (heading) {
-              const HeadingTag = `h${Math.min(heading[1].length + 2, 4)}`;
-              return (
-                <HeadingTag key={`heading-${index}-${paragraphIndex}`}>
-                  <InlineMarkdown text={heading[2]} />
-                </HeadingTag>
-              );
-            }
-            const listLines = trimmed.split('\n').filter((line) => /^(\s*[-*]\s+|\s*\d+\.\s+)/.test(line));
-            if (listLines.length > 1 && listLines.length === trimmed.split('\n').length) {
-              const isOrdered = /^\s*\d+\.\s+/.test(listLines[0]);
-              const Tag = isOrdered ? 'ol' : 'ul';
-              return (
-                <Tag key={`list-${index}-${paragraphIndex}`}>
-                  {listLines.map((line, lineIndex) => (
-                    <li key={`item-${lineIndex}`}>
-                      <InlineMarkdown text={line.replace(/^\s*(?:[-*]|\d+\.)\s+/, '')} />
-                    </li>
-                  ))}
-                </Tag>
-              );
-            }
+      <ReactMarkdown
+        remarkPlugins={[RemarkGfm, RemarkBreaks]}
+        components={{
+          a: ({ children, href, title }) => {
+            const isInternal = href?.startsWith('/') || href?.startsWith('#');
             return (
-              <p key={`paragraph-${index}-${paragraphIndex}`}>
-                <InlineMarkdown text={trimmed} />
-              </p>
+              <a
+                href={href}
+                title={title}
+                target={isInternal ? undefined : '_blank'}
+                rel={isInternal ? undefined : 'noopener noreferrer'}
+              >
+                {children}
+              </a>
             );
-          });
-      })}
+          },
+          pre: ({ children }) => {
+            const codeElement = React.Children.toArray(children)[0];
+            if (!React.isValidElement(codeElement)) return <pre>{children}</pre>;
+            const language = String(codeElement.props.className || '').replace(
+              /^language-/,
+              '',
+            );
+            const code = String(codeElement.props.children || '').replace(/\n$/, '');
+            return <CodeBlock code={code} language={language} />;
+          },
+        }}
+      >
+        {source}
+      </ReactMarkdown>
     </div>
   );
 }
