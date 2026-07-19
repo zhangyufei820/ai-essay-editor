@@ -122,6 +122,7 @@ func TestNormalizeUserVisibleModelsHidesSupplierExposedImageModels(t *testing.T)
 	models := normalizeUserVisibleModels(2, []string{
 		"gpt-5.5",
 		"geek2api-image-2",
+		"internal-image2-discount-v2",
 		"internal-image2-stable-v1",
 		"特价 image-2",
 		"image 2电商商品图快速通道(1.5K)",
@@ -131,9 +132,10 @@ func TestNormalizeUserVisibleModelsHidesSupplierExposedImageModels(t *testing.T)
 		"moonapix-image-leak",
 	})
 
-	require.Equal(t, []string{"gpt-5.5", "官转image 2稳定", "image 2电商商品图快速通道(1.5K)"}, models)
-	require.NotContains(t, models, "特价 image-2")
+	require.Equal(t, []string{"gpt-5.5", "特价 image-2", "官转image 2稳定", "image 2电商商品图快速通道(1.5K)"}, models)
+	require.Contains(t, models, "特价 image-2")
 	require.NotContains(t, models, "geek2api-image-2")
+	require.NotContains(t, models, "internal-image2-discount-v2")
 	require.NotContains(t, models, "internal-image2-stable-v1")
 }
 
@@ -194,6 +196,31 @@ func TestFilterPricingByUsableGroupsSynthesizesStableImage2PublicPricing(t *test
 			EnableGroup: []string{"default"},
 		},
 	}, pricing)
+}
+
+func TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing(t *testing.T) {
+	originalModelPrice := ratio_setting.ModelPrice2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(originalModelPrice))
+	})
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"特价 image-2":0.008219178082}`))
+
+	pricing := filterPricingByUsableGroups([]model.Pricing{
+		{
+			ModelName:   service.InternalDiscountImage2ModelName,
+			Description: "特价 image-2：人民币 1K ¥0.06、2K ¥0.09、4K ¥0.10/张。",
+			Tags:        "image,openai,internal-hidden",
+			EnableGroup: []string{"default"},
+		},
+	}, map[string]string{"default": "原价"})
+
+	require.Len(t, pricing, 1)
+	require.Equal(t, service.PublicDiscountImage2ModelName, pricing[0].ModelName)
+	require.Equal(t, 1, pricing[0].QuotaType)
+	require.InDelta(t, 0.008219178082, pricing[0].ModelPrice, 0.000000000001)
+	require.Equal(t, []string{"default"}, pricing[0].EnableGroup)
+	require.NotContains(t, pricing[0].Description, "internal-image2")
+	require.NotContains(t, pricing[0].Tags, "internal-hidden")
 }
 
 func TestFilterPricingByUsableGroupsRemovesLegacyGroupMetadata(t *testing.T) {

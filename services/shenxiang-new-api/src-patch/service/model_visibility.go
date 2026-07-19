@@ -4,19 +4,20 @@ import "strings"
 
 const (
 	PublicDiscountImage2ModelName   = "特价 image-2"
-	InternalDiscountImage2ModelName = "geek2api-image-2"
+	InternalDiscountImage2ModelName = "internal-image2-discount-v2"
+	RetiredDiscountImage2ModelName  = "geek2api-image-2"
 	PublicStableImage2ModelName     = "官转image 2稳定"
 	InternalStableImage2ModelName   = "internal-image2-stable-v1"
 )
 
 var supplierExposedModelNames = map[string]bool{
 	InternalDiscountImage2ModelName: true,
+	RetiredDiscountImage2ModelName:  true,
 	InternalStableImage2ModelName:   true,
 }
 
 var retiredImageModelNames = map[string]bool{
-	strings.ToLower(PublicDiscountImage2ModelName):   true,
-	strings.ToLower(InternalDiscountImage2ModelName): true,
+	strings.ToLower(RetiredDiscountImage2ModelName): true,
 }
 
 var publicImageModelAliases = map[string]string{

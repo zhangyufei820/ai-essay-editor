@@ -2,6 +2,7 @@ package dto
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -194,16 +195,122 @@ func discountImage2PriceCNY(request *ImageRequest) (float64, bool) {
 	case "4K":
 		return 0.10, true
 	case "2K":
-		return 0.06, true
+		return 0.09, true
 	default:
-		return 0.03, true
+		return 0.06, true
 	}
 }
 
 func isDiscountImage2Model(model string) bool {
 	trimmed := strings.TrimSpace(model)
 	return strings.EqualFold(trimmed, "特价 image-2") ||
-		strings.EqualFold(trimmed, "geek2api-image-2")
+		strings.EqualFold(trimmed, "internal-image2-discount-v2")
+}
+
+func NormalizeDiscountImage2GenerationRequest(request *ImageRequest) error {
+	if request == nil || !isDiscountImage2Model(request.Model) {
+		return nil
+	}
+	if request.N != nil && *request.N != 1 {
+		return fmt.Errorf("特价 image-2 的 n 仅支持 1")
+	}
+	if request.N == nil {
+		request.N = common.GetPointer(uint(1))
+	}
+	if quality := strings.TrimSpace(request.Quality); quality != "" && !strings.EqualFold(quality, "high") {
+		return fmt.Errorf("特价 image-2 的 quality 仅支持 high")
+	}
+	request.Quality = "high"
+	if aspectRatio := strings.TrimSpace(request.AspectRatio); aspectRatio != "" && aspectRatio != "1:1" {
+		return fmt.Errorf("特价 image-2 仅支持 1:1 方图")
+	}
+	if request.Stream != nil && *request.Stream {
+		return fmt.Errorf("特价 image-2 不支持流式输出")
+	}
+	if len(request.Images) > 0 || len(request.Image) > 0 || len(request.Mask) > 0 || len(request.InputFidelity) > 0 {
+		return fmt.Errorf("特价 image-2 仅支持文生图")
+	}
+	if len(request.ResponseFormatObj) > 0 || len(request.GenerationConfig) > 0 || len(request.ExtraBody) > 0 {
+		return fmt.Errorf("特价 image-2 不支持扩展图像配置")
+	}
+	if request.ResponseFormat != "" || len(request.Style) > 0 || len(request.User) > 0 || len(request.ExtraFields) > 0 ||
+		len(request.Background) > 0 || len(request.Moderation) > 0 || len(request.OutputCompression) > 0 || len(request.PartialImages) > 0 ||
+		request.Watermark != nil || len(request.WatermarkEnabled) > 0 || len(request.UserId) > 0 {
+		return fmt.Errorf("特价 image-2 不支持额外输出参数")
+	}
+	if len(request.OutputFormat) > 0 {
+		var outputFormat string
+		if err := common.Unmarshal(request.OutputFormat, &outputFormat); err != nil || !strings.EqualFold(strings.TrimSpace(outputFormat), "png") {
+			return fmt.Errorf("特价 image-2 的 output_format 仅支持 png")
+		}
+	}
+	request.OutputFormat = json.RawMessage(`"png"`)
+
+	resolution := discountImage2VerifiedResolutionLabel(request.Resolution)
+	if strings.TrimSpace(request.Resolution) != "" && resolution == "" {
+		return fmt.Errorf("特价 image-2 的 resolution 仅支持 1K、2K 或 4K")
+	}
+	sizeResolution := discountImage2VerifiedPixelResolution(request.Size)
+	if strings.TrimSpace(request.Size) != "" && sizeResolution == "" {
+		return fmt.Errorf("特价 image-2 的 size 不受支持")
+	}
+	imageSizeResolution := discountImage2VerifiedResolutionLabel(request.ImageSize)
+	if strings.TrimSpace(request.ImageSize) != "" && imageSizeResolution == "" {
+		return fmt.Errorf("特价 image-2 的 image_size 不受支持")
+	}
+	for _, candidate := range []string{sizeResolution, imageSizeResolution} {
+		if candidate == "" {
+			continue
+		}
+		if resolution == "" {
+			resolution = candidate
+			continue
+		}
+		if candidate != resolution {
+			return fmt.Errorf("特价 image-2 的尺寸参数不一致")
+		}
+	}
+	if resolution == "" {
+		resolution = "1K"
+	}
+	request.Resolution = resolution
+	request.AspectRatio = ""
+	request.ImageSize = ""
+	switch resolution {
+	case "2K":
+		request.Size = "2048x2048"
+	case "4K":
+		request.Size = "2880x2880"
+	default:
+		request.Size = "1024x1024"
+	}
+	return nil
+}
+
+func discountImage2VerifiedResolutionLabel(value string) string {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "1K":
+		return "1K"
+	case "2K":
+		return "2K"
+	case "4K":
+		return "4K"
+	default:
+		return ""
+	}
+}
+
+func discountImage2VerifiedPixelResolution(value string) string {
+	switch strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), " ", "")) {
+	case "1024x1024":
+		return "1K"
+	case "2048x2048":
+		return "2K"
+	case "2880x2880":
+		return "4K"
+	default:
+		return ""
+	}
 }
 
 func discountImage2Resolution(request *ImageRequest) string {

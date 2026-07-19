@@ -146,11 +146,11 @@ func TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInter
 
 	normalized, changed := normalizePlaygroundImageTaskPayload(raw, &request)
 	require.True(t, changed)
-	require.Equal(t, "geek2api-image-2", request.Model)
+	require.Equal(t, "internal-image2-discount-v2", request.Model)
 
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(normalized, &payload))
-	require.Equal(t, "geek2api-image-2", payload["model"])
+	require.Equal(t, "internal-image2-discount-v2", payload["model"])
 	require.Equal(t, "2K", payload["resolution"])
 	require.NotContains(t, payload, "display_model")
 }
@@ -172,7 +172,7 @@ func TestCreateImageTaskRejectsRetiredImage2BeforePersistence(t *testing.T) {
 	ctx.Request = httptest.NewRequest(
 		http.MethodPost,
 		"/pg/images/tasks/generations",
-		bytes.NewBufferString(`{"model":"特价 image-2","prompt":"poster"}`),
+		bytes.NewBufferString(`{"model":"geek2api-image-2","prompt":"poster"}`),
 	)
 	ctx.Request.Header.Set("Content-Type", "application/json")
 	ctx.Set("id", 71)
@@ -229,11 +229,11 @@ func TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName(t *testi
 		SubmitTime: time.Now().Unix(),
 		Properties: model.Properties{
 			Input:           "poster",
-			OriginModelName: "geek2api-image-2",
+			OriginModelName: "internal-image2-discount-v2",
 		},
 	}
 	task.SetData(playgroundImageTaskPayload{
-		Model:        "geek2api-image-2",
+		Model:        "internal-image2-discount-v2",
 		DisplayModel: "特价 image-2",
 		Prompt:       "poster",
 		RequestID:    "req-discount-image-2",
@@ -244,11 +244,11 @@ func TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName(t *testi
 			DisplayURL:  "/pg/media/files/u-1/discount.png",
 			CachedURL:   "/pg/media/files/u-1/discount.png",
 			Filename:    "discount.png",
-			Model:       "geek2api-image-2",
+			Model:       "internal-image2-discount-v2",
 			Status:      "ready",
 			CacheStatus: "cached",
 			Metadata: map[string]interface{}{
-				"model": "geek2api-image-2",
+				"model": "internal-image2-discount-v2",
 			},
 		},
 	})
@@ -263,8 +263,8 @@ func TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName(t *testi
 
 	require.Contains(t, string(playgroundJSON), "特价 image-2")
 	require.Contains(t, string(openAIJSON), "特价 image-2")
-	require.NotContains(t, string(playgroundJSON), "geek2api")
-	require.NotContains(t, string(openAIJSON), "geek2api")
+	require.NotContains(t, string(playgroundJSON), "internal-image2")
+	require.NotContains(t, string(openAIJSON), "internal-image2")
 }
 
 func TestPlaygroundImageTaskEditsMultipartReplaysWithNormalizedN(t *testing.T) {

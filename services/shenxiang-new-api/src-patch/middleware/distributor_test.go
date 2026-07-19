@@ -276,8 +276,8 @@ func TestNormalizeImageEndpointModelRequestMapsDiscountImage2PublicAlias(t *test
 
 	normalizeImageEndpointModelRequest(ctx, modelRequest)
 
-	if modelRequest.Model != "geek2api-image-2" {
-		t.Fatalf("model = %q, want geek2api-image-2", modelRequest.Model)
+	if modelRequest.Model != "internal-image2-discount-v2" {
+		t.Fatalf("model = %q, want internal-image2-discount-v2", modelRequest.Model)
 	}
 	if publicAlias := PublicImageModelAliasForRequest(ctx); publicAlias != "特价 image-2" {
 		t.Fatalf("public alias = %q, want 特价 image-2", publicAlias)
@@ -297,7 +297,7 @@ func TestGetTaskOriginModelNameUsesPublicDiscountImage2Alias(t *testing.T) {
 		TaskID: "task_public_alias",
 		UserId: 1,
 		Properties: model.Properties{
-			OriginModelName: "geek2api-image-2",
+			OriginModelName: "internal-image2-discount-v2",
 		},
 	}
 	if err := model.DB.Create(task).Error; err != nil {
@@ -336,15 +336,25 @@ func TestGetModelRequestRejectsDiscountImage2TextEndpointWithoutSupplierLeak(t *
 	if err == nil {
 		t.Fatal("getModelRequest() err = nil, want image model text endpoint rejection")
 	}
-	if strings.Contains(err.Error(), "geek2api") {
-		t.Fatalf("error = %q, want no supplier model name", err.Error())
-	}
 	if !strings.Contains(err.Error(), "特价 image-2") {
 		t.Fatalf("error = %q, want public model name", err.Error())
 	}
-	if !strings.Contains(err.Error(), "/v1/images/generations") || !strings.Contains(err.Error(), "/v1/images/edits") {
-		t.Fatalf("error = %q, want image endpoint hints", err.Error())
+	if !strings.Contains(err.Error(), "/v1/images/generations") || strings.Contains(err.Error(), "/v1/images/edits") {
+		t.Fatalf("error = %q, want generation-only endpoint hint", err.Error())
 	}
+}
+
+func TestGetModelRequestRejectsDiscountImage2EditEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/edits", bytes.NewBufferString(`{"model":"特价 image-2"}`))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	_, _, err := getModelRequest(ctx)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "仅支持 POST /v1/images/generations 文生图")
+	require.NotContains(t, err.Error(), "internal-image2")
 }
 
 func TestGetModelRequestRejectsSupplierImageModelWithoutEchoingName(t *testing.T) {
@@ -391,11 +401,11 @@ func TestDistributeRejectsSupplierExposedModelWithoutEchoingName(t *testing.T) {
 	}
 }
 
-func TestDistributeRejectsRetiredDiscountImage2BeforeChannelSelection(t *testing.T) {
+func TestDistributeRejectsLegacyDiscountImage2BeforeChannelSelection(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewBufferString(`{"model":"特价 image-2"}`))
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewBufferString(`{"model":"geek2api-image-2"}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 
 	Distribute()(ctx)

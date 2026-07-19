@@ -5,7 +5,7 @@
   },
   {
     "package": "./controller",
-    "run": "^(TestCreateImageTaskRejectsRetiredImage2BeforePersistence|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility)$"
+    "run": "^(TestCreateImageTaskRejectsRetiredImage2BeforePersistence|TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel|TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility|TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing)$"
   },
   {
     "package": "./relay/channel/task/sora",
@@ -14,6 +14,10 @@
   {
     "package": "./dto",
     "run": ""
+  },
+  {
+    "package": "./relay",
+    "run": "^TestDiscountImage2V2OutboundBodyPreservesVerifiedFields$"
   },
   {
     "package": "./service/relayconvert",
@@ -29,6 +33,6 @@
   },
   {
     "package": "./service",
-    "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestMergeModelLimits.*|TestEnsureSystemTokensRejectsNonAdminUser|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize|TestDiscountImage2NamesAreRetired)$"
+    "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestMergeModelLimits.*|TestEnsureSystemTokensRejectsNonAdminUser|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestDiscountImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize|TestOnlyLegacyDiscountImage2NameIsRetired)$"
   }
 ]

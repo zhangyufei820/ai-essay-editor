@@ -48,7 +48,7 @@ func TestModelPriceHelperUsesImageCNYFixedPrice(t *testing.T) {
 
 	c, _ := gin.CreateTestContext(nil)
 	info := &relaycommon.RelayInfo{
-		OriginModelName: "geek2api-image-2",
+		OriginModelName: service.InternalDiscountImage2ModelName,
 		UsingGroup:      "default",
 	}
 
@@ -66,7 +66,7 @@ func TestHasModelBillingConfigAcceptsPublicDiscountImage2Alias(t *testing.T) {
 		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(oldModelPrice))
 	}()
 
-	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"`+service.InternalDiscountImage2ModelName+`":0.03}`))
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"`+service.PublicDiscountImage2ModelName+`":0.008219178082}`))
 
 	require.True(t, HasModelBillingConfig(service.PublicDiscountImage2ModelName))
 }

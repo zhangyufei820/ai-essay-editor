@@ -83,6 +83,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
     def test_staged_grok1080_is_admin_only_until_published(self) -> None:
         self.module.grok15_1080_video_release_state = lambda: "staged"
+        self.module.discount_image2_release_state = lambda: "unavailable"
         profiles = {
             "codex": ["gpt-5.5"],
             "claude": ["claude-opus-4-8"],
@@ -105,6 +106,32 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         ):
             self.module.mysql = lambda _query, rows=rows: rows
             self.assertEqual(self.module.grok15_1080_video_release_state(), expected)
+
+    def test_discount_image2_release_state_requires_exact_managed_groups(self) -> None:
+        for rows, expected in (
+            ([], "unavailable"),
+            ([["1", "internal"]], "staged"),
+            ([["1", "default,standard,pro,code,internal"]], "published"),
+            ([["1", "default,internal"]], "invalid"),
+            ([["2", "default,standard,pro,code,internal"]], "unavailable"),
+        ):
+            self.module.mysql = lambda _query, rows=rows: rows
+            self.assertEqual(self.module.discount_image2_release_state(), expected)
+
+    def test_staged_discount_image2_is_admin_only_until_published(self) -> None:
+        self.module.grok15_1080_video_release_state = lambda: "unavailable"
+        self.module.discount_image2_release_state = lambda: "staged"
+        profiles = {
+            "codex": ["gpt-5.5"],
+            "claude": ["claude-opus-4-8"],
+            "image": ["gpt-image-2-4K"],
+            "video": ["grok-video-1.5"],
+        }
+
+        system_profiles = self.module.system_token_profiles(profiles)
+
+        self.assertNotIn("特价 image-2", profiles["image"])
+        self.assertIn("特价 image-2", system_profiles["image"])
 
     def test_new_video_catalog_describes_price_inputs_and_face_support_without_provider_details(self) -> None:
         sd_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["seedance-sd2-fast-720p"]["description"]
@@ -243,6 +270,20 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("geek2api-image-2", profiles["image"])
         self.assertNotIn("internal-image2-stable-v1", profiles["image"])
         self.assertNotIn("seedance-nsfw", profiles["video"])
+
+    def test_model_lists_adds_discount_image2_only_after_publish(self) -> None:
+        self.module.grok15_1080_video_release_state = lambda: "unavailable"
+        self.module.discount_image2_release_state = lambda: "published"
+        self.module.mysql = lambda query: (
+            [["1", "internal-image2-discount-v2", "image,openai,internal-hidden"]]
+            if "FROM models" in query
+            else []
+        )
+
+        profiles = self.module.model_lists()
+
+        self.assertIn("特价 image-2", profiles["image"])
+        self.assertNotIn("internal-image2-discount-v2", profiles["image"])
 
     def test_disabled_image2_ability_pairs_are_not_synced(self) -> None:
         self.assertTrue(self.module.is_disabled_ability_pair("12", "gpt-image-2-4K"))
@@ -465,21 +506,20 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("'default', 'gpt-5.5', 21", sql)
         self.assertNotIn("'discount', 'gpt-5.5', 21", sql)
 
-    def test_retire_discount_image2_removes_every_runtime_entitlement(self) -> None:
+    def test_retire_legacy_discount_image2_preserves_new_public_product(self) -> None:
         captured: list[str] = []
 
         def fake_mysql(query: str) -> list[list[str]]:
             if "FROM tokens" in query:
                 return [
-                    ["71", "key-71", "gpt-5.5,特价 image-2"],
                     ["72", "key-72", "geek2api-image-2,官转image 2稳定"],
                 ]
             if "FROM channels WHERE status = 2" in query:
                 return [["27"]]
             if "FROM models WHERE status = 0" in query:
-                return [["61"], ["62"]]
+                return [["61"]]
             if "FROM abilities WHERE enabled = 0" in query:
-                return [["27"], ["27"]]
+                return [["27"]]
             return []
 
         self.module.mysql = fake_mysql
@@ -496,16 +536,16 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.mysql_exec = captured.append
         self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
 
-        result = self.module.retire_discount_image2()
+        result = self.module.retire_legacy_discount_image2()
 
         self.assertEqual(
             result,
             {
                 "channels_disabled": 1,
-                "models_disabled": 2,
-                "abilities_disabled": 2,
-                "tokens_rewritten": 2,
-                "token_caches_deleted": 2,
+                "models_disabled": 1,
+                "abilities_disabled": 1,
+                "tokens_rewritten": 1,
+                "token_caches_deleted": 1,
                 "pricing_options_sanitized": 8,
             },
         )
@@ -514,14 +554,28 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertTrue(sql.startswith("START TRANSACTION;"))
         self.assertTrue(sql.endswith("COMMIT;"))
         self.assertIn("UPDATE channels SET status = 2, priority = 0, weight = 0", sql)
-        self.assertIn("FIND_IN_SET('特价 image-2', COALESCE(models, ''))", sql)
+        self.assertNotIn("FIND_IN_SET('特价 image-2', COALESCE(models, ''))", sql)
+        self.assertIn("FIND_IN_SET('geek2api-image-2', COALESCE(models, ''))", sql)
         self.assertIn("UPDATE abilities SET enabled = 0", sql)
         self.assertIn("UPDATE models SET status = 0", sql)
-        self.assertIn("model_limits = 'gpt-5.5'", sql)
         self.assertIn("model_limits = '官转image 2稳定'", sql)
-        self.assertIn("VALUES ('ImageRatio', '{\"other-image\":3.0}')", sql)
-        self.assertIn("VALUES ('billing_setting.billing_expr', '{\"other-image\":\"keep\"}')", sql)
-        self.assertEqual(captured[1], "CACHE:key-71,key-72")
+        self.assertIn('"特价 image-2":1.0', sql)
+        self.assertIn('"特价 image-2":"retired-public"', sql)
+        self.assertEqual(captured[1], "CACHE:key-72")
+
+    def test_ensure_discount_image2_backing_model_uses_public_metadata(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_discount_image2_backing_model()
+
+        sql = "\n".join(captured)
+        self.assertIn("internal-image2-discount-v2", sql)
+        self.assertIn("特价 image-2", sql)
+        self.assertIn("1K ¥0.06、2K ¥0.09、4K ¥0.10", sql)
+        self.assertNotIn("new.ddpapi.top", sql)
+        self.assertIn('/v1/images/generations', sql)
+        self.assertNotIn('/v1/images/edits', sql)
 
     def test_ensure_stable_image2_backing_model_uses_public_metadata(self) -> None:
         captured: list[str] = []
@@ -549,6 +603,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.module.sync_public_image_pricing()
 
+        self.assertAlmostEqual(
+            captured_options["ModelPrice"]["特价 image-2"],
+            0.008219178082,
+            places=12,
+        )
+        self.assertNotIn("特价 image-2", captured_options["ModelRatio"])
+        self.assertNotIn("特价 image-2", captured_options["CompletionRatio"])
         self.assertAlmostEqual(
             captured_options["ModelPrice"]["官转image 2稳定"],
             0.018493150685,
@@ -760,6 +821,93 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("SELECT 'pro', 'grok-video-1.5-1080p', 44", sql)
         self.assertIn("ability.`group` <> 'internal'", sql)
 
+    def test_sync_abilities_keeps_staged_discount_image2_internal_only(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "45",
+                    "internal-image2-discount-v2",
+                    "0",
+                    "100",
+                    "xingren-discount-image2-v2",
+                    "internal",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["internal-image2-discount-v2"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "internal", "pro"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        self.assertIn("SELECT 'internal', 'internal-image2-discount-v2', 45", sql)
+        self.assertNotIn("SELECT 'default', 'internal-image2-discount-v2', 45", sql)
+        self.assertNotIn("SELECT 'pro', 'internal-image2-discount-v2', 45", sql)
+        self.assertIn("ability.`group` <> 'internal'", sql)
+
+    def test_sync_abilities_publishes_discount_image2_to_public_groups(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "45",
+                    "internal-image2-discount-v2",
+                    "0",
+                    "100",
+                    "xingren-discount-image2-v2",
+                    "default,standard,pro,code,internal",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["internal-image2-discount-v2"]]
+            return []
+
+        self.module.active_groups = lambda: ["code", "default", "discount", "grok45", "internal", "pro", "standard"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        for group in ("default", "standard", "pro", "code", "internal"):
+            self.assertIn(f"SELECT '{group}', 'internal-image2-discount-v2', 45", sql)
+        self.assertNotIn("SELECT 'discount', 'internal-image2-discount-v2', 45", sql)
+        self.assertNotIn("SELECT 'grok45', 'internal-image2-discount-v2', 45", sql)
+
+    def test_sync_abilities_disables_invalid_discount_image2_channel(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "45",
+                    "internal-image2-discount-v2",
+                    "0",
+                    "100",
+                    "xingren-discount-image2-v2",
+                    "default,internal",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["internal-image2-discount-v2"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "internal"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        with self.assertRaisesRegex(RuntimeError, "invalid channel count: 1"):
+            self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        self.assertIn("UPDATE channels SET status = 2", sql)
+        self.assertNotIn("SELECT 'default', 'internal-image2-discount-v2', 45", sql)
+        self.assertNotIn("SELECT 'internal', 'internal-image2-discount-v2', 45", sql)
+
     def test_sync_user_image_tokens_replaces_all_public_image_limits(self) -> None:
         captured: list[str] = []
 
@@ -788,8 +936,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         sql = "\n".join(captured)
         self.assertEqual(result, {"tokens_rewritten": 2, "token_caches_deleted": 2})
-        self.assertIn("gpt-image-2-4K,官转image 2稳定", sql)
-        self.assertNotIn("特价 image-2", sql)
+        self.assertIn("gpt-image-2-4K,特价 image-2,官转image 2稳定", sql)
         self.assertNotIn("internal-image2-stable-v1", sql)
         self.assertIn("CACHE:key-221,key-222", sql)
 

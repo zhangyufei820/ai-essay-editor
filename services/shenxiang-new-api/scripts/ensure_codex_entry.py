@@ -21,8 +21,9 @@ SOURCE_ROOT_MARKERS = (
 )
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
-INTERNAL_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
 DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
+INTERNAL_DISCOUNT_IMAGE2_MODEL = "internal-image2-discount-v2"
+RETIRED_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 CODEX_TOKEN_NAMES = ("星人 Codex 文本令牌", "星人 Codex 自动令牌")
@@ -45,6 +46,7 @@ CODEX_STANDARD_ALLOWED_MODELS = tuple(
 )
 SUPPLIER_EXPOSED_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL,
+    RETIRED_DISCOUNT_IMAGE2_MODEL,
 }
 PUBLIC_ALIAS_BACKING_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL: DISCOUNT_IMAGE2_PUBLIC_MODEL,
@@ -679,7 +681,7 @@ def is_hidden_pricing_model(model: str) -> bool:
 
 
 def supplier_exposed_model_limit_predicate() -> str:
-    terms = [RAW_GPT_IMAGE2_MODEL, *SUPPLIER_EXPOSED_MARKERS]
+    terms = [RAW_GPT_IMAGE2_MODEL, *SUPPLIER_EXPOSED_MODELS, *SUPPLIER_EXPOSED_MARKERS]
     clauses = [
         "COALESCE(model_limits, '') LIKE " + sql_quote(f"%{term}%")
         for term in terms

@@ -62,9 +62,10 @@ func TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels(t *testing.T) {
 
 	models := decodeListModelsResponse(t, recorder)
 	_, publicAliasVisible := models[service.PublicStableImage2ModelName]
+	_, discountAliasVisible := models[service.PublicDiscountImage2ModelName]
 	require.Contains(t, models, "visible-model")
 	require.True(t, publicAliasVisible)
-	require.NotContains(t, models, service.PublicDiscountImage2ModelName)
+	require.True(t, discountAliasVisible)
 	require.NotContains(t, models, "token-only-model")
 	require.NotContains(t, models, "disabled-model")
 	require.NotContains(t, models, service.InternalDiscountImage2ModelName)
@@ -107,7 +108,7 @@ func TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility(t *testing.T) {
 		require.NotContains(t, recorder.Body.String(), service.InternalStableImage2ModelName)
 	})
 
-	t.Run("hides the retired public alias even with a current route", func(t *testing.T) {
+	t.Run("returns the published discount public alias", func(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		context, _ := gin.CreateTestContext(recorder)
 		context.Request = httptest.NewRequest(http.MethodGet, "/v1/models/retired", nil)
@@ -121,11 +122,9 @@ func TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility(t *testing.T) {
 
 		RetrieveVisibleModel(context, constant.ChannelTypeOpenAI)
 
-		var response struct {
-			Error types.OpenAIError `json:"error"`
-		}
+		var response dto.OpenAIModels
 		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
-		require.Equal(t, "model_not_found", response.Error.Code)
+		require.Equal(t, service.PublicDiscountImage2ModelName, response.Id)
 		require.NotContains(t, recorder.Body.String(), service.InternalDiscountImage2ModelName)
 	})
 

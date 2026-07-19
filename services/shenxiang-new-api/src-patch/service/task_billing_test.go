@@ -339,8 +339,8 @@ func TestLogTaskConsumptionDiscountImage2UsesPublicLogName(t *testing.T) {
 		OriginModelName: InternalDiscountImage2ModelName,
 		UsingGroup:      "default",
 		PriceData: types.PriceData{
-			ModelPrice:     0.03,
-			Quota:          2055,
+			ModelPrice:     0.06,
+			Quota:          4109,
 			GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 1},
 		},
 		ChannelMeta: &relaycommon.ChannelMeta{
@@ -385,7 +385,7 @@ func TestPostTextConsumeQuotaDiscountImage2UsesPublicLogName(t *testing.T) {
 		UsingGroup:        "default",
 		PriceData: types.PriceData{
 			UsePrice:       true,
-			ModelPrice:     0.03,
+			ModelPrice:     0.06,
 			GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 1},
 		},
 		ChannelMeta: &relaycommon.ChannelMeta{

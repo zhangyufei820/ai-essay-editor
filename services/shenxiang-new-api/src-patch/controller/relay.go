@@ -675,6 +675,14 @@ func rejectImageModelTextEndpointRequest(relayFormat types.RelayFormat, request 
 	if !isImageGenerationModelName(modelName) {
 		return nil
 	}
+	if strings.EqualFold(modelName, service.PublicDiscountImage2ModelName) {
+		return types.NewErrorWithStatusCode(
+			fmt.Errorf("%s 仅支持 POST /v1/images/generations 文生图", service.PublicDiscountImage2ModelName),
+			types.ErrorCodeInvalidRequest,
+			http.StatusBadRequest,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
 	if service.IsSupplierExposedModelName(modelName) {
 		return types.NewErrorWithStatusCode(
 			fmt.Errorf("image generation models must use POST /v1/images/generations or POST /v1/images/edits instead of text endpoints"),

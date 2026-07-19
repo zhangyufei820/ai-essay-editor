@@ -53,12 +53,12 @@ func TestImageRequestDiscountImage2UsesCNYTierPrice(t *testing.T) {
 		{
 			name:      "public alias 1K",
 			raw:       `{"model":"特价 image-2","prompt":"poster","resolution":"1K"}`,
-			wantPrice: 0.03,
+			wantPrice: 0.06,
 		},
 		{
 			name:      "internal model 2K",
-			raw:       `{"model":"geek2api-image-2","prompt":"poster","resolution":"2K"}`,
-			wantPrice: 0.06,
+			raw:       `{"model":"internal-image2-discount-v2","prompt":"poster","resolution":"2K"}`,
+			wantPrice: 0.09,
 		},
 		{
 			name:      "extra body 4K",
@@ -68,7 +68,7 @@ func TestImageRequestDiscountImage2UsesCNYTierPrice(t *testing.T) {
 		{
 			name:      "pixel size infers 2K",
 			raw:       `{"model":"特价 image-2","prompt":"poster","size":"2048x2048"}`,
-			wantPrice: 0.06,
+			wantPrice: 0.09,
 		},
 	}
 
@@ -80,6 +80,47 @@ func TestImageRequestDiscountImage2UsesCNYTierPrice(t *testing.T) {
 			meta := request.GetTokenCountMeta()
 			require.InDelta(t, test.wantPrice, meta.ImagePriceCNY, 0.000001)
 		})
+	}
+}
+
+func TestNormalizeDiscountImage2GenerationRequestPinsVerifiedContract(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		request    ImageRequest
+		resolution string
+		size       string
+	}{
+		{name: "defaults to 1K", request: ImageRequest{Model: "特价 image-2"}, resolution: "1K", size: "1024x1024"},
+		{name: "keeps 2K", request: ImageRequest{Model: "internal-image2-discount-v2", Resolution: "2K", Size: "2048x2048"}, resolution: "2K", size: "2048x2048"},
+		{name: "keeps 4K", request: ImageRequest{Model: "特价 image-2", Resolution: "4K", Size: "2880x2880"}, resolution: "4K", size: "2880x2880"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			require.NoError(t, NormalizeDiscountImage2GenerationRequest(&test.request))
+			require.NotNil(t, test.request.N)
+			require.Equal(t, uint(1), *test.request.N)
+			require.Equal(t, "high", test.request.Quality)
+			require.Equal(t, test.resolution, test.request.Resolution)
+			require.Equal(t, test.size, test.request.Size)
+			require.JSONEq(t, `"png"`, string(test.request.OutputFormat))
+		})
+	}
+}
+
+func TestNormalizeDiscountImage2GenerationRequestRejectsUnverifiedInputs(t *testing.T) {
+	two := uint(2)
+	stream := true
+	for _, request := range []ImageRequest{
+		{Model: "特价 image-2", N: &two},
+		{Model: "特价 image-2", Quality: "auto"},
+		{Model: "特价 image-2", AspectRatio: "16:9"},
+		{Model: "特价 image-2", Resolution: "custom", Size: "1536x1024"},
+		{Model: "特价 image-2", Size: "1536x1024"},
+		{Model: "特价 image-2", Resolution: "2K", Size: "1024x1024"},
+		{Model: "特价 image-2", OutputFormat: json.RawMessage(`"jpeg"`)},
+		{Model: "特价 image-2", Images: json.RawMessage(`["https://example.com/input.png"]`)},
+		{Model: "特价 image-2", Stream: &stream},
+	} {
+		require.Error(t, NormalizeDiscountImage2GenerationRequest(&request))
 	}
 }
 

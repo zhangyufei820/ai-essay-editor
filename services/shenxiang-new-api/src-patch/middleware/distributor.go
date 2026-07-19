@@ -563,6 +563,18 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		modelRequest.Model = ratio_setting.WithCompactModelSuffix(modelRequest.Model)
 	}
 	normalizeImageEndpointModelRequest(c, &modelRequest)
+	if isImageEditEndpointPath(c.Request.URL.Path) && strings.EqualFold(
+		PublicImageModelAliasForRequest(c),
+		service.PublicDiscountImage2ModelName,
+	) {
+		return nil, false, fmt.Errorf("%s 仅支持 POST /v1/images/generations 文生图", service.PublicDiscountImage2ModelName)
+	}
+	if isOpenAITextEndpointPath(c.Request.URL.Path) && strings.EqualFold(
+		strings.TrimSpace(modelRequest.Model),
+		service.PublicDiscountImage2ModelName,
+	) {
+		return nil, false, fmt.Errorf("%s 仅支持 POST /v1/images/generations 文生图", service.PublicDiscountImage2ModelName)
+	}
 	if isOpenAITextEndpointPath(c.Request.URL.Path) && isImageGenerationModelName(modelRequest.Model) {
 		if service.IsSupplierExposedModelName(modelRequest.Model) {
 			return nil, false, fmt.Errorf("image generation models must use POST /v1/images/generations or POST /v1/images/edits instead of text endpoints")
@@ -570,6 +582,10 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		return nil, false, fmt.Errorf("%s is an image generation model; use POST /v1/images/generations or POST /v1/images/edits instead of text endpoints", strings.TrimSpace(modelRequest.Model))
 	}
 	return &modelRequest, shouldSelectChannel, nil
+}
+
+func isImageEditEndpointPath(path string) bool {
+	return strings.HasPrefix(path, "/v1/images/edits") || strings.HasPrefix(path, "/pg/images/edits")
 }
 
 func normalizeImageEndpointModelRequest(c *gin.Context, modelRequest *ModelRequest) {

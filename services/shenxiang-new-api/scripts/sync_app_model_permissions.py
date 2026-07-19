@@ -27,11 +27,17 @@ CLAUDE_USER_TOKEN_NAME = "claude"
 
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
-INTERNAL_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
 DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
+INTERNAL_DISCOUNT_IMAGE2_MODEL = "internal-image2-discount-v2"
+RETIRED_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
+DISCOUNT_IMAGE2_CHANNEL_TAG = "xingren-discount-image2-v2"
+DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
+DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：仅支持文生图；已验证 1K/2K/4K 方图，固定 high 质量与 PNG 输出。人民币 1K ¥0.06、2K ¥0.09、4K ¥0.10/张。"
+DISCOUNT_IMAGE2_TAGS = "image,openai,internal-hidden"
+DISCOUNT_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
+DISCOUNT_IMAGE2_BASE_PRICE_CNY = Decimal("0.06")
 RETIRED_IMAGE_MODELS = (
-    INTERNAL_DISCOUNT_IMAGE2_MODEL,
-    DISCOUNT_IMAGE2_PUBLIC_MODEL,
+    RETIRED_DISCOUNT_IMAGE2_MODEL,
 )
 INTERNAL_STABLE_IMAGE2_MODEL = "internal-image2-stable-v1"
 STABLE_IMAGE2_PUBLIC_MODEL = "官转image 2稳定"
@@ -47,6 +53,7 @@ CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL,
+    RETIRED_DISCOUNT_IMAGE2_MODEL,
     INTERNAL_STABLE_IMAGE2_MODEL,
 }
 PUBLIC_ALIAS_BACKING_MODELS = {
@@ -534,7 +541,7 @@ def is_hidden_pricing_model(model: str) -> bool:
 
 
 def supplier_exposed_model_limit_predicate() -> str:
-    terms = [RAW_GPT_IMAGE2_MODEL, *SUPPLIER_EXPOSED_MARKERS]
+    terms = [RAW_GPT_IMAGE2_MODEL, *SUPPLIER_EXPOSED_MODELS, *SUPPLIER_EXPOSED_MARKERS]
     clauses = [
         "COALESCE(model_limits, '') LIKE " + sql_quote(f"%{term}%")
         for term in terms
@@ -1138,7 +1145,10 @@ def model_lists() -> dict[str, list[str]]:
             append_model("codex", model)
     available_codex_models = set(profiles["codex"]) | set(profiles["image"])
     profiles["codex"] = [model for model in CODEX_ALLOWED_MODELS if model in available_codex_models]
-    for public_image_model in (STABLE_IMAGE2_PUBLIC_MODEL,):
+    public_image_models = [STABLE_IMAGE2_PUBLIC_MODEL]
+    if discount_image2_release_state() == "published":
+        public_image_models.append(DISCOUNT_IMAGE2_PUBLIC_MODEL)
+    for public_image_model in public_image_models:
         if public_image_model not in profiles["image"]:
             profiles["image"].append(public_image_model)
     for model in PUBLIC_VIDEO_MODELS:
@@ -1165,10 +1175,28 @@ def grok15_1080_video_release_state() -> str:
     return "invalid"
 
 
+def discount_image2_release_state() -> str:
+    rows = mysql(
+        "SELECT status, REPLACE(COALESCE(`group`, ''), ' ', '') FROM channels WHERE tag = "
+        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+        + " ORDER BY id"
+    )
+    if len(rows) != 1 or rows[0][0] != "1":
+        return "unavailable"
+    groups = rows[0][1]
+    if groups == "internal":
+        return "staged"
+    if groups == DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS:
+        return "published"
+    return "invalid"
+
+
 def system_token_profiles(profiles: dict[str, list[str]]) -> dict[str, list[str]]:
     result = {name: list(models) for name, models in profiles.items()}
     if grok15_1080_video_release_state() == "staged" and PUBLIC_GROK15_1080_VIDEO_MODEL not in result["video"]:
         result["video"].append(PUBLIC_GROK15_1080_VIDEO_MODEL)
+    if discount_image2_release_state() == "staged" and DISCOUNT_IMAGE2_PUBLIC_MODEL not in result["image"]:
+        result["image"].append(DISCOUNT_IMAGE2_PUBLIC_MODEL)
     return result
 
 
@@ -1269,7 +1297,7 @@ def ensure_public_video_models() -> None:
     mysql_exec("\n".join(statements))
 
 
-def retire_discount_image2() -> dict[str, int]:
+def retire_legacy_discount_image2() -> dict[str, int]:
     retired_models = ", ".join(sql_quote(model) for model in RETIRED_IMAGE_MODELS)
     channel_predicate = " OR ".join(
         "FIND_IN_SET("
@@ -1372,6 +1400,56 @@ def retire_discount_image2() -> dict[str, int]:
     }
 
 
+def ensure_discount_image2_backing_model() -> None:
+    statements = [
+        "START TRANSACTION;",
+        "SET @now := UNIX_TIMESTAMP();",
+        "SET @discount_image2_model := "
+        + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+        + " COLLATE utf8mb4_unicode_ci;",
+        "SET @keep_model_id := ("
+        "SELECT MIN(id) FROM models WHERE model_name = @discount_image2_model AND deleted_at IS NULL"
+        ");",
+        "SET @keep_model_id := IFNULL(@keep_model_id, ("
+        "SELECT MIN(id) FROM models WHERE model_name = @discount_image2_model"
+        "));",
+        "INSERT INTO models "
+        "(model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) "
+        "SELECT "
+        + ", ".join(
+            [
+                "@discount_image2_model",
+                sql_quote(DISCOUNT_IMAGE2_DESCRIPTION),
+                sql_quote("OpenAI"),
+                sql_quote(DISCOUNT_IMAGE2_TAGS),
+                "1",
+                sql_quote(DISCOUNT_IMAGE2_ENDPOINTS),
+                "1",
+                "0",
+                "@now",
+                "@now",
+                "0",
+            ]
+        )
+        + " WHERE @keep_model_id IS NULL;",
+        "SET @keep_model_id := IFNULL(@keep_model_id, LAST_INSERT_ID());",
+        "UPDATE models SET description = "
+        + sql_quote(DISCOUNT_IMAGE2_DESCRIPTION)
+        + ", icon = "
+        + sql_quote("OpenAI")
+        + ", tags = "
+        + sql_quote(DISCOUNT_IMAGE2_TAGS)
+        + ", vendor_id = 1, endpoints = "
+        + sql_quote(DISCOUNT_IMAGE2_ENDPOINTS)
+        + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
+        "WHERE id = @keep_model_id;",
+        "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+        "WHERE model_name = @discount_image2_model AND id <> @keep_model_id;",
+        "COMMIT;",
+    ]
+    mysql_exec("\n".join(statements))
+
+
 def ensure_stable_image2_backing_model() -> None:
     statements = [
         "START TRANSACTION;",
@@ -1427,6 +1505,12 @@ def sync_public_image_pricing() -> None:
     completion_ratios = parse_json_option("CompletionRatio")
     model_prices = parse_json_option("ModelPrice")
     exchange_rate = usd_exchange_rate()
+
+    model_prices[DISCOUNT_IMAGE2_PUBLIC_MODEL] = decimal_to_float(
+        DISCOUNT_IMAGE2_BASE_PRICE_CNY / exchange_rate
+    )
+    model_ratios.pop(DISCOUNT_IMAGE2_PUBLIC_MODEL, None)
+    completion_ratios.pop(DISCOUNT_IMAGE2_PUBLIC_MODEL, None)
 
     model_prices[STABLE_IMAGE2_PUBLIC_MODEL] = decimal_to_float(
         STABLE_IMAGE2_PRICE_CNY / exchange_rate
@@ -1633,7 +1717,9 @@ def sync_user_image_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
         "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0) FROM tokens "
         "WHERE deleted_at IS NULL AND name IN ("
         + ", ".join(sql_quote(name) for name in token_names)
-        + ");"
+        + ") AND user_id <> "
+        + str(ADMIN_SYSTEM_TOKEN_USER_ID)
+        + ";"
     )
     token_updates: list[tuple[str, str]] = []
     for token_id, token_key, raw_limits, raw_enabled in token_rows:
@@ -1702,10 +1788,18 @@ def sync_abilities() -> None:
         + " AND REPLACE(COALESCE(`group`, ''), ' ', '') NOT IN ('internal', "
         + sql_quote(PUBLIC_GROK15_1080_VIDEO_CHANNEL_GROUPS)
         + ");",
+        "UPDATE channels SET status = 2 WHERE tag = "
+        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+        + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') NOT IN ('internal', "
+        + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
+        + ") OR REPLACE(COALESCE(models, ''), ' ', '') <> "
+        + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+        + ");",
     ]
     invalid_discount_channels: list[str] = []
     invalid_grok_channels: list[str] = []
     invalid_grok1080_channels: list[str] = []
+    invalid_discount_image2_channels: list[str] = []
     for channel_id, raw_models, _priority, _weight, tag, raw_groups in channel_rows:
         channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
         channel_models = [item.strip() for item in raw_models.split(",") if item.strip()]
@@ -1744,6 +1838,22 @@ def sync_abilities() -> None:
             else:
                 invalid_grok1080_channels.append(channel_id)
                 sync_groups = []
+        elif tag == DISCOUNT_IMAGE2_CHANNEL_TAG:
+            normalized_groups = ",".join(channel_groups)
+            if channel_models != [INTERNAL_DISCOUNT_IMAGE2_MODEL]:
+                invalid_discount_image2_channels.append(channel_id)
+                sync_groups = []
+            elif normalized_groups == "internal":
+                sync_groups = ["internal"]
+            elif normalized_groups == DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS:
+                sync_groups = [
+                    group
+                    for group in groups
+                    if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
+                ]
+            else:
+                invalid_discount_image2_channels.append(channel_id)
+                sync_groups = []
         else:
             sync_groups = [
                 group
@@ -1751,6 +1861,10 @@ def sync_abilities() -> None:
                 if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
             ]
         for model in channel_models:
+            if model == INTERNAL_DISCOUNT_IMAGE2_MODEL and tag != DISCOUNT_IMAGE2_CHANNEL_TAG:
+                continue
+            if tag == DISCOUNT_IMAGE2_CHANNEL_TAG and model != INTERNAL_DISCOUNT_IMAGE2_MODEL:
+                continue
             if model == GROK45_MODEL and tag != GROK45_CHANNEL_TAG:
                 continue
             if tag == GROK45_CHANNEL_TAG and model != GROK45_MODEL:
@@ -1777,6 +1891,11 @@ def sync_abilities() -> None:
                     current_channel_conditions.append(
                         discount_text_models_allowed_sql("current_channel.models")
                     )
+                elif tag == DISCOUNT_IMAGE2_CHANNEL_TAG:
+                    current_channel_conditions.append(
+                        "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
+                        + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+                    )
                 elif tag != GROK45_CHANNEL_TAG:
                     current_channel_conditions.extend(
                         [
@@ -1784,6 +1903,8 @@ def sync_abilities() -> None:
                             + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
                             + ", "
                             + sql_quote(GROK45_CHANNEL_TAG)
+                            + ", "
+                            + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
                             + ")",
                             "FIND_IN_SET("
                             + sql_quote(DISCOUNT_TEXT_GROUP)
@@ -1864,6 +1985,18 @@ def sync_abilities() -> None:
             + sql_quote(PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG)
             + " AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = 'internal' "
             "AND ability.`group` <> 'internal';",
+            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+            "SET ability.enabled = 0 WHERE channel.tag = "
+            + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+            + " AND (ability.model <> "
+            + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+            + " OR (REPLACE(COALESCE(channel.`group`, ''), ' ', '') = 'internal' "
+            "AND ability.`group` <> 'internal'));",
+            "UPDATE abilities SET enabled = 0 WHERE model = "
+            + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+            + " AND channel_id NOT IN (SELECT id FROM channels WHERE status = 1 AND tag = "
+            + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+            + ");",
         ]
     )
     statements.append("COMMIT;")
@@ -1882,6 +2015,11 @@ def sync_abilities() -> None:
         raise RuntimeError(
             "Grok 1080P staging isolation violation; invalid channel count: "
             + str(len(invalid_grok1080_channels))
+        )
+    if invalid_discount_image2_channels:
+        raise RuntimeError(
+            "discount Image 2 staging isolation violation; invalid channel count: "
+            + str(len(invalid_discount_image2_channels))
         )
 
 
@@ -1985,7 +2123,9 @@ def sync_codex_env(profiles: dict[str, list[str]]) -> bool:
         "CODEX_CHAT_FALLBACK_MODEL": CODEX_CHAT_FALLBACK_MODEL,
         "CODEX_ALLOWED_MODELS": ",".join(profiles["codex"]),
         "CLAUDE_ALLOWED_MODELS": ",".join(profiles["claude"]),
-        "IMAGE_ALLOWED_MODELS": ",".join(profiles["image"]),
+        "IMAGE_ALLOWED_MODELS": ",".join(
+            model for model in profiles["image"] if model != DISCOUNT_IMAGE2_PUBLIC_MODEL
+        ),
         "VIDEO_ALLOWED_MODELS": ",".join(profiles["video"]),
     }
     for key, value in updates.items():
@@ -2017,7 +2157,8 @@ def refresh_codex() -> None:
 
 def main() -> int:
     ensure_public_video_models()
-    retired_discount_image2_result = retire_discount_image2()
+    retired_discount_image2_result = retire_legacy_discount_image2()
+    ensure_discount_image2_backing_model()
     ensure_stable_image2_backing_model()
     sync_grok_image_metadata()
     ensure_public_openai_text_models()

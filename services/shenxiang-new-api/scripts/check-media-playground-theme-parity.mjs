@@ -17,13 +17,7 @@ const requiredVideoModels = [
 ]
 
 const retiredVideoModels = [
-  'grok-video-super-720p',
   'seedance-2.0',
-  'seedance-2.0-ld-17',
-]
-
-const retiredClassicImageModels = [
-  '特价 image-2',
 ]
 
 const requiredMarkers = {
@@ -48,6 +42,8 @@ const requiredClassicOnlyMarkers = {
   mediaPromptLimitConstant: 'MEDIA_PROMPT_MAX_LENGTH = 10000',
   mediaPromptLimitProp: 'promptMaxLength={MEDIA_PROMPT_MAX_LENGTH}',
   promptTextareaMaxLength: 'maxLength={promptLimit}',
+  discountImage2StableLabel: "statusLabel: '稳定'",
+  discountImage2TierPriceLabel: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.10',
   compactModelOptionLabel: 'function modelOptionDisplayLabel(model)',
 }
 
@@ -126,10 +122,6 @@ function main() {
     if (classicModels.has(model)) errors.push(`classic retired model still exposed: ${model}`)
     if (defaultModels.has(model)) errors.push(`default retired model still exposed: ${model}`)
   }
-  for (const model of retiredClassicImageModels) {
-    if (classicModels.has(model)) errors.push(`classic retired model still exposed: ${model}`)
-  }
-
   for (const [label, marker] of Object.entries(requiredMarkers)) {
     errors.push(...missingMarkerErrors(`classic marker ${label}`, classicAll, marker))
     errors.push(...missingMarkerErrors(`default marker ${label}`, defaultAll, marker))

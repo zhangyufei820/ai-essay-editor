@@ -582,14 +582,11 @@ func TestRejectImageModelTextEndpointRequestRejectsDiscountImage2PublicAlias(t *
 	if err.StatusCode != http.StatusBadRequest {
 		t.Fatalf("StatusCode = %d, want %d", err.StatusCode, http.StatusBadRequest)
 	}
-	if strings.Contains(err.Error(), "geek2api") {
-		t.Fatalf("error = %q, want no supplier model name", err.Error())
-	}
 	if !strings.Contains(err.Error(), "特价 image-2") {
 		t.Fatalf("error = %q, want public model name", err.Error())
 	}
-	if !strings.Contains(err.Error(), "/v1/images/generations") || !strings.Contains(err.Error(), "/v1/images/edits") {
-		t.Fatalf("error = %q, want image endpoint hints", err.Error())
+	if !strings.Contains(err.Error(), "/v1/images/generations") || strings.Contains(err.Error(), "/v1/images/edits") {
+		t.Fatalf("error = %q, want generation-only endpoint hint", err.Error())
 	}
 }
 

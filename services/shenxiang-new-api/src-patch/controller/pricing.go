@@ -20,7 +20,7 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 	if len(usableGroup) == 0 {
 		return []model.Pricing{}
 	}
-	pricing = appendStableImage2PublicPricing(pricing)
+	pricing = appendPublicImageAliasPricing(pricing)
 
 	filtered := make([]model.Pricing, 0, len(pricing))
 	for _, item := range pricing {
@@ -36,39 +36,46 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 	return filtered
 }
 
-func appendStableImage2PublicPricing(pricing []model.Pricing) []model.Pricing {
-	publicModelPresent := false
-	internalModelIndex := -1
-	for index := range pricing {
-		switch {
-		case strings.EqualFold(strings.TrimSpace(pricing[index].ModelName), service.PublicStableImage2ModelName):
-			publicModelPresent = true
-		case strings.EqualFold(strings.TrimSpace(pricing[index].ModelName), service.InternalStableImage2ModelName):
-			internalModelIndex = index
+func appendPublicImageAliasPricing(pricing []model.Pricing) []model.Pricing {
+	aliases := [][2]string{
+		{service.PublicStableImage2ModelName, service.InternalStableImage2ModelName},
+		{service.PublicDiscountImage2ModelName, service.InternalDiscountImage2ModelName},
+	}
+	for _, alias := range aliases {
+		publicModelName, internalModelName := alias[0], alias[1]
+		publicModelPresent := false
+		internalModelIndex := -1
+		for index := range pricing {
+			switch {
+			case strings.EqualFold(strings.TrimSpace(pricing[index].ModelName), publicModelName):
+				publicModelPresent = true
+			case strings.EqualFold(strings.TrimSpace(pricing[index].ModelName), internalModelName):
+				internalModelIndex = index
+			}
 		}
+		if publicModelPresent || internalModelIndex < 0 {
+			continue
+		}
+		modelPrice, configured := ratio_setting.GetModelPrice(publicModelName, false)
+		if !configured {
+			continue
+		}
+		publicPricing := pricing[internalModelIndex]
+		publicPricing.ModelName = publicModelName
+		publicPricing.QuotaType = 1
+		publicPricing.ModelPrice = modelPrice
+		publicPricing.ModelRatio = 0
+		publicPricing.CompletionRatio = 0
+		publicPricing.CacheRatio = nil
+		publicPricing.CreateCacheRatio = nil
+		publicPricing.ImageRatio = nil
+		publicPricing.AudioRatio = nil
+		publicPricing.AudioCompletionRatio = nil
+		publicPricing.BillingMode = ""
+		publicPricing.BillingExpr = ""
+		pricing = append(pricing, publicPricing)
 	}
-	if publicModelPresent || internalModelIndex < 0 {
-		return pricing
-	}
-
-	modelPrice, configured := ratio_setting.GetModelPrice(service.PublicStableImage2ModelName, false)
-	if !configured {
-		return pricing
-	}
-	publicPricing := pricing[internalModelIndex]
-	publicPricing.ModelName = service.PublicStableImage2ModelName
-	publicPricing.QuotaType = 1
-	publicPricing.ModelPrice = modelPrice
-	publicPricing.ModelRatio = 0
-	publicPricing.CompletionRatio = 0
-	publicPricing.CacheRatio = nil
-	publicPricing.CreateCacheRatio = nil
-	publicPricing.ImageRatio = nil
-	publicPricing.AudioRatio = nil
-	publicPricing.AudioCompletionRatio = nil
-	publicPricing.BillingMode = ""
-	publicPricing.BillingExpr = ""
-	return append(pricing, publicPricing)
+	return pricing
 }
 
 func pinManagedGrok45Pricing(pricing []model.Pricing) []model.Pricing {
@@ -128,7 +135,7 @@ func sanitizePricingTags(tags string) string {
 	visible := make([]string, 0)
 	for _, tag := range strings.Split(tags, ",") {
 		tag = strings.TrimSpace(tag)
-		if tag == "" || service.IsSupplierExposedModelName(tag) {
+		if tag == "" || strings.EqualFold(tag, "internal-hidden") || service.IsSupplierExposedModelName(tag) {
 			continue
 		}
 		visible = append(visible, tag)

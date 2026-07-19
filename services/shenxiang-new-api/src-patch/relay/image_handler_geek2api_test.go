@@ -67,6 +67,23 @@ func TestSanitizeGeek2APIImage2OutboundBodyLeavesOtherModelsUntouched(t *testing
 	require.Equal(t, string(body), string(sanitized))
 }
 
+func TestDiscountImage2V2OutboundBodyPreservesVerifiedFields(t *testing.T) {
+	body := []byte(`{"model":"gpt-image-2","prompt":"poster","n":1,"size":"2880x2880","resolution":"4K","quality":"high","output_format":"png"}`)
+
+	sanitized, err := sanitizeGeek2APIImage2OutboundBody(
+		&relaycommon.RelayInfo{OriginModelName: "internal-image2-discount-v2"},
+		body,
+	)
+
+	require.NoError(t, err)
+	var payload map[string]interface{}
+	require.NoError(t, common.Unmarshal(sanitized, &payload))
+	require.Equal(t, "2880x2880", payload["size"])
+	require.Equal(t, "4K", payload["resolution"])
+	require.Equal(t, "high", payload["quality"])
+	require.Equal(t, "png", payload["output_format"])
+}
+
 func TestUseGeminiAdaptorForNativeImageModelMappedFromOpenAIChannel(t *testing.T) {
 	info := &relaycommon.RelayInfo{
 		RelayMode: relayconstant.RelayModeImagesEdits,
