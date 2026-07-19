@@ -49,6 +49,24 @@ GROK_IMAGE_MODEL = "grok-imagine-image"
 GROK_IMAGE_DESCRIPTION = "Grok Image Pro：当前供应商实际仅返回约 1K，仅支持文生图，人民币 ¥0.055/张。"
 GROK_IMAGE_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
 GROK_IMAGE_PRICE_CNY = Decimal("0.055")
+GEMINI_DDPAPI_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
+GEMINI_DDPAPI_ENDPOINTS = '{"image-generation":"/v1/images/generations","image-edit":"/v1/images/edits"}'
+GEMINI_DDPAPI_MODEL_CONFIGS = {
+    "gemini-3.1-flash-image": {
+        "channel_tag": "xingren-gemini31-flash-image-ddpapi",
+        "description": "Gemini 3.1 Flash Image：支持 1K/2K/4K 与图片编辑，人民币 ¥0.10/张。",
+        "price_cny": Decimal("0.10"),
+    },
+    "gemini-3-pro-image": {
+        "channel_tag": "xingren-gemini3-pro-image-ddpapi",
+        "description": "Gemini 3 Pro Image：支持 1K/2K/4K 与图片编辑，人民币 ¥0.15/张。",
+        "price_cny": Decimal("0.15"),
+    },
+}
+GEMINI_DDPAPI_MODELS = tuple(GEMINI_DDPAPI_MODEL_CONFIGS)
+GEMINI_DDPAPI_CHANNEL_TAGS = tuple(
+    str(config["channel_tag"]) for config in GEMINI_DDPAPI_MODEL_CONFIGS.values()
+)
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
@@ -1100,6 +1118,7 @@ def sync_supplier_safe_public_metadata() -> dict[str, int]:
 
 def model_lists() -> dict[str, list[str]]:
     grok1080_state = grok15_1080_video_release_state()
+    gemini_ddpapi_state = gemini_ddpapi_release_state()
     rows = mysql(
         """
         SELECT id, model_name, COALESCE(tags, '')
@@ -1135,6 +1154,8 @@ def model_lists() -> dict[str, list[str]]:
             continue
         if "image" in tags:
             if is_supplier_exposed_model(model):
+                continue
+            if model in GEMINI_DDPAPI_MODELS and gemini_ddpapi_state != "published":
                 continue
             append_model("image", model)
             continue
@@ -1191,12 +1212,43 @@ def discount_image2_release_state() -> str:
     return "invalid"
 
 
+def gemini_ddpapi_release_state() -> str:
+    rows = mysql(
+        "SELECT COALESCE(tag, ''), status, REPLACE(COALESCE(`group`, ''), ' ', ''), "
+        "REPLACE(COALESCE(models, ''), ' ', '') FROM channels WHERE tag IN ("
+        + ", ".join(sql_quote(tag) for tag in GEMINI_DDPAPI_CHANNEL_TAGS)
+        + ") ORDER BY tag"
+    )
+    if len(rows) != len(GEMINI_DDPAPI_MODEL_CONFIGS):
+        return "unavailable"
+    expected_by_tag = {
+        str(config["channel_tag"]): model
+        for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items()
+    }
+    groups: set[str] = set()
+    seen_tags: set[str] = set()
+    for tag, status, channel_groups, models in rows:
+        if status != "1" or tag in seen_tags or models != expected_by_tag.get(tag):
+            return "invalid"
+        seen_tags.add(tag)
+        groups.add(channel_groups)
+    if groups == {"internal"}:
+        return "staged"
+    if groups == {GEMINI_DDPAPI_PUBLIC_CHANNEL_GROUPS}:
+        return "published"
+    return "invalid"
+
+
 def system_token_profiles(profiles: dict[str, list[str]]) -> dict[str, list[str]]:
     result = {name: list(models) for name, models in profiles.items()}
     if grok15_1080_video_release_state() == "staged" and PUBLIC_GROK15_1080_VIDEO_MODEL not in result["video"]:
         result["video"].append(PUBLIC_GROK15_1080_VIDEO_MODEL)
     if discount_image2_release_state() == "staged" and DISCOUNT_IMAGE2_PUBLIC_MODEL not in result["image"]:
         result["image"].append(DISCOUNT_IMAGE2_PUBLIC_MODEL)
+    if gemini_ddpapi_release_state() == "staged":
+        for model in GEMINI_DDPAPI_MODELS:
+            if model not in result["image"]:
+                result["image"].append(model)
     return result
 
 
@@ -1500,6 +1552,47 @@ def ensure_stable_image2_backing_model() -> None:
     mysql_exec("\n".join(statements))
 
 
+def ensure_gemini_ddpapi_image_models() -> None:
+    statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
+    for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
+        model_literal = sql_quote(model)
+        statements.extend(
+            [
+                "SET @gemini_image_model := " + model_literal + " COLLATE utf8mb4_unicode_ci;",
+                "SET @keep_model_id := (SELECT MIN(id) FROM models WHERE model_name = @gemini_image_model AND deleted_at IS NULL);",
+                "SET @keep_model_id := IFNULL(@keep_model_id, (SELECT MIN(id) FROM models WHERE model_name = @gemini_image_model));",
+                "INSERT INTO models "
+                "(model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) SELECT "
+                + ", ".join(
+                    [
+                        "@gemini_image_model",
+                        sql_quote(str(config["description"])),
+                        sql_quote("Gemini.Color"),
+                        sql_quote("image,gemini"),
+                        "6",
+                        sql_quote(GEMINI_DDPAPI_ENDPOINTS),
+                        "1",
+                        "0",
+                        "@now",
+                        "@now",
+                        "0",
+                    ]
+                )
+                + " WHERE @keep_model_id IS NULL;",
+                "SET @keep_model_id := IFNULL(@keep_model_id, LAST_INSERT_ID());",
+                "UPDATE models SET description = "
+                + sql_quote(str(config["description"]))
+                + ", icon = 'Gemini.Color', tags = 'image,gemini', vendor_id = 6, endpoints = "
+                + sql_quote(GEMINI_DDPAPI_ENDPOINTS)
+                + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 WHERE id = @keep_model_id;",
+                "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+                "WHERE model_name = @gemini_image_model AND id <> @keep_model_id;",
+            ]
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+
+
 def sync_public_image_pricing() -> None:
     model_ratios = parse_json_option("ModelRatio")
     completion_ratios = parse_json_option("CompletionRatio")
@@ -1523,6 +1616,14 @@ def sync_public_image_pricing() -> None:
     )
     model_ratios.pop(GROK_IMAGE_MODEL, None)
     completion_ratios.pop(GROK_IMAGE_MODEL, None)
+
+    for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
+        price_cny = config["price_cny"]
+        if not isinstance(price_cny, Decimal):
+            raise TypeError("Gemini image price must be Decimal")
+        model_prices[model] = decimal_to_float(price_cny / exchange_rate)
+        model_ratios.pop(model, None)
+        completion_ratios.pop(model, None)
 
     upsert_json_option("ModelRatio", model_ratios)
     upsert_json_option("CompletionRatio", completion_ratios)
@@ -1796,10 +1897,26 @@ def sync_abilities() -> None:
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
         + ");",
     ]
+    for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
+        statements.append(
+            "UPDATE channels SET status = 2 WHERE tag = "
+            + sql_quote(str(config["channel_tag"]))
+            + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') NOT IN ('internal', "
+            + sql_quote(GEMINI_DDPAPI_PUBLIC_CHANNEL_GROUPS)
+            + ") OR REPLACE(COALESCE(models, ''), ' ', '') <> "
+            + sql_quote(model)
+            + ");"
+        )
     invalid_discount_channels: list[str] = []
     invalid_grok_channels: list[str] = []
     invalid_grok1080_channels: list[str] = []
     invalid_discount_image2_channels: list[str] = []
+    invalid_gemini_ddpapi_channels: list[str] = []
+    gemini_model_by_tag = {
+        str(config["channel_tag"]): model
+        for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items()
+    }
+    gemini_tag_by_model = {model: tag for tag, model in gemini_model_by_tag.items()}
     for channel_id, raw_models, _priority, _weight, tag, raw_groups in channel_rows:
         channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
         channel_models = [item.strip() for item in raw_models.split(",") if item.strip()]
@@ -1854,6 +1971,23 @@ def sync_abilities() -> None:
             else:
                 invalid_discount_image2_channels.append(channel_id)
                 sync_groups = []
+        elif tag in gemini_model_by_tag:
+            expected_model = gemini_model_by_tag[tag]
+            normalized_groups = ",".join(channel_groups)
+            if channel_models != [expected_model]:
+                invalid_gemini_ddpapi_channels.append(channel_id)
+                sync_groups = []
+            elif normalized_groups == "internal":
+                sync_groups = ["internal"]
+            elif normalized_groups == GEMINI_DDPAPI_PUBLIC_CHANNEL_GROUPS:
+                sync_groups = [
+                    group
+                    for group in groups
+                    if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
+                ]
+            else:
+                invalid_gemini_ddpapi_channels.append(channel_id)
+                sync_groups = []
         else:
             sync_groups = [
                 group
@@ -1864,6 +1998,10 @@ def sync_abilities() -> None:
             if model == INTERNAL_DISCOUNT_IMAGE2_MODEL and tag != DISCOUNT_IMAGE2_CHANNEL_TAG:
                 continue
             if tag == DISCOUNT_IMAGE2_CHANNEL_TAG and model != INTERNAL_DISCOUNT_IMAGE2_MODEL:
+                continue
+            if model in gemini_tag_by_model and tag != gemini_tag_by_model[model]:
+                continue
+            if tag in gemini_model_by_tag and model != gemini_model_by_tag[tag]:
                 continue
             if model == GROK45_MODEL and tag != GROK45_CHANNEL_TAG:
                 continue
@@ -1999,6 +2137,23 @@ def sync_abilities() -> None:
             + ");",
         ]
     )
+    for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
+        channel_tag = str(config["channel_tag"])
+        statements.extend(
+            [
+                "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+                "SET ability.enabled = 0 WHERE channel.tag = "
+                + sql_quote(channel_tag)
+                + " AND (ability.model <> "
+                + sql_quote(model)
+                + " OR (REPLACE(COALESCE(channel.`group`, ''), ' ', '') = 'internal' AND ability.`group` <> 'internal'));",
+                "UPDATE abilities SET enabled = 0 WHERE model = "
+                + sql_quote(model)
+                + " AND channel_id NOT IN (SELECT id FROM channels WHERE status = 1 AND tag = "
+                + sql_quote(channel_tag)
+                + ");",
+            ]
+        )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
     if invalid_discount_channels:
@@ -2020,6 +2175,11 @@ def sync_abilities() -> None:
         raise RuntimeError(
             "discount Image 2 staging isolation violation; invalid channel count: "
             + str(len(invalid_discount_image2_channels))
+        )
+    if invalid_gemini_ddpapi_channels:
+        raise RuntimeError(
+            "Gemini DDPAPI staging isolation violation; invalid channel count: "
+            + str(len(invalid_gemini_ddpapi_channels))
         )
 
 
@@ -2160,6 +2320,7 @@ def main() -> int:
     retired_discount_image2_result = retire_legacy_discount_image2()
     ensure_discount_image2_backing_model()
     ensure_stable_image2_backing_model()
+    ensure_gemini_ddpapi_image_models()
     sync_grok_image_metadata()
     ensure_public_openai_text_models()
     sync_public_video_pricing()

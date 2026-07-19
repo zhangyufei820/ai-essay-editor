@@ -377,6 +377,8 @@ func isNativeGeminiImageModel(modelName string) bool {
 	}
 	lowerName := strings.ToLower(modelName)
 	return (strings.HasPrefix(lowerName, "gemini-") && strings.Contains(lowerName, "image-preview")) ||
+		lowerName == "gemini-3.1-flash-image" ||
+		lowerName == "gemini-3-pro-image" ||
 		strings.HasPrefix(lowerName, "nano-banana-")
 }
 

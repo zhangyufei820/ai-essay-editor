@@ -131,7 +131,110 @@ func TestConvertImageRequestRejectsNonImagineGeminiModel(t *testing.T) {
 		RelayMode:   constant.RelayModeImagesGenerations,
 		ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "gemini-2.0-flash"},
 	}, dto.ImageRequest{Prompt: "test"})
-	require.ErrorContains(t, err, "only imagen and gemini image-preview models are supported")
+	require.ErrorContains(t, err, "only imagen and approved Gemini image models are supported")
+}
+
+func TestConvertImageRequestBridgesApprovedGeminiModelsToOpenAIChat(t *testing.T) {
+	for _, modelName := range []string{"gemini-3.1-flash-image", "gemini-3-pro-image"} {
+		t.Run(modelName, func(t *testing.T) {
+			converted, err := (&Adaptor{}).ConvertImageRequest(nil, &relaycommon.RelayInfo{
+				RelayMode: constant.RelayModeImagesGenerations,
+				ChannelMeta: &relaycommon.ChannelMeta{
+					ChannelType:       appconstant.ChannelTypeOpenAI,
+					UpstreamModelName: modelName,
+				},
+			}, dto.ImageRequest{
+				Prompt:      "test image",
+				AspectRatio: "16:9",
+				ImageSize:   "2K",
+			})
+
+			require.NoError(t, err)
+			request, ok := converted.(*openAIChatGeminiImageRequest)
+			require.True(t, ok)
+			require.Equal(t, modelName, request.Model)
+			require.False(t, request.Stream)
+			require.Len(t, request.Messages, 1)
+			require.Equal(t, "user", request.Messages[0].Role)
+			require.Equal(t, "test image", request.Messages[0].Content)
+			google := request.ExtraBody["google"].(map[string]interface{})
+			imageConfig := google["image_config"].(map[string]interface{})
+			require.Equal(t, "16:9", imageConfig["aspect_ratio"])
+			require.Equal(t, "2K", imageConfig["image_size"])
+		})
+	}
+}
+
+func TestConvertImageRequestRejectsMultipleImagesForOpenAIChatBridge(t *testing.T) {
+	count := uint(2)
+	_, err := (&Adaptor{}).ConvertImageRequest(nil, &relaycommon.RelayInfo{
+		RelayMode: constant.RelayModeImagesGenerations,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType:       appconstant.ChannelTypeOpenAI,
+			UpstreamModelName: "gemini-3-pro-image",
+		},
+	}, dto.ImageRequest{Prompt: "test", N: &count})
+
+	require.ErrorContains(t, err, "one image per request")
+}
+
+func TestConvertImageRequestBridgesGeminiImageEditReference(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/images/edits", nil)
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	converted, err := (&Adaptor{}).ConvertImageRequest(ctx, &relaycommon.RelayInfo{
+		RelayMode: constant.RelayModeImagesEdits,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType:       appconstant.ChannelTypeOpenAI,
+			UpstreamModelName: "gemini-3.1-flash-image",
+		},
+	}, dto.ImageRequest{
+		Prompt: "make the circle blue",
+		Image:  json.RawMessage(`"data:image/png;base64,ZmFrZS1wbmc="`),
+	})
+
+	require.NoError(t, err)
+	request := converted.(*openAIChatGeminiImageRequest)
+	content := request.Messages[0].Content.([]openAIChatGeminiImageContentPart)
+	require.Len(t, content, 2)
+	require.Equal(t, "text", content[0].Type)
+	require.Equal(t, "image_url", content[1].Type)
+	require.Equal(t, "data:image/png;base64,ZmFrZS1wbmc=", content[1].ImageURL.URL)
+}
+
+func TestOpenAICompatibleGeminiImageModelsUseChatCompletionsURL(t *testing.T) {
+	for _, modelName := range []string{"gemini-3.1-flash-image", "gemini-3-pro-image"} {
+		t.Run(modelName, func(t *testing.T) {
+			url, err := (&Adaptor{}).GetRequestURL(&relaycommon.RelayInfo{
+				RelayMode: constant.RelayModeImagesGenerations,
+				ChannelMeta: &relaycommon.ChannelMeta{
+					ChannelType:       appconstant.ChannelTypeOpenAI,
+					ChannelBaseUrl:    "https://new.ddpapi.top",
+					UpstreamModelName: modelName,
+				},
+			})
+
+			require.NoError(t, err)
+			require.Equal(t, "https://new.ddpapi.top/v1/chat/completions", url)
+		})
+	}
+}
+
+func TestApprovedGeminiImageModelKeepsNativeURLForGeminiChannel(t *testing.T) {
+	url, err := (&Adaptor{}).GetRequestURL(&relaycommon.RelayInfo{
+		RelayMode: constant.RelayModeImagesGenerations,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType:       appconstant.ChannelTypeGemini,
+			ChannelBaseUrl:    "https://generativelanguage.googleapis.com",
+			UpstreamModelName: "gemini-3-pro-image",
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent", url)
 }
 
 func TestConvertImageRequestAllowsNanoBananaModel(t *testing.T) {
@@ -264,6 +367,37 @@ func TestGeminiImageHandlerConvertsMarkdownImageURLCandidates(t *testing.T) {
 	require.Len(t, imageResponse.Data, 1)
 	require.Equal(t, "https://file2.aitohumanize.com/file/example-image.png", imageResponse.Data[0].Url)
 	require.Empty(t, imageResponse.Data[0].B64Json)
+}
+
+func TestOpenAIChatGeminiImageHandlerConvertsMarkdownDataURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/images/generations", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body: io.NopCloser(strings.NewReader(`{
+			"choices":[{"message":{"content":"done\n![image](data:image/png;base64,ZmFrZS1wbmc=)"}}],
+			"usage":{"prompt_tokens":12,"completion_tokens":34,"total_tokens":46}
+		}`)),
+	}
+
+	usage, apiErr := (&Adaptor{}).DoResponse(ctx, resp, &relaycommon.RelayInfo{
+		RelayMode: constant.RelayModeImagesGenerations,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType:       appconstant.ChannelTypeOpenAI,
+			UpstreamModelName: "gemini-3.1-flash-image",
+		},
+	})
+
+	require.Nil(t, apiErr)
+	require.Equal(t, 46, usage.(*dto.Usage).TotalTokens)
+	var imageResponse dto.ImageResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &imageResponse))
+	require.Len(t, imageResponse.Data, 1)
+	require.Equal(t, "ZmFrZS1wbmc=", imageResponse.Data[0].B64Json)
 }
 
 func TestGeminiImagePreviewRelayUsesImageHandler(t *testing.T) {

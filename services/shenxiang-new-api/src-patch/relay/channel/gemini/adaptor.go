@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,39 @@ import (
 )
 
 type Adaptor struct {
+}
+
+const openAIChatGeminiImageMaxResponseBytes = 64 * 1024 * 1024
+
+type openAIChatGeminiImageRequest struct {
+	Model     string                         `json:"model"`
+	Messages  []openAIChatGeminiImageMessage `json:"messages"`
+	Stream    bool                           `json:"stream"`
+	ExtraBody map[string]interface{}         `json:"extra_body,omitempty"`
+}
+
+type openAIChatGeminiImageMessage struct {
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"`
+}
+
+type openAIChatGeminiImageContentPart struct {
+	Type     string                          `json:"type"`
+	Text     string                          `json:"text,omitempty"`
+	ImageURL *openAIChatGeminiImageURLSource `json:"image_url,omitempty"`
+}
+
+type openAIChatGeminiImageURLSource struct {
+	URL string `json:"url"`
+}
+
+type openAIChatGeminiImageResponse struct {
+	Choices []struct {
+		Message struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+	Usage dto.Usage `json:"usage"`
 }
 
 func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
@@ -71,10 +105,75 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 	}
 
 	if !isGeminiNativeImageModel(info.UpstreamModelName) {
-		return nil, errors.New("not supported model for image generation, only imagen and gemini image-preview models are supported")
+		return nil, errors.New("not supported model for image generation, only imagen and approved Gemini image models are supported")
+	}
+
+	if usesOpenAIChatGeminiImageBridge(info) {
+		return convertOpenAIChatGeminiImageRequest(c, info, request)
 	}
 
 	return convertGeminiImagePreviewRequest(c, request)
+}
+
+func convertOpenAIChatGeminiImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (*openAIChatGeminiImageRequest, error) {
+	if request.N != nil && *request.N > 1 {
+		return nil, errors.New("OpenAI-compatible Gemini image generation supports one image per request")
+	}
+
+	prompt := strings.TrimSpace(request.Prompt)
+	imageParts, err := geminiImagePreviewParts(c, request)
+	if err != nil {
+		return nil, err
+	}
+
+	var content interface{}
+	if len(imageParts) == 0 {
+		if prompt == "" {
+			return nil, errors.New("prompt or image is required")
+		}
+		content = prompt
+	} else {
+		parts := make([]openAIChatGeminiImageContentPart, 0, len(imageParts)+1)
+		if prompt != "" {
+			parts = append(parts, openAIChatGeminiImageContentPart{Type: "text", Text: prompt})
+		}
+		for _, imagePart := range imageParts {
+			if imagePart.InlineData == nil || strings.TrimSpace(imagePart.InlineData.Data) == "" {
+				continue
+			}
+			parts = append(parts, openAIChatGeminiImageContentPart{
+				Type: "image_url",
+				ImageURL: &openAIChatGeminiImageURLSource{
+					URL: "data:" + imagePart.InlineData.MimeType + ";base64," + imagePart.InlineData.Data,
+				},
+			})
+		}
+		if len(parts) == 0 {
+			return nil, errors.New("prompt or image is required")
+		}
+		content = parts
+	}
+
+	imageConfig := make(map[string]interface{})
+	if aspectRatio := geminiImagePreviewAspectRatio(request); aspectRatio != "" {
+		imageConfig["aspect_ratio"] = aspectRatio
+	}
+	if imageSize := geminiImagePreviewImageSize(request); imageSize != "" {
+		imageConfig["image_size"] = imageSize
+	}
+	extraBody := make(map[string]interface{})
+	if len(imageConfig) > 0 {
+		extraBody["google"] = map[string]interface{}{"image_config": imageConfig}
+	}
+
+	return &openAIChatGeminiImageRequest{
+		Model: info.UpstreamModelName,
+		Messages: []openAIChatGeminiImageMessage{
+			{Role: "user", Content: content},
+		},
+		Stream:    false,
+		ExtraBody: extraBody,
+	}, nil
 }
 
 func convertImagenImageRequest(request dto.ImageRequest) dto.GeminiImageRequest {
@@ -404,6 +503,9 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	if usesOpenAIChatGeminiImageBridge(info) {
+		return strings.TrimRight(info.ChannelBaseUrl, "/") + "/v1/chat/completions", nil
+	}
 
 	if model_setting.GetGeminiSettings().ThinkingAdapterEnabled &&
 		!model_setting.ShouldPreserveThinkingSuffix(info.OriginModelName) {
@@ -536,6 +638,9 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 }
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
+	if usesOpenAIChatGeminiImageBridge(info) {
+		return openAIChatGeminiImageHandler(c, info, resp)
+	}
 	if info.RelayMode == constant.RelayModeResponses {
 		if info.IsStream {
 			return GeminiResponsesStreamHandler(c, info, resp)
@@ -601,5 +706,100 @@ func isGeminiNativeImageModel(modelName string) bool {
 	}
 	lowerName := strings.ToLower(modelName)
 	return (strings.HasPrefix(lowerName, "gemini-") && strings.Contains(lowerName, "image-preview")) ||
+		isOpenAIChatGeminiImageModel(lowerName) ||
 		strings.HasPrefix(lowerName, "nano-banana-")
+}
+
+func isOpenAIChatGeminiImageModel(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case "gemini-3.1-flash-image", "gemini-3-pro-image":
+		return true
+	default:
+		return false
+	}
+}
+
+func usesOpenAIChatGeminiImageBridge(info *relaycommon.RelayInfo) bool {
+	return info != nil &&
+		info.ChannelType == appconstant.ChannelTypeOpenAI &&
+		isGeminiImageRelay(info) &&
+		isOpenAIChatGeminiImageModel(info.UpstreamModelName)
+}
+
+func openAIChatGeminiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+	if resp == nil || resp.Body == nil {
+		return nil, types.NewOpenAIError(errors.New("empty OpenAI-compatible Gemini image response"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+	defer resp.Body.Close()
+
+	limitedBody := io.LimitReader(resp.Body, openAIChatGeminiImageMaxResponseBytes+1)
+	responseBody, readErr := io.ReadAll(limitedBody)
+	if readErr != nil {
+		return nil, types.NewOpenAIError(readErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+	if len(responseBody) > openAIChatGeminiImageMaxResponseBytes {
+		return nil, types.NewOpenAIError(errors.New("OpenAI-compatible Gemini image response exceeded size limit"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+
+	var chatResponse openAIChatGeminiImageResponse
+	if unmarshalErr := common.Unmarshal(responseBody, &chatResponse); unmarshalErr != nil {
+		return nil, types.NewOpenAIError(unmarshalErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+
+	imageData := make([]dto.ImageData, 0, len(chatResponse.Choices))
+	for _, choice := range chatResponse.Choices {
+		var content string
+		if unmarshalErr := common.Unmarshal(choice.Message.Content, &content); unmarshalErr != nil {
+			continue
+		}
+		for _, imageURL := range extractGeminiImageURLsFromText(content) {
+			converted, ok := openAIChatGeminiImageData(imageURL)
+			if ok {
+				imageData = append(imageData, converted)
+			}
+		}
+	}
+	if len(imageData) == 0 {
+		return nil, types.NewOpenAIError(errors.New("no images generated"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+
+	imageResponse := dto.ImageResponse{Created: common.GetTimestamp(), Data: imageData}
+	jsonResponse, marshalErr := common.Marshal(imageResponse)
+	if marshalErr != nil {
+		return nil, types.NewError(marshalErr, types.ErrorCodeBadResponseBody)
+	}
+	c.Writer.Header().Set("Content-Type", "application/json")
+	c.Writer.WriteHeader(resp.StatusCode)
+	_, _ = c.Writer.Write(jsonResponse)
+
+	usage := chatResponse.Usage
+	if usage.TotalTokens == 0 && usage.PromptTokens == 0 && usage.CompletionTokens == 0 {
+		usage = *geminiImageUsageFromImageCount(len(imageData))
+	} else if usage.TotalTokens == 0 {
+		usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+	}
+	return &usage, nil
+}
+
+func openAIChatGeminiImageData(rawURL string) (dto.ImageData, bool) {
+	rawURL = strings.TrimSpace(rawURL)
+	lowerURL := strings.ToLower(rawURL)
+	if !strings.HasPrefix(lowerURL, "data:image/") {
+		if isGeminiImageResultURL(rawURL) {
+			return dto.ImageData{Url: rawURL}, true
+		}
+		return dto.ImageData{}, false
+	}
+	comma := strings.Index(rawURL, ",")
+	if comma <= 0 || !strings.Contains(strings.ToLower(rawURL[:comma]), ";base64") {
+		return dto.ImageData{}, false
+	}
+	encoded := strings.TrimSpace(rawURL[comma+1:])
+	if encoded == "" {
+		return dto.ImageData{}, false
+	}
+	if _, err := io.Copy(io.Discard, base64.NewDecoder(base64.StdEncoding, strings.NewReader(encoded))); err != nil {
+		return dto.ImageData{}, false
+	}
+	return dto.ImageData{B64Json: encoded}, true
 }

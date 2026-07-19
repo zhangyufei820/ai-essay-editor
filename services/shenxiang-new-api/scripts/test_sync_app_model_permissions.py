@@ -84,6 +84,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
     def test_staged_grok1080_is_admin_only_until_published(self) -> None:
         self.module.grok15_1080_video_release_state = lambda: "staged"
         self.module.discount_image2_release_state = lambda: "unavailable"
+        self.module.gemini_ddpapi_release_state = lambda: "unavailable"
         profiles = {
             "codex": ["gpt-5.5"],
             "claude": ["claude-opus-4-8"],
@@ -121,6 +122,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
     def test_staged_discount_image2_is_admin_only_until_published(self) -> None:
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "staged"
+        self.module.gemini_ddpapi_release_state = lambda: "unavailable"
         profiles = {
             "codex": ["gpt-5.5"],
             "claude": ["claude-opus-4-8"],
@@ -132,6 +134,42 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertNotIn("特价 image-2", profiles["image"])
         self.assertIn("特价 image-2", system_profiles["image"])
+
+    def test_gemini_ddpapi_release_state_requires_both_exact_channels(self) -> None:
+        staged_rows = [
+            ["xingren-gemini31-flash-image-ddpapi", "1", "internal", "gemini-3.1-flash-image"],
+            ["xingren-gemini3-pro-image-ddpapi", "1", "internal", "gemini-3-pro-image"],
+        ]
+        published_rows = [
+            ["xingren-gemini31-flash-image-ddpapi", "1", "default,standard,pro,code,internal", "gemini-3.1-flash-image"],
+            ["xingren-gemini3-pro-image-ddpapi", "1", "default,standard,pro,code,internal", "gemini-3-pro-image"],
+        ]
+        for rows, expected in (
+            ([], "unavailable"),
+            (staged_rows, "staged"),
+            (published_rows, "published"),
+            (staged_rows[:1], "unavailable"),
+            ([staged_rows[0], published_rows[1]], "invalid"),
+        ):
+            self.module.mysql = lambda _query, rows=rows: rows
+            self.assertEqual(self.module.gemini_ddpapi_release_state(), expected)
+
+    def test_staged_gemini_ddpapi_models_are_admin_only_until_published(self) -> None:
+        self.module.grok15_1080_video_release_state = lambda: "unavailable"
+        self.module.discount_image2_release_state = lambda: "unavailable"
+        self.module.gemini_ddpapi_release_state = lambda: "staged"
+        profiles = {
+            "codex": ["gpt-5.5"],
+            "claude": ["claude-opus-4-8"],
+            "image": ["gpt-image-2-4K"],
+            "video": ["grok-video-1.5"],
+        }
+
+        system_profiles = self.module.system_token_profiles(profiles)
+
+        for model in self.module.GEMINI_DDPAPI_MODELS:
+            self.assertNotIn(model, profiles["image"])
+            self.assertIn(model, system_profiles["image"])
 
     def test_new_video_catalog_describes_price_inputs_and_face_support_without_provider_details(self) -> None:
         sd_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["seedance-sd2-fast-720p"]["description"]
@@ -591,6 +629,19 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn('/v1/images/generations', sql)
         self.assertNotIn('/v1/images/edits', sql)
 
+    def test_ensure_gemini_ddpapi_models_uses_public_metadata(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_gemini_ddpapi_image_models()
+
+        sql = "\n".join(captured)
+        for marker in ("gemini-3.1-flash-image", "gemini-3-pro-image", "¥0.10/张", "¥0.15/张"):
+            self.assertIn(marker, sql)
+        self.assertNotIn("new.ddpapi.top", sql)
+        self.assertIn('/v1/images/generations', sql)
+        self.assertIn('/v1/images/edits', sql)
+
     def test_sync_public_image_pricing_sets_fixed_cny_price(self) -> None:
         captured_options: dict[str, dict[str, float]] = {}
         self.module.parse_json_option = lambda key: {
@@ -624,6 +675,19 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
         self.assertNotIn("grok-imagine-image", captured_options["ModelRatio"])
         self.assertNotIn("grok-imagine-image", captured_options["CompletionRatio"])
+        self.assertAlmostEqual(
+            captured_options["ModelPrice"]["gemini-3.1-flash-image"],
+            0.013698630137,
+            places=12,
+        )
+        self.assertAlmostEqual(
+            captured_options["ModelPrice"]["gemini-3-pro-image"],
+            0.020547945205,
+            places=12,
+        )
+        for model in ("gemini-3.1-flash-image", "gemini-3-pro-image"):
+            self.assertNotIn(model, captured_options["ModelRatio"])
+            self.assertNotIn(model, captured_options["CompletionRatio"])
 
     def test_sync_grok_image_metadata_sets_verified_capability_description(self) -> None:
         captured: list[str] = []

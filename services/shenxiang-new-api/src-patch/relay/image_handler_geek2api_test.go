@@ -117,3 +117,24 @@ func TestUseGeminiAdaptorForNativeImageModelSupportsNanoBananaAliases(t *testing
 
 	require.Equal(t, constant.APITypeGemini, info.ApiType)
 }
+
+func TestUseGeminiAdaptorForApprovedOpenAIChatImageModels(t *testing.T) {
+	for _, modelName := range []string{"gemini-3.1-flash-image", "gemini-3-pro-image"} {
+		t.Run(modelName, func(t *testing.T) {
+			info := &relaycommon.RelayInfo{
+				RelayMode: relayconstant.RelayModeImagesGenerations,
+				ChannelMeta: &relaycommon.ChannelMeta{
+					ApiType:           constant.APITypeOpenAI,
+					ChannelType:       constant.ChannelTypeOpenAI,
+					ChannelBaseUrl:    "https://new.ddpapi.top/v1/",
+					UpstreamModelName: modelName,
+				},
+			}
+
+			useGeminiAdaptorForNativeImageModel(info)
+
+			require.Equal(t, constant.APITypeGemini, info.ApiType)
+			require.Equal(t, "https://new.ddpapi.top", info.ChannelBaseUrl)
+		})
+	}
+}

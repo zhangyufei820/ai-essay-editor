@@ -9,6 +9,8 @@ const requiredBundleMarkers = [
   'banana-2',
   'gemini-3-pro-image-preview',
   'gemini-3.1-flash-image-preview',
+  'gemini-3.1-flash-image',
+  'gemini-3-pro-image',
   'generationConfig',
   'responseModalities',
   'imageConfig',
@@ -53,6 +55,20 @@ const expectedChannels = [
     label: 'Gemini 3 Pro Image MoonApiX channel',
     model: 'gemini-3-pro-image-preview',
     upstream: 'gemini-3-pro-image-preview',
+  },
+  {
+    label: 'Gemini 3.1 Flash Image channel',
+    model: 'gemini-3.1-flash-image',
+    upstream: 'gemini-3.1-flash-image',
+    optionalUntilStaged: true,
+    baseUrlPattern: /^https:\/\/new\.ddpapi\.top$/i,
+  },
+  {
+    label: 'Gemini 3 Pro Image channel',
+    model: 'gemini-3-pro-image',
+    upstream: 'gemini-3-pro-image',
+    optionalUntilStaged: true,
+    baseUrlPattern: /^https:\/\/new\.ddpapi\.top$/i,
   },
   {
     label: 'Grok Video 1.5 1080P channel',
@@ -211,16 +227,17 @@ function checkChannelRows(rows) {
 
     const healthy = matchingRows.some((row) => {
       const upstream = row.mapping[expected.model] || expected.model
+      const baseUrlPattern = expected.baseUrlPattern || /moonapix\.com/i
       return (
         row.status === '1' &&
-        (expected.baseUrlPattern || /moonapix\.com/i).test(row.baseUrl) &&
+        baseUrlPattern.test(row.baseUrl) &&
         upstream === expected.upstream
       )
     })
 
     if (!healthy) {
       errors.push(
-        `${expected.label}: no enabled moonapix.com channel maps ${expected.model} to ${expected.upstream}`,
+        `${expected.label}: no enabled expected channel maps ${expected.model} to ${expected.upstream}`,
       )
     }
   }

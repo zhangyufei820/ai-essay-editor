@@ -17,7 +17,7 @@
   },
   {
     "package": "./relay",
-    "run": "^TestDiscountImage2V2OutboundBodyPreservesVerifiedFields$"
+    "run": "^(TestDiscountImage2V2OutboundBodyPreservesVerifiedFields|TestUseGeminiAdaptorForApprovedOpenAIChatImageModels)$"
   },
   {
     "package": "./service/relayconvert",
@@ -26,6 +26,10 @@
   {
     "package": "./relay/channel/gemini",
     "run": ""
+  },
+  {
+    "package": "./relay/channel/gemini",
+    "run": "^(TestConvertImageRequestBridgesApprovedGeminiModelsToOpenAIChat|TestConvertImageRequestRejectsMultipleImagesForOpenAIChatBridge|TestConvertImageRequestBridgesGeminiImageEditReference|TestOpenAICompatibleGeminiImageModelsUseChatCompletionsURL|TestApprovedGeminiImageModelKeepsNativeURLForGeminiChannel|TestOpenAIChatGeminiImageHandlerConvertsMarkdownDataURL)$"
   },
   {
     "package": "./relay/channel/openai",

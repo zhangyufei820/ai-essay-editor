@@ -54,6 +54,8 @@ function main() {
   const discountImage2Block = modelBlock(classic, '特价 image-2')
   const banana2Block = modelBlock(classic, 'banana-2')
   const geminiProBlock = modelBlock(classic, 'gemini-3-pro-image-preview')
+  const geminiFlashDDPAPIBlock = modelBlock(classic, 'gemini-3.1-flash-image')
+  const geminiProDDPAPIBlock = modelBlock(classic, 'gemini-3-pro-image')
   const grokBlock = modelBlock(classic, 'grok-imagine-image')
   const grokRatioBlock = arrayBlock(classic, 'XAI_GROK_IMAGE_ASPECT_RATIOS')
   const errors = []
@@ -136,6 +138,25 @@ function main() {
 
   if (geminiProBlock.includes('aspectRatios: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS')) {
     errors.push('Gemini Pro must not use Gemini 3.1 Flash extreme aspect ratio set')
+  }
+
+  for (const [label, block, ratioMarker, priceMarker] of [
+    ['gemini-3.1-flash-image', geminiFlashDDPAPIBlock, 'GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS', "priceLabel: '¥0.10/张'"],
+    ['gemini-3-pro-image', geminiProDDPAPIBlock, 'GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS', "priceLabel: '¥0.15/张'"],
+  ]) {
+    if (!block) {
+      errors.push(`classic media playground must expose ${label}`)
+      continue
+    }
+    for (const marker of [
+      `sizes: ${ratioMarker}`,
+      "resolutions: ['1K', '2K', '4K']",
+      'maxCount: 1',
+      'edit: true',
+      priceMarker,
+    ]) {
+      if (!block.includes(marker)) errors.push(`${label} missing contract marker: ${marker}`)
+    }
   }
 
   if (!gptImage2Block.includes('resolutions: GPT_IMAGE_2_RESOLUTIONS')) {

@@ -251,6 +251,50 @@ const IMAGE_MODELS = [
     hint: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。4K 会按 Gemini 官方比例表输出，如 16:9 为 5504x3072。',
   },
   {
+    value: 'gemini-3.1-flash-image',
+    label: 'gemini-3.1-flash-image',
+    badge: '4K',
+    vendor: '星人图像',
+    sizes: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
+    aspectRatios: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
+    resolutions: ['1K', '2K', '4K'],
+    qualities: ['auto'],
+    formats: ['url'],
+    defaultSize: '16:9',
+    defaultAspectRatio: '16:9',
+    defaultResolution: '2K',
+    defaultQuality: 'auto',
+    maxCount: 1,
+    countParam: 'none',
+    sizeParam: 'responseFormat',
+    edit: true,
+    priceLabel: '¥0.10/张',
+    billingLabel: '按张计费',
+    hint: '快速 Gemini 图像生成与编辑线路，支持 1K / 2K / 4K 和多种画面比例，人民币固定 ¥0.10/张。',
+  },
+  {
+    value: 'gemini-3-pro-image',
+    label: 'gemini-3-pro-image',
+    badge: '4K',
+    vendor: '星人图像',
+    sizes: GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS,
+    aspectRatios: GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS,
+    resolutions: ['1K', '2K', '4K'],
+    qualities: ['auto'],
+    formats: ['url'],
+    defaultSize: '16:9',
+    defaultAspectRatio: '16:9',
+    defaultResolution: '4K',
+    defaultQuality: 'auto',
+    maxCount: 1,
+    countParam: 'none',
+    sizeParam: 'responseFormat',
+    edit: true,
+    priceLabel: '¥0.15/张',
+    billingLabel: '按张计费',
+    hint: '高阶 Gemini 图像生成与编辑线路，支持 1K / 2K / 4K 和多种画面比例，人民币固定 ¥0.15/张。',
+  },
+  {
     value: 'image 2电商商品图快速通道(1.5K)',
     label: 'image 2电商商品图快速通道(1.5K)',
     badge: '1.5K',
@@ -494,6 +538,8 @@ function isGeminiImageModel(model) {
   return (
     model === 'banana-2' ||
     model === 'gemini-3-pro-image-preview' ||
+    model === 'gemini-3.1-flash-image' ||
+    model === 'gemini-3-pro-image' ||
     model === 'ecommerce-banana-2'
   );
 }
@@ -709,7 +755,10 @@ function imagePixelSizeForModel(modelValue, aspectRatio, imageSize, customSize =
     if (pixelSize === 'auto') return '';
     return pixelSize || '自定义尺寸待输入';
   }
-  if (modelValue === 'gemini-3-pro-image-preview') {
+  if (
+    modelValue === 'gemini-3-pro-image-preview' ||
+    modelValue === 'gemini-3-pro-image'
+  ) {
     return geminiProImageSizeFor(aspectRatio, imageSize);
   }
   if (isGrokImageModel(modelValue)) {
@@ -730,7 +779,10 @@ function aspectOrientation(aspectRatio) {
 }
 
 function googleImageEditSizeFor(aspectRatio, imageSize, modelValue) {
-  if (modelValue === 'gemini-3-pro-image-preview') {
+  if (
+    modelValue === 'gemini-3-pro-image-preview' ||
+    modelValue === 'gemini-3-pro-image'
+  ) {
     const officialSize = geminiProImageSizeFor(aspectRatio, imageSize);
     if (officialSize) return officialSize;
   }

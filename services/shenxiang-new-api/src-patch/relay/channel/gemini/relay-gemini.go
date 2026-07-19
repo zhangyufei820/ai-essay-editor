@@ -62,7 +62,7 @@ const (
 	flash25LiteMaxBudget = 24576
 )
 
-var geminiMarkdownImagePattern = regexp.MustCompile(`!\[[^\]]*\]\((https?://[^\s)]+)\)`)
+var geminiMarkdownImagePattern = regexp.MustCompile(`!\[[^\]]*\]\((https?://[^\s)]+|data:image/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=_-]+)\)`)
 var geminiPlainImageURLPattern = regexp.MustCompile(`https?://[^\s<>"')]+`)
 
 func isNew25ProModel(modelName string) bool {
