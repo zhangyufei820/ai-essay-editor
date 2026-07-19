@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
@@ -369,7 +370,7 @@ func TestDistributeRejectsSupplierExposedModelWithoutEchoingName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewBufferString(`{"model":"geek2api-image-2"}`))
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewBufferString(`{"model":"custom-geek2api-image"}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 
 	Distribute()(ctx)
@@ -388,4 +389,19 @@ func TestDistributeRejectsSupplierExposedModelWithoutEchoingName(t *testing.T) {
 	if payload["error"] == nil {
 		t.Fatalf("response missing error: %s", body)
 	}
+}
+
+func TestDistributeRejectsRetiredDiscountImage2BeforeChannelSelection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewBufferString(`{"model":"特价 image-2"}`))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	Distribute()(ctx)
+
+	require.Equal(t, http.StatusNotFound, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "模型服务暂时不可用")
+	require.Contains(t, recorder.Body.String(), string(types.ErrorCodeModelNotFound))
+	require.NotContains(t, recorder.Body.String(), "geek2api")
 }

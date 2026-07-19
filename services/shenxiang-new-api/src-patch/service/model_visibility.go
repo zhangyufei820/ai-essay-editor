@@ -14,6 +14,11 @@ var supplierExposedModelNames = map[string]bool{
 	InternalStableImage2ModelName:   true,
 }
 
+var retiredImageModelNames = map[string]bool{
+	strings.ToLower(PublicDiscountImage2ModelName):   true,
+	strings.ToLower(InternalDiscountImage2ModelName): true,
+}
+
 var publicImageModelAliases = map[string]string{
 	strings.ToLower(PublicDiscountImage2ModelName): InternalDiscountImage2ModelName,
 	strings.ToLower(PublicStableImage2ModelName):   InternalStableImage2ModelName,
@@ -48,6 +53,10 @@ func IsSupplierExposedModelName(modelName string) bool {
 		}
 	}
 	return false
+}
+
+func IsRetiredImageModelName(modelName string) bool {
+	return retiredImageModelNames[strings.ToLower(strings.TrimSpace(modelName))]
 }
 
 func NormalizeImageGenerationModelName(modelName string) (normalized string, publicAlias string, changed bool) {

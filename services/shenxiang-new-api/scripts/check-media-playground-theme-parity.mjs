@@ -22,6 +22,10 @@ const retiredVideoModels = [
   'seedance-2.0-ld-17',
 ]
 
+const retiredClassicImageModels = [
+  '特价 image-2',
+]
+
 const requiredMarkers = {
   resultTtl72h: '72 * 60 * 60 * 1000',
   promptCopy: '复制提示词',
@@ -44,8 +48,6 @@ const requiredClassicOnlyMarkers = {
   mediaPromptLimitConstant: 'MEDIA_PROMPT_MAX_LENGTH = 10000',
   mediaPromptLimitProp: 'promptMaxLength={MEDIA_PROMPT_MAX_LENGTH}',
   promptTextareaMaxLength: 'maxLength={promptLimit}',
-  geekImage2StableLabel: "statusLabel: '稳定'",
-  geekImage2TierPriceLabel: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
   compactModelOptionLabel: 'function modelOptionDisplayLabel(model)',
 }
 
@@ -123,6 +125,9 @@ function main() {
   for (const model of retiredVideoModels) {
     if (classicModels.has(model)) errors.push(`classic retired model still exposed: ${model}`)
     if (defaultModels.has(model)) errors.push(`default retired model still exposed: ${model}`)
+  }
+  for (const model of retiredClassicImageModels) {
+    if (classicModels.has(model)) errors.push(`classic retired model still exposed: ${model}`)
   }
 
   for (const [label, marker] of Object.entries(requiredMarkers)) {

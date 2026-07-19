@@ -238,7 +238,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("gpt-5.4-openai-compact", profiles["codex"])
         self.assertIn("codex-auto-review", profiles["codex"])
         self.assertNotIn("gpt-image-2-4K", profiles["codex"])
-        self.assertIn("特价 image-2", profiles["image"])
+        self.assertNotIn("特价 image-2", profiles["image"])
         self.assertIn("官转image 2稳定", profiles["image"])
         self.assertNotIn("geek2api-image-2", profiles["image"])
         self.assertNotIn("internal-image2-stable-v1", profiles["image"])
@@ -249,7 +249,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertTrue(self.module.is_disabled_ability_pair("21", "gpt-image-2"))
         self.assertFalse(self.module.is_disabled_ability_pair("8", "gpt-image-2-4K"))
 
-    def test_sync_abilities_allows_discount_image2_backing_model_only(self) -> None:
+    def test_sync_abilities_skips_retired_discount_image2_models(self) -> None:
         captured: list[str] = []
 
         def fake_mysql(query: str) -> list[list[str]]:
@@ -266,7 +266,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.sync_abilities()
 
         sql = "\n".join(captured)
-        self.assertIn("geek2api-image-2", sql)
+        self.assertNotIn("geek2api-image-2", sql)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("custom-geek2api-leak", sql)
 
@@ -465,17 +465,63 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("'default', 'gpt-5.5', 21", sql)
         self.assertNotIn("'discount', 'gpt-5.5', 21", sql)
 
-    def test_ensure_discount_image2_backing_model_uses_public_metadata(self) -> None:
+    def test_retire_discount_image2_removes_every_runtime_entitlement(self) -> None:
         captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM tokens" in query:
+                return [
+                    ["71", "key-71", "gpt-5.5,特价 image-2"],
+                    ["72", "key-72", "geek2api-image-2,官转image 2稳定"],
+                ]
+            if "FROM channels WHERE status = 2" in query:
+                return [["27"]]
+            if "FROM models WHERE status = 0" in query:
+                return [["61"], ["62"]]
+            if "FROM abilities WHERE enabled = 0" in query:
+                return [["27"], ["27"]]
+            return []
+
+        self.module.mysql = fake_mysql
+        self.module.parse_json_option = lambda _key: {
+            "特价 image-2": 1.0,
+            "geek2api-image-2": 2.0,
+            "other-image": 3.0,
+        }
+        self.module.parse_json_string_option = lambda _key: {
+            "特价 image-2": "retired-public",
+            "geek2api-image-2": "retired-internal",
+            "other-image": "keep",
+        }
         self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
 
-        self.module.ensure_discount_image2_backing_model()
+        result = self.module.retire_discount_image2()
 
-        sql = "\n".join(captured)
-        self.assertIn("geek2api-image-2", sql)
-        self.assertIn("特价 image-2", sql)
-        self.assertIn("image,openai", sql)
-        self.assertNotIn("image,openai,geek2api", sql)
+        self.assertEqual(
+            result,
+            {
+                "channels_disabled": 1,
+                "models_disabled": 2,
+                "abilities_disabled": 2,
+                "tokens_rewritten": 2,
+                "token_caches_deleted": 2,
+                "pricing_options_sanitized": 8,
+            },
+        )
+        self.assertEqual(len(captured), 2)
+        sql = captured[0]
+        self.assertTrue(sql.startswith("START TRANSACTION;"))
+        self.assertTrue(sql.endswith("COMMIT;"))
+        self.assertIn("UPDATE channels SET status = 2, priority = 0, weight = 0", sql)
+        self.assertIn("FIND_IN_SET('特价 image-2', COALESCE(models, ''))", sql)
+        self.assertIn("UPDATE abilities SET enabled = 0", sql)
+        self.assertIn("UPDATE models SET status = 0", sql)
+        self.assertIn("model_limits = 'gpt-5.5'", sql)
+        self.assertIn("model_limits = '官转image 2稳定'", sql)
+        self.assertIn("VALUES ('ImageRatio', '{\"other-image\":3.0}')", sql)
+        self.assertIn("VALUES ('billing_setting.billing_expr', '{\"other-image\":\"keep\"}')", sql)
+        self.assertEqual(captured[1], "CACHE:key-71,key-72")
 
     def test_ensure_stable_image2_backing_model_uses_public_metadata(self) -> None:
         captured: list[str] = []
@@ -742,7 +788,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         sql = "\n".join(captured)
         self.assertEqual(result, {"tokens_rewritten": 2, "token_caches_deleted": 2})
-        self.assertIn("gpt-image-2-4K,特价 image-2,官转image 2稳定", sql)
+        self.assertIn("gpt-image-2-4K,官转image 2稳定", sql)
+        self.assertNotIn("特价 image-2", sql)
         self.assertNotIn("internal-image2-stable-v1", sql)
         self.assertIn("CACHE:key-221,key-222", sql)
 

@@ -4,6 +4,10 @@
     "run": ""
   },
   {
+    "package": "./controller",
+    "run": "^(TestCreateImageTaskRejectsRetiredImage2BeforePersistence|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility)$"
+  },
+  {
     "package": "./relay/channel/task/sora",
     "run": ""
   },
@@ -25,6 +29,6 @@
   },
   {
     "package": "./service",
-    "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestMergeModelLimits.*|TestEnsureSystemTokensRejectsNonAdminUser|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize)$"
+    "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestMergeModelLimits.*|TestEnsureSystemTokensRejectsNonAdminUser|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize|TestDiscountImage2NamesAreRetired)$"
   }
 ]

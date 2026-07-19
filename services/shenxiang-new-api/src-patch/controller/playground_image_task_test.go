@@ -155,6 +155,40 @@ func TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInter
 	require.NotContains(t, payload, "display_model")
 }
 
+func TestCreateImageTaskRejectsRetiredImage2BeforePersistence(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Task{}))
+	oldDB := model.DB
+	model.DB = db
+	t.Cleanup(func() {
+		model.DB = oldDB
+	})
+
+	cacheRoot := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", cacheRoot)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(
+		http.MethodPost,
+		"/pg/images/tasks/generations",
+		bytes.NewBufferString(`{"model":"特价 image-2","prompt":"poster"}`),
+	)
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Set("id", 71)
+
+	PlaygroundCreateImageTask(ctx)
+
+	require.Equal(t, http.StatusNotFound, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "该模型已下架")
+	var taskCount int64
+	require.NoError(t, db.Model(&model.Task{}).Count(&taskCount).Error)
+	require.Zero(t, taskCount)
+	entries, readErr := os.ReadDir(cacheRoot)
+	require.NoError(t, readErr)
+	require.Empty(t, entries)
+}
+
 func TestCacheFirstPlaygroundImageTaskResultRetainsMismatchedImageSize(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	root := t.TempDir()
