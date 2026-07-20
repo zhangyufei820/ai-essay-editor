@@ -177,11 +177,11 @@ const IMAGE_MODELS = [
     countParam: 'n',
     sizeParam: 'size',
     backgroundOptions: ['auto', 'opaque'],
-    edit: false,
+    edit: true,
     statusLabel: '稳定',
     priceLabel: '¥0.135/张',
     billingLabel: '按张计费',
-    hint: '稳定图像生成线路，支持 1K / 2K / 4K 和合法自定义 WxH，固定 ¥0.135/张。',
+    hint: '稳定图像生成与编辑线路，支持 1K / 2K / 4K 和合法自定义 WxH，固定 ¥0.135/张。',
   },
   {
     value: '特价 image-2',

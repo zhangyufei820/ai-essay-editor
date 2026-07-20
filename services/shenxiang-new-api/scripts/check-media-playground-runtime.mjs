@@ -33,6 +33,14 @@ const requiredBundleMarkers = [
 
 const requiredBundlePatterns = [
   {
+    label: 'stable Image 2 editing enabled',
+    pattern: /value:\s*["']官转image 2稳定["'][\s\S]{0,1200}?edit:\s*(?:true|!0)/,
+  },
+  {
+    label: 'discount Image 2 editing disabled',
+    pattern: /value:\s*["']特价 image-2["'][\s\S]{0,1200}?edit:\s*(?:false|!1)/,
+  },
+  {
     label: 'Grok Video 1.5 text and image workflows',
     pattern: /value:\s*["']grok-video-1\.5["'][\s\S]{0,1200}?workflows:\s*\[["']text["'],["']image["']\]/,
   },

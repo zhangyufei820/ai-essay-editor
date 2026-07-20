@@ -196,6 +196,9 @@ function main() {
   if (!stableImage2Block) {
     errors.push('classic media playground must expose public model 官转image 2稳定')
   } else {
+    if (!stableImage2Block.includes('edit: true')) {
+      errors.push('官转image 2稳定 must support image editing')
+    }
     if (!stableImage2Block.includes('resolutions: GPT_IMAGE_2_RESOLUTIONS')) {
       errors.push('官转image 2稳定 must use GPT_IMAGE_2_RESOLUTIONS')
     }
