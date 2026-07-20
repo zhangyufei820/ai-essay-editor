@@ -105,7 +105,7 @@ func TestHandleGroupRatioPinsDiscountMarketplaceRatio(t *testing.T) {
 	require.Equal(t, float64(-1), ratioInfo.GroupSpecialRatio)
 }
 
-func TestModelPriceHelperChargesFivePercentOfMarketplaceFixedPrice(t *testing.T) {
+func TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	originalModelPrice := ratio_setting.ModelPrice2JSONString()
 	originalGroupRatio := ratio_setting.GroupRatio2JSONString()
@@ -129,7 +129,7 @@ func TestModelPriceHelperChargesFivePercentOfMarketplaceFixedPrice(t *testing.T)
 	require.NoError(t, err)
 	require.True(t, priceData.UsePrice)
 	require.Equal(t, service.DiscountPricingGroupRatio, priceData.GroupRatioInfo.GroupRatio)
-	require.Equal(t, 50_000, priceData.QuotaToPreConsume)
+	require.Equal(t, 60_000, priceData.QuotaToPreConsume)
 }
 
 func TestTieredRealtimeBillingUsesFrozenModelRatio(t *testing.T) {

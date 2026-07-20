@@ -132,7 +132,7 @@ const CHAT_HISTORY_LIMIT = 30;
 const CHAT_HISTORY_STORAGE_PREFIX = 'aiphui-home-chat-history:v1';
 const DISCOUNT_GROUP = 'discount';
 const DEFAULT_GROUP = 'default';
-const DISCOUNT_PRICING_LABEL = '特价 0.05x';
+const DISCOUNT_PRICING_LABEL = '特价 0.06x';
 const DEFAULT_PRICING_LABEL = '原价 1x';
 const DISCOUNT_FALLBACK_HEADER = 'X-Aiphui-Discount-Fallback';
 const PRICING_GROUP_HEADER = 'X-Aiphui-Pricing-Group';
@@ -1724,7 +1724,7 @@ const TextWorkbench = ({ isMobile }) => {
           </div>
           {activeModelGroup === DISCOUNT_GROUP ? (
             <div className='sx-gpt-message-name' role='note'>
-              当前跟随“星人 Codex 文本令牌”：特价 0.05x。若特价通道异常，请在接入设置中手动切换原价 1x。
+              当前跟随“星人 Codex 文本令牌”：特价 0.06x。若特价通道异常，请在接入设置中手动切换原价 1x。
             </div>
           ) : activeModelGroup === DEFAULT_GROUP ? (
             <div className='sx-gpt-message-name' role='note'>

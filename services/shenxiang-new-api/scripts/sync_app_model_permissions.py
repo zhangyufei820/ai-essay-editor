@@ -79,22 +79,22 @@ PUBLIC_ALIAS_BACKING_MODELS = {
     INTERNAL_STABLE_IMAGE2_MODEL: STABLE_IMAGE2_PUBLIC_MODEL,
 }
 DISCOUNT_TEXT_GROUP = "discount"
-DISCOUNT_TEXT_CHANNEL_TAG = "xingren-discount-text"
+DISCOUNT_TEXT_CHANNEL_TAGS = (
+    "xingren-discount-text-wangwang",
+    "xingren-discount-text-pdhlzy",
+    "xingren-discount-text-reserve",
+)
+DISCOUNT_TEXT_ALLOWED_MODELS = (
+    "gpt-5.5",
+    "gpt-5.6-luna",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+)
 CODEX_AUTO_REVIEW_MODEL = "codex-auto-review"
 CODEX_AUTO_REVIEW_BACKING_MODEL = "gpt-5.5"
 CONTROLLED_CODEX_MODEL_ALIASES = {
     CODEX_AUTO_REVIEW_MODEL: CODEX_AUTO_REVIEW_BACKING_MODEL,
 }
-DISCOUNT_TEXT_ALLOWED_MODELS = (
-    "gpt-5.4",
-    "gpt-5.4-mini",
-    "gpt-5.5",
-    "gpt-5.5-openai-compact",
-    "gpt-5.6-luna",
-    "gpt-5.6-terra",
-    "gpt-5.6-sol",
-    CODEX_AUTO_REVIEW_MODEL,
-)
 _DISCOUNT_TEXT_MODEL_REGEX_ALTERNATION = "|".join(
     model.replace(".", "[.]") for model in DISCOUNT_TEXT_ALLOWED_MODELS
 )
@@ -1858,19 +1858,27 @@ def sync_abilities() -> None:
         for row in mysql("SELECT model_name FROM models WHERE deleted_at IS NULL AND status = 1")
         if should_sync_ability_model(row[0])
     }
+    discount_channel_tags = set(DISCOUNT_TEXT_CHANNEL_TAGS)
+    discount_channel_tags_sql = ", ".join(sql_quote(tag) for tag in DISCOUNT_TEXT_CHANNEL_TAGS)
+    protected_channel_tags_sql = ", ".join(
+        sql_quote(tag)
+        for tag in (*DISCOUNT_TEXT_CHANNEL_TAGS, GROK45_CHANNEL_TAG, DISCOUNT_IMAGE2_CHANNEL_TAG)
+    )
     discount_allowed_models = set(DISCOUNT_TEXT_ALLOWED_MODELS)
     discount_allowed_models_sql = ", ".join(sql_quote(model) for model in DISCOUNT_TEXT_ALLOWED_MODELS)
     statements = [
         "START TRANSACTION;",
-        "UPDATE channels SET status = 2 WHERE tag = "
-        + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+        "UPDATE channels SET status = 2 WHERE tag IN ("
+        + discount_channel_tags_sql
+        + ")"
         + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') <> "
         + sql_quote(DISCOUNT_TEXT_GROUP)
         + " OR NOT ("
         + discount_text_models_allowed_sql("models")
         + "));",
-        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
-        + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') NOT IN ("
+        + discount_channel_tags_sql
+        + ")"
         + " AND FIND_IN_SET("
         + sql_quote(DISCOUNT_TEXT_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
@@ -1920,7 +1928,7 @@ def sync_abilities() -> None:
     for channel_id, raw_models, _priority, _weight, tag, raw_groups in channel_rows:
         channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
         channel_models = [item.strip() for item in raw_models.split(",") if item.strip()]
-        if tag == DISCOUNT_TEXT_CHANNEL_TAG:
+        if tag in discount_channel_tags:
             if (
                 channel_groups != [DISCOUNT_TEXT_GROUP]
                 or not channel_models
@@ -2025,7 +2033,7 @@ def sync_abilities() -> None:
                     + sql_quote(model)
                     + ", REPLACE(COALESCE(current_channel.models, ''), ' ', '')) > 0",
                 ]
-                if tag == DISCOUNT_TEXT_CHANNEL_TAG:
+                if tag in discount_channel_tags:
                     current_channel_conditions.append(
                         discount_text_models_allowed_sql("current_channel.models")
                     )
@@ -2038,11 +2046,7 @@ def sync_abilities() -> None:
                     current_channel_conditions.extend(
                         [
                             "COALESCE(current_channel.tag, '') NOT IN ("
-                            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-                            + ", "
-                            + sql_quote(GROK45_CHANNEL_TAG)
-                            + ", "
-                            + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+                            + protected_channel_tags_sql
                             + ")",
                             "FIND_IN_SET("
                             + sql_quote(DISCOUNT_TEXT_GROUP)
@@ -2073,27 +2077,28 @@ def sync_abilities() -> None:
         [
             "UPDATE abilities SET enabled = 0 WHERE `group` = "
             + sql_quote(DISCOUNT_TEXT_GROUP)
-            + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
-            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-            + ");",
+            + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag IN ("
+            + discount_channel_tags_sql
+            + "));",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
-            + "(SELECT id FROM channels WHERE tag = "
-            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-            + ") AND `group` <> "
+            + "(SELECT id FROM channels WHERE tag IN ("
+            + discount_channel_tags_sql
+            + ")) AND `group` <> "
             + sql_quote(DISCOUNT_TEXT_GROUP)
             + ";",
             "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
-            "SET ability.enabled = 0 WHERE channel.tag = "
-            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
+            "SET ability.enabled = 0 WHERE channel.tag IN ("
+            + discount_channel_tags_sql
+            + ")"
             + " AND (ability.model NOT IN ("
             + discount_allowed_models_sql
             + ") OR NOT ("
             + discount_text_models_allowed_sql("channel.models")
             + ") OR FIND_IN_SET(ability.model, REPLACE(COALESCE(channel.models, ''), ' ', '')) = 0);",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
-            + "(SELECT id FROM channels WHERE status <> 1 AND (tag = "
-            + sql_quote(DISCOUNT_TEXT_CHANNEL_TAG)
-            + " OR FIND_IN_SET("
+            + "(SELECT id FROM channels WHERE status <> 1 AND (tag IN ("
+            + discount_channel_tags_sql
+            + ") OR FIND_IN_SET("
             + sql_quote(DISCOUNT_TEXT_GROUP)
             + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0));",
             "UPDATE abilities SET enabled = 0 WHERE `group` = "

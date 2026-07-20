@@ -16,30 +16,20 @@ from dataclasses import dataclass
 
 
 DISCOUNT_GROUP = "discount"
-DISCOUNT_RATIO = 0.05
-DISCOUNT_CHANNEL_TAG = "xingren-discount-text"
-DISCOUNT_CHANNEL_NAME = "星人特价临时文本通道"
+DISCOUNT_RATIO = 0.06
 DEFAULT_GROUP_DESCRIPTION = "原价稳定通道"
-DISCOUNT_GROUP_DESCRIPTION = "特价临时通道（可能随时下架；不可用时请切回原价）"
-DEFAULT_UPSTREAM_BASE_URL = "https://www.geek2api.com"
-DEFAULT_UPSTREAM_HOST = "www.geek2api.com"
-UPSTREAM_KEY_ENV = "DISCOUNT_UPSTREAM_API_KEY"
-UPSTREAM_BASE_URL_ENV = "DISCOUNT_UPSTREAM_BASE_URL"
-MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
+DISCOUNT_GROUP_DESCRIPTION = "特价通道（可能随时下架；不可用时请切回原价）"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
-CODEX_AUTO_REVIEW_MODEL = "codex-auto-review"
-CODEX_AUTO_REVIEW_BACKING_MODEL = "gpt-5.5"
-CONTROLLED_MODEL_ALIASES = {
-    CODEX_AUTO_REVIEW_MODEL: CODEX_AUTO_REVIEW_BACKING_MODEL,
-}
-CODEX_TEXT_MODELS = (
-    "gpt-5.4",
-    "gpt-5.4-mini",
+MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
+OPENAI_CHANNEL_TYPE = 1
+ADVANCED_CUSTOM_CHANNEL_TYPE = 58
+LEGACY_DISCOUNT_CHANNEL_TAG = "xingren-discount-text"
+DEFAULT_CHANNEL_ORDER = ("wangwang", "pdhlzy", "reserve")
+DISCOUNT_TEXT_MODELS = (
     "gpt-5.5",
-    "gpt-5.5-openai-compact",
     "gpt-5.6-luna",
-    "gpt-5.6-terra",
     "gpt-5.6-sol",
+    "gpt-5.6-terra",
 )
 OPTION_KEYS = ("GroupRatio", "UserUsableGroups", "AutoGroups", "GroupGroupRatio")
 
@@ -68,31 +58,137 @@ class DiscountPlan:
     missing_models: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class DiscountChannelSpec:
+    slug: str
+    tag: str
+    name: str
+    key_envs: tuple[str, ...]
+    base_url_envs: tuple[str, ...]
+    default_base_url: str
+    approved_hosts: tuple[str, ...]
+    channel_type: int
+    responses_via_chat: bool = False
+
+
+DISCOUNT_CHANNEL_SPECS = (
+    DiscountChannelSpec(
+        slug="wangwang",
+        tag="xingren-discount-text-wangwang",
+        name="星人特价文本链路 A",
+        key_envs=("DISCOUNT_WANGWANG_API_KEY",),
+        base_url_envs=("DISCOUNT_WANGWANG_BASE_URL",),
+        default_base_url="https://wangwang.sbs",
+        approved_hosts=("wangwang.sbs",),
+        channel_type=OPENAI_CHANNEL_TYPE,
+    ),
+    DiscountChannelSpec(
+        slug="pdhlzy",
+        tag="xingren-discount-text-pdhlzy",
+        name="星人特价文本链路 B",
+        key_envs=("DISCOUNT_PDHLZY_API_KEY",),
+        base_url_envs=("DISCOUNT_PDHLZY_BASE_URL",),
+        default_base_url="https://pdhlzy.com",
+        approved_hosts=("pdhlzy.com",),
+        channel_type=ADVANCED_CUSTOM_CHANNEL_TYPE,
+        responses_via_chat=True,
+    ),
+    DiscountChannelSpec(
+        slug="reserve",
+        tag="xingren-discount-text-reserve",
+        name="星人特价文本链路 C",
+        key_envs=("DISCOUNT_RESERVE_API_KEY", "DISCOUNT_UPSTREAM_API_KEY"),
+        base_url_envs=("DISCOUNT_RESERVE_BASE_URL", "DISCOUNT_UPSTREAM_BASE_URL"),
+        default_base_url="https://www.geek2api.com",
+        approved_hosts=("www.geek2api.com", "api.geek2api.com"),
+        channel_type=OPENAI_CHANNEL_TYPE,
+    ),
+)
+DISCOUNT_CHANNEL_TAGS = tuple(spec.tag for spec in DISCOUNT_CHANNEL_SPECS)
+ALL_DISCOUNT_CHANNEL_TAGS = DISCOUNT_CHANNEL_TAGS + (LEGACY_DISCOUNT_CHANNEL_TAG,)
+
+
 def sql_quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
 
 
-def normalize_base_url(value: str) -> str:
+def sql_list(values: tuple[str, ...] | list[str]) -> str:
+    return ",".join(sql_quote(value) for value in values)
+
+
+def json_option(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def normalize_base_url(value: str, spec: DiscountChannelSpec) -> str:
     normalized = value.strip().rstrip("/")
     try:
         parsed = urllib.parse.urlsplit(normalized)
         port = parsed.port
     except ValueError:
-        raise ConfigurationError("discount upstream base URL is invalid") from None
+        raise ConfigurationError(f"{spec.slug} upstream base URL is invalid") from None
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-        raise ConfigurationError("discount upstream base URL must be a credential-free HTTPS origin")
-    if parsed.hostname != DEFAULT_UPSTREAM_HOST or port not in {None, 443}:
-        raise ConfigurationError("discount upstream base URL must use the approved HTTPS host")
+        raise ConfigurationError(f"{spec.slug} upstream base URL must be a credential-free HTTPS origin")
+    if parsed.hostname not in spec.approved_hosts or port not in {None, 443}:
+        raise ConfigurationError(f"{spec.slug} upstream base URL must use an approved HTTPS host")
     if parsed.query or parsed.fragment or parsed.path not in {"", "/"}:
-        raise ConfigurationError("discount upstream base URL must not include a path, query, or fragment")
+        raise ConfigurationError(f"{spec.slug} upstream base URL must not include a path, query, or fragment")
     return normalized
 
 
-def require_upstream_key() -> str:
-    key = os.environ.get(UPSTREAM_KEY_ENV, "").strip()
+def read_first_env(names: tuple[str, ...]) -> str:
+    for name in names:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def require_upstream_key(spec: DiscountChannelSpec) -> str:
+    key = read_first_env(spec.key_envs)
     if len(key) < 16 or any(character.isspace() for character in key):
-        raise ConfigurationError(f"{UPSTREAM_KEY_ENV} is missing or invalid")
+        raise ConfigurationError(f"{spec.key_envs[0]} is missing or invalid")
     return key
+
+
+def resolve_upstream_base_url(spec: DiscountChannelSpec) -> str:
+    configured = read_first_env(spec.base_url_envs) or spec.default_base_url
+    return normalize_base_url(configured, spec)
+
+
+def parse_channel_order(raw_value: str) -> tuple[str, ...]:
+    order = tuple(item.strip() for item in raw_value.split(",") if item.strip())
+    expected = {spec.slug for spec in DISCOUNT_CHANNEL_SPECS}
+    if len(order) != len(expected) or set(order) != expected:
+        raise ConfigurationError("channel order must contain wangwang,pdhlzy,reserve exactly once")
+    return order
+
+
+def channel_priorities(order: tuple[str, ...]) -> dict[str, int]:
+    return {slug: (len(order) - index) * 10 for index, slug in enumerate(order)}
+
+
+def advanced_custom_settings(spec: DiscountChannelSpec) -> str:
+    if not spec.responses_via_chat:
+        return "{}"
+    return json_option(
+        {
+            "advanced_custom": {
+                "advanced_routes": [
+                    {
+                        "converter": "openai_responses_to_openai_chat_completions",
+                        "incoming_path": "/v1/responses",
+                        "upstream_path": "/v1/chat/completions",
+                    },
+                    {
+                        "converter": "none",
+                        "incoming_path": "/v1/chat/completions",
+                        "upstream_path": "/v1/chat/completions",
+                    },
+                ]
+            }
+        }
+    )
 
 
 @contextlib.contextmanager
@@ -119,7 +215,7 @@ def fetch_upstream_models(base_url: str, api_key: str) -> set[str]:
         headers={
             "Authorization": "Bearer " + api_key,
             "Accept": "application/json",
-            "User-Agent": "shenxiang-new-api-discount-model-probe/1.0",
+            "User-Agent": "shenxiang-new-api-discount-model-probe/2.0",
         },
         method="GET",
     )
@@ -152,14 +248,10 @@ def fetch_upstream_models(base_url: str, api_key: str) -> set[str]:
 
 
 def build_discount_plan(upstream_models: set[str]) -> DiscountPlan:
-    matched_models = [model for model in CODEX_TEXT_MODELS if model in upstream_models]
-    for alias, backing_model in CONTROLLED_MODEL_ALIASES.items():
-        if backing_model in upstream_models:
-            matched_models.append(alias)
-    matched = tuple(matched_models)
-    missing = tuple(model for model in CODEX_TEXT_MODELS if model not in upstream_models)
-    if not matched:
-        raise ConfigurationError("upstream does not expose any current Codex text model alias")
+    matched = tuple(model for model in DISCOUNT_TEXT_MODELS if model in upstream_models)
+    missing = tuple(model for model in DISCOUNT_TEXT_MODELS if model not in upstream_models)
+    if missing:
+        raise ConfigurationError("upstream is missing required discount models: " + ",".join(missing))
     return DiscountPlan(
         upstream_model_count=len(upstream_models),
         matched_models=matched,
@@ -268,10 +360,6 @@ def parse_json_array(raw_value: str, option_key: str) -> list[object]:
     return value
 
 
-def json_option(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-
-
 def build_group_option_updates(options: dict[str, str]) -> dict[str, str]:
     group_ratio = parse_json_object(options["GroupRatio"], "GroupRatio")
     group_ratio[DISCOUNT_GROUP] = DISCOUNT_RATIO
@@ -336,42 +424,57 @@ def mysql_status(output: list[str], prefix: str) -> str:
     raise ConfigurationError("production MySQL update returned no completion status")
 
 
-def build_apply_sql(plan: DiscountPlan, api_key: str, base_url: str, options: dict[str, str]) -> str:
-    models = ",".join(plan.matched_models)
-    model_mapping = json_option(
-        {model: CONTROLLED_MODEL_ALIASES.get(model, model) for model in plan.matched_models}
-    )
+def channel_id_variable(slug: str) -> str:
+    return "@discount_channel_id_" + slug
+
+
+def build_apply_sql(
+    plans: dict[str, DiscountPlan],
+    api_keys: dict[str, str],
+    base_urls: dict[str, str],
+    order: tuple[str, ...],
+    options: dict[str, str],
+) -> str:
+    if set(plans) != {spec.slug for spec in DISCOUNT_CHANNEL_SPECS}:
+        raise ConfigurationError("all discount upstream plans are required")
+    priorities = channel_priorities(order)
+    models = ",".join(DISCOUNT_TEXT_MODELS)
+    model_mapping = json_option({model: model for model in DISCOUNT_TEXT_MODELS})
+    allowed_tags_sql = sql_list(list(ALL_DISCOUNT_CHANNEL_TAGS))
     statements = ["START TRANSACTION;"]
     statements.extend(option_guard_statements(options))
-    relevant_channel_condition = (
-        "tag = "
-        + sql_quote(DISCOUNT_CHANNEL_TAG)
-        + " OR FIND_IN_SET("
-        + sql_quote(DISCOUNT_GROUP)
-        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0"
-    )
-    conflicting_channel_condition = (
-        "COALESCE(tag, '') <> "
-        + sql_quote(DISCOUNT_CHANNEL_TAG)
-        + " AND FIND_IN_SET("
-        + sql_quote(DISCOUNT_GROUP)
-        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0"
-    )
     statements.extend(
         [
-            "SELECT id FROM channels WHERE " + relevant_channel_condition + " ORDER BY id FOR UPDATE;",
-            "SET @discount_tag_channel_count := (SELECT COUNT(*) FROM channels WHERE tag = "
-            + sql_quote(DISCOUNT_CHANNEL_TAG)
-            + ");",
-            "SET @discount_group_conflict_count := (SELECT COUNT(*) FROM channels WHERE "
-            + conflicting_channel_condition
-            + ");",
+            "SELECT id FROM channels WHERE tag IN ("
+            + allowed_tags_sql
+            + ") OR FIND_IN_SET("
+            + sql_quote(DISCOUNT_GROUP)
+            + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0 ORDER BY id FOR UPDATE;",
+            "SET @discount_group_conflict_count := (SELECT COUNT(*) FROM channels WHERE FIND_IN_SET("
+            + sql_quote(DISCOUNT_GROUP)
+            + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0 AND COALESCE(tag, '') NOT IN ("
+            + allowed_tags_sql
+            + "));",
+            "SET @discount_duplicate_count := "
+            + " + ".join(
+                "IF((SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(spec.tag) + ") > 1, 1, 0)"
+                for spec in DISCOUNT_CHANNEL_SPECS
+                if spec.slug != "reserve"
+            )
+            + " + IF((SELECT COUNT(*) FROM channels WHERE tag IN ("
+            + sql_list(
+                [
+                    next(spec.tag for spec in DISCOUNT_CHANNEL_SPECS if spec.slug == "reserve"),
+                    LEGACY_DISCOUNT_CHANNEL_TAG,
+                ]
+            )
+            + ") > 1, 1, 0);",
             "SET @discount_apply_status := CASE "
             + "WHEN @discount_options_match <> "
             + str(len(options))
             + " THEN 'options_conflict' "
             + "WHEN @discount_group_conflict_count > 0 THEN 'channel_conflict' "
-            + "WHEN @discount_tag_channel_count > 1 THEN 'duplicate_channels' "
+            + "WHEN @discount_duplicate_count > 0 THEN 'duplicate_channels' "
             + "ELSE 'ok' END;",
             "SET @discount_apply_allowed := IF(@discount_apply_status = 'ok', 1, 0);",
         ]
@@ -381,99 +484,130 @@ def build_apply_sql(plan: DiscountPlan, api_key: str, base_url: str, options: di
         guarded_option_update(key, value, "@discount_apply_allowed = 1")
         for key, value in option_updates.items()
     )
-    statements.extend(
-        [
-            "SET @discount_channel_id := IF(@discount_apply_allowed = 1, "
-            "(SELECT MIN(id) FROM channels WHERE tag = "
-            + sql_quote(DISCOUNT_CHANNEL_TAG)
-            + "), NULL);",
+
+    for spec in DISCOUNT_CHANNEL_SPECS:
+        channel_variable = channel_id_variable(spec.slug)
+        if spec.slug == "reserve":
+            lookup_condition = "tag IN (" + sql_list([spec.tag, LEGACY_DISCOUNT_CHANNEL_TAG]) + ")"
+        else:
+            lookup_condition = "tag = " + sql_quote(spec.tag)
+        statements.append(
+            "SET "
+            + channel_variable
+            + " := IF(@discount_apply_allowed = 1, (SELECT MIN(id) FROM channels WHERE "
+            + lookup_condition
+            + "), NULL);"
+        )
+        statements.append(
             "INSERT INTO channels "
-            "(type, `key`, status, name, weight, created_time, test_time, response_time, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark) "
-            "SELECT "
+            "(type, `key`, status, name, weight, created_time, test_time, response_time, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark, other) SELECT "
             + ", ".join(
                 [
+                    str(spec.channel_type),
+                    sql_quote(api_keys[spec.slug]),
                     "1",
-                    sql_quote(api_key),
-                    "1",
-                    sql_quote(DISCOUNT_CHANNEL_NAME),
+                    sql_quote(spec.name),
                     "100",
                     "UNIX_TIMESTAMP()",
                     "0",
                     "0",
-                    sql_quote(base_url),
+                    sql_quote(base_urls[spec.slug]),
                     sql_quote(models),
                     sql_quote(DISCOUNT_GROUP),
                     sql_quote(model_mapping),
-                    "0",
+                    str(priorities[spec.slug]),
                     "1",
-                    sql_quote(DISCOUNT_CHANNEL_TAG),
+                    sql_quote(spec.tag),
                     sql_quote(DISCOUNT_GROUP_DESCRIPTION),
+                    sql_quote(advanced_custom_settings(spec)),
                 ]
             )
-            + " WHERE @discount_channel_id IS NULL AND @discount_apply_allowed = 1"
-            + ";",
-            "SET @discount_channel_id := IF(@discount_apply_allowed = 1, "
-            "IFNULL(@discount_channel_id, LAST_INSERT_ID()), NULL);",
-            "UPDATE channels SET "
-            + "type = 1, `key` = "
-            + sql_quote(api_key)
+            + " WHERE "
+            + channel_variable
+            + " IS NULL AND @discount_apply_allowed = 1;"
+        )
+        statements.append(
+            "SET "
+            + channel_variable
+            + " := IF(@discount_apply_allowed = 1, IFNULL("
+            + channel_variable
+            + ", LAST_INSERT_ID()), NULL);"
+        )
+        statements.append(
+            "UPDATE channels SET type = "
+            + str(spec.channel_type)
+            + ", `key` = "
+            + sql_quote(api_keys[spec.slug])
             + ", status = 1, name = "
-            + sql_quote(DISCOUNT_CHANNEL_NAME)
+            + sql_quote(spec.name)
             + ", weight = 100, base_url = "
-            + sql_quote(base_url)
+            + sql_quote(base_urls[spec.slug])
             + ", models = "
             + sql_quote(models)
             + ", `group` = "
             + sql_quote(DISCOUNT_GROUP)
             + ", model_mapping = "
             + sql_quote(model_mapping)
-            + ", priority = 0, auto_ban = 1, tag = "
-            + sql_quote(DISCOUNT_CHANNEL_TAG)
+            + ", priority = "
+            + str(priorities[spec.slug])
+            + ", auto_ban = 1, tag = "
+            + sql_quote(spec.tag)
             + ", remark = "
             + sql_quote(DISCOUNT_GROUP_DESCRIPTION)
-            + " WHERE id = @discount_channel_id AND @discount_apply_allowed = 1"
-            + ";",
+            + ", other = "
+            + sql_quote(advanced_custom_settings(spec))
+            + " WHERE id = "
+            + channel_variable
+            + " AND @discount_apply_allowed = 1;"
+        )
+
+    channel_variables = ",".join(channel_id_variable(spec.slug) for spec in DISCOUNT_CHANNEL_SPECS)
+    statements.extend(
+        [
             "UPDATE abilities SET enabled = 0 WHERE `group` = "
             + sql_quote(DISCOUNT_GROUP)
-            + " AND channel_id <> @discount_channel_id"
-            + " AND @discount_apply_allowed = 1"
-            + ";",
-            "UPDATE abilities SET enabled = 0 WHERE channel_id = @discount_channel_id"
-            + " AND @discount_apply_allowed = 1"
-            + ";",
+            + " AND channel_id NOT IN ("
+            + channel_variables
+            + ") AND @discount_apply_allowed = 1;",
+            "UPDATE abilities SET enabled = 0 WHERE channel_id IN ("
+            + channel_variables
+            + ") AND @discount_apply_allowed = 1;",
         ]
     )
-    for model in plan.matched_models:
-        statements.append(
-            "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) SELECT "
-            + ", ".join(
-                [
-                    sql_quote(DISCOUNT_GROUP),
-                    sql_quote(model),
-                    "@discount_channel_id",
-                    "1",
-                    "0",
-                    "100",
-                    sql_quote(DISCOUNT_CHANNEL_TAG),
-                ]
+    for spec in DISCOUNT_CHANNEL_SPECS:
+        for model in DISCOUNT_TEXT_MODELS:
+            statements.append(
+                "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) SELECT "
+                + ", ".join(
+                    [
+                        sql_quote(DISCOUNT_GROUP),
+                        sql_quote(model),
+                        channel_id_variable(spec.slug),
+                        "1",
+                        str(priorities[spec.slug]),
+                        "100",
+                        sql_quote(spec.tag),
+                    ]
+                )
+                + " WHERE @discount_apply_allowed = 1 ON DUPLICATE KEY UPDATE enabled = 1, priority = VALUES(priority), weight = 100, tag = VALUES(tag);"
             )
-            + " WHERE @discount_apply_allowed = 1"
-            + " ON DUPLICATE KEY UPDATE enabled = 1, priority = 0, weight = 100, tag = "
-            + sql_quote(DISCOUNT_CHANNEL_TAG)
-            + ";"
-        )
     statements.append("COMMIT;")
     statements.append("SELECT CONCAT('discount_apply_status=', @discount_apply_status);")
     return "\n".join(statements)
 
 
-def apply_discount_plan(plan: DiscountPlan, api_key: str, base_url: str) -> None:
-    output = mysql_exec(build_apply_sql(plan, api_key, base_url, load_group_options()))
+def apply_discount_plan(
+    plans: dict[str, DiscountPlan],
+    api_keys: dict[str, str],
+    base_urls: dict[str, str],
+    order: tuple[str, ...],
+) -> None:
+    output = mysql_exec(build_apply_sql(plans, api_keys, base_urls, order, load_group_options()))
     status = mysql_status(output, "discount_apply_status=")
     errors = {
         "options_conflict": "group options changed concurrently; retry the apply operation",
-        "channel_conflict": "the discount group is already assigned to a non-isolated channel",
-        "duplicate_channels": "multiple discount channels use the reserved isolation tag",
+        "channel_conflict": "the discount group is assigned to an unmanaged channel",
+        "duplicate_channels": "multiple channels use the same discount route identity",
     }
     if status != "ok":
         raise ConfigurationError(errors.get(status, "discount channel apply failed closed"))
@@ -494,19 +628,19 @@ def build_disable_option_updates(options: dict[str, str]) -> dict[str, str]:
 
 
 def build_disable_sql(options: dict[str, str] | None, option_updates: dict[str, str] | None) -> str:
+    tags = sql_list(list(ALL_DISCOUNT_CHANNEL_TAGS))
     statements = [
         "START TRANSACTION;",
-        "UPDATE channels SET status = 2 WHERE tag = "
-        + sql_quote(DISCOUNT_CHANNEL_TAG)
-        + " OR FIND_IN_SET("
+        "UPDATE channels SET status = 2 WHERE tag IN ("
+        + tags
+        + ") OR FIND_IN_SET("
         + sql_quote(DISCOUNT_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
         "UPDATE abilities SET enabled = 0 WHERE `group` = "
         + sql_quote(DISCOUNT_GROUP)
-        + " OR channel_id IN "
-        "(SELECT id FROM channels WHERE tag = "
-        + sql_quote(DISCOUNT_CHANNEL_TAG)
-        + ");",
+        + " OR channel_id IN (SELECT id FROM channels WHERE tag IN ("
+        + tags
+        + "));",
     ]
     if options is not None and option_updates is not None:
         statements.extend(option_guard_statements(options))
@@ -544,10 +678,15 @@ def disable_discount_channel() -> bool:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Safely configure the isolated discount text channel")
+    parser = argparse.ArgumentParser(description="Safely configure the isolated discount text channels")
     action = parser.add_mutually_exclusive_group()
-    action.add_argument("--apply", action="store_true", help="write the validated channel and group configuration")
-    action.add_argument("--disable", action="store_true", help="disable the channel and hide the discount group")
+    action.add_argument("--apply", action="store_true", help="write the validated channels and group configuration")
+    action.add_argument("--disable", action="store_true", help="disable all managed channels and hide the discount group")
+    parser.add_argument(
+        "--order",
+        default=",".join(DEFAULT_CHANNEL_ORDER),
+        help="comma-separated channel order from primary to final fallback",
+    )
     args = parser.parse_args()
 
     if args.disable:
@@ -567,20 +706,37 @@ def main() -> int:
         )
         return 0
 
-    api_key = require_upstream_key()
-    base_url = normalize_base_url(os.environ.get(UPSTREAM_BASE_URL_ENV, DEFAULT_UPSTREAM_BASE_URL))
-    plan = build_discount_plan(fetch_upstream_models(base_url, api_key))
+    order = parse_channel_order(args.order)
+    plans: dict[str, DiscountPlan] = {}
+    api_keys: dict[str, str] = {}
+    base_urls: dict[str, str] = {}
+    for spec in DISCOUNT_CHANNEL_SPECS:
+        api_key = require_upstream_key(spec)
+        base_url = resolve_upstream_base_url(spec)
+        plans[spec.slug] = build_discount_plan(fetch_upstream_models(base_url, api_key))
+        api_keys[spec.slug] = api_key
+        base_urls[spec.slug] = base_url
+
     if args.apply:
         with model_sync_lock():
-            apply_discount_plan(plan, api_key, base_url)
+            apply_discount_plan(plans, api_keys, base_urls, order)
+    priorities = channel_priorities(order)
     print(
         json.dumps(
             {
                 "ok": True,
                 "action": "applied" if args.apply else "probe",
-                "upstream_model_count": plan.upstream_model_count,
-                "matched_public_models": plan.matched_models,
-                "missing_public_models": plan.missing_models,
+                "ratio": DISCOUNT_RATIO,
+                "channel_order": order,
+                "channels": {
+                    spec.slug: {
+                        "priority": priorities[spec.slug],
+                        "upstream_model_count": plans[spec.slug].upstream_model_count,
+                        "matched_public_models": plans[spec.slug].matched_models,
+                        "wire_api": "responses-via-chat" if spec.responses_via_chat else "responses",
+                    }
+                    for spec in DISCOUNT_CHANNEL_SPECS
+                },
                 "runtime_cache_refresh_required": args.apply,
             },
             ensure_ascii=False,

@@ -23,31 +23,60 @@ def load_module():
 class ConfigureDiscountTextChannelTests(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_module()
+        self.options = {
+            "GroupRatio": '{"default":1,"internal":1}',
+            "UserUsableGroups": '{"default":"默认","internal":"内部兼容"}',
+            "AutoGroups": '["default","discount"]',
+            "GroupGroupRatio": '{"internal":{"discount":0.2,"default":1}}',
+        }
+        self.plans = {
+            spec.slug: self.module.DiscountPlan(
+                upstream_model_count=8,
+                matched_models=self.module.DISCOUNT_TEXT_MODELS,
+                missing_models=(),
+            )
+            for spec in self.module.DISCOUNT_CHANNEL_SPECS
+        }
+        self.keys = {
+            spec.slug: f"fake-{spec.slug}-upstream-key-for-test"
+            for spec in self.module.DISCOUNT_CHANNEL_SPECS
+        }
+        self.base_urls = {
+            spec.slug: spec.default_base_url
+            for spec in self.module.DISCOUNT_CHANNEL_SPECS
+        }
 
-    def test_build_discount_plan_uses_only_current_public_aliases(self) -> None:
-        plan = self.module.build_discount_plan({"gpt-5.5", "gpt-5.4-mini", "supplier-private-model"})
-
-        self.assertEqual(plan.matched_models, ("gpt-5.4-mini", "gpt-5.5", "codex-auto-review"))
-        self.assertNotIn("supplier-private-model", plan.matched_models)
-        self.assertEqual(plan.upstream_model_count, 3)
-
-    def test_build_discount_plan_rejects_no_compatible_models(self) -> None:
-        with self.assertRaisesRegex(self.module.ConfigurationError, "does not expose any"):
-            self.module.build_discount_plan({"supplier-private-model"})
-
-    def test_build_group_option_updates_preserves_legacy_authorization(self) -> None:
-        updates = self.module.build_group_option_updates(
-            {
-                "GroupRatio": '{"default":1,"internal":1}',
-                "UserUsableGroups": '{"default":"默认","internal":"内部兼容"}',
-                "AutoGroups": '["default","discount"]',
-                "GroupGroupRatio": '{"internal":{"discount":0.2,"default":1}}',
-            }
+    def build_sql(self, order: tuple[str, ...] | None = None) -> str:
+        return self.module.build_apply_sql(
+            self.plans,
+            self.keys,
+            self.base_urls,
+            order or self.module.DEFAULT_CHANNEL_ORDER,
+            self.options,
         )
+
+    def test_build_discount_plan_requires_exact_four_models(self) -> None:
+        upstream = set(self.module.DISCOUNT_TEXT_MODELS) | {"gpt-5.4", "supplier-private-model"}
+
+        plan = self.module.build_discount_plan(upstream)
+
+        self.assertEqual(plan.matched_models, self.module.DISCOUNT_TEXT_MODELS)
+        self.assertEqual(plan.missing_models, ())
+        self.assertEqual(plan.upstream_model_count, 6)
+
+    def test_build_discount_plan_rejects_missing_required_model(self) -> None:
+        upstream = set(self.module.DISCOUNT_TEXT_MODELS)
+        upstream.remove("gpt-5.6-terra")
+
+        with self.assertRaisesRegex(self.module.ConfigurationError, "gpt-5.6-terra"):
+            self.module.build_discount_plan(upstream)
+
+    def test_build_group_option_updates_sets_runtime_ratio_and_hides_auto_group(self) -> None:
+        updates = self.module.build_group_option_updates(self.options)
 
         self.assertEqual(
             self.module.json.loads(updates["GroupRatio"]),
-            {"default": 1, "discount": 0.05, "internal": 1},
+            {"default": 1, "discount": 0.06, "internal": 1},
         )
         self.assertEqual(
             self.module.json.loads(updates["UserUsableGroups"]),
@@ -63,202 +92,123 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
             {"internal": {"default": 1}},
         )
 
-    def test_build_apply_sql_keeps_channel_and_abilities_in_discount_only(self) -> None:
-        plan = self.module.DiscountPlan(
-            upstream_model_count=2,
-            matched_models=("gpt-5.4", "gpt-5.5", "codex-auto-review"),
-            missing_models=(),
+    def test_parse_channel_order_accepts_any_exact_permutation(self) -> None:
+        self.assertEqual(
+            self.module.parse_channel_order("pdhlzy,reserve,wangwang"),
+            ("pdhlzy", "reserve", "wangwang"),
         )
-        sql = self.module.build_apply_sql(
-            plan,
-            "fake-upstream-key-for-test",
-            "https://example.test",
-            {
-                "GroupRatio": '{"default":1}',
-                "UserUsableGroups": '{"default":"默认"}',
-                "AutoGroups": "[]",
-                "GroupGroupRatio": "{}",
-            },
-        )
+        with self.assertRaises(self.module.ConfigurationError):
+            self.module.parse_channel_order("wangwang,pdhlzy,pdhlzy")
 
-        self.assertIn("`group` = 'discount'", sql)
-        self.assertIn("'discount', 'gpt-5.4', @discount_channel_id", sql)
-        self.assertIn("'discount', 'gpt-5.5', @discount_channel_id", sql)
-        self.assertIn("'discount', 'codex-auto-review', @discount_channel_id", sql)
-        self.assertIn('"codex-auto-review":"gpt-5.5"', sql)
-        self.assertNotIn("'default', 'gpt-5.4', @discount_channel_id", sql)
-        self.assertIn(self.module.DISCOUNT_CHANNEL_TAG, sql)
+    def test_pdhlzy_converts_responses_to_streaming_chat(self) -> None:
+        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "pdhlzy")
 
-    def test_build_apply_sql_guards_against_concurrent_option_updates(self) -> None:
-        options = {
-            "GroupRatio": '{"default":1}',
-            "UserUsableGroups": '{"default":"默认"}',
-            "AutoGroups": "[]",
-            "GroupGroupRatio": "{}",
-        }
-        plan = self.module.DiscountPlan(
-            upstream_model_count=1,
-            matched_models=("gpt-5.5",),
-            missing_models=(),
-        )
+        settings = self.module.json.loads(self.module.advanced_custom_settings(spec))
+        routes = settings["advanced_custom"]["advanced_routes"]
 
-        sql = self.module.build_apply_sql(plan, "fake-upstream-key-for-test", "https://example.test", options)
+        self.assertEqual(spec.channel_type, self.module.ADVANCED_CUSTOM_CHANNEL_TYPE)
+        self.assertEqual(routes[0]["incoming_path"], "/v1/responses")
+        self.assertEqual(routes[0]["upstream_path"], "/v1/chat/completions")
+        self.assertEqual(routes[0]["converter"], "openai_responses_to_openai_chat_completions")
+        self.assertEqual(routes[1]["converter"], "none")
+
+    def test_build_apply_sql_creates_three_isolated_priority_channels(self) -> None:
+        sql = self.build_sql()
+
+        self.assertIn("@discount_channel_id_wangwang", sql)
+        self.assertIn("@discount_channel_id_pdhlzy", sql)
+        self.assertIn("@discount_channel_id_reserve", sql)
+        self.assertIn("priority = 30", sql)
+        self.assertIn("priority = 20", sql)
+        self.assertIn("priority = 10", sql)
+        self.assertIn("type = 58", sql)
+        self.assertIn("openai_responses_to_openai_chat_completions", sql)
+        self.assertIn(self.module.LEGACY_DISCOUNT_CHANNEL_TAG, sql)
+        for spec in self.module.DISCOUNT_CHANNEL_SPECS:
+            self.assertIn(spec.tag, sql)
+        for model in self.module.DISCOUNT_TEXT_MODELS:
+            self.assertIn("'discount', '" + model + "'", sql)
+        self.assertNotIn("'discount', 'gpt-5.4'", sql)
+        self.assertNotIn("'discount', 'gpt-5.4-mini'", sql)
+        self.assertNotIn("'discount', 'codex-auto-review'", sql)
+
+    def test_build_apply_sql_guards_every_mutation(self) -> None:
+        sql = self.build_sql()
 
         self.assertIn("FOR UPDATE", sql)
         self.assertIn("@discount_options_match <> 4", sql)
-        self.assertIn("@discount_apply_allowed = 1", sql)
-        self.assertIn("discount_apply_status=", sql)
-        self.assertNotIn("INSERT INTO options", sql)
-
-    def test_build_apply_sql_locks_channel_conflicts_and_reports_exact_statuses(self) -> None:
-        options = {
-            "GroupRatio": '{"default":1}',
-            "UserUsableGroups": '{"default":"默认"}',
-            "AutoGroups": "[]",
-            "GroupGroupRatio": "{}",
-        }
-        plan = self.module.DiscountPlan(
-            upstream_model_count=1,
-            matched_models=("gpt-5.5",),
-            missing_models=(),
-        )
-
-        sql = self.module.build_apply_sql(plan, "fake-upstream-key-for-test", "https://example.test", options)
-
-        channel_lock = "SELECT id FROM channels WHERE"
-        self.assertIn(channel_lock, sql)
-        self.assertIn("FIND_IN_SET('discount'", sql)
-        self.assertIn("FOR UPDATE;", sql[sql.index(channel_lock) :])
-        self.assertIn("@discount_tag_channel_count", sql)
-        self.assertIn("@discount_group_conflict_count", sql)
-        self.assertIn("@discount_apply_allowed", sql)
-        for status in ("options_conflict", "channel_conflict", "duplicate_channels", "ok"):
-            with self.subTest(status=status):
-                self.assertIn("'" + status + "'", sql)
-
-    def test_build_apply_sql_conditions_every_mutation_on_apply_allowed(self) -> None:
-        plan = self.module.DiscountPlan(
-            upstream_model_count=1,
-            matched_models=("gpt-5.5",),
-            missing_models=(),
-        )
-        sql = self.module.build_apply_sql(
-            plan,
-            "fake-upstream-key-for-test",
-            "https://example.test",
-            {
-                "GroupRatio": '{"default":1}',
-                "UserUsableGroups": '{"default":"默认"}',
-                "AutoGroups": "[]",
-                "GroupGroupRatio": "{}",
-            },
-        )
-
+        self.assertIn("@discount_duplicate_count", sql)
         mutations = [
             statement
             for statement in sql.splitlines()
-            if statement.startswith(
-                (
-                    "UPDATE options",
-                    "INSERT INTO channels",
-                    "UPDATE channels",
-                    "UPDATE abilities",
-                    "INSERT INTO abilities",
-                )
-            )
+            if statement.startswith(("UPDATE options", "INSERT INTO channels", "UPDATE channels", "UPDATE abilities", "INSERT INTO abilities"))
         ]
         self.assertGreater(len(mutations), 0)
         for statement in mutations:
             with self.subTest(statement=statement):
                 self.assertIn("@discount_apply_allowed = 1", statement)
 
-    def test_apply_discount_plan_performs_no_transaction_external_channel_preflight(self) -> None:
-        options = {
-            "GroupRatio": '{"default":1}',
-            "UserUsableGroups": '{"default":"默认"}',
-            "AutoGroups": "[]",
-            "GroupGroupRatio": "{}",
-        }
-        plan = self.module.DiscountPlan(
-            upstream_model_count=1,
-            matched_models=("gpt-5.5",),
-            missing_models=(),
-        )
-
-        with mock.patch.object(self.module, "load_group_options", return_value=options), mock.patch.object(
+    def test_apply_discount_plan_uses_single_guarded_transaction(self) -> None:
+        with mock.patch.object(self.module, "load_group_options", return_value=self.options), mock.patch.object(
             self.module, "mysql_exec", return_value=["discount_apply_status=ok"]
         ), mock.patch.object(
             self.module,
             "mysql",
-            side_effect=AssertionError("channel preflight must be inside the write transaction"),
+            side_effect=AssertionError("channel preflight must stay inside the write transaction"),
         ):
-            self.module.apply_discount_plan(plan, "fake-upstream-key-for-test", "https://example.test")
+            self.module.apply_discount_plan(
+                self.plans,
+                self.keys,
+                self.base_urls,
+                self.module.DEFAULT_CHANNEL_ORDER,
+            )
 
-    def test_apply_discount_plan_surfaces_fail_closed_conflict_statuses(self) -> None:
-        options = {
-            "GroupRatio": '{"default":1}',
-            "UserUsableGroups": '{"default":"默认"}',
-            "AutoGroups": "[]",
-            "GroupGroupRatio": "{}",
-        }
-        plan = self.module.DiscountPlan(
-            upstream_model_count=1,
-            matched_models=("gpt-5.5",),
-            missing_models=(),
-        )
+    def test_apply_discount_plan_surfaces_fail_closed_statuses(self) -> None:
         cases = (
             ("options_conflict", "group options changed concurrently"),
-            ("channel_conflict", "non-isolated channel"),
-            ("duplicate_channels", "multiple discount channels"),
+            ("channel_conflict", "unmanaged channel"),
+            ("duplicate_channels", "same discount route identity"),
         )
 
         for status, message in cases:
             with self.subTest(status=status), mock.patch.object(
-                self.module, "load_group_options", return_value=options
+                self.module, "load_group_options", return_value=self.options
             ), mock.patch.object(
                 self.module, "mysql_exec", return_value=["discount_apply_status=" + status]
-            ), mock.patch.object(
-                self.module,
-                "mysql",
-                side_effect=AssertionError("channel preflight must be inside the write transaction"),
             ):
                 with self.assertRaisesRegex(self.module.ConfigurationError, message):
                     self.module.apply_discount_plan(
-                        plan,
-                        "fake-upstream-key-for-test",
-                        "https://example.test",
+                        self.plans,
+                        self.keys,
+                        self.base_urls,
+                        self.module.DEFAULT_CHANNEL_ORDER,
                     )
 
-    def test_build_disable_sql_still_disables_channel_when_options_are_unavailable(self) -> None:
+    def test_build_disable_sql_disables_all_managed_and_conflicting_channels(self) -> None:
         sql = self.module.build_disable_sql(None, None)
 
-        self.assertIn("UPDATE channels SET status = 2", sql)
-        channel_update = next(
-            statement for statement in sql.splitlines() if statement.startswith("UPDATE channels")
-        )
-        self.assertIn("FIND_IN_SET('discount'", channel_update)
+        for tag in self.module.ALL_DISCOUNT_CHANNEL_TAGS:
+            self.assertIn(tag, sql)
+        self.assertIn("FIND_IN_SET('discount'", sql)
         self.assertIn("UPDATE abilities SET enabled = 0", sql)
-        ability_update = next(
-            statement for statement in sql.splitlines() if statement.startswith("UPDATE abilities")
-        )
-        self.assertIn("`group` = 'discount'", ability_update)
-        self.assertIn("OR channel_id IN", ability_update)
         self.assertIn("discount_disable_status=channel_only", sql)
         self.assertNotIn("UPDATE options", sql)
 
-    def test_normalize_base_url_rejects_paths_and_credentials(self) -> None:
+    def test_normalize_base_url_rejects_paths_credentials_and_unapproved_hosts(self) -> None:
+        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "pdhlzy")
+
         self.assertEqual(
-            self.module.normalize_base_url("https://www.geek2api.com/"),
-            "https://www.geek2api.com",
+            self.module.normalize_base_url("https://pdhlzy.com/", spec),
+            "https://pdhlzy.com",
         )
-        with self.assertRaises(self.module.ConfigurationError):
-            self.module.normalize_base_url("https://www.geek2api.com/v1")
-        with self.assertRaises(self.module.ConfigurationError):
-            self.module.normalize_base_url("https://user:pass@www.geek2api.com")
-        with self.assertRaises(self.module.ConfigurationError):
-            self.module.normalize_base_url("https://example.test")
-        with self.assertRaises(self.module.ConfigurationError):
-            self.module.normalize_base_url("https://www.geek2api.com:444")
+        for invalid in (
+            "https://pdhlzy.com/v1",
+            "https://user:pass@pdhlzy.com",
+            "https://example.test",
+            "https://pdhlzy.com:444",
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(self.module.ConfigurationError):
+                self.module.normalize_base_url(invalid, spec)
 
     def test_model_probe_redirects_are_disabled(self) -> None:
         handler = self.module.NoRedirectHandler()

@@ -48,14 +48,18 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(
             self.module.DISCOUNT_TEXT_ALLOWED_MODELS,
             (
-                "gpt-5.4",
-                "gpt-5.4-mini",
                 "gpt-5.5",
-                "gpt-5.5-openai-compact",
                 "gpt-5.6-luna",
-                "gpt-5.6-terra",
                 "gpt-5.6-sol",
-                "codex-auto-review",
+                "gpt-5.6-terra",
+            ),
+        )
+        self.assertEqual(
+            self.module.DISCOUNT_TEXT_CHANNEL_TAGS,
+            (
+                "xingren-discount-text-wangwang",
+                "xingren-discount-text-pdhlzy",
+                "xingren-discount-text-reserve",
             ),
         )
 
@@ -355,7 +359,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         def fake_mysql(query: str) -> list[list[str]]:
             if "FROM channels" in query:
                 return [
-                    ["31", "gpt-5.5", "0", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAG, "discount"],
+                    ["31", "gpt-5.5", "30", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[0], "discount"],
+                    ["32", "gpt-5.5", "20", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[1], "discount"],
+                    ["33", "gpt-5.5", "10", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[2], "discount"],
                     ["21", "gpt-5.5", "0", "100", "stable", "default,internal"],
                     ["7", "grok-video-super-720p", "15", "100", "xingren-grok-video", "default,internal"],
                 ]
@@ -370,9 +376,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.sync_abilities()
 
         sql = "\n".join(captured)
-        discount_insert = "SELECT 'discount', 'gpt-5.5', 31"
-        self.assertIn(discount_insert, sql)
-        self.assertNotIn("'default', 'gpt-5.5', 31", sql)
+        for channel_id, tag in zip(("31", "32", "33"), self.module.DISCOUNT_TEXT_CHANNEL_TAGS):
+            self.assertIn("SELECT 'discount', 'gpt-5.5', " + channel_id, sql)
+            self.assertNotIn("'default', 'gpt-5.5', " + channel_id, sql)
+            self.assertIn("COALESCE(current_channel.tag, '') = '" + tag + "'", sql)
         self.assertNotIn("'discount', 'gpt-5.5', 21", sql)
         self.assertIn("'default', 'gpt-5.5', 21", sql)
         self.assertIn("'internal', 'gpt-5.5', 21", sql)
@@ -384,7 +391,6 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("FROM channels AS current_channel", sql)
         self.assertIn("current_channel.id = 31", sql)
         self.assertIn("current_channel.status = 1", sql)
-        self.assertIn("COALESCE(current_channel.tag, '') = 'xingren-discount-text'", sql)
         self.assertIn("REPLACE(COALESCE(current_channel.`group`, ''), ' ', '') = 'discount'", sql)
         self.assertIn(
             "FIND_IN_SET('gpt-5.5', REPLACE(COALESCE(current_channel.models, ''), ' ', '')) > 0",
@@ -482,7 +488,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     "gpt-5.5,gpt-5.7-preview",
                     "0",
                     "100",
-                    self.module.DISCOUNT_TEXT_CHANNEL_TAG,
+                    self.module.DISCOUNT_TEXT_CHANNEL_TAGS[0],
                     "discount",
                 ]]
             if "SELECT model_name FROM models" in query:
@@ -497,7 +503,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.module.sync_abilities()
 
         sql = "\n".join(captured)
-        self.assertIn("UPDATE channels SET status = 2 WHERE tag = 'xingren-discount-text'", sql)
+        self.assertIn("UPDATE channels SET status = 2 WHERE tag IN", sql)
+        for tag in self.module.DISCOUNT_TEXT_CHANNEL_TAGS:
+            self.assertIn("'" + tag + "'", sql)
         self.assertIn("REGEXP BINARY", sql)
         self.assertNotIn("SELECT 'discount', 'gpt-5.5', 31", sql)
         self.assertNotIn("gpt-5.7-preview', 31", sql)
@@ -507,7 +515,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         def fake_mysql(query: str) -> list[list[str]]:
             if "FROM channels" in query:
-                return [["31", "gpt-5.5", "0", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAG, "default"]]
+                return [["31", "gpt-5.5", "0", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[0], "default"]]
             if "SELECT model_name FROM models" in query:
                 return [["gpt-5.5"]]
             return []

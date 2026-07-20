@@ -41,7 +41,7 @@ func IsManagedTextPricingTokenName(name string) bool {
 
 // ResolveUserTextPricingGroup returns the persisted preference. Existing users
 // without the setting are migrated lazily from their managed text token so a
-// prior manual 0.05x/1x choice is not overwritten during rollout.
+// prior manual 0.06x/1x choice is not overwritten during rollout.
 func ResolveUserTextPricingGroup(userID int) (string, error) {
 	if userID <= 0 {
 		return "", errors.New("userId 无效")

@@ -132,6 +132,7 @@ func TestResolveRealtimeGroupRatioPinsDiscountMarketplaceRatio(t *testing.T) {
 
 	groupRatio := resolveRealtimeGroupRatio(ctx, relayInfo)
 
+	require.Equal(t, 0.06, DiscountPricingGroupRatio)
 	require.Equal(t, DiscountPricingGroupName, relayInfo.UsingGroup)
 	require.Equal(t, DiscountPricingGroupRatio, groupRatio)
 }

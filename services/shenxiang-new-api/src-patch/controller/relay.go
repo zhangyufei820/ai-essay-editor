@@ -467,7 +467,7 @@ func shouldFallbackPlaygroundDiscount(c *gin.Context, info *relaycommon.RelayInf
 		return false
 	}
 	// Pricing changes are user-controlled. The homepage no longer opts into
-	// automatic 0.05x -> 1x switching; keep the guarded mechanism available
+	// automatic discount -> 1x switching; keep the guarded mechanism available
 	// only for explicitly marked internal compatibility requests.
 	if strings.TrimSpace(c.GetHeader(playgroundAutoPricingFallbackHeader)) != "1" {
 		return false
