@@ -11,7 +11,7 @@
       "id": "cc-gpt-sonnet",
       "display_name": "Claude Code Sonnet",
       "route_type": "openai-mapped",
-      "target_model": "gpt-5.5",
+      "target_model": "gpt-5.6-sol",
       "description": "适合日常代码任务的 Claude Code 兼容模型。"
     },
     {
@@ -55,6 +55,41 @@
       "route_type": "openai-mapped",
       "target_model": "codex-auto-review",
       "description": "兼容 Claude Opus 名称。"
+    },
+    {
+      "id": "claude-opus-4-6",
+      "display_name": "Claude Opus 4.6",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-6",
+      "description": "Claude 原生模型直通。"
+    },
+    {
+      "id": "claude-opus-4-7",
+      "display_name": "Claude Opus 4.7",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-7",
+      "description": "Claude 原生模型直通。"
+    },
+    {
+      "id": "claude-opus-4-8",
+      "display_name": "Claude Opus 4.8",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-8",
+      "description": "Claude 原生模型直通。"
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "display_name": "Claude Sonnet 4.6",
+      "route_type": "native-claude",
+      "target_model": "claude-sonnet-4-6",
+      "description": "Claude 原生模型直通。"
+    },
+    {
+      "id": "claude-sonnet-5",
+      "display_name": "Claude Sonnet 5",
+      "route_type": "native-claude",
+      "target_model": "claude-sonnet-5",
+      "description": "Claude 原生模型直通。"
     },
     {
       "id": "cc-native-haiku",
