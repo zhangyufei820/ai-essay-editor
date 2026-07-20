@@ -121,6 +121,16 @@ function getPlanTextMultiplier(plan) {
   return 1.8;
 }
 
+function isMonthlyCardPlan(plan) {
+  const planId = Number(plan?.id || 0);
+  const title = String(plan?.title || '').toLowerCase();
+  return (
+    Boolean(MONTHLY_TEXT_VALUE_MULTIPLIER_BY_PLAN_ID[planId]) ||
+    title.includes('月卡') ||
+    title.includes('monthly card')
+  );
+}
+
 function formatMultiplierText(value) {
   if (!Number.isFinite(value)) return '1.0x';
   const fixed = value.toFixed(2);
@@ -362,9 +372,24 @@ const SubscriptionPlansCard = ({
     }
   };
 
+  const planMap = useMemo(() => {
+    const map = new Map();
+    (plans || []).forEach((planEntry) => {
+      const plan = planEntry?.plan;
+      if (!plan?.id) return;
+      map.set(plan.id, plan);
+    });
+    return map;
+  }, [plans]);
+
   // 当前订阅信息 - 支持多个订阅
   const hasActiveSubscription = activeSubscriptions.length > 0;
   const hasAnySubscription = allSubscriptions.length > 0;
+  const hasActiveMonthlyCard = activeSubscriptions.some((subscriptionItem) =>
+    isMonthlyCardPlan(
+      planMap.get(subscriptionItem?.subscription?.plan_id),
+    ),
+  );
   const disableSubscriptionPreference = !hasActiveSubscription;
   const isSubscriptionPreference =
     billingPreference === 'subscription_first' ||
@@ -390,16 +415,6 @@ const SubscriptionPlansCard = ({
     });
     return map;
   }, [allSubscriptions]);
-
-  const planTitleMap = useMemo(() => {
-    const map = new Map();
-    (plans || []).forEach((p) => {
-      const plan = p?.plan;
-      if (!plan?.id) return;
-      map.set(plan.id, plan.title || '');
-    });
-    return map;
-  }, [plans]);
 
   const getPlanPurchaseCount = (planId) =>
     planPurchaseCountMap.get(planId) || 0;
@@ -549,6 +564,14 @@ const SubscriptionPlansCard = ({
                 {t('，当前无生效订阅，将自动使用钱包')}
               </Text>
             )}
+            {hasActiveMonthlyCard &&
+              billingPreference === 'monthly_card_and_wallet' && (
+                <Text type='tertiary' size='small'>
+                  {t(
+                    '月卡+余额：月卡指定模型扣月卡额度，其他模型扣余额；月卡额度耗尽后不会自动扣余额。',
+                  )}
+                </Text>
+              )}
 
             {hasAnySubscription ? (
               <>
@@ -563,8 +586,15 @@ const SubscriptionPlansCard = ({
                       totalAmount > 0
                         ? Math.max(0, totalAmount - usedAmount)
                         : 0;
-                    const planTitle =
-                      planTitleMap.get(subscription?.plan_id) || '';
+                    const plan = planMap.get(subscription?.plan_id);
+                    const planTitle = plan?.title || '';
+                    const monthlyCardPlan = isMonthlyCardPlan(plan);
+                    const textMultiplier = monthlyCardPlan
+                      ? getPlanTextMultiplier(plan)
+                      : 1;
+                    const textValueLimit = Math.round(
+                      totalAmount * textMultiplier,
+                    );
                     const remainDays = getRemainingDays(sub);
                     const usagePercent = getUsagePercent(sub);
                     const now = Date.now() / 1000;
@@ -627,7 +657,10 @@ const SubscriptionPlansCard = ({
                           </div>
                         )}
                         <div className='text-xs text-gray-500 mb-2'>
-                          {t('总额度')}:{' '}
+                          {monthlyCardPlan
+                            ? t('月卡计费额度')
+                            : t('总额度')}
+                          :{' '}
                           {totalAmount > 0 ? (
                             <Tooltip
                               content={`${t('原生额度')}：${usedAmount}/${totalAmount} · ${t('剩余')} ${remainAmount}`}
@@ -647,6 +680,15 @@ const SubscriptionPlansCard = ({
                             </span>
                           )}
                         </div>
+                        {monthlyCardPlan && totalAmount > 0 && (
+                          <div className='text-xs text-gray-500 mb-2'>
+                            {t('按量文本等值上限')}:{' '}
+                            <span className='text-blue-600 font-medium'>
+                              {renderQuota(textValueLimit)}
+                            </span>{' '}
+                            ({formatMultiplierText(textMultiplier)})
+                          </div>
+                        )}
                         {!isLast && <Divider margin={12} />}
                       </div>
                     );
