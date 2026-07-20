@@ -138,6 +138,10 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertIn("FOR UPDATE", sql)
         self.assertIn("@discount_options_match <> 4", sql)
         self.assertIn("@discount_duplicate_count", sql)
+        self.assertIn(
+            "tag IN ('xingren-discount-text-reserve','xingren-discount-text')) > 1, 1, 0)",
+            sql,
+        )
         mutations = [
             statement
             for statement in sql.splitlines()

@@ -468,7 +468,7 @@ def build_apply_sql(
                     LEGACY_DISCOUNT_CHANNEL_TAG,
                 ]
             )
-            + ") > 1, 1, 0);",
+            + ")) > 1, 1, 0);",
             "SET @discount_apply_status := CASE "
             + "WHEN @discount_options_match <> "
             + str(len(options))
