@@ -326,34 +326,43 @@ func playgroundVideoMarkerFromTask(task *model.Task) *playgroundVideoMediaMarker
 
 func taskToPlaygroundVideoTask(task *model.Task, marker *playgroundVideoMediaMarker) gin.H {
 	taskID := strings.TrimSpace(task.TaskID)
-	resultURL := strings.TrimSpace(task.GetResultURL())
+	resultURL := ""
+	if task.Status == model.TaskStatusSuccess {
+		resultURL = strings.TrimSpace(task.GetResultURL())
+	}
 	status := string(task.Status)
+	publicFailureReason := ""
+	if task.Status == model.TaskStatusFailure {
+		publicFailureReason = publicPlaygroundTaskFailureReason(task.FailReason)
+	}
 	response := gin.H{
-		"id":          taskID,
-		"task_id":     taskID,
-		"status":      status,
-		"task_status": status,
-		"progress":    task.Progress,
-		"created":     task.SubmitTime,
-		"created_at":  task.SubmitTime,
-		"updated_at":  task.FinishTime,
-		"finish_time": task.FinishTime,
-		"model":       firstNonEmptyString(marker.Model, task.Properties.OriginModelName),
-		"prompt":      firstNonEmptyString(marker.Prompt, task.Properties.Input),
-		"result_url":  resultURL,
-		"url":         resultURL,
-		"video_url":   resultURL,
-		"fail_reason": task.FailReason,
-		"message":     task.FailReason,
+		"id":             taskID,
+		"task_id":        taskID,
+		"status":         status,
+		"task_status":    status,
+		"progress":       task.Progress,
+		"created":        task.SubmitTime,
+		"created_at":     task.SubmitTime,
+		"updated_at":     task.FinishTime,
+		"finish_time":    task.FinishTime,
+		"model":          firstNonEmptyString(marker.Model, task.Properties.OriginModelName),
+		"prompt":         firstNonEmptyString(marker.Prompt, task.Properties.Input),
+		"result_url":     resultURL,
+		"url":            resultURL,
+		"video_url":      resultURL,
+		"fail_reason":    publicFailureReason,
+		"message":        publicFailureReason,
+		"public_message": publicFailureReason,
 		"data": gin.H{
-			"task_id":     taskID,
-			"status":      status,
-			"task_status": status,
-			"progress":    task.Progress,
-			"result_url":  resultURL,
-			"url":         resultURL,
-			"video_url":   resultURL,
-			"fail_reason": task.FailReason,
+			"task_id":        taskID,
+			"status":         status,
+			"task_status":    status,
+			"progress":       task.Progress,
+			"result_url":     resultURL,
+			"url":            resultURL,
+			"video_url":      resultURL,
+			"fail_reason":    publicFailureReason,
+			"public_message": publicFailureReason,
 		},
 		"metadata": gin.H{
 			"playground_media": marker,

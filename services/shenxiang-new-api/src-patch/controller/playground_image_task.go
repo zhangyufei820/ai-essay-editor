@@ -493,6 +493,16 @@ func sanitizePlaygroundImageTaskPayloadForResponse(payload *playgroundImageTaskP
 		return
 	}
 	payload.RequestFile = ""
+	payload.TokenID = 0
+	payload.TokenName = ""
+	payload.UseAPIToken = false
+	payload.ClientIP = ""
+	if payload.Error != "" {
+		payload.Error = publicPlaygroundTaskFailureReason(payload.Error)
+	}
+	if payload.LastRetryReason != "" {
+		payload.LastRetryReason = publicPlaygroundTaskFailureReason(payload.LastRetryReason)
+	}
 	if displayModel == "" {
 		return
 	}
@@ -1653,6 +1663,65 @@ func sanitizePlaygroundImageTaskPublicReason(reason string) string {
 	return cleaned
 }
 
+func publicPlaygroundTaskFailureReason(reason string) string {
+	const fallback = "本次生成暂时未完成，请稍后重试或切换模型。"
+	cleaned := truncatePlaygroundText(strings.TrimSpace(sanitizePlaygroundImageTaskFailure(reason)), 500)
+	classificationSource := strings.ToLower(reason + " " + cleaned)
+	if strings.HasPrefix(cleaned, "抱歉，我不能帮你生成") || playgroundFailureContainsAny(classificationSource,
+		"prompt_blocked", "content_policy", "content policy", "content moderation",
+		"moderation", "safety", "不能帮你生成", "审核未通过", "安全审核", "安全策略", "敏感内容", "违规内容",
+	) {
+		return "提示词或参考图被安全策略拒绝，请调整内容后重试。"
+	}
+	if playgroundFailureContainsAny(classificationSource,
+		"no access", "access denied", "permission denied", "unauthorized", "forbidden", "not allowed",
+	) {
+		return "当前账号暂未开通该模型，请联系管理员或切换模型。"
+	}
+	if playgroundFailureContainsAny(classificationSource,
+		"unsupported", "not supported", "invalid parameter", "invalid argument", "invalid request",
+		"resolution", "aspect ratio", "duration", "reference image", "reference video", "mime type",
+	) {
+		return "当前参数不符合所选模型要求，请检查尺寸、数量和参考素材后重试。"
+	}
+	if playgroundFailureContainsAny(classificationSource,
+		"timeout", "timed out", "deadline exceeded", "proxy read timeout", "gateway time",
+	) {
+		return "本次生成等待时间过长，请稍后刷新媒体工坊查看结果；如果没有结果，再降低分辨率或重试。"
+	}
+	if playgroundFailureContainsAny(classificationSource,
+		"rate limit", "too many requests", "concurrency", "overloaded", "server busy",
+	) {
+		return "模型服务暂时不可用，请稍后重试。"
+	}
+	if playgroundFailureContainsAny(classificationSource,
+		"insufficient balance", "insufficient quota", "balance", "quota", "余额", "额度", "充值",
+	) {
+		return "模型服务暂时不可用，请稍后重试。"
+	}
+	if playgroundFailureContainsAny(classificationSource,
+		"application not found", "no available channel", "no channel", "service unavailable",
+		"temporarily unavailable", "connection refused", "connection reset",
+	) {
+		return "模型服务暂时不可用，请稍后重试。"
+	}
+	if playgroundFailureContainsAny(classificationSource,
+		"returned no", "without a usable", "no image", "no video", "empty response", "empty result",
+	) {
+		return fallback
+	}
+	return fallback
+}
+
+func playgroundFailureContainsAny(value string, markers ...string) bool {
+	for _, marker := range markers {
+		if strings.Contains(value, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func resolvePlaygroundImageTaskFailureReason(capture *playgroundImageTaskResultCapture, userID int, requestID string, body []byte, status int) string {
 	if capture != nil {
 		reason := strings.TrimSpace(capture.LastFailureReason)
@@ -1816,22 +1885,31 @@ func taskToPlaygroundImageTask(task *model.Task) gin.H {
 	_ = task.GetData(&payload)
 	displayModel := playgroundImageTaskDisplayModel(task, &payload)
 	sanitizePlaygroundImageTaskPayloadForResponse(&payload, displayModel)
+	resultURL := ""
+	if task.Status == model.TaskStatusSuccess {
+		resultURL = strings.TrimSpace(task.GetResultURL())
+	}
+	publicFailureReason := ""
+	if task.Status == model.TaskStatusFailure {
+		publicFailureReason = publicPlaygroundTaskFailureReason(task.FailReason)
+	}
 	return gin.H{
-		"task_id":     task.TaskID,
-		"request_id":  payload.RequestID,
-		"status":      task.Status,
-		"progress":    task.Progress,
-		"submit_time": task.SubmitTime,
-		"start_time":  task.StartTime,
-		"finish_time": task.FinishTime,
-		"model":       displayModel,
-		"prompt":      task.Properties.Input,
-		"action":      task.Action,
-		"result_url":  task.GetResultURL(),
-		"fail_reason": task.FailReason,
-		"quota":       task.Quota,
-		"data":        payload,
-		"item":        payload.Item,
+		"task_id":        task.TaskID,
+		"request_id":     payload.RequestID,
+		"status":         task.Status,
+		"progress":       task.Progress,
+		"submit_time":    task.SubmitTime,
+		"start_time":     task.StartTime,
+		"finish_time":    task.FinishTime,
+		"model":          displayModel,
+		"prompt":         task.Properties.Input,
+		"action":         task.Action,
+		"result_url":     resultURL,
+		"fail_reason":    publicFailureReason,
+		"public_message": publicFailureReason,
+		"quota":          task.Quota,
+		"data":           payload,
+		"item":           payload.Item,
 	}
 }
 
@@ -1839,30 +1917,39 @@ func taskToOpenAIImageTask(task *model.Task) map[string]interface{} {
 	payload := playgroundImageTaskPayload{}
 	_ = task.GetData(&payload)
 	taskID := task.TaskID
-	resultURL := strings.TrimSpace(task.GetResultURL())
+	resultURL := ""
+	if task.Status == model.TaskStatusSuccess {
+		resultURL = strings.TrimSpace(task.GetResultURL())
+	}
 	displayModel := playgroundImageTaskDisplayModel(task, &payload)
 	sanitizePlaygroundImageTaskPayloadForResponse(&payload, displayModel)
+	publicFailureReason := ""
+	if task.Status == model.TaskStatusFailure {
+		publicFailureReason = publicPlaygroundTaskFailureReason(task.FailReason)
+	}
 	response := map[string]interface{}{
-		"task_id":     taskID,
-		"id":          taskID,
-		"status":      string(task.Status),
-		"task_status": string(task.Status),
-		"progress":    task.Progress,
-		"created":     task.SubmitTime,
-		"created_at":  task.SubmitTime,
-		"updated_at":  task.FinishTime,
-		"model":       displayModel,
-		"result_url":  resultURL,
-		"fail_reason": task.FailReason,
-		"message":     task.FailReason,
+		"task_id":        taskID,
+		"id":             taskID,
+		"status":         string(task.Status),
+		"task_status":    string(task.Status),
+		"progress":       task.Progress,
+		"created":        task.SubmitTime,
+		"created_at":     task.SubmitTime,
+		"updated_at":     task.FinishTime,
+		"model":          displayModel,
+		"result_url":     resultURL,
+		"fail_reason":    publicFailureReason,
+		"message":        publicFailureReason,
+		"public_message": publicFailureReason,
 		"data": map[string]interface{}{
-			"task_id":     taskID,
-			"status":      string(task.Status),
-			"task_status": string(task.Status),
-			"progress":    task.Progress,
-			"result_url":  resultURL,
-			"fail_reason": task.FailReason,
-			"data":        []map[string]interface{}{},
+			"task_id":        taskID,
+			"status":         string(task.Status),
+			"task_status":    string(task.Status),
+			"progress":       task.Progress,
+			"result_url":     resultURL,
+			"fail_reason":    publicFailureReason,
+			"public_message": publicFailureReason,
+			"data":           []map[string]interface{}{},
 		},
 	}
 	if resultURL != "" && task.Status == model.TaskStatusSuccess {
