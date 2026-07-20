@@ -45,6 +45,23 @@ const requiredBundlePatterns = [
   },
 ]
 
+const requiredStylePatterns = [
+  {
+    label: 'media route clears inherited content padding',
+    pattern:
+      /body\.mp-route-active \.semi-layout-content\{[^}]*padding:0!important/,
+  },
+  {
+    label: 'desktop media panes reserve stable scrollbar space',
+    pattern: /scrollbar-gutter:stable/,
+  },
+  {
+    label: 'short desktop viewports keep generation controls visible',
+    pattern:
+      /@media \(min-width:1181px\) and \(max-height:820px\)[\s\S]*?body\.mp-route-active \.mp-parameter-panel\{(?=[^}]*position:sticky)(?=[^}]*bottom:0)[^}]*\}/,
+  },
+]
+
 const expectedChannels = [
   {
     label: 'Banana 2 MoonApiX channel',
@@ -123,6 +140,7 @@ Checks the deployed New API media playground runtime:
   - /api/status reports the classic theme
   - /console/media-playground serves a business index bundle
   - the served bundle still contains Gemini/Banana image markers and task endpoints
+  - the served styles keep Edge/short-viewport layout guards
   - optional MySQL channel config still maps MoonApiX Gemini image models correctly`)
 }
 
@@ -145,6 +163,7 @@ async function checkStatus(baseUrl, timeoutMs) {
 async function checkBundle(baseUrl, timeoutMs) {
   const page = await fetchText(`${baseUrl}/console/media-playground`, timeoutMs)
   const scripts = [...new Set([...page.matchAll(/static\/js\/[^"'<>\s]+\.js/g)].map((match) => match[0]))]
+  const styles = [...new Set([...page.matchAll(/static\/css\/[^"'<>\s]+\.css/g)].map((match) => match[0]))]
   const indexScripts = scripts.filter((script) => /static\/js\/index\.[^/]+\.js$/.test(script))
   const errors = []
 
@@ -153,6 +172,9 @@ async function checkBundle(baseUrl, timeoutMs) {
   }
   if (indexScripts.length === 0) {
     errors.push('media playground page did not reference static/js/index.*.js')
+  }
+  if (styles.length === 0) {
+    errors.push('media playground page did not reference any static CSS bundle')
   }
 
   const bundleParts = []
@@ -170,6 +192,18 @@ async function checkBundle(baseUrl, timeoutMs) {
   for (const required of requiredBundlePatterns) {
     if (!required.pattern.test(bundle)) {
       errors.push(`served bundle missing behavior: ${required.label}`)
+    }
+  }
+
+  const styleParts = []
+  for (const style of styles) {
+    styleParts.push(await fetchText(`${baseUrl}/${style}`, timeoutMs))
+  }
+  const styleBundle = styleParts.join('\n')
+
+  for (const required of requiredStylePatterns) {
+    if (!required.pattern.test(styleBundle)) {
+      errors.push(`served styles missing behavior: ${required.label}`)
     }
   }
 
