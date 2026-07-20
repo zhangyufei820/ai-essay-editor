@@ -207,6 +207,54 @@ func isDiscountImage2Model(model string) bool {
 		strings.EqualFold(trimmed, "internal-image2-discount-v2")
 }
 
+var discountImage2VerifiedSizes = map[string]map[string]string{
+	"1K": {
+		"1:1":  "1024x1024",
+		"1:3":  "512x1536",
+		"3:1":  "1536x512",
+		"2:3":  "1024x1536",
+		"3:2":  "1536x1024",
+		"3:4":  "1008x1344",
+		"4:3":  "1344x1008",
+		"4:5":  "1024x1280",
+		"5:4":  "1280x1024",
+		"9:16": "864x1536",
+		"16:9": "1536x864",
+		"9:21": "672x1568",
+		"21:9": "1568x672",
+	},
+	"2K": {
+		"1:1":  "2048x2048",
+		"1:3":  "688x2064",
+		"3:1":  "2064x688",
+		"2:3":  "1376x2064",
+		"3:2":  "2064x1376",
+		"3:4":  "1536x2048",
+		"4:3":  "2048x1536",
+		"4:5":  "1664x2080",
+		"5:4":  "2080x1664",
+		"9:16": "1152x2048",
+		"16:9": "2048x1152",
+		"9:21": "912x2128",
+		"21:9": "2128x912",
+	},
+	"4K": {
+		"1:1":  "2880x2880",
+		"1:3":  "1280x3840",
+		"3:1":  "3840x1280",
+		"2:3":  "2176x3264",
+		"3:2":  "3264x2176",
+		"3:4":  "2160x2880",
+		"4:3":  "2880x2160",
+		"4:5":  "2304x2880",
+		"5:4":  "2880x2304",
+		"9:16": "2160x3840",
+		"16:9": "3840x2160",
+		"9:21": "1632x3808",
+		"21:9": "3808x1632",
+	},
+}
+
 func NormalizeDiscountImage2GenerationRequest(request *ImageRequest) error {
 	if request == nil || !isDiscountImage2Model(request.Model) {
 		return nil
@@ -221,8 +269,9 @@ func NormalizeDiscountImage2GenerationRequest(request *ImageRequest) error {
 		return fmt.Errorf("特价 image-2 的 quality 仅支持 high")
 	}
 	request.Quality = "high"
-	if aspectRatio := strings.TrimSpace(request.AspectRatio); aspectRatio != "" && aspectRatio != "1:1" {
-		return fmt.Errorf("特价 image-2 仅支持 1:1 方图")
+	aspectRatio := discountImage2VerifiedAspectRatio(request.AspectRatio)
+	if strings.TrimSpace(request.AspectRatio) != "" && aspectRatio == "" {
+		return fmt.Errorf("特价 image-2 的 aspect_ratio 不受支持")
 	}
 	if request.Stream != nil && *request.Stream {
 		return fmt.Errorf("特价 image-2 不支持流式输出")
@@ -250,7 +299,7 @@ func NormalizeDiscountImage2GenerationRequest(request *ImageRequest) error {
 	if strings.TrimSpace(request.Resolution) != "" && resolution == "" {
 		return fmt.Errorf("特价 image-2 的 resolution 仅支持 1K、2K 或 4K")
 	}
-	sizeResolution := discountImage2VerifiedPixelResolution(request.Size)
+	sizeResolution, sizeAspectRatio, normalizedSize := discountImage2VerifiedPixelSpec(request.Size)
 	if strings.TrimSpace(request.Size) != "" && sizeResolution == "" {
 		return fmt.Errorf("特价 image-2 的 size 不受支持")
 	}
@@ -273,17 +322,25 @@ func NormalizeDiscountImage2GenerationRequest(request *ImageRequest) error {
 	if resolution == "" {
 		resolution = "1K"
 	}
+	if aspectRatio == "" {
+		aspectRatio = sizeAspectRatio
+	}
+	if aspectRatio == "" {
+		aspectRatio = "1:1"
+	}
+	if sizeAspectRatio != "" && sizeAspectRatio != aspectRatio {
+		return fmt.Errorf("特价 image-2 的尺寸比例参数不一致")
+	}
+	if normalizedSize == "" {
+		normalizedSize = discountImage2VerifiedSizes[resolution][aspectRatio]
+	}
+	if normalizedSize == "" {
+		return fmt.Errorf("特价 image-2 的尺寸组合不受支持")
+	}
 	request.Resolution = resolution
 	request.AspectRatio = ""
 	request.ImageSize = ""
-	switch resolution {
-	case "2K":
-		request.Size = "2048x2048"
-	case "4K":
-		request.Size = "2880x2880"
-	default:
-		request.Size = "1024x1024"
-	}
+	request.Size = normalizedSize
 	return nil
 }
 
@@ -301,16 +358,30 @@ func discountImage2VerifiedResolutionLabel(value string) string {
 }
 
 func discountImage2VerifiedPixelResolution(value string) string {
-	switch strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), " ", "")) {
-	case "1024x1024":
-		return "1K"
-	case "2048x2048":
-		return "2K"
-	case "2880x2880":
-		return "4K"
-	default:
-		return ""
+	resolution, _, _ := discountImage2VerifiedPixelSpec(value)
+	return resolution
+}
+
+func discountImage2VerifiedAspectRatio(value string) string {
+	normalized := strings.TrimSpace(value)
+	for aspectRatio := range discountImage2VerifiedSizes["1K"] {
+		if normalized == aspectRatio {
+			return aspectRatio
+		}
 	}
+	return ""
+}
+
+func discountImage2VerifiedPixelSpec(value string) (string, string, string) {
+	normalized := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), " ", ""))
+	for resolution, sizes := range discountImage2VerifiedSizes {
+		for aspectRatio, size := range sizes {
+			if normalized == size {
+				return resolution, aspectRatio, size
+			}
+		}
+	}
+	return "", "", ""
 }
 
 func discountImage2Resolution(request *ImageRequest) string {

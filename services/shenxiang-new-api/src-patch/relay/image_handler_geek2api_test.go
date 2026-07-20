@@ -68,7 +68,7 @@ func TestSanitizeGeek2APIImage2OutboundBodyLeavesOtherModelsUntouched(t *testing
 }
 
 func TestDiscountImage2V2OutboundBodyPreservesVerifiedFields(t *testing.T) {
-	body := []byte(`{"model":"gpt-image-2","prompt":"poster","n":1,"size":"2880x2880","resolution":"4K","quality":"high","output_format":"png"}`)
+	body := []byte(`{"model":"gpt-image-2","prompt":"poster","n":1,"size":"2160x2880","resolution":"4K","quality":"high","output_format":"png"}`)
 
 	sanitized, err := sanitizeGeek2APIImage2OutboundBody(
 		&relaycommon.RelayInfo{OriginModelName: "internal-image2-discount-v2"},
@@ -78,7 +78,7 @@ func TestDiscountImage2V2OutboundBodyPreservesVerifiedFields(t *testing.T) {
 	require.NoError(t, err)
 	var payload map[string]interface{}
 	require.NoError(t, common.Unmarshal(sanitized, &payload))
-	require.Equal(t, "2880x2880", payload["size"])
+	require.Equal(t, "2160x2880", payload["size"])
 	require.Equal(t, "4K", payload["resolution"])
 	require.Equal(t, "high", payload["quality"])
 	require.Equal(t, "png", payload["output_format"])

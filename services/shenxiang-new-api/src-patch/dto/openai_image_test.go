@@ -106,16 +106,80 @@ func TestNormalizeDiscountImage2GenerationRequestPinsVerifiedContract(t *testing
 	}
 }
 
+func TestNormalizeDiscountImage2GenerationRequestAcceptsMediaPlaygroundAspectRatios(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		request    ImageRequest
+		resolution string
+		size       string
+	}{
+		{
+			name:       "keeps 2K 2:3 production request",
+			request:    ImageRequest{Model: "特价 image-2", Resolution: "2K", Size: "1376x2064"},
+			resolution: "2K",
+			size:       "1376x2064",
+		},
+		{
+			name:       "keeps 4K 3:4 production request",
+			request:    ImageRequest{Model: "特价 image-2", Resolution: "4K", Size: "2160x2880"},
+			resolution: "4K",
+			size:       "2160x2880",
+		},
+		{
+			name:       "keeps 4K 2:3 production request",
+			request:    ImageRequest{Model: "特价 image-2", Resolution: "4K", Size: "2176x3264"},
+			resolution: "4K",
+			size:       "2176x3264",
+		},
+		{
+			name:       "keeps 1K 16:9 production request",
+			request:    ImageRequest{Model: "特价 image-2", Resolution: "1K", Size: "1536x864"},
+			resolution: "1K",
+			size:       "1536x864",
+		},
+		{
+			name:       "maps 2K 9:16 aspect ratio",
+			request:    ImageRequest{Model: "特价 image-2", Resolution: "2K", AspectRatio: "9:16"},
+			resolution: "2K",
+			size:       "1152x2048",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			require.NoError(t, NormalizeDiscountImage2GenerationRequest(&test.request))
+			require.Equal(t, test.resolution, test.request.Resolution)
+			require.Equal(t, test.size, test.request.Size)
+			require.Empty(t, test.request.AspectRatio)
+		})
+	}
+}
+
+func TestNormalizeDiscountImage2GenerationRequestSupportsAllMediaPlaygroundRatios(t *testing.T) {
+	aspectRatios := []string{"1:1", "1:3", "3:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "9:21", "21:9"}
+	for _, resolution := range []string{"1K", "2K", "4K"} {
+		sizes := discountImage2VerifiedSizes[resolution]
+		require.Len(t, sizes, len(aspectRatios))
+		for _, aspectRatio := range aspectRatios {
+			expectedSize, ok := sizes[aspectRatio]
+			require.True(t, ok, "%s must support %s", resolution, aspectRatio)
+
+			request := ImageRequest{Model: "特价 image-2", Resolution: resolution, AspectRatio: aspectRatio}
+			require.NoError(t, NormalizeDiscountImage2GenerationRequest(&request))
+			require.Equal(t, expectedSize, request.Size)
+		}
+	}
+}
+
 func TestNormalizeDiscountImage2GenerationRequestRejectsUnverifiedInputs(t *testing.T) {
 	two := uint(2)
 	stream := true
 	for _, request := range []ImageRequest{
 		{Model: "特价 image-2", N: &two},
 		{Model: "特价 image-2", Quality: "auto"},
-		{Model: "特价 image-2", AspectRatio: "16:9"},
+		{Model: "特价 image-2", AspectRatio: "7:8"},
 		{Model: "特价 image-2", Resolution: "custom", Size: "1536x1024"},
-		{Model: "特价 image-2", Size: "1536x1024"},
+		{Model: "特价 image-2", Size: "1504x1008"},
 		{Model: "特价 image-2", Resolution: "2K", Size: "1024x1024"},
+		{Model: "特价 image-2", Resolution: "2K", Size: "1152x2048", AspectRatio: "16:9"},
 		{Model: "特价 image-2", OutputFormat: json.RawMessage(`"jpeg"`)},
 		{Model: "特价 image-2", Images: json.RawMessage(`["https://example.com/input.png"]`)},
 		{Model: "特价 image-2", Stream: &stream},
