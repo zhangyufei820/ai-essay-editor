@@ -132,6 +132,14 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertNotIn("'discount', 'gpt-5.4-mini'", sql)
         self.assertNotIn("'discount', 'codex-auto-review'", sql)
 
+    def test_build_apply_sql_stores_advanced_custom_in_settings_column(self) -> None:
+        sql = self.build_sql()
+
+        self.assertIn("remark, settings) SELECT", sql)
+        self.assertIn(", settings = ", sql)
+        self.assertNotIn("remark, other) SELECT", sql)
+        self.assertNotIn(", other = ", sql)
+
     def test_build_apply_sql_guards_every_mutation(self) -> None:
         sql = self.build_sql()
 

@@ -500,7 +500,7 @@ def build_apply_sql(
         )
         statements.append(
             "INSERT INTO channels "
-            "(type, `key`, status, name, weight, created_time, test_time, response_time, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark, other) SELECT "
+            "(type, `key`, status, name, weight, created_time, test_time, response_time, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark, settings) SELECT "
             + ", ".join(
                 [
                     str(spec.channel_type),
@@ -554,7 +554,7 @@ def build_apply_sql(
             + sql_quote(spec.tag)
             + ", remark = "
             + sql_quote(DISCOUNT_GROUP_DESCRIPTION)
-            + ", other = "
+            + ", settings = "
             + sql_quote(advanced_custom_settings(spec))
             + " WHERE id = "
             + channel_variable
