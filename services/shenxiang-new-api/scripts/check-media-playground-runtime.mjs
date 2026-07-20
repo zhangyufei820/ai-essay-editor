@@ -17,6 +17,7 @@ const requiredBundleMarkers = [
   'responseFormat',
   '/pg/images/tasks/generations',
   '/pg/images/tasks/edits',
+  '当前模型仅支持文生图，请切换到文生图或更换支持图片编辑的模型。',
   'imageTaskTerminal',
   'grok-video-super-720p',
   'grok-video-1.5',

@@ -182,6 +182,17 @@ function main() {
     }
   }
 
+  for (const marker of [
+    'function imageModelSupportsWorkflow(modelConfig, workflow)',
+    'imageModelSupportsWorkflow(item, imageWorkflow)',
+    'if (mode === \'image\' && !imageModelSupportsWorkflow(activeImageModel, imageWorkflow))',
+    '当前模型仅支持文生图，请切换到文生图或更换支持图片编辑的模型。',
+  ]) {
+    if (!classic.includes(marker)) {
+      errors.push(`image workflow/model guard missing marker: ${marker}`)
+    }
+  }
+
   if (!stableImage2Block) {
     errors.push('classic media playground must expose public model 官转image 2稳定')
   } else {

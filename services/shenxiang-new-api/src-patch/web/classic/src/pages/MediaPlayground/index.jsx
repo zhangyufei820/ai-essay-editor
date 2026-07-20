@@ -376,6 +376,10 @@ function toModelSelectOptions(models) {
   }));
 }
 
+function imageModelSupportsWorkflow(modelConfig, workflow) {
+  return workflow !== 'edit' || Boolean(modelConfig?.edit);
+}
+
 const SIZE_TO_ASPECT_RATIO = {
   '960x960': '1:1',
   '720x1280': '9:16',
@@ -4212,6 +4216,9 @@ const MediaPlayground = () => {
 
   async function handleSubmit() {
     if (!modelAllowed) return Toast.error('当前用户分组暂未开放这个模型。');
+    if (mode === 'image' && !imageModelSupportsWorkflow(activeImageModel, imageWorkflow)) {
+      return Toast.warning('当前模型仅支持文生图，请切换到文生图或更换支持图片编辑的模型。');
+    }
     if (!prompt.trim()) return Toast.error('请先写一句你想生成什么。');
     if (mode === 'image' && isGptImage2Model(imageModel) && resolution === 'custom') {
       const sizeError = gptImage2CustomSizeError(customImageSize);
@@ -4486,6 +4493,7 @@ const MediaPlayground = () => {
   const modelOptions = (mode === 'image' ? IMAGE_MODELS : VIDEO_MODELS).filter(
     (item) =>
       (!item.private || models.some((model) => model === item.value)) &&
+      (mode !== 'image' || imageModelSupportsWorkflow(item, imageWorkflow)) &&
       (mode === 'image' || isVideoModelAllowed(item.value)),
   );
   const workflowSelectValue = mode === 'video' ? videoWorkflow : imageWorkflow;
