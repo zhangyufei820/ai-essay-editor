@@ -12,6 +12,7 @@ import (
 const (
 	TextPricingGroupDefault  = "default"
 	TextPricingGroupDiscount = "discount"
+	TextPricingGroupPlus     = "plus"
 )
 
 var managedTextPricingTokenNames = []string{
@@ -22,7 +23,7 @@ var managedTextPricingTokenNames = []string{
 func NormalizeTextPricingGroup(group string) (string, bool) {
 	normalized := strings.ToLower(strings.TrimSpace(group))
 	switch normalized {
-	case TextPricingGroupDefault, TextPricingGroupDiscount:
+	case TextPricingGroupDefault, TextPricingGroupDiscount, TextPricingGroupPlus:
 		return normalized, true
 	default:
 		return "", false
@@ -81,7 +82,7 @@ func UpdateTokenWithTextPricingPreference(token *Token, syncPreference bool) err
 	}
 	group, ok := NormalizeTextPricingGroup(token.Group)
 	if !ok {
-		return errors.New("文本令牌仅支持 default 或 discount 分组")
+		return errors.New("文本令牌仅支持 default、discount 或 plus 分组")
 	}
 	token.Group = group
 	token.CrossGroupRetry = false

@@ -131,8 +131,10 @@ const CHAT_HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const CHAT_HISTORY_LIMIT = 30;
 const CHAT_HISTORY_STORAGE_PREFIX = 'aiphui-home-chat-history:v1';
 const DISCOUNT_GROUP = 'discount';
+const PLUS_GROUP = 'plus';
 const DEFAULT_GROUP = 'default';
 const DISCOUNT_PRICING_LABEL = '特价 0.06x';
+const PLUS_PRICING_LABEL = 'Plus 0.23x';
 const DEFAULT_PRICING_LABEL = '原价 1x';
 const DISCOUNT_FALLBACK_HEADER = 'X-Aiphui-Discount-Fallback';
 const PRICING_GROUP_HEADER = 'X-Aiphui-Pricing-Group';
@@ -499,6 +501,7 @@ function getResponsePricingMetadata(response) {
 
 function getPricingLabel(group) {
   if (group === DISCOUNT_GROUP) return DISCOUNT_PRICING_LABEL;
+  if (group === PLUS_GROUP) return PLUS_PRICING_LABEL;
   if (group === DEFAULT_GROUP) return DEFAULT_PRICING_LABEL;
   return '';
 }
@@ -841,7 +844,11 @@ const TextWorkbench = ({ isMobile }) => {
         const group = String(nextUser.text_pricing_group || '')
           .trim()
           .toLowerCase();
-        if (group === DISCOUNT_GROUP || group === DEFAULT_GROUP) {
+        if (
+          group === DISCOUNT_GROUP ||
+          group === PLUS_GROUP ||
+          group === DEFAULT_GROUP
+        ) {
           setTextPricingGroup(group);
         }
       })
@@ -902,7 +909,16 @@ const TextWorkbench = ({ isMobile }) => {
 
     setModelsLoading(true);
     setModelError('');
-    API.get('/api/user/models')
+    const modelGroup = [DISCOUNT_GROUP, PLUS_GROUP, DEFAULT_GROUP].includes(
+      textPricingGroup,
+    )
+      ? textPricingGroup
+      : '';
+    API.get(
+      modelGroup
+        ? `/api/user/models?group=${encodeURIComponent(modelGroup)}`
+        : '/api/user/models',
+    )
       .then((res) => {
         const data = res?.data?.data || [];
         const nextModels = Array.isArray(data) ? data : [];
@@ -914,7 +930,7 @@ const TextWorkbench = ({ isMobile }) => {
         setSelectedModel(getDefaultTextModel([]));
       })
       .finally(() => setModelsLoading(false));
-  }, [isLoggedIn]);
+  }, [isLoggedIn, textPricingGroup]);
 
   useEffect(() => {
     const defaultEffort = getDefaultReasoningEffort(activeModel);
@@ -1072,7 +1088,9 @@ const TextWorkbench = ({ isMobile }) => {
           .toLowerCase();
         if (
           !preferenceResponse?.data?.success ||
-          (preference !== DISCOUNT_GROUP && preference !== DEFAULT_GROUP)
+          (preference !== DISCOUNT_GROUP &&
+            preference !== PLUS_GROUP &&
+            preference !== DEFAULT_GROUP)
         ) {
           throw new Error('倍率偏好不可用');
         }

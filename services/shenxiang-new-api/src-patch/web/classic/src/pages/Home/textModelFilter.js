@@ -15,6 +15,16 @@ const DISCOUNT_TEXT_MODELS = new Set([
   'codex-auto-review',
 ]);
 
+const PLUS_TEXT_MODELS = new Set([
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.5',
+  'gpt-5.6-luna',
+  'gpt-5.6-terra',
+  'gpt-5.6-sol',
+  'codex-auto-review',
+]);
+
 const FALLBACK_TEXT_MODELS = [
   DEFAULT_TEXT_MODEL,
   'gpt-5.5',
@@ -84,6 +94,9 @@ export function getTextModelGroupForPreference(modelName, pricingGroup) {
     DISCOUNT_TEXT_MODELS.has(name) &&
     (normalizedGroup === 'discount' || normalizedGroup === 'default')
   ) {
+    return normalizedGroup;
+  }
+  if (PLUS_TEXT_MODELS.has(name) && normalizedGroup === 'plus') {
     return normalizedGroup;
   }
   return '';

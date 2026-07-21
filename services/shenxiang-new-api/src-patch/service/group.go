@@ -7,7 +7,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
-var publicTokenGroups = []string{"default", DiscountPricingGroupName}
+var publicTokenGroups = []string{"default", DiscountPricingGroupName, PlusPricingGroupName}
 
 func IsPublicTokenGroup(group string) bool {
 	for _, publicGroup := range publicTokenGroups {
@@ -30,6 +30,7 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 	groupsCopy := setting.GetUserUsableGroupsCopy()
 	defaultDescription, defaultEnabled := groupsCopy["default"]
 	discountDescription, discountEnabled := groupsCopy[DiscountPricingGroupName]
+	plusDescription, plusEnabled := groupsCopy[PlusPricingGroupName]
 	if userGroup != "" {
 		specialSettings, ok := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.Get(userGroup)
 		if ok {
@@ -56,6 +57,11 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 		groupsCopy[DiscountPricingGroupName] = discountDescription
 	} else {
 		delete(groupsCopy, DiscountPricingGroupName)
+	}
+	if plusEnabled {
+		groupsCopy[PlusPricingGroupName] = plusDescription
+	} else {
+		delete(groupsCopy, PlusPricingGroupName)
 	}
 	return groupsCopy
 }
@@ -89,7 +95,7 @@ func GetUserAutoGroup(userGroup string) []string {
 	groups := GetUserUsableGroups(userGroup)
 	autoGroups := make([]string, 0)
 	for _, group := range setting.GetAutoGroups() {
-		if group == DiscountPricingGroupName {
+		if group == DiscountPricingGroupName || group == PlusPricingGroupName {
 			continue
 		}
 		if _, ok := groups[group]; ok {
@@ -113,6 +119,9 @@ func GetPublicUserAutoGroup(userGroup string) []string {
 func GetUserGroupRatio(userGroup, group string) float64 {
 	if group == DiscountPricingGroupName {
 		return DiscountPricingGroupRatio
+	}
+	if group == PlusPricingGroupName {
+		return PlusPricingGroupRatio
 	}
 	ratio, ok := ratio_setting.GetGroupGroupRatio(userGroup, group)
 	if ok {

@@ -55,6 +55,7 @@ func TestManagedTextTokenUpdateSynchronizesPreferenceAndLegacyToken(t *testing.T
 	}
 
 	updateGroup(model.TextPricingGroupDiscount)
+	updateGroup(model.TextPricingGroupPlus)
 	updateGroup(model.TextPricingGroupDefault)
 }
 

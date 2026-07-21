@@ -42,13 +42,13 @@ func TestEnforcePublicTokenGroupSelectionPreservesBodyForController(t *testing.T
 			Group string `json:"group"`
 		}{}
 		require.NoError(t, c.ShouldBindJSON(&request))
-		require.Equal(t, "discount", request.Group)
+		require.Equal(t, "plus", request.Group)
 		c.Status(http.StatusNoContent)
 	})
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/api/token/",
-		strings.NewReader(`{"group":"discount"}`),
+		strings.NewReader(`{"group":"plus"}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
