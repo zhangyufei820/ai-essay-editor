@@ -330,6 +330,7 @@ func Register(c *gin.Context) {
 			return
 		}
 	}
+	ensureSystemTokensForUser(c, insertedUser.Id)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1048,6 +1049,7 @@ func CreateUser(c *gin.Context) {
 		}
 	}
 	cleanUser.FinishInsert(0)
+	ensureSystemTokensForUser(c, cleanUser.Id)
 
 	recordManageAuditFor(c, cleanUser.Id, "user.create", map[string]interface{}{
 		"username": cleanUser.Username,

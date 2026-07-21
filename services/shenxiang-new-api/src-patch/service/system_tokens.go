@@ -79,13 +79,24 @@ func IsAdminSystemTokenUserID(userID int) bool {
 	return userID == AdminSystemTokenUserID
 }
 
+func systemTokenProfilesForUserID(userID int) []SystemTokenProfile {
+	profiles := SystemTokenProfiles()
+	if IsAdminSystemTokenUserID(userID) {
+		return profiles
+	}
+	publicProfiles := make([]SystemTokenProfile, 0, len(profiles))
+	for _, profile := range profiles {
+		if profile.Mode != "grok" {
+			publicProfiles = append(publicProfiles, profile)
+		}
+	}
+	return publicProfiles
+}
+
 func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEnsureResult, error) {
 	result := SystemTokenEnsureResult{UserID: userID}
 	if userID <= 0 {
 		return result, fmt.Errorf("invalid user id: %d", userID)
-	}
-	if !IsAdminSystemTokenUserID(userID) {
-		return result, fmt.Errorf("system test tokens are restricted to admin user %d, got user %d", AdminSystemTokenUserID, userID)
 	}
 
 	err := model.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -96,7 +107,7 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 
 		userSetting := user.GetSetting()
 		preferredTextGroup, hasPreferredTextGroup := model.NormalizeTextPricingGroup(userSetting.TextPricingGroup)
-		for _, profile := range SystemTokenProfiles() {
+		for _, profile := range systemTokenProfilesForUserID(userID) {
 			tokenGroup := strings.TrimSpace(profile.Group)
 			if tokenGroup == "" {
 				tokenGroup = user.Group
@@ -184,6 +195,45 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 		if err := model.InvalidateUserTokensCache(userID); err != nil {
 			return result, fmt.Errorf("failed to invalidate system token cache for user %d: %w", userID, err)
 		}
+	}
+	return result, nil
+}
+
+type UserSystemTokenReconcileResult struct {
+	UsersScanned int
+	Created      int
+	Updated      int
+	Skipped      int
+	Failed       int
+}
+
+func ReconcileUserSystemTokensForEnabledUsers(ctx context.Context) (UserSystemTokenReconcileResult, error) {
+	result := UserSystemTokenReconcileResult{}
+	var userIDs []int
+	if err := model.DB.WithContext(ctx).Model(&model.User{}).
+		Where("status = ? AND id <> ?", common.UserStatusEnabled, AdminSystemTokenUserID).
+		Order("id").Pluck("id", &userIDs).Error; err != nil {
+		return result, err
+	}
+
+	var lastErr error
+	for _, userID := range userIDs {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		result.UsersScanned++
+		userResult, err := EnsureSystemTokensForUserID(ctx, userID)
+		if err != nil {
+			result.Failed++
+			lastErr = err
+			continue
+		}
+		result.Created += userResult.Created
+		result.Updated += userResult.Updated
+		result.Skipped += userResult.Skipped
+	}
+	if result.Failed > 0 {
+		return result, fmt.Errorf("failed to reconcile system tokens for %d enabled users: %w", result.Failed, lastErr)
 	}
 	return result, nil
 }

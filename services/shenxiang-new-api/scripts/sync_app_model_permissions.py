@@ -1642,32 +1642,43 @@ def sync_grok_image_metadata() -> None:
     )
 
 
-def sync_tokens(profiles: dict[str, list[str]]) -> None:
-    statements = ["START TRANSACTION;"]
+def sync_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
+    expected_models_by_name: dict[str, str] = {}
     for profile, names in TOKEN_PROFILES.items():
         models = ",".join(sanitize_token_models(profiles[profile]))
         for name in names:
-            statements.append(
-                "UPDATE tokens "
-                "SET model_limits_enabled = 1, model_limits = "
-                + sql_quote(models)
-                + " WHERE deleted_at IS NULL AND name = "
-                + sql_quote(name)
-                + " AND user_id = "
-                + str(ADMIN_SYSTEM_TOKEN_USER_ID)
-                + ";"
-            )
-    statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    managed_names = [name for names in TOKEN_PROFILES.values() for name in names]
+            expected_models_by_name[name] = models
+    managed_names = tuple(expected_models_by_name)
     token_rows = mysql(
-        "SELECT COALESCE(`key`, '') FROM tokens WHERE user_id = "
-        + str(ADMIN_SYSTEM_TOKEN_USER_ID)
-        + " AND name IN ("
+        "SELECT id, COALESCE(`key`, ''), name, COALESCE(model_limits, ''), "
+        "COALESCE(model_limits_enabled, 0) FROM tokens "
+        "WHERE deleted_at IS NULL AND name IN ("
         + ", ".join(sql_quote(name) for name in managed_names)
         + ");"
     )
-    delete_token_caches([row[0] for row in token_rows])
+    token_updates: list[tuple[str, str, str]] = []
+    for token_id, token_key, name, raw_limits, raw_enabled in token_rows:
+        expected_models = expected_models_by_name.get(name)
+        if expected_models is None:
+            continue
+        if raw_limits != expected_models or raw_enabled != "1":
+            token_updates.append((token_id, token_key, expected_models))
+
+    statements = ["START TRANSACTION;"]
+    for token_id, _token_key, expected_models in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits_enabled = 1, model_limits = "
+            + sql_quote(expected_models)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    caches_deleted = delete_token_caches(
+        [token_key for _token_id, token_key, _expected_models in token_updates]
+    )
+    return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
 def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict[str, int]:
@@ -1688,7 +1699,6 @@ def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict
         + str(ADMIN_SYSTEM_TOKEN_USER_ID)
         + ";"
     )
-    all_token_keys = [row[1] for row in token_rows]
     token_updates: list[tuple[str, str, str]] = []
     for token_id, token_key, raw_limits, raw_enabled in token_rows:
         next_limits = ensure_codex_image_model_limits(raw_limits, required_models)
@@ -1706,7 +1716,9 @@ def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict
         )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches(all_token_keys)
+    caches_deleted = delete_token_caches(
+        [token_key for _token_id, _next_limits, token_key in token_updates]
+    )
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
@@ -2341,7 +2353,7 @@ def main() -> int:
         print(f"refuse to sync empty model profiles: {', '.join(missing)}", file=sys.stderr)
         return 2
     sync_abilities()
-    sync_tokens(system_token_profiles(profiles))
+    system_token_result = sync_tokens(system_token_profiles(profiles))
     codex_token_result = sync_user_codex_tokens(profiles)
     codex_alias_token_result = sync_controlled_codex_alias_tokens()
     claude_token_result = sync_user_claude_tokens(profiles)
@@ -2354,7 +2366,7 @@ def main() -> int:
     print(
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
-        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, codex_alias_token_sync={codex_alias_token_result}, claude_token_sync={claude_token_result}, image_token_sync={image_token_result}, video_token_sync={video_token_result}, gpt_image2_guard={guard_result}"
+        + f", codex_env_changed={env_changed}, system_token_sync={system_token_result}, codex_token_sync={codex_token_result}, codex_alias_token_sync={codex_alias_token_result}, claude_token_sync={claude_token_result}, image_token_sync={image_token_result}, video_token_sync={video_token_result}, gpt_image2_guard={guard_result}"
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
         + f", retired_claude={retired_claude_result}"

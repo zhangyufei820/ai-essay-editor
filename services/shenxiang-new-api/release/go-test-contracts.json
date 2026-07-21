@@ -5,7 +5,7 @@
   },
   {
     "package": "./controller",
-    "run": "^(TestCreateImageTaskRejectsRetiredImage2BeforePersistence|TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel|TestNormalizePlaygroundImageTaskPayloadPreservesExplicitDiscountImage2ExtraBody|TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility|TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing|TestPublicPlaygroundTaskFailureReason.*|TestPlaygroundTaskResponsesExposeOnlyPublicFailureMessage)$"
+    "run": "^(TestCreateImageTaskRejectsRetiredImage2BeforePersistence|TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel|TestNormalizePlaygroundImageTaskPayloadPreservesExplicitDiscountImage2ExtraBody|TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility|TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing|TestPublicPlaygroundTaskFailureReason.*|TestPlaygroundTaskResponsesExposeOnlyPublicFailureMessage|TestGetAllTokensWithSystemSyncCreatesPublicTokensBeforeListing)$"
   },
   {
     "package": "./relay/channel/task/sora",
@@ -37,7 +37,7 @@
   },
   {
     "package": "./service",
-    "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestMergeModelLimits.*|TestEnsureSystemTokensRejectsNonAdminUser|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestDiscountImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize|TestOnlyLegacyDiscountImage2NameIsRetired|TestResolveRealtimeGroupRatioPinsDiscountMarketplaceRatio)$"
+    "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestMergeModelLimits.*|TestEnsureSystemTokensForCommonUserCreatesPublicProfilesOnly|TestReconcileUserSystemTokensForEnabledUsersBackfillsAndIsIdempotent|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestDiscountImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize|TestOnlyLegacyDiscountImage2NameIsRetired|TestResolveRealtimeGroupRatioPinsDiscountMarketplaceRatio)$"
   },
   {
     "package": "./model",

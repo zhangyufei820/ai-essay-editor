@@ -713,13 +713,18 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn('/v1/images/generations', sql)
         self.assertNotIn('/v1/images/edits', sql)
 
-    def test_sync_tokens_updates_admin_system_tokens_only(self) -> None:
+    def test_sync_tokens_updates_all_managed_system_tokens_exactly(self) -> None:
         captured: list[str] = []
         self.module.mysql_exec = captured.append
-        self.module.mysql = lambda query: [["admin-key-1"], ["admin-key-2"]]
+        self.module.mysql = lambda query: [
+            ["101", "admin-codex-key", "星人 Codex 文本令牌", "gpt-5.4", "1"],
+            ["102", "user-claude-key", "星人 Claude 高阶令牌", "", "0"],
+            ["103", "user-image-key", "星人图像生成令牌", "gpt-image-2-4K", "1"],
+            ["104", "user-video-key", "星人视频生成令牌", "seedance-2.0-cl-mini", "1"],
+        ]
         self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
 
-        self.module.sync_tokens(
+        result = self.module.sync_tokens(
             {
                 "codex": [
                     "gpt-5.5",
@@ -736,8 +741,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
 
         sql = "\n".join(captured)
-        self.assertIn("AND user_id = 1", sql)
-        self.assertEqual(sql.count("AND user_id = 1"), 5)
+        self.assertEqual(result, {"tokens_rewritten": 3, "token_caches_deleted": 3})
+        self.assertNotIn("user_id = 1", sql)
+        self.assertIn("WHERE id = '101'", sql)
+        self.assertIn("WHERE id = '102'", sql)
+        self.assertIn("WHERE id = '103'", sql)
+        self.assertNotIn("WHERE id = '104'", sql)
         self.assertIn("gpt-5.6-luna", sql)
         self.assertIn("gpt-5.6-terra", sql)
         self.assertIn("gpt-5.6-sol", sql)
@@ -745,7 +754,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("codex-auto-review", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertIn("官转image 2稳定", sql)
-        self.assertIn("CACHE:admin-key-1,admin-key-2", sql)
+        self.assertIn("CACHE:admin-codex-key,user-claude-key,user-image-key", sql)
 
     def test_sync_user_codex_tokens_updates_non_admin_codex_tokens(self) -> None:
         captured: list[str] = []
@@ -796,6 +805,21 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("gpt-image-2-4K", sql)
         self.assertNotIn("claude-opus-4-8", sql)
         self.assertNotIn("seedance-2.0-cl-mini", sql)
+
+    def test_sync_user_codex_tokens_leaves_unchanged_cache_intact(self) -> None:
+        captured: list[str] = []
+        exact_limits = ",".join(self.module.CODEX_ALLOWED_MODELS)
+        self.module.mysql = lambda query: [["107", "key-107", exact_limits, "1"]]
+        self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
+
+        result = self.module.sync_user_codex_tokens(
+            {"codex": list(self.module.CODEX_ALLOWED_MODELS)}
+        )
+
+        self.assertEqual(result, {"tokens_rewritten": 0, "token_caches_deleted": 0})
+        self.assertIn("CACHE:", captured)
+        self.assertNotIn("key-107", captured[-1])
 
     def test_sync_user_claude_tokens_replaces_unrestricted_limits(self) -> None:
         captured: list[str] = []

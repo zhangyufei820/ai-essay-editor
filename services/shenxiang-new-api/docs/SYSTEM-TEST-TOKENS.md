@@ -29,9 +29,8 @@ Known admin system token names:
 
 Implementation guardrails:
 
-- `service.EnsureSystemTokensForUserID` is restricted to `user_id=1`.
-- `service.StartSystemTokenReconcileTask` reconciles only `user_id=1`.
+- `service.EnsureSystemTokensForUserID` creates the four public Codex, Claude, image, and video system tokens for every enabled user. Only `user_id=1` receives the additional Grok 4.5 system-test token.
+- `service.StartSystemTokenReconcileTask` reconciles `user_id=1` separately for audit visibility, then backfills the four public system tokens for every enabled non-admin user.
 - Go reconciliation owns token existence, safe bootstrap limits, group selection, and retry policy. It must not overwrite an enabled token's exact non-Grok model list.
-- `scripts/sync_app_model_permissions.py` is the single writer for the exact Codex, Claude, image, and video model lists. This prevents the two reconcilers from oscillating between different catalogs.
-- `scripts/sync_app_model_permissions.py` updates managed system-token model limits only where `user_id=1`.
+- `scripts/sync_app_model_permissions.py` is the single writer for the exact Codex, Claude, image, and video model lists on all managed system tokens. This prevents the two reconcilers from oscillating between different catalogs.
 - `scripts/smoke_test.sh` refuses raw API key arguments and resolves admin tokens from MySQL.

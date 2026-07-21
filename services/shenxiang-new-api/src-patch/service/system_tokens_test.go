@@ -90,15 +90,77 @@ func TestMergeModelLimitsCanonicalizesRawGPTImage2(t *testing.T) {
 	require.Equal(t, "gpt-5.5,gpt-image-2-4K", limits)
 }
 
-func TestEnsureSystemTokensRejectsNonAdminUser(t *testing.T) {
-	result, err := EnsureSystemTokensForUserID(context.Background(), AdminSystemTokenUserID+1)
+func TestEnsureSystemTokensForCommonUserCreatesPublicProfilesOnly(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	userID := AdminSystemTokenUserID + 200
+	require.NoError(t, model.DB.Create(&model.User{
+		Id:       userID,
+		Username: "system-token-common-user",
+		AffCode:  "system-token-common-user-aff",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+	}).Error)
 
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "restricted to admin user 1")
-	require.Equal(t, AdminSystemTokenUserID+1, result.UserID)
-	require.Zero(t, result.Created)
+	result, err := EnsureSystemTokensForUserID(context.Background(), userID)
+
+	require.NoError(t, err)
+	require.Equal(t, userID, result.UserID)
+	require.Equal(t, 4, result.Created)
 	require.Zero(t, result.Updated)
 	require.Zero(t, result.Skipped)
+	var tokens []model.Token
+	require.NoError(t, model.DB.Where("user_id = ?", userID).Order("name").Find(&tokens).Error)
+	require.Len(t, tokens, 4)
+	for _, token := range tokens {
+		require.NotEqual(t, Grok45AdminTokenName, token.Name)
+		require.Equal(t, common.TokenStatusEnabled, token.Status)
+		require.True(t, token.ModelLimitsEnabled)
+	}
+}
+
+func TestReconcileUserSystemTokensForEnabledUsersBackfillsAndIsIdempotent(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	require.NoError(t, model.DB.Create(&[]model.User{
+		{
+			Id:       301,
+			Username: "enabled-system-token-user",
+			AffCode:  "enabled-system-token-user-aff",
+			Role:     common.RoleCommonUser,
+			Status:   common.UserStatusEnabled,
+			Group:    "default",
+		},
+		{
+			Id:       302,
+			Username: "disabled-system-token-user",
+			AffCode:  "disabled-system-token-user-aff",
+			Role:     common.RoleCommonUser,
+			Status:   common.UserStatusDisabled,
+			Group:    "default",
+		},
+	}).Error)
+
+	result, err := ReconcileUserSystemTokensForEnabledUsers(context.Background())
+
+	require.NoError(t, err)
+	require.Equal(t, 1, result.UsersScanned)
+	require.Equal(t, 4, result.Created)
+	require.Zero(t, result.Updated)
+	require.Zero(t, result.Failed)
+	var enabledTokenCount int64
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("user_id = ?", 301).Count(&enabledTokenCount).Error)
+	require.EqualValues(t, 4, enabledTokenCount)
+	var disabledTokenCount int64
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("user_id = ?", 302).Count(&disabledTokenCount).Error)
+	require.Zero(t, disabledTokenCount)
+
+	secondResult, err := ReconcileUserSystemTokensForEnabledUsers(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 1, secondResult.UsersScanned)
+	require.Zero(t, secondResult.Created)
+	require.Zero(t, secondResult.Updated)
+	require.Equal(t, 4, secondResult.Skipped)
+	require.Zero(t, secondResult.Failed)
 }
 
 func TestSystemTokenProfilesIncludesIsolatedGrok45Token(t *testing.T) {

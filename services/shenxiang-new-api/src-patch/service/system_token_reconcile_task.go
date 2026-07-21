@@ -54,6 +54,13 @@ func runSystemTokenReconcileOnce() {
 		logger.LogInfo(ctx, fmt.Sprintf("admin system token reconcile completed: user_id=%d created=%d updated=%d skipped=%d", AdminSystemTokenUserID, adminResult.Created, adminResult.Updated, adminResult.Skipped))
 	}
 
+	userResult, userErr := ReconcileUserSystemTokensForEnabledUsers(ctx)
+	if userErr != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("user system token reconcile failed: scanned=%d created=%d updated=%d failed=%d error=%v", userResult.UsersScanned, userResult.Created, userResult.Updated, userResult.Failed, userErr))
+	} else if userResult.Created > 0 || userResult.Updated > 0 {
+		logger.LogInfo(ctx, fmt.Sprintf("user system token reconcile completed: scanned=%d created=%d updated=%d skipped=%d", userResult.UsersScanned, userResult.Created, userResult.Updated, userResult.Skipped))
+	}
+
 	grokResult, grokErr := ReconcileManagedGrok45UserTokens(ctx)
 	if grokErr != nil {
 		logger.LogWarn(ctx, fmt.Sprintf("managed Grok token reconcile failed: scanned=%d created=%d updated=%d failed=%d error=%v", grokResult.UsersScanned, grokResult.Created, grokResult.Updated, grokResult.Failed, grokErr))
