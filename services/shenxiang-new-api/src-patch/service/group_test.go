@@ -154,6 +154,6 @@ func TestGetUserGroupRatioPinsPlusMarketplaceRatio(t *testing.T) {
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"plus":0.8}`))
 	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"vip":{"plus":0.4}}`))
 
-	require.Equal(t, 0.23, PlusPricingGroupRatio)
+	require.Equal(t, 0.5, PlusPricingGroupRatio)
 	require.Equal(t, PlusPricingGroupRatio, GetUserGroupRatio("vip", PlusPricingGroupName))
 }

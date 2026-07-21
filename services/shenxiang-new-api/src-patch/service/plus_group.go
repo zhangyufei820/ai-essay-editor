@@ -2,5 +2,5 @@ package service
 
 const (
 	PlusPricingGroupName  = "plus"
-	PlusPricingGroupRatio = 0.23
+	PlusPricingGroupRatio = 0.5
 )

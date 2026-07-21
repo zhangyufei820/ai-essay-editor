@@ -91,9 +91,10 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
     def test_group_options_pin_ratio_and_remove_plus_from_auto_and_overrides(self) -> None:
         updates = self.module.build_group_option_updates(self.options)
 
+        self.assertEqual(self.module.PLUS_GROUP_DESCRIPTION, "Plus 0.5x 通道")
         self.assertEqual(
             self.module.json.loads(updates["GroupRatio"]),
-            {"default": 1, "internal": 1, "plus": 0.23},
+            {"default": 1, "internal": 1, "plus": 0.5},
         )
         self.assertEqual(
             self.module.json.loads(updates["UserUsableGroups"]),

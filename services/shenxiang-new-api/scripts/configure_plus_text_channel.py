@@ -16,9 +16,9 @@ from dataclasses import dataclass
 
 
 PLUS_GROUP = "plus"
-PLUS_RATIO = 0.23
+PLUS_RATIO = 0.5
 DEFAULT_GROUP_DESCRIPTION = "原价稳定通道"
-PLUS_GROUP_DESCRIPTION = "Plus 0.23x 通道"
+PLUS_GROUP_DESCRIPTION = "Plus 0.5x 通道"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
 OPENAI_CHANNEL_TYPE = 1
