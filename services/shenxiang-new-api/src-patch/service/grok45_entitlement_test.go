@@ -29,10 +29,8 @@ func setupGrok45EntitlementTestDB(t *testing.T) {
 	})
 }
 
-func createManagedGrok45Capability(t *testing.T) int {
+func createManagedGrok45CapabilityFor(t *testing.T, tag string, baseURL string) int {
 	t.Helper()
-	tag := Grok45ManagedChannelTag
-	baseURL := Grok45ManagedBaseURL
 	channel := model.Channel{
 		Status:  common.ChannelStatusEnabled,
 		Name:    "managed-grok45",
@@ -52,6 +50,11 @@ func createManagedGrok45Capability(t *testing.T) int {
 	}
 	require.NoError(t, model.DB.Create(&ability).Error)
 	return channel.Id
+}
+
+func createManagedGrok45Capability(t *testing.T) int {
+	t.Helper()
+	return createManagedGrok45CapabilityFor(t, Grok45ManagedChannelTag, Grok45ManagedBaseURL)
 }
 
 func createGrok45TestUser(t *testing.T, userID int, role int, status int) {
@@ -100,6 +103,20 @@ func TestManagedGrok45CapabilityRequiresExactManagedChannelAndAbility(t *testing
 	active, err = ManagedGrok45CapabilityActive(context.Background())
 	require.NoError(t, err)
 	require.False(t, active)
+}
+
+func TestManagedGrok45CapabilityAcceptsPrimaryAndFallbackChannels(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	createManagedGrok45CapabilityFor(t, Grok45PrimaryManagedChannelTag, Grok45PrimaryManagedBaseURL)
+
+	active, err := ManagedGrok45CapabilityActive(context.Background())
+	require.NoError(t, err)
+	require.True(t, active)
+
+	createManagedGrok45Capability(t)
+	active, err = ManagedGrok45CapabilityActive(context.Background())
+	require.NoError(t, err)
+	require.True(t, active)
 }
 
 func TestEnsureManagedGrok45UserTokenCreatesAndRepairsExactProfile(t *testing.T) {

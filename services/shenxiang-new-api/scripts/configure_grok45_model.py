@@ -24,10 +24,19 @@ MODEL_VENDOR_ICON = "XAI"
 PRICING_GROUP = "grok45"
 PRICING_GROUP_RATIO = 1
 PRICING_GROUP_DESCRIPTION = "Grok 4.5 专用通道"
-CHANNEL_TAG = "xingren-grok45"
-CHANNEL_NAME = "星人 Grok 4.5 独立通道"
-EXPECTED_UPSTREAM_BASE_URL = "https://www.geek2api.com"
-UPSTREAM_KEY_ENV = "GROK45_UPSTREAM_API_KEY"
+PRIMARY_CHANNEL_TAG = "xingren-grok45-primary"
+PRIMARY_CHANNEL_NAME = "星人 Grok 4.5 主通道"
+PRIMARY_CHANNEL_REMARK = "Grok 4.5 主路由"
+PRIMARY_UPSTREAM_BASE_URL = "https://dragtokens.com"
+PRIMARY_UPSTREAM_KEY_ENV = "GROK45_PRIMARY_UPSTREAM_API_KEY"
+PRIMARY_PRIORITY = 100
+FALLBACK_CHANNEL_TAG = "xingren-grok45"
+FALLBACK_CHANNEL_NAME = "星人 Grok 4.5 备用通道"
+FALLBACK_CHANNEL_REMARK = "Grok 4.5 备用路由"
+FALLBACK_UPSTREAM_BASE_URL = "https://www.geek2api.com"
+FALLBACK_PRIORITY = 0
+MANAGED_CHANNEL_TAGS = (PRIMARY_CHANNEL_TAG, FALLBACK_CHANNEL_TAG)
+ALLOWED_UPSTREAM_BASE_URLS = (PRIMARY_UPSTREAM_BASE_URL, FALLBACK_UPSTREAM_BASE_URL)
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
 MAX_INFERENCE_RESPONSE_BYTES = 1 * 1024 * 1024
 MYSQL_QUERY_TIMEOUT_SECONDS = 15
@@ -76,10 +85,12 @@ def sql_quote(value: str) -> str:
 def normalize_base_url(value: str) -> str:
     normalized = value.strip().rstrip("/")
     parsed = urllib.parse.urlsplit(normalized)
-    expected = urllib.parse.urlsplit(EXPECTED_UPSTREAM_BASE_URL)
+    canonical_by_hostname = {
+        urllib.parse.urlsplit(base_url).hostname: base_url for base_url in ALLOWED_UPSTREAM_BASE_URLS
+    }
     if (
         parsed.scheme != "https"
-        or parsed.hostname != expected.hostname
+        or parsed.hostname not in canonical_by_hostname
         or parsed.port is not None
         or parsed.username
         or parsed.password
@@ -88,7 +99,14 @@ def normalize_base_url(value: str) -> str:
         or parsed.fragment
     ):
         raise ConfigurationError("the configured Grok endpoint is not permitted")
-    return EXPECTED_UPSTREAM_BASE_URL
+    return canonical_by_hostname[parsed.hostname]
+
+
+def require_managed_base_url(value: str, expected_base_url: str) -> str:
+    base_url = normalize_base_url(value)
+    if base_url != expected_base_url:
+        raise ConfigurationError("the configured Grok channel uses an unexpected endpoint")
+    return base_url
 
 
 def validate_upstream_key(value: str, *, env_name: str | None = None) -> str:
@@ -100,7 +118,10 @@ def validate_upstream_key(value: str, *, env_name: str | None = None) -> str:
 
 
 def require_upstream_key() -> str:
-    return validate_upstream_key(os.environ.get(UPSTREAM_KEY_ENV, ""), env_name=UPSTREAM_KEY_ENV)
+    return validate_upstream_key(
+        os.environ.get(PRIMARY_UPSTREAM_KEY_ENV, ""),
+        env_name=PRIMARY_UPSTREAM_KEY_ENV,
+    )
 
 
 @contextlib.contextmanager
@@ -365,12 +386,81 @@ def option_upsert(option_key: str, option_value: str) -> str:
     )
 
 
-def build_apply_sql(
+def build_channel_statements(
+    *,
+    variable_name: str,
     api_key: str,
     base_url: str,
+    tag: str,
+    name: str,
+    remark: str,
+    priority: int,
+    mapping: str,
+) -> list[str]:
+    channel_id = "@" + variable_name
+    return [
+        "SET " + channel_id + " := (SELECT MIN(id) FROM channels WHERE tag = " + sql_quote(tag) + ");",
+        "INSERT INTO channels "
+        "(type, `key`, status, name, weight, created_time, test_time, response_time, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark) "
+        "SELECT "
+        + ", ".join(
+            [
+                "1",
+                sql_quote(validate_upstream_key(api_key)),
+                "1",
+                sql_quote(name),
+                "100",
+                "@now",
+                "0",
+                "0",
+                sql_quote(normalize_base_url(base_url)),
+                sql_quote(MODEL_NAME),
+                sql_quote(PRICING_GROUP),
+                sql_quote(mapping),
+                str(priority),
+                "1",
+                sql_quote(tag),
+                sql_quote(remark),
+            ]
+        )
+        + " WHERE "
+        + channel_id
+        + " IS NULL;",
+        "SET " + channel_id + " := IFNULL(" + channel_id + ", LAST_INSERT_ID());",
+        "UPDATE channels SET type = 1, `key` = "
+        + sql_quote(validate_upstream_key(api_key))
+        + ", status = 1, name = "
+        + sql_quote(name)
+        + ", weight = 100, base_url = "
+        + sql_quote(normalize_base_url(base_url))
+        + ", models = "
+        + sql_quote(MODEL_NAME)
+        + ", `group` = "
+        + sql_quote(PRICING_GROUP)
+        + ", model_mapping = "
+        + sql_quote(mapping)
+        + ", priority = "
+        + str(priority)
+        + ", auto_ban = 1, tag = "
+        + sql_quote(tag)
+        + ", remark = "
+        + sql_quote(remark)
+        + " WHERE id = "
+        + channel_id
+        + ";",
+    ]
+
+
+def build_apply_sql(
+    primary_api_key: str,
+    primary_base_url: str,
+    fallback_api_key: str,
+    fallback_base_url: str,
     options: dict[str, str],
     exchange_rate: Decimal,
 ) -> str:
+    primary_base_url = require_managed_base_url(primary_base_url, PRIMARY_UPSTREAM_BASE_URL)
+    fallback_base_url = require_managed_base_url(fallback_base_url, FALLBACK_UPSTREAM_BASE_URL)
     option_updates = build_option_updates(options, exchange_rate)
     mapping = json_option({MODEL_NAME: MODEL_NAME})
     statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
@@ -437,72 +527,76 @@ def build_apply_sql(
             "WHERE id = @keep_model_id;",
             "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
             "WHERE model_name = @grok_model AND id <> @keep_model_id;",
-            "SET @grok_channel_id := (SELECT MIN(id) FROM channels WHERE tag = " + sql_quote(CHANNEL_TAG) + ");",
-            "INSERT INTO channels "
-            "(type, `key`, status, name, weight, created_time, test_time, response_time, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark) "
-            "SELECT "
-            + ", ".join(
-                [
-                    "1",
-                    sql_quote(validate_upstream_key(api_key)),
-                    "1",
-                    sql_quote(CHANNEL_NAME),
-                    "100",
-                    "@now",
-                    "0",
-                    "0",
-                    sql_quote(normalize_base_url(base_url)),
-                    sql_quote(MODEL_NAME),
-                    sql_quote(PRICING_GROUP),
-                    sql_quote(mapping),
-                    "0",
-                    "1",
-                    sql_quote(CHANNEL_TAG),
-                    sql_quote(PRICING_GROUP_DESCRIPTION),
-                ]
-            )
-            + " WHERE @grok_channel_id IS NULL;",
-            "SET @grok_channel_id := IFNULL(@grok_channel_id, LAST_INSERT_ID());",
-            "UPDATE channels SET type = 1, `key` = "
-            + sql_quote(validate_upstream_key(api_key))
-            + ", status = 1, name = "
-            + sql_quote(CHANNEL_NAME)
-            + ", weight = 100, base_url = "
-            + sql_quote(normalize_base_url(base_url))
-            + ", models = "
-            + sql_quote(MODEL_NAME)
-            + ", `group` = "
-            + sql_quote(PRICING_GROUP)
-            + ", model_mapping = "
-            + sql_quote(mapping)
-            + ", priority = 0, auto_ban = 1, tag = "
-            + sql_quote(CHANNEL_TAG)
-            + ", remark = "
-            + sql_quote(PRICING_GROUP_DESCRIPTION)
-            + " WHERE id = @grok_channel_id;",
+        ]
+    )
+    statements.extend(
+        build_channel_statements(
+            variable_name="grok_primary_channel_id",
+            api_key=primary_api_key,
+            base_url=primary_base_url,
+            tag=PRIMARY_CHANNEL_TAG,
+            name=PRIMARY_CHANNEL_NAME,
+            remark=PRIMARY_CHANNEL_REMARK,
+            priority=PRIMARY_PRIORITY,
+            mapping=mapping,
+        )
+    )
+    statements.extend(
+        build_channel_statements(
+            variable_name="grok_fallback_channel_id",
+            api_key=fallback_api_key,
+            base_url=fallback_base_url,
+            tag=FALLBACK_CHANNEL_TAG,
+            name=FALLBACK_CHANNEL_NAME,
+            remark=FALLBACK_CHANNEL_REMARK,
+            priority=FALLBACK_PRIORITY,
+            mapping=mapping,
+        )
+    )
+    statements.extend(
+        [
             "UPDATE abilities SET enabled = 0 WHERE `group` = "
             + sql_quote(PRICING_GROUP)
-            + " AND channel_id <> @grok_channel_id;",
+            + " AND channel_id NOT IN (@grok_primary_channel_id, @grok_fallback_channel_id);",
             "UPDATE abilities SET enabled = 0 WHERE model = "
             + sql_quote(MODEL_NAME)
             + " AND `group` <> "
             + sql_quote(PRICING_GROUP)
             + ";",
-            "UPDATE abilities SET enabled = 0 WHERE channel_id = @grok_channel_id;",
+            "UPDATE abilities SET enabled = 0 WHERE channel_id IN (@grok_primary_channel_id, @grok_fallback_channel_id);",
             "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) VALUES ("
             + ", ".join(
                 [
                     sql_quote(PRICING_GROUP),
                     sql_quote(MODEL_NAME),
-                    "@grok_channel_id",
+                    "@grok_primary_channel_id",
                     "1",
-                    "0",
+                    str(PRIMARY_PRIORITY),
                     "100",
-                    sql_quote(CHANNEL_TAG),
+                    sql_quote(PRIMARY_CHANNEL_TAG),
                 ]
             )
-            + ") ON DUPLICATE KEY UPDATE enabled = 1, priority = 0, weight = 100, tag = "
-            + sql_quote(CHANNEL_TAG)
+            + ") ON DUPLICATE KEY UPDATE enabled = 1, priority = "
+            + str(PRIMARY_PRIORITY)
+            + ", weight = 100, tag = "
+            + sql_quote(PRIMARY_CHANNEL_TAG)
+            + ";",
+            "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) VALUES ("
+            + ", ".join(
+                [
+                    sql_quote(PRICING_GROUP),
+                    sql_quote(MODEL_NAME),
+                    "@grok_fallback_channel_id",
+                    "1",
+                    str(FALLBACK_PRIORITY),
+                    "100",
+                    sql_quote(FALLBACK_CHANNEL_TAG),
+                ]
+            )
+            + ") ON DUPLICATE KEY UPDATE enabled = 1, priority = "
+            + str(FALLBACK_PRIORITY)
+            + ", weight = 100, tag = "
+            + sql_quote(FALLBACK_CHANNEL_TAG)
             + ";",
             "COMMIT;",
         ]
@@ -511,12 +605,15 @@ def build_apply_sql(
 
 
 def validate_channel_isolation() -> None:
-    rows = mysql("SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(CHANNEL_TAG))
-    if (int(rows[0][0]) if rows else 0) > 1:
-        raise ConfigurationError("multiple channels use the reserved Grok isolation tag")
+    for tag in MANAGED_CHANNEL_TAGS:
+        rows = mysql("SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(tag))
+        if (int(rows[0][0]) if rows else 0) > 1:
+            raise ConfigurationError("multiple channels use a reserved Grok isolation tag")
+    managed_tags_sql = ",".join(sql_quote(tag) for tag in MANAGED_CHANNEL_TAGS)
     rows = mysql(
-        "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') <> "
-        + sql_quote(CHANNEL_TAG)
+        "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') NOT IN ("
+        + managed_tags_sql
+        + ")"
         + " AND FIND_IN_SET("
         + sql_quote(PRICING_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0"
@@ -525,23 +622,44 @@ def validate_channel_isolation() -> None:
         raise ConfigurationError("the Grok group is assigned to a non-isolated channel")
 
 
-def apply_grok45(api_key: str, base_url: str) -> None:
+def apply_grok45(
+    primary_api_key: str,
+    primary_base_url: str,
+    fallback_api_key: str,
+    fallback_base_url: str,
+) -> None:
     validate_channel_isolation()
     options, exchange_rate = load_options()
-    mysql_exec(build_apply_sql(api_key, base_url, options, exchange_rate))
+    mysql_exec(
+        build_apply_sql(
+            primary_api_key,
+            primary_base_url,
+            fallback_api_key,
+            fallback_base_url,
+            options,
+            exchange_rate,
+        )
+    )
 
 
-def load_existing_channel() -> tuple[str, str] | None:
+def load_existing_channel(tag: str, expected_base_url: str) -> tuple[str, str] | None:
     rows = mysql(
         "SELECT COALESCE(`key`, ''), COALESCE(base_url, '') FROM channels WHERE tag = "
-        + sql_quote(CHANNEL_TAG)
+        + sql_quote(tag)
         + " ORDER BY id"
     )
     if not rows:
         return None
     if len(rows) != 1 or len(rows[0]) != 2:
         raise ConfigurationError("the configured Grok channel is ambiguous")
-    return validate_upstream_key(rows[0][0]), normalize_base_url(rows[0][1])
+    base_url = require_managed_base_url(rows[0][1], expected_base_url)
+    return validate_upstream_key(rows[0][0]), base_url
+
+
+def probe_upstream(configured: tuple[str, str]) -> None:
+    api_key, base_url = configured
+    require_exact_model(fetch_upstream_models(base_url, api_key))
+    require_upstream_inference(base_url, api_key)
 
 
 def emit_result(action: str) -> None:
@@ -561,27 +679,34 @@ def main() -> int:
 
     if args.reconcile_if_configured:
         with model_sync_lock():
-            configured = load_existing_channel()
-            if configured is None:
+            fallback = load_existing_channel(FALLBACK_CHANNEL_TAG, FALLBACK_UPSTREAM_BASE_URL)
+            primary = load_existing_channel(PRIMARY_CHANNEL_TAG, PRIMARY_UPSTREAM_BASE_URL)
+            if fallback is None and primary is None:
                 emit_result("not_configured")
                 return 0
-            api_key, base_url = configured
-            require_exact_model(fetch_upstream_models(base_url, api_key))
-            require_upstream_inference(base_url, api_key)
-            apply_grok45(api_key, base_url)
+            if fallback is None:
+                raise ConfigurationError("the managed Grok fallback channel is missing")
+            probe_upstream(fallback)
+            if primary is None:
+                emit_result("fallback_only")
+                return 0
+            probe_upstream(primary)
+            apply_grok45(primary[0], primary[1], fallback[0], fallback[1])
         emit_result("reconciled")
         return 0
 
     api_key = require_upstream_key()
-    base_url = normalize_base_url(EXPECTED_UPSTREAM_BASE_URL)
+    base_url = normalize_base_url(PRIMARY_UPSTREAM_BASE_URL)
     if args.apply:
         with model_sync_lock():
-            require_exact_model(fetch_upstream_models(base_url, api_key))
-            require_upstream_inference(base_url, api_key)
-            apply_grok45(api_key, base_url)
+            fallback = load_existing_channel(FALLBACK_CHANNEL_TAG, FALLBACK_UPSTREAM_BASE_URL)
+            if fallback is None:
+                raise ConfigurationError("the managed Grok fallback channel is missing")
+            probe_upstream((api_key, base_url))
+            probe_upstream(fallback)
+            apply_grok45(api_key, base_url, fallback[0], fallback[1])
     else:
-        require_exact_model(fetch_upstream_models(base_url, api_key))
-        require_upstream_inference(base_url, api_key)
+        probe_upstream((api_key, base_url))
     emit_result("applied" if args.apply else "probe")
     return 0
 

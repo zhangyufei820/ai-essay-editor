@@ -32,6 +32,7 @@ class Grok45SyncIsolationTests(unittest.TestCase):
         if "FROM channels" in query:
             return [
                 ["41", self.module.GROK45_MODEL, "0", "100", self.module.GROK45_CHANNEL_TAG, self.module.GROK45_GROUP],
+                ["42", self.module.GROK45_MODEL, "100", "100", self.module.GROK45_PRIMARY_CHANNEL_TAG, self.module.GROK45_GROUP],
                 ["21", f"gpt-5.5,{self.module.GROK45_MODEL}", "0", "100", "normal", "default"],
             ]
         if "SELECT model_name FROM models" in query:
@@ -47,11 +48,12 @@ class Grok45SyncIsolationTests(unittest.TestCase):
 
         sql = captured[0]
         self.assertIn("'grok45', 'grok-4.5', 41", sql)
+        self.assertIn("'grok45', 'grok-4.5', 42", sql)
         self.assertNotIn("'default', 'grok-4.5'", sql)
         self.assertNotIn("'grok45', 'gpt-5.5'", sql)
         self.assertIn("model = 'grok-4.5' AND `group` <> 'grok45'", sql)
-        self.assertIn("tag = 'xingren-grok45'", sql)
-        self.assertIn("status <> 1 AND tag = 'xingren-grok45'", sql)
+        self.assertIn("'xingren-grok45-primary', 'xingren-grok45'", sql)
+        self.assertIn("status <> 1 AND tag IN", sql)
 
     def test_misgrouped_grok_channel_is_disabled_and_reported(self) -> None:
         def rows(query: str) -> list[list[str]]:
@@ -60,7 +62,7 @@ class Grok45SyncIsolationTests(unittest.TestCase):
             if "SELECT DISTINCT `group` FROM abilities" in query:
                 return []
             if "FROM channels" in query:
-                return [["41", self.module.GROK45_MODEL, "0", "100", self.module.GROK45_CHANNEL_TAG, "default"]]
+                return [["41", self.module.GROK45_MODEL, "100", "100", self.module.GROK45_PRIMARY_CHANNEL_TAG, "default"]]
             if "SELECT model_name FROM models" in query:
                 return [[self.module.GROK45_MODEL]]
             raise AssertionError(f"unexpected query: {query}")

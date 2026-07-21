@@ -63,10 +63,16 @@ func managedGrok45CapabilityActiveWithDB(ctx context.Context, db *gorm.DB) (bool
 		Where("managed_ability.`group` = ?", Grok45PricingGroupName).
 		Where("managed_ability.model = ?", Grok45ModelName).
 		Where("managed_ability.enabled = ?", true).
-		Where("managed_ability.tag = ?", Grok45ManagedChannelTag).
+		Where("managed_ability.tag = managed_channel.tag").
 		Where("managed_channel.status = ?", common.ChannelStatusEnabled).
-		Where("managed_channel.tag = ?", Grok45ManagedChannelTag).
-		Where("managed_channel.base_url = ?", Grok45ManagedBaseURL).
+		Where(
+			"(managed_channel.tag = ? AND managed_channel.base_url = ?) OR "+
+				"(managed_channel.tag = ? AND managed_channel.base_url = ?)",
+			Grok45PrimaryManagedChannelTag,
+			Grok45PrimaryManagedBaseURL,
+			Grok45ManagedChannelTag,
+			Grok45ManagedBaseURL,
+		).
 		Where("COALESCE(managed_channel.`key`, '') <> ''").
 		Where("managed_channel.`group` = ?", Grok45PricingGroupName).
 		Where("managed_channel.models = ?", Grok45ModelName).
@@ -74,7 +80,7 @@ func managedGrok45CapabilityActiveWithDB(ctx context.Context, db *gorm.DB) (bool
 	if err != nil {
 		return false, err
 	}
-	return count == 1, nil
+	return count > 0, nil
 }
 
 func UserHasManagedGrok45Entitlement(ctx context.Context, userID int) (bool, error) {

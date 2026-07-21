@@ -62,19 +62,19 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         opener.open.return_value = response
         with mock.patch.object(self.module.urllib.request, "build_opener", return_value=opener):
             self.module.require_upstream_inference(
-                self.module.EXPECTED_UPSTREAM_BASE_URL,
+                self.module.PRIMARY_UPSTREAM_BASE_URL,
                 "fake-grok-key-for-unit-tests",
             )
 
         request = opener.open.call_args.args[0]
-        self.assertEqual(request.full_url, self.module.EXPECTED_UPSTREAM_BASE_URL + "/v1/chat/completions")
+        self.assertEqual(request.full_url, self.module.PRIMARY_UPSTREAM_BASE_URL + "/v1/chat/completions")
         self.assertEqual(json.loads(request.data)["model"], self.module.MODEL_NAME)
 
     def test_inference_probe_error_is_generic_and_secret_free(self) -> None:
         secret = "fake-grok-secret-for-inference-test"
         opener = mock.MagicMock()
         opener.open.side_effect = self.module.urllib.error.HTTPError(
-            self.module.EXPECTED_UPSTREAM_BASE_URL + "/v1/chat/completions",
+            self.module.PRIMARY_UPSTREAM_BASE_URL + "/v1/chat/completions",
             502,
             "upstream error containing " + secret,
             {},
@@ -82,7 +82,7 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         )
         with mock.patch.object(self.module.urllib.request, "build_opener", return_value=opener):
             with self.assertRaises(self.module.ConfigurationError) as raised:
-                self.module.require_upstream_inference(self.module.EXPECTED_UPSTREAM_BASE_URL, secret)
+                self.module.require_upstream_inference(self.module.PRIMARY_UPSTREAM_BASE_URL, secret)
 
         self.assertEqual(str(raised.exception), "Grok inference probe returned HTTP 502")
         self.assertNotIn(secret, str(raised.exception))
@@ -98,17 +98,16 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         with mock.patch.object(self.module.urllib.request, "build_opener", return_value=opener):
             with self.assertRaisesRegex(self.module.ConfigurationError, "verification prompt"):
                 self.module.require_upstream_inference(
-                    self.module.EXPECTED_UPSTREAM_BASE_URL,
+                    self.module.PRIMARY_UPSTREAM_BASE_URL,
                     "fake-grok-key-for-unit-tests",
                 )
 
-    def test_only_expected_https_origin_is_allowed(self) -> None:
-        self.assertEqual(
-            self.module.normalize_base_url(self.module.EXPECTED_UPSTREAM_BASE_URL + "/"),
-            self.module.EXPECTED_UPSTREAM_BASE_URL,
-        )
+    def test_only_managed_https_origins_are_allowed(self) -> None:
+        for base_url in self.module.ALLOWED_UPSTREAM_BASE_URLS:
+            self.assertEqual(self.module.normalize_base_url(base_url + "/"), base_url)
         for value in (
             "http://www.geek2api.com",
+            "http://dragtokens.com",
             "https://www.geek2api.com/v1",
             "https://www.geek2api.com:443",
             "https://user:pass@www.geek2api.com",
@@ -142,14 +141,21 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
 
     def test_apply_sql_keeps_model_and_abilities_in_dedicated_group(self) -> None:
         sql = self.module.build_apply_sql(
-            "fake-grok-key-for-unit-tests",
-            self.module.EXPECTED_UPSTREAM_BASE_URL,
+            "fake-primary-grok-key-for-unit-tests",
+            self.module.PRIMARY_UPSTREAM_BASE_URL,
+            "fake-fallback-grok-key-for-unit-tests",
+            self.module.FALLBACK_UPSTREAM_BASE_URL,
             self.base_options(),
             Decimal("7.3"),
         )
 
         self.assertIn("`group` = 'grok45'", sql)
-        self.assertIn("'grok45', 'grok-4.5', @grok_channel_id", sql)
+        self.assertIn("'grok45', 'grok-4.5', @grok_primary_channel_id", sql)
+        self.assertIn("'grok45', 'grok-4.5', @grok_fallback_channel_id", sql)
+        self.assertIn("priority = 100", sql)
+        self.assertIn("priority = 0", sql)
+        self.assertIn("'xingren-grok45-primary'", sql)
+        self.assertIn("'xingren-grok45'", sql)
         self.assertIn("model = 'grok-4.5' AND `group` <> 'grok45'", sql)
         self.assertIn("INSERT INTO vendors", sql)
         self.assertIn("vendor_id = @grok_vendor_id", sql)
@@ -159,9 +165,20 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         self.assertNotIn("INSERT INTO tokens", sql)
         self.assertNotIn("UPDATE tokens", sql)
 
+    def test_apply_sql_rejects_swapped_primary_and_fallback_origins(self) -> None:
+        with self.assertRaisesRegex(self.module.ConfigurationError, "unexpected endpoint"):
+            self.module.build_apply_sql(
+                "fake-primary-grok-key-for-unit-tests",
+                self.module.FALLBACK_UPSTREAM_BASE_URL,
+                "fake-fallback-grok-key-for-unit-tests",
+                self.module.PRIMARY_UPSTREAM_BASE_URL,
+                self.base_options(),
+                Decimal("7.3"),
+            )
+
     def test_reconcile_without_channel_needs_no_upstream_key(self) -> None:
         stdout = io.StringIO()
-        with mock.patch.object(self.module, "load_existing_channel", return_value=None), mock.patch.object(
+        with mock.patch.object(self.module, "load_existing_channel", side_effect=[None, None]), mock.patch.object(
             sys, "argv", [str(MODULE_PATH), "--reconcile-if-configured"]
         ), contextlib.redirect_stdout(stdout):
             result = self.module.main()
@@ -169,10 +186,54 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(json.loads(stdout.getvalue())["action"], "not_configured")
 
+    def test_reconcile_preserves_fallback_while_primary_is_not_configured(self) -> None:
+        stdout = io.StringIO()
+        fallback = ("fake-fallback-grok-key", self.module.FALLBACK_UPSTREAM_BASE_URL)
+        with mock.patch.object(
+            self.module, "load_existing_channel", side_effect=[fallback, None]
+        ), mock.patch.object(self.module, "probe_upstream") as probe, mock.patch.object(
+            self.module, "apply_grok45"
+        ) as apply_grok45, mock.patch.object(
+            sys, "argv", [str(MODULE_PATH), "--reconcile-if-configured"]
+        ), contextlib.redirect_stdout(stdout):
+            result = self.module.main()
+
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(stdout.getvalue())["action"], "fallback_only")
+        probe.assert_called_once_with(fallback)
+        apply_grok45.assert_not_called()
+
+    def test_existing_channel_tag_cannot_swap_managed_origin(self) -> None:
+        with mock.patch.object(
+            self.module,
+            "mysql",
+            return_value=[["fake-existing-grok-key", self.module.PRIMARY_UPSTREAM_BASE_URL]],
+        ):
+            with self.assertRaisesRegex(self.module.ConfigurationError, "unexpected endpoint"):
+                self.module.load_existing_channel(
+                    self.module.FALLBACK_CHANNEL_TAG,
+                    self.module.FALLBACK_UPSTREAM_BASE_URL,
+                )
+
+    def test_apply_requires_existing_fallback_channel(self) -> None:
+        with mock.patch.dict(
+            self.module.os.environ,
+            {self.module.PRIMARY_UPSTREAM_KEY_ENV: "fake-primary-grok-key"},
+        ), mock.patch.object(
+            self.module, "load_existing_channel", return_value=None
+        ), mock.patch.object(
+            sys, "argv", [str(MODULE_PATH), "--apply"]
+        ):
+            with self.assertRaisesRegex(self.module.ConfigurationError, "fallback channel is missing"):
+                self.module.main()
+
     def test_command_output_never_contains_the_credential(self) -> None:
         secret = "fake-grok-secret-for-unit-tests"
         stdout = io.StringIO()
-        with mock.patch.dict(self.module.os.environ, {self.module.UPSTREAM_KEY_ENV: secret}), mock.patch.object(
+        fallback = ("fake-fallback-grok-key", self.module.FALLBACK_UPSTREAM_BASE_URL)
+        with mock.patch.dict(self.module.os.environ, {self.module.PRIMARY_UPSTREAM_KEY_ENV: secret}), mock.patch.object(
+            self.module, "load_existing_channel", return_value=fallback
+        ), mock.patch.object(
             self.module, "fetch_upstream_models", return_value={self.module.MODEL_NAME}
         ), mock.patch.object(self.module, "require_upstream_inference"), mock.patch.object(
             self.module, "apply_grok45"
@@ -187,7 +248,7 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
     def test_model_probe_redirects_are_disabled(self) -> None:
         handler = self.module.NoRedirectHandler()
         redirected = handler.redirect_request(
-            self.module.urllib.request.Request(self.module.EXPECTED_UPSTREAM_BASE_URL + "/v1/models"),
+            self.module.urllib.request.Request(self.module.PRIMARY_UPSTREAM_BASE_URL + "/v1/models"),
             None,
             302,
             "Found",
@@ -210,7 +271,7 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         environment = {
             "MYSQL_ROOT_PASSWORD": "fake-database-password",
             "MYSQL_DATABASE": "new-api",
-            self.module.UPSTREAM_KEY_ENV: secret,
+            self.module.PRIMARY_UPSTREAM_KEY_ENV: secret,
         }
         with mock.patch.dict(self.module.os.environ, environment, clear=True), mock.patch.object(
             self.module.subprocess,
