@@ -40,6 +40,7 @@ func videoTokenModels() []string {
 		"seedance-2.0-ld-17",
 		"seedance-sd2-fast-720p",
 		"grok-video-1.5",
+		"grok-video-1.5-1080p",
 	}
 }
 
@@ -48,12 +49,12 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "codex",
 			Name:   "星人 Codex 文本令牌",
-			Models: []string{"gpt-5.5", "gpt-5.4", "gpt-5.4-mini", PublicStableImage2ModelName, codexImage15KModelName},
+			Models: []string{"gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5-openai-compact", "codex-auto-review", codexImage15KModelName},
 		},
 		{
 			Mode:   "claude",
 			Name:   "星人 Claude 高阶令牌",
-			Models: []string{"claude-fable-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6"},
+			Models: []string{"claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6", "claude-sonnet-5"},
 		},
 		{
 			Mode:   "image",
@@ -114,18 +115,23 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 						tokenGroup = legacyGroup
 					}
 				}
-				nextLimits := systemTokenModelLimits(token.ModelLimits, profile)
-				grokRetryEnabled := profile.Mode == "grok" && token.CrossGroupRetry
-				codexRetryEnabled := profile.Mode == "codex" && token.CrossGroupRetry
-				if !token.ModelLimitsEnabled || nextLimits != token.ModelLimits || token.Group != tokenGroup || grokRetryEnabled || codexRetryEnabled {
-					updates := map[string]interface{}{
-						"model_limits_enabled": true,
-						"model_limits":         nextLimits,
-						"group":                tokenGroup,
+				updates := map[string]interface{}{}
+				if !token.ModelLimitsEnabled {
+					updates["model_limits_enabled"] = true
+					updates["model_limits"] = strings.Join(profile.Models, ",")
+				} else if profile.Mode == "grok" {
+					nextLimits := systemTokenModelLimits(token.ModelLimits, profile)
+					if nextLimits != token.ModelLimits {
+						updates["model_limits"] = nextLimits
 					}
-					if profile.Mode == "grok" || profile.Mode == "codex" {
-						updates["cross_group_retry"] = false
-					}
+				}
+				if token.Group != tokenGroup {
+					updates["group"] = tokenGroup
+				}
+				if (profile.Mode == "grok" || profile.Mode == "codex") && token.CrossGroupRetry {
+					updates["cross_group_retry"] = false
+				}
+				if len(updates) > 0 {
 					if err := tx.Model(&model.Token{}).Where("id = ?", token.Id).Updates(updates).Error; err != nil {
 						return err
 					}

@@ -31,5 +31,7 @@ Implementation guardrails:
 
 - `service.EnsureSystemTokensForUserID` is restricted to `user_id=1`.
 - `service.StartSystemTokenReconcileTask` reconciles only `user_id=1`.
+- Go reconciliation owns token existence, safe bootstrap limits, group selection, and retry policy. It must not overwrite an enabled token's exact non-Grok model list.
+- `scripts/sync_app_model_permissions.py` is the single writer for the exact Codex, Claude, image, and video model lists. This prevents the two reconcilers from oscillating between different catalogs.
 - `scripts/sync_app_model_permissions.py` updates managed system-token model limits only where `user_id=1`.
 - `scripts/smoke_test.sh` refuses raw API key arguments and resolves admin tokens from MySQL.

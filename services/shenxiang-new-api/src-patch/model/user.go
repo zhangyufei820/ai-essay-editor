@@ -430,12 +430,8 @@ func HardDeleteUserById(id int) error {
 	if id == 0 {
 		return errors.New("id 为空！")
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := deleteUserOAuthBindingsByUserId(tx, id); err != nil {
-			return err
-		}
-		return tx.Unscoped().Delete(&User{}, "id = ?", id).Error
-	})
+	user := User{Id: id}
+	return user.HardDelete()
 }
 
 func inviteUser(inviterId int) (err error) {
@@ -749,11 +745,21 @@ func (user *User) Delete() error {
 	if user.Id == 0 {
 		return errors.New("id 为空！")
 	}
-	if err := DB.Delete(user).Error; err != nil {
+	if err := InvalidateUserTokensCache(user.Id); err != nil {
+		return err
+	}
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Token{}).Where("user_id = ?", user.Id).Update("status", common.TokenStatusDisabled).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", user.Id).Delete(&Token{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(user).Error
+	}); err != nil {
 		return err
 	}
 
-	// 清除缓存
 	return invalidateUserCache(user.Id)
 }
 
@@ -761,12 +767,21 @@ func (user *User) HardDelete() error {
 	if user.Id == 0 {
 		return errors.New("id 为空！")
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	if err := InvalidateUserTokensCache(user.Id); err != nil {
+		return err
+	}
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Unscoped().Where("user_id = ?", user.Id).Delete(&Token{}).Error; err != nil {
+			return err
+		}
 		if err := deleteUserOAuthBindingsByUserId(tx, user.Id); err != nil {
 			return err
 		}
 		return tx.Unscoped().Delete(user).Error
-	})
+	}); err != nil {
+		return err
+	}
+	return invalidateUserCache(user.Id)
 }
 
 // ValidateAndFill check password & user status

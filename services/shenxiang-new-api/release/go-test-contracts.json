@@ -38,5 +38,9 @@
   {
     "package": "./service",
     "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestMergeModelLimits.*|TestEnsureSystemTokensRejectsNonAdminUser|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestDiscountImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize|TestOnlyLegacyDiscountImage2NameIsRetired|TestResolveRealtimeGroupRatioPinsDiscountMarketplaceRatio)$"
+  },
+  {
+    "package": "./model",
+    "run": "^Test(DeleteUserByIdRevokesAndSoftDeletesTokens|HardDeleteUserByIdRemovesTokensAndBindings)$"
   }
 ]
