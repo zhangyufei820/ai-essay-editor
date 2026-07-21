@@ -101,6 +101,26 @@ _DISCOUNT_TEXT_MODEL_REGEX_ALTERNATION = "|".join(
 DISCOUNT_TEXT_MODELS_REGEX = (
     "^(" + _DISCOUNT_TEXT_MODEL_REGEX_ALTERNATION + ")(,(" + _DISCOUNT_TEXT_MODEL_REGEX_ALTERNATION + "))*$"
 )
+PLUS_TEXT_GROUP = "plus"
+PLUS_TEXT_CHANNEL_TAGS = (
+    "xingren-plus-text-wangwang",
+    "xingren-plus-text-pdhlzy",
+)
+PLUS_TEXT_ALLOWED_MODELS = (
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.5",
+    "gpt-5.6-luna",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "codex-auto-review",
+)
+_PLUS_TEXT_MODEL_REGEX_ALTERNATION = "|".join(
+    model.replace(".", "[.]") for model in PLUS_TEXT_ALLOWED_MODELS
+)
+PLUS_TEXT_MODELS_REGEX = (
+    "^(" + _PLUS_TEXT_MODEL_REGEX_ALTERNATION + ")(,(" + _PLUS_TEXT_MODEL_REGEX_ALTERNATION + "))*$"
+)
 GROK45_MODEL = "grok-4.5"
 GROK45_GROUP = "grok45"
 GROK45_CHANNEL_TAG = "xingren-grok45"
@@ -446,6 +466,13 @@ def discount_text_models_allowed_sql(column: str) -> str:
     return (
         "REPLACE(COALESCE(" + column + ", ''), ' ', '') REGEXP BINARY "
         + sql_quote(DISCOUNT_TEXT_MODELS_REGEX)
+    )
+
+
+def plus_text_models_allowed_sql(column: str) -> str:
+    return (
+        "REPLACE(COALESCE(" + column + ", ''), ' ', '') REGEXP BINARY "
+        + sql_quote(PLUS_TEXT_MODELS_REGEX)
     )
 
 
@@ -1874,14 +1901,23 @@ def sync_abilities() -> None:
     }
     discount_channel_tags = set(DISCOUNT_TEXT_CHANNEL_TAGS)
     discount_channel_tags_sql = ", ".join(sql_quote(tag) for tag in DISCOUNT_TEXT_CHANNEL_TAGS)
+    plus_channel_tags = set(PLUS_TEXT_CHANNEL_TAGS)
+    plus_channel_tags_sql = ", ".join(sql_quote(tag) for tag in PLUS_TEXT_CHANNEL_TAGS)
     grok45_channel_tags = set(GROK45_CHANNEL_TAGS)
     grok45_channel_tags_sql = ", ".join(sql_quote(tag) for tag in GROK45_CHANNEL_TAGS)
     protected_channel_tags_sql = ", ".join(
         sql_quote(tag)
-        for tag in (*DISCOUNT_TEXT_CHANNEL_TAGS, *GROK45_CHANNEL_TAGS, DISCOUNT_IMAGE2_CHANNEL_TAG)
+        for tag in (
+            *DISCOUNT_TEXT_CHANNEL_TAGS,
+            *PLUS_TEXT_CHANNEL_TAGS,
+            *GROK45_CHANNEL_TAGS,
+            DISCOUNT_IMAGE2_CHANNEL_TAG,
+        )
     )
     discount_allowed_models = set(DISCOUNT_TEXT_ALLOWED_MODELS)
     discount_allowed_models_sql = ", ".join(sql_quote(model) for model in DISCOUNT_TEXT_ALLOWED_MODELS)
+    plus_allowed_models = set(PLUS_TEXT_ALLOWED_MODELS)
+    plus_allowed_models_sql = ", ".join(sql_quote(model) for model in PLUS_TEXT_ALLOWED_MODELS)
     statements = [
         "START TRANSACTION;",
         "UPDATE channels SET status = 2 WHERE tag IN ("
@@ -1897,6 +1933,20 @@ def sync_abilities() -> None:
         + ")"
         + " AND FIND_IN_SET("
         + sql_quote(DISCOUNT_TEXT_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
+        "UPDATE channels SET status = 2 WHERE tag IN ("
+        + plus_channel_tags_sql
+        + ")"
+        + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+        + sql_quote(PLUS_TEXT_GROUP)
+        + " OR NOT ("
+        + plus_text_models_allowed_sql("models")
+        + "));",
+        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') NOT IN ("
+        + plus_channel_tags_sql
+        + ")"
+        + " AND FIND_IN_SET("
+        + sql_quote(PLUS_TEXT_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
         "UPDATE channels SET status = 2 WHERE tag IN ("
         + grok45_channel_tags_sql
@@ -1934,6 +1984,7 @@ def sync_abilities() -> None:
             + ");"
         )
     invalid_discount_channels: list[str] = []
+    invalid_plus_channels: list[str] = []
     invalid_grok_channels: list[str] = []
     invalid_grok1080_channels: list[str] = []
     invalid_discount_image2_channels: list[str] = []
@@ -1959,6 +2010,19 @@ def sync_abilities() -> None:
         elif DISCOUNT_TEXT_GROUP in channel_groups:
             invalid_discount_channels.append(channel_id)
             sync_groups = []
+        elif tag in plus_channel_tags:
+            if (
+                channel_groups != [PLUS_TEXT_GROUP]
+                or not channel_models
+                or any(model not in plus_allowed_models for model in channel_models)
+            ):
+                invalid_plus_channels.append(channel_id)
+                sync_groups = []
+            else:
+                sync_groups = channel_groups
+        elif PLUS_TEXT_GROUP in channel_groups:
+            invalid_plus_channels.append(channel_id)
+            sync_groups = []
         elif tag in grok45_channel_tags:
             if channel_groups != [GROK45_GROUP]:
                 invalid_grok_channels.append(channel_id)
@@ -1976,7 +2040,7 @@ def sync_abilities() -> None:
                 sync_groups = [
                     group
                     for group in groups
-                    if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
+                    if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
                 ]
             else:
                 invalid_grok1080_channels.append(channel_id)
@@ -1992,7 +2056,7 @@ def sync_abilities() -> None:
                 sync_groups = [
                     group
                     for group in groups
-                    if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
+                    if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
                 ]
             else:
                 invalid_discount_image2_channels.append(channel_id)
@@ -2009,7 +2073,7 @@ def sync_abilities() -> None:
                 sync_groups = [
                     group
                     for group in groups
-                    if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
+                    if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
                 ]
             else:
                 invalid_gemini_ddpapi_channels.append(channel_id)
@@ -2018,7 +2082,7 @@ def sync_abilities() -> None:
             sync_groups = [
                 group
                 for group in groups
-                if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
+                if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
             ]
         for model in channel_models:
             if model == INTERNAL_DISCOUNT_IMAGE2_MODEL and tag != DISCOUNT_IMAGE2_CHANNEL_TAG:
@@ -2055,6 +2119,10 @@ def sync_abilities() -> None:
                     current_channel_conditions.append(
                         discount_text_models_allowed_sql("current_channel.models")
                     )
+                elif tag in plus_channel_tags:
+                    current_channel_conditions.append(
+                        plus_text_models_allowed_sql("current_channel.models")
+                    )
                 elif tag == DISCOUNT_IMAGE2_CHANNEL_TAG:
                     current_channel_conditions.append(
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
@@ -2068,6 +2136,9 @@ def sync_abilities() -> None:
                             + ")",
                             "FIND_IN_SET("
                             + sql_quote(DISCOUNT_TEXT_GROUP)
+                            + ", REPLACE(COALESCE(current_channel.`group`, ''), ' ', '')) = 0",
+                            "FIND_IN_SET("
+                            + sql_quote(PLUS_TEXT_GROUP)
                             + ", REPLACE(COALESCE(current_channel.`group`, ''), ' ', '')) = 0",
                             "FIND_IN_SET("
                             + sql_quote(GROK45_GROUP)
@@ -2118,6 +2189,32 @@ def sync_abilities() -> None:
             + discount_channel_tags_sql
             + ") OR FIND_IN_SET("
             + sql_quote(DISCOUNT_TEXT_GROUP)
+            + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0));",
+            "UPDATE abilities SET enabled = 0 WHERE `group` = "
+            + sql_quote(PLUS_TEXT_GROUP)
+            + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag IN ("
+            + plus_channel_tags_sql
+            + "));",
+            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
+            + "(SELECT id FROM channels WHERE tag IN ("
+            + plus_channel_tags_sql
+            + ")) AND `group` <> "
+            + sql_quote(PLUS_TEXT_GROUP)
+            + ";",
+            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+            "SET ability.enabled = 0 WHERE channel.tag IN ("
+            + plus_channel_tags_sql
+            + ")"
+            + " AND (ability.model NOT IN ("
+            + plus_allowed_models_sql
+            + ") OR NOT ("
+            + plus_text_models_allowed_sql("channel.models")
+            + ") OR FIND_IN_SET(ability.model, REPLACE(COALESCE(channel.models, ''), ' ', '')) = 0);",
+            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
+            + "(SELECT id FROM channels WHERE status <> 1 AND (tag IN ("
+            + plus_channel_tags_sql
+            + ") OR FIND_IN_SET("
+            + sql_quote(PLUS_TEXT_GROUP)
             + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0));",
             "UPDATE abilities SET enabled = 0 WHERE `group` = "
             + sql_quote(GROK45_GROUP)
@@ -2183,6 +2280,11 @@ def sync_abilities() -> None:
         raise RuntimeError(
             "discount group isolation violation; disabled channel count: "
             + str(len(invalid_discount_channels))
+        )
+    if invalid_plus_channels:
+        raise RuntimeError(
+            "Plus group isolation violation; disabled channel count: "
+            + str(len(invalid_plus_channels))
         )
     if invalid_grok_channels:
         raise RuntimeError(

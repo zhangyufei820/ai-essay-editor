@@ -399,6 +399,69 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("REGEXP BINARY", sql)
         self.assertGreater(sql.index("UPDATE abilities SET enabled = 0"), sql.rindex("ON DUPLICATE KEY UPDATE"))
 
+    def test_sync_abilities_keeps_plus_channels_isolated_without_compact(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                plus_models = ",".join(self.module.PLUS_TEXT_ALLOWED_MODELS)
+                return [
+                    ["41", plus_models, "20", "100", self.module.PLUS_TEXT_CHANNEL_TAGS[0], "plus"],
+                    ["42", plus_models, "10", "100", self.module.PLUS_TEXT_CHANNEL_TAGS[1], "plus"],
+                    ["21", "gpt-5.5,gpt-5.5-openai-compact,claude-sonnet-5", "0", "100", "stable", "default,internal"],
+                ]
+            if "SELECT model_name FROM models" in query:
+                return [[model] for model in (*self.module.PLUS_TEXT_ALLOWED_MODELS, "gpt-5.5-openai-compact", "claude-sonnet-5")]
+            return []
+
+        self.module.active_groups = lambda: ["default", "internal", "plus"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        for channel_id, tag in zip(("41", "42"), self.module.PLUS_TEXT_CHANNEL_TAGS):
+            for model in self.module.PLUS_TEXT_ALLOWED_MODELS:
+                self.assertIn(f"SELECT 'plus', '{model}', {channel_id}", sql)
+            self.assertNotIn(f"'default', 'gpt-5.5', {channel_id}", sql)
+            self.assertIn("COALESCE(current_channel.tag, '') = '" + tag + "'", sql)
+        self.assertNotIn("'plus', 'gpt-5.5-openai-compact', 21", sql)
+        self.assertNotIn("'plus', 'claude-sonnet-5', 21", sql)
+        self.assertIn("'default', 'gpt-5.5-openai-compact', 21", sql)
+        self.assertIn("'internal', 'claude-sonnet-5', 21", sql)
+        self.assertIn("FIND_IN_SET('plus'", sql)
+        self.assertIn("ability.model NOT IN", sql)
+
+    def test_sync_abilities_rejects_plus_channel_with_compact(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "41",
+                    "gpt-5.5,gpt-5.5-openai-compact",
+                    "20",
+                    "100",
+                    self.module.PLUS_TEXT_CHANNEL_TAGS[0],
+                    "plus",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["gpt-5.5"], ["gpt-5.5-openai-compact"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "plus"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        with self.assertRaisesRegex(RuntimeError, "Plus group isolation violation"):
+            self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        self.assertIn("UPDATE channels SET status = 2 WHERE tag IN", sql)
+        self.assertNotIn("SELECT 'plus', 'gpt-5.5', 41", sql)
+        self.assertNotIn("SELECT 'plus', 'gpt-5.5-openai-compact', 41", sql)
+
     def test_ensure_public_video_models_restores_only_callable_models(self) -> None:
         captured: list[str] = []
         self.module.mysql_exec = captured.append
