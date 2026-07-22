@@ -709,7 +709,7 @@ def main() -> int:
                         "priority": priorities[spec.slug],
                         "upstream_model_count": plans[spec.slug].upstream_model_count,
                         "matched_public_models": plans[spec.slug].matched_models,
-                        "wire_api": "responses-via-chat" if spec.responses_via_chat else "responses",
+                        "wire_api": "responses",
                     }
                     for spec in DISCOUNT_CHANNEL_SPECS
                 },

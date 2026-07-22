@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import sys
 import unittest
 from pathlib import Path
@@ -104,6 +105,33 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "pdhlzy")
 
         self.assertEqual(spec.channel_type, self.module.OPENAI_CHANNEL_TYPE)
+
+    def test_probe_output_reports_native_responses_for_every_channel(self) -> None:
+        plan = self.module.DiscountPlan(
+            upstream_model_count=4,
+            matched_models=self.module.DISCOUNT_TEXT_MODELS,
+            missing_models=(),
+        )
+        stdout = io.StringIO()
+        with mock.patch.object(self.module, "require_upstream_key", return_value="fake-upstream-key"), mock.patch.object(
+            self.module, "resolve_upstream_base_url", return_value="https://example.test"
+        ), mock.patch.object(
+            self.module, "fetch_upstream_models", return_value=set(self.module.DISCOUNT_TEXT_MODELS)
+        ), mock.patch.object(
+            self.module, "build_discount_plan", return_value=plan
+        ), mock.patch.object(
+            sys, "argv", ["configure_discount_text_channel.py", "--order", "reserve,pdhlzy,wangwang"]
+        ), mock.patch(
+            "sys.stdout", stdout
+        ):
+            self.assertEqual(self.module.main(), 0)
+
+        payload = self.module.json.loads(stdout.getvalue())
+        self.assertEqual(payload["channel_order"], ["reserve", "pdhlzy", "wangwang"])
+        self.assertEqual(
+            {channel["wire_api"] for channel in payload["channels"].values()},
+            {"responses"},
+        )
 
     def test_build_apply_sql_creates_three_isolated_priority_channels(self) -> None:
         sql = self.build_sql()
