@@ -21,6 +21,10 @@ func TestGetPublicUserUsableGroupsOnlyReturnsStableDiscountAndPlusGroups(t *test
 		"default":"原价稳定通道",
 		"discount":"特价临时通道",
 		"plus":"Plus 通道",
+		"kiro":"Claude 经济通道",
+		"kiro-stable":"Claude 稳定通道",
+		"claude-external":"Claude 标准通道",
+		"ccmax-terminal":"Claude 终端专用",
 		"code":"历史兼容",
 		"internal":"内部兼容",
 		"pro":"历史兼容",
@@ -30,10 +34,14 @@ func TestGetPublicUserUsableGroupsOnlyReturnsStableDiscountAndPlusGroups(t *test
 	groups := GetPublicUserUsableGroups("internal")
 
 	require.Equal(t, map[string]string{
-		"default":  "原价稳定通道",
-		"discount": "特价临时通道",
-		"plus":     "Plus 通道",
+		"default":         "原价稳定通道",
+		"discount":        "特价临时通道",
+		"plus":            "Plus 通道",
+		"kiro":            "Claude 经济通道",
+		"kiro-stable":     "Claude 稳定通道",
+		"claude-external": "Claude 标准通道",
 	}, groups)
+	require.NotContains(t, groups, ClaudeTerminalPricingGroupName)
 }
 
 func TestIsPublicTokenGroupRejectsLegacyAndAutoGroups(t *testing.T) {
@@ -41,6 +49,14 @@ func TestIsPublicTokenGroupRejectsLegacyAndAutoGroups(t *testing.T) {
 	require.True(t, IsPublicTokenGroup("default"))
 	require.True(t, IsPublicTokenGroup(DiscountPricingGroupName))
 	require.True(t, IsPublicTokenGroup(PlusPricingGroupName))
+	require.True(t, IsPublicTokenGroup(ClaudeKiroPricingGroupName))
+	require.True(t, IsPublicTokenGroup(ClaudeKiroStablePricingGroupName))
+	require.True(t, IsPublicTokenGroup(ClaudeExternalPricingGroupName))
+	require.False(t, IsPublicTokenGroup(ClaudeTerminalPricingGroupName))
+	require.True(t, IsPublicClaudeTokenGroup(ClaudeKiroPricingGroupName))
+	require.True(t, IsPublicClaudeTokenGroup(ClaudeKiroStablePricingGroupName))
+	require.True(t, IsPublicClaudeTokenGroup(ClaudeExternalPricingGroupName))
+	require.False(t, IsPublicClaudeTokenGroup("default"))
 	require.False(t, IsPublicTokenGroup("internal"))
 	require.False(t, IsPublicTokenGroup("auto"))
 }
@@ -112,9 +128,13 @@ func TestGetPublicUserAutoGroupHidesLegacyGroups(t *testing.T) {
 		"default":"原价",
 		"discount":"特价",
 		"plus":"Plus",
+		"kiro":"Claude 经济",
+		"kiro-stable":"Claude 稳定",
+		"claude-external":"Claude 标准",
+		"ccmax-terminal":"Claude 终端专用",
 		"internal":"历史兼容"
 	}`))
-	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["default","internal","discount","plus"]`))
+	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["default","internal","discount","plus","kiro","kiro-stable","claude-external","ccmax-terminal"]`))
 
 	require.Equal(t, []string{"default", "internal"}, GetUserAutoGroup("internal"))
 	require.Equal(t, []string{"default"}, GetPublicUserAutoGroup("internal"))

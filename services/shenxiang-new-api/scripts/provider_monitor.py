@@ -62,6 +62,8 @@ class TextFamily:
     baseline_priorities: dict[int, int]
     allow_disable: bool = True
     standalone: bool = False
+    request_format: str = "chat"
+    expected_tags: dict[int, str] | None = None
 
 
 TEXT_FAMILIES = (
@@ -72,17 +74,72 @@ TEXT_FAMILIES = (
         baseline_priorities={2: 40, 14: 30},
     ),
     TextFamily(
-        name="claude_text",
-        models=("claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6"),
-        channel_ids=(13, 9),
-        baseline_priorities={13: 30, 9: 20},
+        name="claude_kiro_text",
+        models=(
+            "claude-fable-5",
+            "claude-opus-4-6",
+            "claude-opus-4-7",
+            "claude-opus-4-8",
+            "claude-sonnet-4-5-20250929",
+            "claude-sonnet-4-6",
+            "claude-sonnet-5",
+        ),
+        channel_ids=(46,),
+        baseline_priorities={46: 10},
+        standalone=True,
+        expected_tags={46: "xingren-claude-pdhlzy-kiro"},
     ),
     TextFamily(
-        name="claude_fable_text",
-        models=("claude-fable-5",),
-        channel_ids=(11,),
-        baseline_priorities={11: 15},
+        name="claude_kiro_stable_text",
+        models=(
+            "claude-fable-5",
+            "claude-haiku-4-5-20251001",
+            "claude-opus-4-5-20251101",
+            "claude-opus-4-6",
+            "claude-opus-4-7",
+            "claude-opus-4-8",
+            "claude-sonnet-4-5-20250929",
+            "claude-sonnet-4-6",
+            "claude-sonnet-5",
+        ),
+        channel_ids=(47,),
+        baseline_priorities={47: 20},
         standalone=True,
+        expected_tags={47: "xingren-claude-pdhlzy-kiro-stable"},
+    ),
+    TextFamily(
+        name="claude_ccmax_terminal_text",
+        models=(
+            "claude-fable-5",
+            "claude-haiku-4-5-20251001",
+            "claude-opus-4-6",
+            "claude-opus-4-7",
+            "claude-opus-4-8",
+            "claude-sonnet-4-6",
+            "claude-sonnet-5",
+        ),
+        channel_ids=(48,),
+        baseline_priorities={48: 30},
+        standalone=True,
+        request_format="messages",
+        expected_tags={48: "xingren-claude-pdhlzy-ccmax-terminal"},
+    ),
+    TextFamily(
+        name="claude_external_text",
+        models=(
+            "claude-fable-5",
+            "claude-haiku-4-5-20251001",
+            "claude-opus-4-6",
+            "claude-opus-4-7",
+            "claude-opus-4-8",
+            "claude-sonnet-4-6",
+            "claude-sonnet-5",
+        ),
+        channel_ids=(49,),
+        baseline_priorities={49: 40},
+        standalone=True,
+        request_format="messages",
+        expected_tags={49: "xingren-claude-pdhlzy-claude-external"},
     ),
 )
 
@@ -263,6 +320,7 @@ SELECT JSON_OBJECT(
   'status', status,
   'priority', priority,
   'weight', weight,
+  'tag', tag,
   'key', `key`
 )
 FROM channels
@@ -379,6 +437,77 @@ def request_chat(base_url: str, api_key: str, model: str) -> dict[str, Any]:
             if first_ms is None:
                 first_ms = int((time.monotonic() - start) * 1000)
             ok = 200 <= status < 300 and ("data:" in preview or "OK" in preview or first_ms < int(HTTP_TIMEOUT * 1000))
+            return {
+                "ok": bool(ok),
+                "status": status,
+                "first_token_ms": first_ms,
+                "reason": "ok" if ok else "bad_stream",
+            }
+    except urllib.error.HTTPError as exc:
+        _ = exc.read(512)
+        return {
+            "ok": False,
+            "status": exc.code,
+            "first_token_ms": int((time.monotonic() - start) * 1000),
+            "reason": classify_http_error(exc.code),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": 0,
+            "first_token_ms": int((time.monotonic() - start) * 1000),
+            "reason": classify_exception(exc),
+        }
+
+
+def request_messages(base_url: str, api_key: str, model: str) -> dict[str, Any]:
+    normalized_base = base_url.rstrip("/")
+    if normalized_base.endswith("/v1"):
+        url = normalized_base + "/messages"
+    else:
+        url = normalized_base + "/v1/messages"
+    body = json.dumps(
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": "Reply with OK only."}],
+            "stream": True,
+            "max_tokens": 4,
+            "temperature": 0,
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            "User-Agent": "shenxiang-new-api-latency-canary/2.0",
+        },
+        method="POST",
+    )
+    start = time.monotonic()
+    preview = ""
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            status = resp.getcode()
+            first_ms: int | None = None
+            deadline = time.monotonic() + HTTP_TIMEOUT
+            while time.monotonic() < deadline:
+                line = resp.readline(4096)
+                if not line:
+                    break
+                text = line.decode("utf-8", "replace")
+                if text.strip():
+                    preview = (preview + text)[:180]
+                if text.strip().startswith("data:"):
+                    first_ms = int((time.monotonic() - start) * 1000)
+                    break
+            if first_ms is None:
+                first_ms = int((time.monotonic() - start) * 1000)
+            ok = 200 <= status < 300 and ("data:" in preview or "OK" in preview)
             return {
                 "ok": bool(ok),
                 "status": status,
@@ -660,11 +789,11 @@ def ingest_real_request_samples(
     env: dict[str, str],
 ) -> dict[str, Any]:
     rows = load_real_request_rows(env, state, families)
-    family_by_route: dict[tuple[int, str], str] = {}
+    family_by_route: dict[tuple[int, str], TextFamily] = {}
     for family in families:
         for channel_id in family.channel_ids:
             for model in family.models:
-                family_by_route[(channel_id, model)] = family.name
+                family_by_route[(channel_id, model)] = family
 
     ingested = 0
     skipped = 0
@@ -674,8 +803,8 @@ def ingest_real_request_samples(
         max_id = max(max_id, log_id)
         channel_id = int(row.get("channel_id") or 0)
         model_name = str(row.get("model_name") or "")
-        family_name = family_by_route.get((channel_id, model_name))
-        if not family_name:
+        family = family_by_route.get((channel_id, model_name))
+        if not family:
             skipped += 1
             continue
         try:
@@ -685,7 +814,12 @@ def ingest_real_request_samples(
         except Exception:
             other = {}
         request_path = str(other.get("request_path") or "")
-        if request_path and request_path not in {"/v1/responses", "/v1/chat/completions"}:
+        allowed_request_paths = (
+            {"/v1/messages"}
+            if family.request_format == "messages"
+            else {"/v1/responses", "/v1/chat/completions"}
+        )
+        if request_path and request_path not in allowed_request_paths:
             skipped += 1
             continue
         frt = int(float(other.get("frt") or 0))
@@ -695,7 +829,7 @@ def ingest_real_request_samples(
         ok, reason = stream_status_from_other(other)
         append_sample(
             state,
-            family_name,
+            family.name,
             model_name,
             channel_id,
             {
@@ -733,10 +867,14 @@ def evaluate_text_family(
 ) -> dict[str, Any]:
     route_results: dict[str, Any] = {}
     futures: dict[concurrent.futures.Future[dict[str, Any]], tuple[int, str]] = {}
+    requester = request_messages if family.request_format == "messages" else request_chat
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         for channel_id in family.channel_ids:
             channel = channels.get(channel_id)
             if not channel:
+                continue
+            expected_tag = (family.expected_tags or {}).get(channel_id)
+            if expected_tag and str(channel.get("tag") or "") != expected_tag:
                 continue
             channel_models = split_models(channel)
             api_key = first_key(str(channel.get("key") or ""))
@@ -746,7 +884,7 @@ def evaluate_text_family(
             for model in family.models:
                 if model not in channel_models:
                     continue
-                futures[pool.submit(request_chat, base_url, api_key, model)] = (channel_id, model)
+                futures[pool.submit(requester, base_url, api_key, model)] = (channel_id, model)
         for future in concurrent.futures.as_completed(futures):
             channel_id, model = futures[future]
             result = future.result()
@@ -767,6 +905,10 @@ def evaluate_text_family(
         channel = channels.get(channel_id)
         if not channel:
             channel_summaries[channel_id] = {"missing": True}
+            continue
+        expected_tag = (family.expected_tags or {}).get(channel_id)
+        if expected_tag and str(channel.get("tag") or "") != expected_tag:
+            channel_summaries[channel_id] = {"tag_mismatch": True}
             continue
         baseline = family.baseline_priorities.get(channel_id, int(channel.get("priority") or 0))
         ch_state = channel_state(state, channel_id, baseline)
@@ -796,7 +938,7 @@ def evaluate_text_family(
 
     enabled_count = sum(1 for channel in channel_summaries.values() if channel.get("current_status") == 1)
     for channel_id, summary in channel_summaries.items():
-        if summary.get("missing"):
+        if summary.get("missing") or summary.get("tag_mismatch"):
             continue
         ch_state = channel_state(state, channel_id, int(summary["baseline_priority"]))
         current_status = int(summary["current_status"])
@@ -829,7 +971,9 @@ def evaluate_text_family(
     rankable = [
         summary
         for summary in channel_summaries.values()
-        if not summary.get("missing") and int(summary.get("current_status") or 0) == 1
+        if not summary.get("missing")
+        and not summary.get("tag_mismatch")
+        and int(summary.get("current_status") or 0) == 1
     ]
     rankable.sort(key=lambda item: (item.get("hard_unhealthy", False), float(item.get("score") or 10_000_000)))
     for rank, summary in enumerate(rankable):

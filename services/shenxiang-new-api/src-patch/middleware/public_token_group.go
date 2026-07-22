@@ -16,9 +16,33 @@ const maxTokenConfigurationBodyBytes = 1 << 20
 const claudeUserTokenName = "claude"
 
 var claudeUserTokenModels = []string{
+	"claude-fable-5",
+	"claude-haiku-4-5-20251001",
 	"claude-opus-4-6",
 	"claude-opus-4-7",
 	"claude-opus-4-8",
+	"claude-sonnet-4-6",
+	"claude-sonnet-5",
+}
+
+var claudeKiroUserTokenModels = []string{
+	"claude-fable-5",
+	"claude-opus-4-6",
+	"claude-opus-4-7",
+	"claude-opus-4-8",
+	"claude-sonnet-4-5-20250929",
+	"claude-sonnet-4-6",
+	"claude-sonnet-5",
+}
+
+var claudeStableUserTokenModels = []string{
+	"claude-fable-5",
+	"claude-haiku-4-5-20251001",
+	"claude-opus-4-5-20251101",
+	"claude-opus-4-6",
+	"claude-opus-4-7",
+	"claude-opus-4-8",
+	"claude-sonnet-4-5-20250929",
 	"claude-sonnet-4-6",
 	"claude-sonnet-5",
 }
@@ -79,8 +103,26 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 		if rawName, ok := request["name"]; ok {
 			var name string
 			if json.Unmarshal(rawName, &name) == nil && strings.EqualFold(strings.TrimSpace(name), claudeUserTokenName) {
+				if group == "default" {
+					group = service.ClaudeExternalPricingGroupName
+				}
+				if !service.IsPublicClaudeTokenGroup(group) {
+					c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+						"success": false,
+						"message": "Claude 令牌分组无效",
+					})
+					return
+				}
+				request["group"] = json.RawMessage(`"` + group + `"`)
 				request["model_limits_enabled"] = json.RawMessage(`true`)
-				request["model_limits"] = json.RawMessage(`"` + strings.Join(claudeUserTokenModels, `,`) + `"`)
+				models := claudeUserTokenModels
+				if group == service.ClaudeKiroPricingGroupName {
+					models = claudeKiroUserTokenModels
+				} else if group == service.ClaudeKiroStablePricingGroupName {
+					models = claudeStableUserTokenModels
+				}
+				request["model_limits"] = json.RawMessage(`"` + strings.Join(models, `,`) + `"`)
+				request["cross_group_retry"] = json.RawMessage(`false`)
 			}
 		}
 		validationBody, err := json.Marshal(request)

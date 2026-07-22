@@ -399,6 +399,42 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("REGEXP BINARY", sql)
         self.assertGreater(sql.index("UPDATE abilities SET enabled = 0"), sql.rindex("ON DUPLICATE KEY UPDATE"))
 
+    def test_sync_abilities_keeps_pdhlzy_claude_channels_isolated(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "47",
+                    "claude-opus-4-5-20251101,claude-sonnet-4-6",
+                    "20",
+                    "100",
+                    "xingren-claude-pdhlzy-kiro-stable",
+                    "kiro-stable",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["claude-opus-4-5-20251101"], ["claude-sonnet-4-6"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "kiro", "kiro-stable", "claude-external"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        self.assertIn("SELECT 'kiro-stable', 'claude-opus-4-5-20251101', 47", sql)
+        self.assertIn("SELECT 'kiro-stable', 'claude-sonnet-4-6', 47", sql)
+        self.assertNotIn("SELECT 'default', 'claude-sonnet-4-6', 47", sql)
+        self.assertNotIn("SELECT 'kiro', 'claude-sonnet-4-6', 47", sql)
+        self.assertIn("WHERE `group` = 'kiro-stable'", sql)
+        pdhlzy_insert = next(
+            statement
+            for statement in sql.splitlines()
+            if "SELECT 'kiro-stable', 'claude-sonnet-4-6', 47" in statement
+        )
+        self.assertNotIn("current_channel.tag, '') NOT IN", pdhlzy_insert)
+
     def test_sync_abilities_keeps_plus_channels_isolated_without_compact(self) -> None:
         captured: list[str] = []
 
@@ -797,7 +833,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     "codex-auto-review",
                     "image 2电商商品图快速通道(1.5K)",
                 ],
-                "claude": ["claude-opus-4-8"],
+                "claude": list(self.module.CLAUDE_ALLOWED_MODELS),
                 "image": ["gpt-image-2-4K", "特价 image-2", "官转image 2稳定", "geek2api-image-2"],
                 "video": ["seedance-2.0-cl-mini"],
             }
@@ -817,6 +853,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("codex-auto-review", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertIn("官转image 2稳定", sql)
+        self.assertIn("claude-haiku-4-5-20251001", sql)
+        self.assertNotIn("claude-opus-4-5-20251101", sql)
+        self.assertNotIn("claude-sonnet-4-5-20250929", sql)
         self.assertIn("CACHE:admin-codex-key,user-claude-key,user-image-key", sql)
 
     def test_sync_user_codex_tokens_updates_non_admin_codex_tokens(self) -> None:
@@ -890,8 +929,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         def fake_mysql(query: str) -> list[list[str]]:
             self.assertIn("LOWER(TRIM(COALESCE(name, ''))) = 'claude'", query)
             return [
-                ["201", "key-201", "", "0"],
-                ["202", "key-202", "claude-opus-4-6", "1"],
+                ["201", "key-201", "", "0", "", "1"],
+                ["202", "key-202", "claude-opus-4-6", "1", "kiro-stable", "0"],
             ]
 
         self.module.mysql = fake_mysql
@@ -908,7 +947,25 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '202'", sql)
         self.assertIn("model_limits_enabled = 1", sql)
         self.assertIn("claude-opus-4-6,claude-sonnet-5", sql)
+        self.assertIn("`group` = 'claude-external'", sql)
+        self.assertIn("`group` = 'kiro-stable'", sql)
+        self.assertIn("cross_group_retry = 0", sql)
         self.assertIn("CACHE:key-201,key-202", sql)
+
+    def test_claude_token_models_follow_verified_group_matrix(self) -> None:
+        available = list(self.module.CLAUDE_ALLOWED_MODELS)
+
+        kiro_models = self.module.claude_token_models_for_group(available, "kiro")
+        stable_models = self.module.claude_token_models_for_group(available, "kiro-stable")
+        external_models = self.module.claude_token_models_for_group(available, "claude-external")
+
+        self.assertEqual(kiro_models, self.module.CLAUDE_KIRO_MODELS)
+        self.assertEqual(stable_models, self.module.CLAUDE_ALLOWED_MODELS)
+        self.assertEqual(external_models, self.module.CLAUDE_EXTERNAL_MODELS)
+        self.assertIn("claude-sonnet-4-5-20250929", kiro_models)
+        self.assertNotIn("claude-haiku-4-5-20251001", kiro_models)
+        self.assertIn("claude-haiku-4-5-20251001", external_models)
+        self.assertNotIn("claude-sonnet-4-5-20250929", external_models)
 
     def test_sync_user_video_tokens_replaces_all_public_video_limits(self) -> None:
         captured: list[str] = []
@@ -1361,21 +1418,21 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(result["active_models_retired"], 4)
         self.assertEqual(result["abilities_disabled"], 12)
-        self.assertEqual(result["channel_models_removed"], 2)
+        self.assertEqual(result["channel_models_removed"], 1)
         self.assertEqual(result["channel_mapping_removed"], 1)
         self.assertEqual(result["pricing_options_sanitized"], 5)
-        self.assertEqual(result["tokens_rewritten"], 2)
-        self.assertEqual(result["token_caches_deleted"], 2)
+        self.assertEqual(result["tokens_rewritten"], 1)
+        self.assertEqual(result["token_caches_deleted"], 1)
         for values in captured_options.values():
-            self.assertEqual(values, {"claude-sonnet-5": 1.0})
+            self.assertEqual(values, {"claude-sonnet-5": 1.0, "claude-fable-5": 2.0})
         sql = "\n".join(captured_sql)
         self.assertIn("UPDATE models SET status = 0", sql)
         self.assertIn("UPDATE abilities SET enabled = 0", sql)
-        self.assertIn("UPDATE channels SET models = 'claude-sonnet-5,claude-opus-4-8'", sql)
+        self.assertIn("UPDATE channels SET models = 'claude-sonnet-5,claude-fable-5,claude-opus-4-8'", sql)
         self.assertIn("model_mapping = '{\"custom\":\"target\"}'", sql)
-        self.assertIn("UPDATE tokens SET model_limits = 'claude-sonnet-5' WHERE id = '301'", sql)
-        self.assertIn("UPDATE tokens SET model_limits = 'claude-opus-4-6' WHERE id = '302'", sql)
-        self.assertEqual(captured_caches, ["key-301", "key-302"])
+        self.assertIn("UPDATE tokens SET model_limits = 'claude-sonnet-5,claude-fable-5' WHERE id = '301'", sql)
+        self.assertNotIn("UPDATE tokens SET model_limits = 'claude-opus-4-6' WHERE id = '302'", sql)
+        self.assertEqual(captured_caches, ["key-301"])
 
     def test_ensure_codex_text_channel_models_adds_openai_models_and_retires_spark_mapping(self) -> None:
         captured: list[str] = []

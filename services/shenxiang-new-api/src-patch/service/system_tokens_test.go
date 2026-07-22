@@ -71,17 +71,29 @@ func TestSystemTokenProfilesCodexTextIncludesPublicImageModels(t *testing.T) {
 	require.NotContains(t, codexModels, "geek2api-image-2")
 }
 
-func TestSystemTokenProfilesClaudeModelsExcludeRetiredFable(t *testing.T) {
+func TestSystemTokenProfilesClaudeModelsMatchExternalChannel(t *testing.T) {
 	var claudeModels []string
+	var claudeGroup string
 	for _, profile := range SystemTokenProfiles() {
 		if profile.Mode == "claude" {
 			claudeModels = profile.Models
+			claudeGroup = profile.Group
 			break
 		}
 	}
 
-	require.Contains(t, claudeModels, "claude-sonnet-5")
-	require.NotContains(t, claudeModels, "claude-fable-5")
+	require.Equal(t, []string{
+		"claude-fable-5",
+		"claude-haiku-4-5-20251001",
+		"claude-opus-4-6",
+		"claude-opus-4-7",
+		"claude-opus-4-8",
+		"claude-sonnet-4-6",
+		"claude-sonnet-5",
+	}, claudeModels)
+	require.Equal(t, ClaudeExternalPricingGroupName, claudeGroup)
+	require.NotContains(t, claudeModels, "claude-opus-4-5-20251101")
+	require.NotContains(t, claudeModels, "claude-sonnet-4-5-20250929")
 }
 
 func TestMergeModelLimitsCanonicalizesRawGPTImage2(t *testing.T) {
@@ -206,6 +218,8 @@ func TestSystemTokenProfilesReconcilePreservesExternallyManagedModelLimits(t *te
 		if profile.Mode == "grok" {
 			group = Grok45PricingGroupName
 			limits = Grok45ModelName
+		} else if profile.Mode == "claude" {
+			group = ClaudeExternalPricingGroupName
 		}
 		require.NoError(t, model.DB.Create(&model.Token{
 			UserId:             AdminSystemTokenUserID,
@@ -217,7 +231,7 @@ func TestSystemTokenProfilesReconcilePreservesExternallyManagedModelLimits(t *te
 			ModelLimitsEnabled: true,
 			ModelLimits:        limits,
 			Group:              group,
-			CrossGroupRetry:    profile.Mode != "codex" && profile.Mode != "grok",
+			CrossGroupRetry:    profile.Mode != "codex" && profile.Mode != "grok" && profile.Mode != "claude",
 		}).Error)
 	}
 

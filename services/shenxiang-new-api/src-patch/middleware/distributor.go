@@ -33,6 +33,7 @@ type ModelRequest struct {
 const (
 	PublicImageModelAliasContextKey        = "public_image_model_alias"
 	DurationRoutedVideoChannelIDContextKey = "duration_routed_video_channel_id"
+	SelectedChannelTagContextKey           = "selected_channel_tag"
 	grokVideo15PublicModel                 = "grok-video-1.5"
 	grokVideo15SixSecondChannelTag         = "xingren-grok-video-15-6s"
 	grokVideo15TenSecondChannelTag         = "xingren-grok-video-15-10s"
@@ -229,7 +230,10 @@ func Distribute() func(c *gin.Context) {
 			}
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
-		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+		if setupErr := SetupContextForSelectedChannel(c, channel, modelRequest.Model); setupErr != nil {
+			abortWithOpenAiMessage(c, setupErr.StatusCode, setupErr.Error(), setupErr.GetErrorCode())
+			return
+		}
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
@@ -686,6 +690,19 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	common.SetContextKey(c, constant.ContextKeyChannelId, channel.Id)
 	common.SetContextKey(c, constant.ContextKeyChannelName, channel.Name)
 	common.SetContextKey(c, constant.ContextKeyChannelType, channel.Type)
+	selectedChannelTag := ""
+	if channel.Tag != nil {
+		selectedChannelTag = strings.TrimSpace(*channel.Tag)
+	}
+	c.Set(SelectedChannelTagContextKey, selectedChannelTag)
+	if selectedChannelTag == claudeTerminalChannelTag && !isClaudeMessagesRequest(c) {
+		return types.NewErrorWithStatusCode(
+			errors.New(claudeTerminalOnlyMessage),
+			types.ErrorCodeAccessDenied,
+			http.StatusForbidden,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
 	common.SetContextKey(c, constant.ContextKeyChannelCreateTime, channel.CreatedTime)
 	common.SetContextKey(c, constant.ContextKeyChannelSetting, channel.GetSetting())
 	common.SetContextKey(c, constant.ContextKeyChannelOtherSetting, channel.GetOtherSettings())

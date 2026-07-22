@@ -4,6 +4,10 @@
     "run": ""
   },
   {
+    "package": "./middleware",
+    "run": "^(TestEnforceClaudeTerminalGroup.*|TestSetupContextForSelectedChannel.*)$"
+  },
+  {
     "package": "./controller",
     "run": "^(TestCreateImageTaskRejectsRetiredImage2BeforePersistence|TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel|TestNormalizePlaygroundImageTaskPayloadPreservesExplicitDiscountImage2ExtraBody|TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility|TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing|TestPublicPricingGroupsExposesPlusOnlyWhenExplicitlyEnabled|TestManagedTextTokenUpdateSynchronizesPreferenceAndLegacyToken|TestManagedTextTokenRejectsUnsupportedPricingGroup|TestResolveUserTextPricingGroupMigratesLegacyTokenChoice|TestPublicPlaygroundTaskFailureReason.*|TestPlaygroundTaskResponsesExposeOnlyPublicFailureMessage|TestGetAllTokensWithSystemSyncCreatesPublicTokensBeforeListing|TestShouldRetryAllowsPlusTextTimeoutFallback|TestShouldRetryPlusTextTimeoutGuardrails)$"
   },

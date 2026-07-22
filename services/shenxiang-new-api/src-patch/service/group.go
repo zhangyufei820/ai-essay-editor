@@ -7,10 +7,39 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
-var publicTokenGroups = []string{"default", DiscountPricingGroupName, PlusPricingGroupName}
+const (
+	ClaudeKiroPricingGroupName       = "kiro"
+	ClaudeKiroStablePricingGroupName = "kiro-stable"
+	ClaudeTerminalPricingGroupName   = "ccmax-terminal"
+	ClaudeExternalPricingGroupName   = "claude-external"
+)
+
+var publicClaudeTokenGroups = []string{
+	ClaudeKiroPricingGroupName,
+	ClaudeKiroStablePricingGroupName,
+	ClaudeExternalPricingGroupName,
+}
+
+var publicTokenGroups = []string{
+	"default",
+	DiscountPricingGroupName,
+	PlusPricingGroupName,
+	ClaudeKiroPricingGroupName,
+	ClaudeKiroStablePricingGroupName,
+	ClaudeExternalPricingGroupName,
+}
 
 func IsPublicTokenGroup(group string) bool {
 	for _, publicGroup := range publicTokenGroups {
+		if group == publicGroup {
+			return true
+		}
+	}
+	return false
+}
+
+func IsPublicClaudeTokenGroup(group string) bool {
+	for _, publicGroup := range publicClaudeTokenGroups {
 		if group == publicGroup {
 			return true
 		}
@@ -95,7 +124,9 @@ func GetUserAutoGroup(userGroup string) []string {
 	groups := GetUserUsableGroups(userGroup)
 	autoGroups := make([]string, 0)
 	for _, group := range setting.GetAutoGroups() {
-		if group == DiscountPricingGroupName || group == PlusPricingGroupName {
+		if group == DiscountPricingGroupName || group == PlusPricingGroupName ||
+			group == ClaudeKiroPricingGroupName || group == ClaudeKiroStablePricingGroupName ||
+			group == ClaudeTerminalPricingGroupName || group == ClaudeExternalPricingGroupName {
 			continue
 		}
 		if _, ok := groups[group]; ok {

@@ -126,6 +126,13 @@ GROK45_GROUP = "grok45"
 GROK45_CHANNEL_TAG = "xingren-grok45"
 GROK45_PRIMARY_CHANNEL_TAG = "xingren-grok45-primary"
 GROK45_CHANNEL_TAGS = (GROK45_PRIMARY_CHANNEL_TAG, GROK45_CHANNEL_TAG)
+PDHLZY_CLAUDE_CHANNEL_GROUPS = {
+    "xingren-claude-pdhlzy-kiro": "kiro",
+    "xingren-claude-pdhlzy-kiro-stable": "kiro-stable",
+    "xingren-claude-pdhlzy-ccmax-terminal": "ccmax-terminal",
+    "xingren-claude-pdhlzy-claude-external": "claude-external",
+}
+PDHLZY_CLAUDE_GROUPS = frozenset(PDHLZY_CLAUDE_CHANNEL_GROUPS.values())
 SUPPLIER_EXPOSED_MARKERS = (
     "ccapi",
     "drag tokens",
@@ -160,12 +167,40 @@ CODEX_STANDARD_ALLOWED_MODELS = [
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
 CLAUDE_ALLOWED_MODELS = [
+    "claude-fable-5",
+    "claude-haiku-4-5-20251001",
+    "claude-opus-4-5-20251101",
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-sonnet-4-5-20250929",
+    "claude-sonnet-4-6",
+    "claude-sonnet-5",
+]
+CLAUDE_KIRO_MODELS = [
+    "claude-fable-5",
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-sonnet-4-5-20250929",
+    "claude-sonnet-4-6",
+    "claude-sonnet-5",
+]
+CLAUDE_EXTERNAL_MODELS = [
+    "claude-fable-5",
+    "claude-haiku-4-5-20251001",
     "claude-opus-4-6",
     "claude-opus-4-7",
     "claude-opus-4-8",
     "claude-sonnet-4-6",
     "claude-sonnet-5",
 ]
+CLAUDE_TOKEN_MODELS_BY_GROUP = {
+    "kiro": CLAUDE_KIRO_MODELS,
+    "kiro-stable": CLAUDE_ALLOWED_MODELS,
+    "ccmax-terminal": CLAUDE_EXTERNAL_MODELS,
+    "claude-external": CLAUDE_EXTERNAL_MODELS,
+}
 PUBLIC_SD2_FAST_MODEL = "seedance-sd2-fast-720p"
 UPSTREAM_SD2_FAST_MODEL = "sd2-fast-720p"
 PUBLIC_GROK15_VIDEO_MODEL = "grok-video-1.5"
@@ -1674,7 +1709,10 @@ def sync_grok_image_metadata() -> None:
 def sync_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
     expected_models_by_name: dict[str, str] = {}
     for profile, names in TOKEN_PROFILES.items():
-        models = ",".join(sanitize_token_models(profiles[profile]))
+        profile_models = sanitize_token_models(profiles[profile])
+        if profile == "claude":
+            profile_models = claude_token_models_for_group(profile_models, "claude-external")
+        models = ",".join(profile_models)
         for name in names:
             expected_models_by_name[name] = models
     managed_names = tuple(expected_models_by_name)
@@ -1795,31 +1833,50 @@ def sync_controlled_codex_alias_tokens() -> dict[str, int]:
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
+def claude_token_models_for_group(available_models: list[str], group: str) -> list[str]:
+    available = set(sanitize_token_models(available_models))
+    allowed = CLAUDE_TOKEN_MODELS_BY_GROUP.get(group, CLAUDE_EXTERNAL_MODELS)
+    return [model for model in allowed if model in available]
+
+
 def sync_user_claude_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
-    claude_models = ",".join(sanitize_token_models(profiles["claude"]))
+    available_models = sanitize_token_models(profiles["claude"])
     token_rows = mysql(
-        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0) FROM tokens "
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0), "
+        "COALESCE(`group`, ''), COALESCE(cross_group_retry, 0) FROM tokens "
         "WHERE deleted_at IS NULL AND LOWER(TRIM(COALESCE(name, ''))) = "
         + sql_quote(CLAUDE_USER_TOKEN_NAME)
         + ";"
     )
-    token_updates: list[tuple[str, str]] = []
-    for token_id, token_key, raw_limits, raw_enabled in token_rows:
-        if raw_limits != claude_models or raw_enabled != "1":
-            token_updates.append((token_id, token_key))
+    token_updates: list[tuple[str, str, str, str]] = []
+    for token_id, token_key, raw_limits, raw_enabled, raw_group, raw_cross_group_retry in token_rows:
+        next_group = raw_group if raw_group in CLAUDE_TOKEN_MODELS_BY_GROUP else "claude-external"
+        claude_models = ",".join(claude_token_models_for_group(available_models, next_group))
+        if (
+            raw_limits != claude_models
+            or raw_enabled != "1"
+            or raw_group != next_group
+            or raw_cross_group_retry != "0"
+        ):
+            token_updates.append((token_id, token_key, claude_models, next_group))
 
     statements = ["START TRANSACTION;"]
-    for token_id, _token_key in token_updates:
+    for token_id, _token_key, claude_models, next_group in token_updates:
         statements.append(
             "UPDATE tokens SET model_limits_enabled = 1, model_limits = "
             + sql_quote(claude_models)
+            + ", `group` = "
+            + sql_quote(next_group)
+            + ", cross_group_retry = 0"
             + " WHERE id = "
             + sql_quote(token_id)
             + ";"
         )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches([token_key for _token_id, token_key in token_updates])
+    caches_deleted = delete_token_caches(
+        [token_key for _token_id, token_key, _models, _group in token_updates]
+    )
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
@@ -1911,6 +1968,7 @@ def sync_abilities() -> None:
             *DISCOUNT_TEXT_CHANNEL_TAGS,
             *PLUS_TEXT_CHANNEL_TAGS,
             *GROK45_CHANNEL_TAGS,
+            *PDHLZY_CLAUDE_CHANNEL_GROUPS,
             DISCOUNT_IMAGE2_CHANNEL_TAG,
         )
     )
@@ -1983,12 +2041,28 @@ def sync_abilities() -> None:
             + sql_quote(model)
             + ");"
         )
+    for pdhlzy_tag, pdhlzy_group in PDHLZY_CLAUDE_CHANNEL_GROUPS.items():
+        statements.extend(
+            [
+                "UPDATE channels SET status = 2 WHERE tag = "
+                + sql_quote(pdhlzy_tag)
+                + " AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+                + sql_quote(pdhlzy_group)
+                + ";",
+                "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
+                + sql_quote(pdhlzy_tag)
+                + " AND FIND_IN_SET("
+                + sql_quote(pdhlzy_group)
+                + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
+            ]
+        )
     invalid_discount_channels: list[str] = []
     invalid_plus_channels: list[str] = []
     invalid_grok_channels: list[str] = []
     invalid_grok1080_channels: list[str] = []
     invalid_discount_image2_channels: list[str] = []
     invalid_gemini_ddpapi_channels: list[str] = []
+    invalid_pdhlzy_channels: list[str] = []
     gemini_model_by_tag = {
         str(config["channel_tag"]): model
         for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items()
@@ -2041,6 +2115,7 @@ def sync_abilities() -> None:
                     group
                     for group in groups
                     if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
+                    and group not in PDHLZY_CLAUDE_GROUPS
                 ]
             else:
                 invalid_grok1080_channels.append(channel_id)
@@ -2057,6 +2132,7 @@ def sync_abilities() -> None:
                     group
                     for group in groups
                     if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
+                    and group not in PDHLZY_CLAUDE_GROUPS
                 ]
             else:
                 invalid_discount_image2_channels.append(channel_id)
@@ -2074,15 +2150,27 @@ def sync_abilities() -> None:
                     group
                     for group in groups
                     if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
+                    and group not in PDHLZY_CLAUDE_GROUPS
                 ]
             else:
                 invalid_gemini_ddpapi_channels.append(channel_id)
                 sync_groups = []
+        elif tag in PDHLZY_CLAUDE_CHANNEL_GROUPS:
+            expected_group = PDHLZY_CLAUDE_CHANNEL_GROUPS[tag]
+            if channel_groups != [expected_group]:
+                invalid_pdhlzy_channels.append(channel_id)
+                sync_groups = []
+            else:
+                sync_groups = channel_groups
+        elif any(group in PDHLZY_CLAUDE_GROUPS for group in channel_groups):
+            invalid_pdhlzy_channels.append(channel_id)
+            sync_groups = []
         else:
             sync_groups = [
                 group
                 for group in groups
                 if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
+                and group not in PDHLZY_CLAUDE_GROUPS
             ]
         for model in channel_models:
             if model == INTERNAL_DISCOUNT_IMAGE2_MODEL and tag != DISCOUNT_IMAGE2_CHANNEL_TAG:
@@ -2128,6 +2216,8 @@ def sync_abilities() -> None:
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
                     )
+                elif tag in PDHLZY_CLAUDE_CHANNEL_GROUPS:
+                    pass
                 elif tag not in grok45_channel_tags:
                     current_channel_conditions.extend(
                         [
@@ -2274,6 +2364,28 @@ def sync_abilities() -> None:
                 + ");",
             ]
         )
+    for pdhlzy_tag, pdhlzy_group in PDHLZY_CLAUDE_CHANNEL_GROUPS.items():
+        statements.extend(
+            [
+                "UPDATE abilities SET enabled = 0 WHERE `group` = "
+                + sql_quote(pdhlzy_group)
+                + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
+                + sql_quote(pdhlzy_tag)
+                + ");",
+                "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE tag = "
+                + sql_quote(pdhlzy_tag)
+                + ") AND `group` <> "
+                + sql_quote(pdhlzy_group)
+                + ";",
+                "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+                "SET ability.enabled = 0 WHERE channel.tag = "
+                + sql_quote(pdhlzy_tag)
+                + " AND FIND_IN_SET(ability.model, REPLACE(COALESCE(channel.models, ''), ' ', '')) = 0;",
+                "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE status <> 1 AND tag = "
+                + sql_quote(pdhlzy_tag)
+                + ");",
+            ]
+        )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
     if invalid_discount_channels:
@@ -2305,6 +2417,11 @@ def sync_abilities() -> None:
         raise RuntimeError(
             "Gemini DDPAPI staging isolation violation; invalid channel count: "
             + str(len(invalid_gemini_ddpapi_channels))
+        )
+    if invalid_pdhlzy_channels:
+        raise RuntimeError(
+            "pdhlzy Claude group isolation violation; disabled channel count: "
+            + str(len(invalid_pdhlzy_channels))
         )
 
 
@@ -2407,7 +2524,9 @@ def sync_codex_env(profiles: dict[str, list[str]]) -> bool:
         "DEFAULT_CODE_MODEL": CODEX_DEFAULT_MODEL,
         "CODEX_CHAT_FALLBACK_MODEL": CODEX_CHAT_FALLBACK_MODEL,
         "CODEX_ALLOWED_MODELS": ",".join(profiles["codex"]),
-        "CLAUDE_ALLOWED_MODELS": ",".join(profiles["claude"]),
+        "CLAUDE_ALLOWED_MODELS": ",".join(
+            claude_token_models_for_group(profiles["claude"], "claude-external")
+        ),
         "IMAGE_ALLOWED_MODELS": ",".join(
             model for model in profiles["image"] if model != DISCOUNT_IMAGE2_PUBLIC_MODEL
         ),

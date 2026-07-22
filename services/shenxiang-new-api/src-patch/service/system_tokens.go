@@ -54,7 +54,8 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "claude",
 			Name:   "星人 Claude 高阶令牌",
-			Models: []string{"claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6", "claude-sonnet-5"},
+			Models: []string{"claude-fable-5", "claude-haiku-4-5-20251001", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6", "claude-sonnet-5"},
+			Group:  ClaudeExternalPricingGroupName,
 		},
 		{
 			Mode:   "image",
@@ -139,7 +140,7 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 				if token.Group != tokenGroup {
 					updates["group"] = tokenGroup
 				}
-				if (profile.Mode == "grok" || profile.Mode == "codex") && token.CrossGroupRetry {
+				if (profile.Mode == "grok" || profile.Mode == "codex" || profile.Mode == "claude") && token.CrossGroupRetry {
 					updates["cross_group_retry"] = false
 				}
 				if len(updates) > 0 {
@@ -179,7 +180,7 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 				ModelLimitsEnabled: true,
 				ModelLimits:        strings.Join(profile.Models, ","),
 				Group:              tokenGroup,
-				CrossGroupRetry:    profile.Mode != "grok" && profile.Mode != "codex",
+				CrossGroupRetry:    profile.Mode != "grok" && profile.Mode != "codex" && profile.Mode != "claude",
 			}
 			if err := tx.Create(&newToken).Error; err != nil {
 				return err

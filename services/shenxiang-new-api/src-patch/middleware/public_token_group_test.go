@@ -93,10 +93,14 @@ func TestEnforcePublicTokenGroupSelectionRestrictsClaudeTokenModels(t *testing.T
 		request := struct {
 			ModelLimitsEnabled bool   `json:"model_limits_enabled"`
 			ModelLimits        string `json:"model_limits"`
+			Group              string `json:"group"`
+			CrossGroupRetry    bool   `json:"cross_group_retry"`
 		}{}
 		require.NoError(t, c.ShouldBindJSON(&request))
 		require.True(t, request.ModelLimitsEnabled)
 		require.Equal(t, strings.Join(claudeUserTokenModels, ","), request.ModelLimits)
+		require.Equal(t, "claude-external", request.Group)
+		require.False(t, request.CrossGroupRetry)
 		c.Status(http.StatusNoContent)
 	})
 	request := httptest.NewRequest(
@@ -110,6 +114,83 @@ func TestEnforcePublicTokenGroupSelectionRestrictsClaudeTokenModels(t *testing.T
 	engine.ServeHTTP(recorder, request)
 
 	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestEnforcePublicTokenGroupSelectionAllowsStableClaudeModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		request := struct {
+			ModelLimits string `json:"model_limits"`
+			Group       string `json:"group"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.Equal(t, strings.Join(claudeStableUserTokenModels, ","), request.ModelLimits)
+		require.Equal(t, "kiro-stable", request.Group)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":"Claude","group":"kiro-stable"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestEnforcePublicTokenGroupSelectionAllowsKiroClaudeModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		request := struct {
+			ModelLimits string `json:"model_limits"`
+			Group       string `json:"group"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.Equal(t, strings.Join(claudeKiroUserTokenModels, ","), request.ModelLimits)
+		require.Equal(t, "kiro", request.Group)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":"Claude","group":"kiro"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestEnforcePublicTokenGroupSelectionRejectsClaudeOnNonClaudeGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		called = true
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":"Claude","group":"plus"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.False(t, called)
 }
 
 func TestEnforcePublicTokenGroupSelectionRejectsNullBody(t *testing.T) {
