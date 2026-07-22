@@ -100,17 +100,10 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         with self.assertRaises(self.module.ConfigurationError):
             self.module.parse_channel_order("wangwang,pdhlzy,pdhlzy")
 
-    def test_pdhlzy_converts_responses_to_streaming_chat(self) -> None:
+    def test_pdhlzy_uses_native_openai_responses(self) -> None:
         spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "pdhlzy")
 
-        settings = self.module.json.loads(self.module.advanced_custom_settings(spec))
-        routes = settings["advanced_custom"]["advanced_routes"]
-
-        self.assertEqual(spec.channel_type, self.module.ADVANCED_CUSTOM_CHANNEL_TYPE)
-        self.assertEqual(routes[0]["incoming_path"], "/v1/responses")
-        self.assertEqual(routes[0]["upstream_path"], "/v1/chat/completions")
-        self.assertEqual(routes[0]["converter"], "openai_responses_to_openai_chat_completions")
-        self.assertEqual(routes[1]["converter"], "none")
+        self.assertEqual(spec.channel_type, self.module.OPENAI_CHANNEL_TYPE)
 
     def test_build_apply_sql_creates_three_isolated_priority_channels(self) -> None:
         sql = self.build_sql()
@@ -121,8 +114,8 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertIn("priority = 30", sql)
         self.assertIn("priority = 20", sql)
         self.assertIn("priority = 10", sql)
-        self.assertIn("type = 58", sql)
-        self.assertIn("openai_responses_to_openai_chat_completions", sql)
+        self.assertNotIn("type = 58", sql)
+        self.assertNotIn("openai_responses_to_openai_chat_completions", sql)
         self.assertIn(self.module.LEGACY_DISCOUNT_CHANNEL_TAG, sql)
         for spec in self.module.DISCOUNT_CHANNEL_SPECS:
             self.assertIn(spec.tag, sql)
@@ -132,13 +125,13 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertNotIn("'discount', 'gpt-5.4-mini'", sql)
         self.assertNotIn("'discount', 'codex-auto-review'", sql)
 
-    def test_build_apply_sql_stores_advanced_custom_in_settings_column(self) -> None:
+    def test_build_apply_sql_clears_managed_channel_settings_and_legacy_other(self) -> None:
         sql = self.build_sql()
 
         self.assertIn("remark, settings) SELECT", sql)
         self.assertIn(", settings = ", sql)
+        self.assertIn(", other = '{}'", sql)
         self.assertNotIn("remark, other) SELECT", sql)
-        self.assertNotIn(", other = ", sql)
 
     def test_build_apply_sql_guards_every_mutation(self) -> None:
         sql = self.build_sql()

@@ -1096,6 +1096,9 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if openaiErr == nil {
 		return false
 	}
+	if shouldRetryPlusTextTimeout(c, openaiErr, retryTimes) {
+		return true
+	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) &&
 		!shouldRetryPlaygroundForcedChannelError(c, openaiErr, retryTimes) &&
 		!shouldBypassChannelAffinityRetryLock(openaiErr, retryTimes) {
@@ -1127,6 +1130,26 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 		return false
 	}
 	return operation_setting.ShouldRetryByStatusCode(code)
+}
+
+func shouldRetryPlusTextTimeout(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil || openaiErr == nil || retryTimes <= 0 {
+		return false
+	}
+	if types.IsSkipRetryError(openaiErr) || !openaiErr.IsUpstreamRelayError() || service.HasTextOutputSent(c) {
+		return false
+	}
+	if _, ok := c.Get("specific_channel_id"); ok {
+		return false
+	}
+	if common.GetContextKeyString(c, constant.ContextKeyUsingGroup) != service.PlusPricingGroupName {
+		return false
+	}
+	path := c.Request.URL.Path
+	if path != "/v1/responses" && path != "/v1/chat/completions" {
+		return false
+	}
+	return openaiErr.StatusCode == http.StatusGatewayTimeout || openaiErr.StatusCode == 524
 }
 
 func shouldRetryPlaygroundForcedChannelError(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {

@@ -22,7 +22,6 @@ DISCOUNT_GROUP_DESCRIPTION = "特价通道（可能随时下架；不可用时�
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
 OPENAI_CHANNEL_TYPE = 1
-ADVANCED_CUSTOM_CHANNEL_TYPE = 58
 LEGACY_DISCOUNT_CHANNEL_TAG = "xingren-discount-text"
 DEFAULT_CHANNEL_ORDER = ("wangwang", "pdhlzy", "reserve")
 DISCOUNT_TEXT_MODELS = (
@@ -68,7 +67,6 @@ class DiscountChannelSpec:
     default_base_url: str
     approved_hosts: tuple[str, ...]
     channel_type: int
-    responses_via_chat: bool = False
 
 
 DISCOUNT_CHANNEL_SPECS = (
@@ -90,8 +88,7 @@ DISCOUNT_CHANNEL_SPECS = (
         base_url_envs=("DISCOUNT_PDHLZY_BASE_URL",),
         default_base_url="https://pdhlzy.com",
         approved_hosts=("pdhlzy.com",),
-        channel_type=ADVANCED_CUSTOM_CHANNEL_TYPE,
-        responses_via_chat=True,
+        channel_type=OPENAI_CHANNEL_TYPE,
     ),
     DiscountChannelSpec(
         slug="reserve",
@@ -166,29 +163,6 @@ def parse_channel_order(raw_value: str) -> tuple[str, ...]:
 
 def channel_priorities(order: tuple[str, ...]) -> dict[str, int]:
     return {slug: (len(order) - index) * 10 for index, slug in enumerate(order)}
-
-
-def advanced_custom_settings(spec: DiscountChannelSpec) -> str:
-    if not spec.responses_via_chat:
-        return "{}"
-    return json_option(
-        {
-            "advanced_custom": {
-                "advanced_routes": [
-                    {
-                        "converter": "openai_responses_to_openai_chat_completions",
-                        "incoming_path": "/v1/responses",
-                        "upstream_path": "/v1/chat/completions",
-                    },
-                    {
-                        "converter": "none",
-                        "incoming_path": "/v1/chat/completions",
-                        "upstream_path": "/v1/chat/completions",
-                    },
-                ]
-            }
-        }
-    )
 
 
 @contextlib.contextmanager
@@ -519,7 +493,7 @@ def build_apply_sql(
                     "1",
                     sql_quote(spec.tag),
                     sql_quote(DISCOUNT_GROUP_DESCRIPTION),
-                    sql_quote(advanced_custom_settings(spec)),
+                    sql_quote("{}"),
                 ]
             )
             + " WHERE "
@@ -555,7 +529,9 @@ def build_apply_sql(
             + ", remark = "
             + sql_quote(DISCOUNT_GROUP_DESCRIPTION)
             + ", settings = "
-            + sql_quote(advanced_custom_settings(spec))
+            + sql_quote("{}")
+            + ", other = "
+            + sql_quote("{}")
             + " WHERE id = "
             + channel_variable
             + " AND @discount_apply_allowed = 1;"

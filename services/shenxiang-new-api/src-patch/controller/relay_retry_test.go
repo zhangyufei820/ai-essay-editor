@@ -919,6 +919,90 @@ func TestShouldRetryKeepsGlobalTimeoutPolicyWithoutForcedFallback(t *testing.T) 
 	}
 }
 
+func TestShouldRetryAllowsPlusTextTimeoutFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name   string
+		path   string
+		status int
+	}{
+		{name: "responses 504", path: "/v1/responses", status: http.StatusGatewayTimeout},
+		{name: "responses 524", path: "/v1/responses", status: 524},
+		{name: "chat 504", path: "/v1/chat/completions", status: http.StatusGatewayTimeout},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, tc.path, nil)
+			c.Set("channel_affinity_skip_retry_on_failure", true)
+			common.SetContextKey(c, constant.ContextKeyUsingGroup, service.PlusPricingGroupName)
+
+			err := types.WithOpenAIError(types.OpenAIError{
+				Message: "gateway timeout",
+				Type:    "openai_error",
+				Code:    "upstream_timeout",
+			}, tc.status)
+
+			if !shouldRetry(c, err, 1) {
+				t.Fatal("shouldRetry() = false, want true for Plus text timeout")
+			}
+		})
+	}
+}
+
+func TestShouldRetryPlusTextTimeoutGuardrails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	newContext := func(path, group string) *gin.Context {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Request = httptest.NewRequest(http.MethodPost, path, nil)
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
+		return c
+	}
+	newTimeout := func(options ...types.NewAPIErrorOptions) *types.NewAPIError {
+		return types.WithOpenAIError(types.OpenAIError{
+			Message: "gateway timeout",
+			Type:    "openai_error",
+			Code:    "upstream_timeout",
+		}, http.StatusGatewayTimeout, options...)
+	}
+
+	tests := []struct {
+		name       string
+		context    *gin.Context
+		err        *types.NewAPIError
+		retryTimes int
+	}{
+		{name: "default group", context: newContext("/v1/responses", "default"), err: newTimeout(), retryTimes: 1},
+		{name: "image path", context: newContext("/v1/images/generations", service.PlusPricingGroupName), err: newTimeout(), retryTimes: 1},
+		{name: "no retries left", context: newContext("/v1/responses", service.PlusPricingGroupName), err: newTimeout(), retryTimes: 0},
+		{name: "local skip retry error", context: newContext("/v1/responses", service.PlusPricingGroupName), err: newTimeout(types.ErrOptionWithSkipRetry()), retryTimes: 1},
+		{name: "local non upstream error", context: newContext("/v1/responses", service.PlusPricingGroupName), err: types.NewErrorWithStatusCode(errors.New("local timeout"), types.ErrorCodeInvalidRequest, http.StatusGatewayTimeout), retryTimes: 1},
+	}
+	specificChannel := newContext("/v1/responses", service.PlusPricingGroupName)
+	specificChannel.Set("specific_channel_id", 43)
+	tests = append(tests, struct {
+		name       string
+		context    *gin.Context
+		err        *types.NewAPIError
+		retryTimes int
+	}{name: "specific channel", context: specificChannel, err: newTimeout(), retryTimes: 1})
+	outputSent := newContext("/v1/responses", service.PlusPricingGroupName)
+	outputSent.Set("response_stream_output_sent", true)
+	tests = append(tests, struct {
+		name       string
+		context    *gin.Context
+		err        *types.NewAPIError
+		retryTimes int
+	}{name: "output already sent", context: outputSent, err: newTimeout(), retryTimes: 1})
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if shouldRetry(tc.context, tc.err, tc.retryTimes) {
+				t.Fatal("shouldRetry() = true, want false")
+			}
+		})
+	}
+}
+
 func TestShouldRetryStopsWhenForcedFallbackExhausted(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())

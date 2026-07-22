@@ -4,7 +4,7 @@
 
 用户编辑“星人 Codex 文本令牌”选择 `discount` 或 `default` 时，系统把该选择保存为用户级文本倍率偏好，并同步旧版令牌别名。Classic 主页会话和云端 Codex 都读取同一偏好；主页在每次发送前重新确认，云端 Codex 的自动令牌校正也以该偏好为准。特价通道异常时不再自动切换原价，用户需要在接入设置中手动切到 `default`；恢复后切回 `discount`，三处会再次统一使用 `0.06x`。
 
-默认优先级为 `wangwang → pdhlzy → reserve`，对应 `30 → 20 → 10`。`wangwang` 与 `reserve` 使用原生 OpenAI Responses；`pdhlzy` 由 Advanced Custom 将 Codex 的流式 Responses 转成已实测可用的流式 Chat。运行脚本时可用 `--order pdhlzy,wangwang,reserve` 等完整排列切换主通道，禁止把三把不同成本或不同供应商密钥合并到同一个随机轮询渠道。
+默认优先级为 `wangwang → pdhlzy → reserve`，对应 `30 → 20 → 10`。三条链路统一使用原生 OpenAI Responses；禁止为 pdhlzy 配置 Responses 到 Chat Completions 的转换，否则真实 Codex 工具续接可能丢失 `function_call` / `function_call_output` 关联。运行脚本时可用 `--order pdhlzy,wangwang,reserve` 等完整排列切换主通道，禁止把三把不同成本或不同供应商密钥合并到同一个随机轮询渠道。
 
 ## 密钥
 
