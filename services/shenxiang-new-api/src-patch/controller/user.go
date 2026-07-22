@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -657,8 +658,20 @@ func GetUserModels(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
 	group := c.Query("group")
+	managedGrok45Visible := false
+	if group == "" || group == service.Grok45PricingGroupName {
+		parent := context.Background()
+		if c.Request != nil {
+			parent = c.Request.Context()
+		}
+		var entitlementErr error
+		managedGrok45Visible, entitlementErr = managedGrok45PricingVisible(parent, id)
+		if entitlementErr != nil {
+			common.SysLog("failed to resolve managed Grok user model visibility: " + entitlementErr.Error())
+		}
+	}
+	groups := service.GetPublicPricingGroups(user.Group, managedGrok45Visible)
 	if group != "" {
 		if _, ok := groups[group]; !ok {
 			c.JSON(http.StatusOK, gin.H{

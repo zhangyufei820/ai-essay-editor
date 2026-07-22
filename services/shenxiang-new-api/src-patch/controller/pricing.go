@@ -99,8 +99,16 @@ func pinManagedGrok45Pricing(pricing []model.Pricing) []model.Pricing {
 
 func publicPricingGroups(enableGroups []string, usableGroups map[string]string) []string {
 	allGroups := common.StringsContains(enableGroups, "all")
-	visibleGroups := make([]string, 0, 4)
-	for _, group := range []string{"default", service.DiscountPricingGroupName, service.PlusPricingGroupName, service.Grok45PricingGroupName} {
+	visibleGroups := make([]string, 0, 7)
+	for _, group := range []string{
+		"default",
+		service.DiscountPricingGroupName,
+		service.PlusPricingGroupName,
+		service.ClaudeKiroPricingGroupName,
+		service.ClaudeKiroStablePricingGroupName,
+		service.ClaudeExternalPricingGroupName,
+		service.Grok45PricingGroupName,
+	} {
 		if _, ok := usableGroups[group]; !ok {
 			continue
 		}

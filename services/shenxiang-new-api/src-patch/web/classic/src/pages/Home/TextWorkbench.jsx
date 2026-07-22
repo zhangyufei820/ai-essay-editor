@@ -133,9 +133,11 @@ const CHAT_HISTORY_STORAGE_PREFIX = 'aiphui-home-chat-history:v1';
 const DISCOUNT_GROUP = 'discount';
 const PLUS_GROUP = 'plus';
 const DEFAULT_GROUP = 'default';
+const CLAUDE_STABLE_GROUP = 'kiro-stable';
 const DISCOUNT_PRICING_LABEL = '特价 0.06x';
 const PLUS_PRICING_LABEL = 'Plus 0.5x';
 const DEFAULT_PRICING_LABEL = '原价 1x';
+const CLAUDE_STABLE_PRICING_LABEL = 'Claude 稳定 0.22x';
 const DISCOUNT_FALLBACK_HEADER = 'X-Aiphui-Discount-Fallback';
 const PRICING_GROUP_HEADER = 'X-Aiphui-Pricing-Group';
 const DISCOUNT_FALLBACK_MAX_COMPLETION_TOKENS = 4096;
@@ -276,7 +278,10 @@ function sanitizeHistoryText(value, maxLength = 6000) {
 }
 
 function normalizePricingLabel(value) {
-  return value === DISCOUNT_PRICING_LABEL || value === DEFAULT_PRICING_LABEL
+  return value === DISCOUNT_PRICING_LABEL ||
+    value === PLUS_PRICING_LABEL ||
+    value === DEFAULT_PRICING_LABEL ||
+    value === CLAUDE_STABLE_PRICING_LABEL
     ? value
     : '';
 }
@@ -503,6 +508,7 @@ function getPricingLabel(group) {
   if (group === DISCOUNT_GROUP) return DISCOUNT_PRICING_LABEL;
   if (group === PLUS_GROUP) return PLUS_PRICING_LABEL;
   if (group === DEFAULT_GROUP) return DEFAULT_PRICING_LABEL;
+  if (group === CLAUDE_STABLE_GROUP) return CLAUDE_STABLE_PRICING_LABEL;
   return '';
 }
 
@@ -909,16 +915,7 @@ const TextWorkbench = ({ isMobile }) => {
 
     setModelsLoading(true);
     setModelError('');
-    const modelGroup = [DISCOUNT_GROUP, PLUS_GROUP, DEFAULT_GROUP].includes(
-      textPricingGroup,
-    )
-      ? textPricingGroup
-      : '';
-    API.get(
-      modelGroup
-        ? `/api/user/models?group=${encodeURIComponent(modelGroup)}`
-        : '/api/user/models',
-    )
+    API.get('/api/user/models')
       .then((res) => {
         const data = res?.data?.data || [];
         const nextModels = Array.isArray(data) ? data : [];
@@ -930,7 +927,7 @@ const TextWorkbench = ({ isMobile }) => {
         setSelectedModel(getDefaultTextModel([]));
       })
       .finally(() => setModelsLoading(false));
-  }, [isLoggedIn, textPricingGroup]);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     const defaultEffort = getDefaultReasoningEffort(activeModel);

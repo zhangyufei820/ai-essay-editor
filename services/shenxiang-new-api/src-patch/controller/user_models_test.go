@@ -258,6 +258,27 @@ func TestPublicPricingGroupsExposesPlusOnlyWhenExplicitlyEnabled(t *testing.T) {
 	require.Equal(t, []string{"default", "plus"}, groups)
 }
 
+func TestPublicPricingGroupsExposesClaudeGroupsButNotTerminal(t *testing.T) {
+	groups := publicPricingGroups([]string{
+		service.ClaudeKiroPricingGroupName,
+		service.ClaudeKiroStablePricingGroupName,
+		service.ClaudeTerminalPricingGroupName,
+		service.ClaudeExternalPricingGroupName,
+	}, map[string]string{
+		service.ClaudeKiroPricingGroupName:       "Claude 经济",
+		service.ClaudeKiroStablePricingGroupName: "Claude 稳定",
+		service.ClaudeTerminalPricingGroupName:   "Claude 终端专用",
+		service.ClaudeExternalPricingGroupName:   "Claude 外接",
+	})
+
+	require.Equal(t, []string{
+		service.ClaudeKiroPricingGroupName,
+		service.ClaudeKiroStablePricingGroupName,
+		service.ClaudeExternalPricingGroupName,
+	}, groups)
+	require.NotContains(t, groups, service.ClaudeTerminalPricingGroupName)
+}
+
 func TestFilterPricingByUsableGroupsExposesDedicatedGrokPricing(t *testing.T) {
 	pricing := filterPricingByUsableGroups([]model.Pricing{
 		{ModelName: "grok-4.5", EnableGroup: []string{"grok45"}},

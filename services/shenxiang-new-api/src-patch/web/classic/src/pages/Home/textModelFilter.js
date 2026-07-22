@@ -2,6 +2,7 @@ const MEDIA_MODEL_PATTERN =
   /(image|gpt-image|banana|midjourney|flux|seedance|sora|kling|veo|video|audio|tts|whisper|speech|voice|embedding|rerank|realtime)/i;
 
 const DEFAULT_TEXT_MODEL = 'gpt-5.4-mini';
+const CLAUDE_STABLE_GROUP = 'kiro-stable';
 const HIDDEN_TEXT_MODELS = new Set(['gpt-5.3-spark']);
 const GROK_TEXT_MODELS = new Set(['grok-4.5']);
 const DISCOUNT_TEXT_MODELS = new Set([
@@ -89,6 +90,7 @@ export function isTextPricingModel(modelName) {
 export function getTextModelGroupForPreference(modelName, pricingGroup) {
   const name = String(modelName || '').trim().toLowerCase();
   if (GROK_TEXT_MODELS.has(name)) return 'grok45';
+  if (name.startsWith('claude-')) return CLAUDE_STABLE_GROUP;
   const normalizedGroup = String(pricingGroup || '').trim().toLowerCase();
   if (
     DISCOUNT_TEXT_MODELS.has(name) &&
