@@ -333,22 +333,30 @@ API.get('/api/user/models');
         )
         self.assertIn("#xr-api-assistant-root:not(.xr-api-assistant-docked){right:12px;top:auto!important;bottom:12px}", source)
 
-    def test_claude_models_are_publicly_listed_and_home_routed_without_terminal_group(self) -> None:
+    def test_claude_models_are_publicly_listed_with_marketplace_only_terminal_group(self) -> None:
         source_root = SCRIPT_PATH.parent.parent / "src-patch"
         pricing = (source_root / "controller/pricing.go").read_text(encoding="utf-8")
         user_controller = (source_root / "controller/user.go").read_text(encoding="utf-8")
         home = (source_root / "web/classic/src/pages/Home/TextWorkbench.jsx").read_text(encoding="utf-8")
         model_filter = (source_root / "web/classic/src/pages/Home/textModelFilter.js").read_text(encoding="utf-8")
+        pricing_table = (source_root / "web/classic/src/components/table/model-pricing/modal/components/ModelPricingTable.jsx").read_text(encoding="utf-8")
+        pricing_groups = (source_root / "web/classic/src/components/table/model-pricing/filter/PricingGroups.jsx").read_text(encoding="utf-8")
 
         self.assertIn("service.ClaudeKiroPricingGroupName", pricing)
         self.assertIn("service.ClaudeKiroStablePricingGroupName", pricing)
+        self.assertIn("service.ClaudeTerminalPricingGroupName", pricing)
         self.assertIn("service.ClaudeExternalPricingGroupName", pricing)
-        self.assertNotIn("service.ClaudeTerminalPricingGroupName", pricing)
+        self.assertIn("service.GetMarketplacePricingGroups(group, managedGrok45Visible)", pricing)
         self.assertIn("service.GetPublicPricingGroups(user.Group, managedGrok45Visible)", user_controller)
         self.assertIn("API.get('/api/user/models')", home)
         self.assertNotIn("/api/user/models?group=", home)
         self.assertIn("const CLAUDE_STABLE_GROUP = 'kiro-stable';", model_filter)
         self.assertIn("if (name.startsWith('claude-')) return CLAUDE_STABLE_GROUP;", model_filter)
+        self.assertIn("usableGroup?.[group] || group", pricing_table)
+        self.assertIn("CLAUDE_DISPLAY_GROUPS.has(group)", pricing_table)
+        self.assertIn("const availableGroups = modelEnableGroups", pricing_table)
+        self.assertIn("usableGroup[g] || g", pricing_groups)
+        self.assertIn("CLAUDE_DISPLAY_GROUP_ORDER", pricing_groups)
 
 
 if __name__ == "__main__":

@@ -258,7 +258,7 @@ func TestPublicPricingGroupsExposesPlusOnlyWhenExplicitlyEnabled(t *testing.T) {
 	require.Equal(t, []string{"default", "plus"}, groups)
 }
 
-func TestPublicPricingGroupsExposesClaudeGroupsButNotTerminal(t *testing.T) {
+func TestPublicPricingGroupsExposesAllClaudeMarketplaceGroups(t *testing.T) {
 	groups := publicPricingGroups([]string{
 		service.ClaudeKiroPricingGroupName,
 		service.ClaudeKiroStablePricingGroupName,
@@ -274,9 +274,9 @@ func TestPublicPricingGroupsExposesClaudeGroupsButNotTerminal(t *testing.T) {
 	require.Equal(t, []string{
 		service.ClaudeKiroPricingGroupName,
 		service.ClaudeKiroStablePricingGroupName,
+		service.ClaudeTerminalPricingGroupName,
 		service.ClaudeExternalPricingGroupName,
 	}, groups)
-	require.NotContains(t, groups, service.ClaudeTerminalPricingGroupName)
 }
 
 func TestFilterPricingByUsableGroupsExposesDedicatedGrokPricing(t *testing.T) {

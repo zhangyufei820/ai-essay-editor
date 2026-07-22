@@ -41,6 +41,7 @@ CHANNELS = (
         "env": "PDHLZY_KIRO_KEY",
         "tag": "xingren-claude-pdhlzy-kiro",
         "name": "Claude Kiro 渠道",
+        "group_label": "Kiro",
         "type": 1,
         "group": "kiro",
         "ratio": Decimal("0.18"),
@@ -59,6 +60,7 @@ CHANNELS = (
         "env": "PDHLZY_KIRO_STABLE_KEY",
         "tag": "xingren-claude-pdhlzy-kiro-stable",
         "name": "Claude Kiro 稳定版",
+        "group_label": "Kiro 稳定版",
         "type": 1,
         "group": "kiro-stable",
         "ratio": Decimal("0.22"),
@@ -69,6 +71,7 @@ CHANNELS = (
         "env": "PDHLZY_CCMAX_KEY",
         "tag": "xingren-claude-pdhlzy-ccmax-terminal",
         "name": "Claude ccmax 终端专用",
+        "group_label": "ccmax 终端专用",
         "type": 14,
         "group": "ccmax-terminal",
         "ratio": Decimal("0.75"),
@@ -87,6 +90,7 @@ CHANNELS = (
         "env": "PDHLZY_CLAUDE_KEY",
         "tag": "xingren-claude-pdhlzy-claude-external",
         "name": "Claude 外接渠道",
+        "group_label": "Claude 外接",
         "type": 14,
         "group": "claude-external",
         "ratio": Decimal("0.9"),
@@ -224,7 +228,7 @@ def option_updates(options: dict[str, object], exchange_rate: Decimal) -> dict[s
 
     for channel in CHANNELS:
         group_ratio[channel["group"]] = decimal_float(channel["ratio"])
-        user_groups[channel["group"]] = f"{channel['name']}（{channel['ratio']}x）"
+        user_groups[channel["group"]] = channel["group_label"]
     for model, (input_price, output_price, cache_write, cache_read) in MODEL_PRICES_CNY.items():
         model_ratio[model] = decimal_float(input_price / (Decimal("2") * exchange_rate))
         completion_ratio[model] = decimal_float(output_price / input_price)

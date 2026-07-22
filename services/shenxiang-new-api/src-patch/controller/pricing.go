@@ -106,6 +106,7 @@ func publicPricingGroups(enableGroups []string, usableGroups map[string]string) 
 		service.PlusPricingGroupName,
 		service.ClaudeKiroPricingGroupName,
 		service.ClaudeKiroStablePricingGroupName,
+		service.ClaudeTerminalPricingGroupName,
 		service.ClaudeExternalPricingGroupName,
 		service.Grok45PricingGroupName,
 	} {
@@ -227,7 +228,7 @@ func GetPricing(c *gin.Context) {
 	if err != nil {
 		common.SysLog("failed to resolve managed Grok pricing visibility: " + err.Error())
 	}
-	usableGroup = service.GetPublicPricingGroups(group, managedGrok45Visible)
+	usableGroup = service.GetMarketplacePricingGroups(group, managedGrok45Visible)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
 	pricing = pinManagedGrok45Pricing(pricing)
 	for group := range ratio_setting.GetGroupRatioCopy() {

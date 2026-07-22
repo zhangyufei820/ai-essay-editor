@@ -86,6 +86,28 @@ func TestPublicPricingGroupsRequireManagedGrokEntitlement(t *testing.T) {
 	require.False(t, GroupInUserUsableGroups("default", Grok45PricingGroupName))
 }
 
+func TestMarketplacePricingGroupsAddsTerminalWithChineseLabelsWithoutMakingItPublic(t *testing.T) {
+	originalGroups := setting.UserUsableGroups2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalGroups))
+	})
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{
+		"kiro":"legacy kiro",
+		"kiro-stable":"legacy stable",
+		"ccmax-terminal":"legacy terminal",
+		"claude-external":"legacy external"
+	}`))
+
+	groups := GetMarketplacePricingGroups("default", false)
+
+	require.Equal(t, "Kiro", groups[ClaudeKiroPricingGroupName])
+	require.Equal(t, "Kiro 稳定版", groups[ClaudeKiroStablePricingGroupName])
+	require.Equal(t, "ccmax 终端专用", groups[ClaudeTerminalPricingGroupName])
+	require.Equal(t, "Claude 外接", groups[ClaudeExternalPricingGroupName])
+	require.NotContains(t, GetPublicPricingGroups("default", false), ClaudeTerminalPricingGroupName)
+	require.False(t, IsPublicTokenGroup(ClaudeTerminalPricingGroupName))
+}
+
 func TestNormalizePublicTokenGroupDefaultsLegacyAndAutoGroups(t *testing.T) {
 	require.Equal(t, "default", NormalizePublicTokenGroup("internal"))
 	require.Equal(t, "default", NormalizePublicTokenGroup("auto"))

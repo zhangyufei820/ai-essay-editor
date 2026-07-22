@@ -20,6 +20,13 @@ var publicClaudeTokenGroups = []string{
 	ClaudeExternalPricingGroupName,
 }
 
+var marketplaceClaudeGroupLabels = map[string]string{
+	ClaudeKiroPricingGroupName:       "Kiro",
+	ClaudeKiroStablePricingGroupName: "Kiro 稳定版",
+	ClaudeTerminalPricingGroupName:   "ccmax 终端专用",
+	ClaudeExternalPricingGroupName:   "Claude 外接",
+}
+
 var publicTokenGroups = []string{
 	"default",
 	DiscountPricingGroupName,
@@ -111,6 +118,20 @@ func GetPublicPricingGroups(userGroup string, includeManagedGrok45 bool) map[str
 	pricingGroups := GetPublicUserUsableGroups(userGroup)
 	if description, ok := usableGroups[Grok45PricingGroupName]; includeManagedGrok45 && ok {
 		pricingGroups[Grok45PricingGroupName] = description
+	}
+	return pricingGroups
+}
+
+func GetMarketplacePricingGroups(userGroup string, includeManagedGrok45 bool) map[string]string {
+	usableGroups := GetUserUsableGroups(userGroup)
+	pricingGroups := GetPublicPricingGroups(userGroup, includeManagedGrok45)
+	if description, ok := usableGroups[ClaudeTerminalPricingGroupName]; ok {
+		pricingGroups[ClaudeTerminalPricingGroupName] = description
+	}
+	for group, label := range marketplaceClaudeGroupLabels {
+		if _, ok := pricingGroups[group]; ok {
+			pricingGroups[group] = label
+		}
 	}
 	return pricingGroups
 }

@@ -29,6 +29,9 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
             Decimal("0.18"), Decimal("0.22"), Decimal("0.75"), Decimal("0.9")
         ])
         self.assertEqual([channel["type"] for channel in channels], [1, 1, 14, 14])
+        self.assertEqual([channel["group_label"] for channel in channels], [
+            "Kiro", "Kiro 稳定版", "ccmax 终端专用", "Claude 外接"
+        ])
         self.assertEqual([len(channel["models"]) for channel in channels], [7, 9, 7, 7])
         self.assertEqual(tuple(channels[1]["models"]), self.module.ALL_MODELS)
         for channel in (channels[0], channels[2], channels[3]):
@@ -50,6 +53,7 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
 
         updates = self.module.option_updates(options, Decimal("7"))
         group_ratios = json.loads(updates["GroupRatio"])
+        user_groups = json.loads(updates["UserUsableGroups"])
         model_ratios = json.loads(updates["ModelRatio"])
         completion_ratios = json.loads(updates["CompletionRatio"])
         cache_ratios = json.loads(updates["CacheRatio"])
@@ -59,6 +63,10 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertEqual(group_ratios["kiro-stable"], 0.22)
         self.assertEqual(group_ratios["ccmax-terminal"], 0.75)
         self.assertEqual(group_ratios["claude-external"], 0.9)
+        self.assertEqual(user_groups["kiro"], "Kiro")
+        self.assertEqual(user_groups["kiro-stable"], "Kiro 稳定版")
+        self.assertEqual(user_groups["ccmax-terminal"], "ccmax 终端专用")
+        self.assertEqual(user_groups["claude-external"], "Claude 外接")
         self.assertAlmostEqual(model_ratios["claude-fable-5"], 10 / 14)
         self.assertEqual(completion_ratios["claude-fable-5"], 5)
         self.assertEqual(cache_ratios["claude-fable-5"], 0.1)
