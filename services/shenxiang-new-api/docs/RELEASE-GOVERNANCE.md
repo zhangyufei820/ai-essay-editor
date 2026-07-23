@@ -54,6 +54,8 @@ The release script fails closed unless all of these conditions hold:
 12. The periodic model-permission runner is installed from the release and resolves its Python scripts only from the checkout pinned by the live manifest.
 13. The provider monitor runner and Cron are installed from the release, resolve the monitor only from the manifest-pinned checkout, and pass the runtime drift guard.
 
+The first release that introduces the provider-monitor files may accept only the exact SHA-256-pinned legacy runner and Cron after the candidate release tool itself is installed. The guarded release must then be run a second time immediately; the active-release reconciliation path installs the candidate files and requires strict byte-for-byte verification. Any other drift fails closed.
+
 The script changes only the `shenxiang-new-api` application image. It does not recreate MySQL or Redis and does not modify their data.
 
 The versioned test contract lives at `release/go-test-contracts.json`. Every fix must add or retain the package and test pattern that proves its behavior. The release script checks that each targeted pattern matches real tests before running it; an empty match cannot pass the gate.

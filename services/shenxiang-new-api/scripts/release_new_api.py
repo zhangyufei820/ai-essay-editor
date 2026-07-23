@@ -208,7 +208,8 @@ class Release:
         self.validate_ancestry(manifest)
         self.load_release_identity()
         if self.is_current_release(manifest):
-            print(f"release already active: {self.candidate} {self.image}")
+            self.reconcile_current_release_governance()
+            print(f"release already active; governance reconciled: {self.candidate} {self.image}")
             return
         self.prepare_source()
         self.run_tests()
@@ -560,6 +561,11 @@ WHERE platform IN ('playground_image', 'playground_video')
         if not source.is_file():
             raise ReleaseError("candidate provider monitor cron is missing")
         atomic_copy(source, Path("/etc/cron.d/shenxiang-new-api-provider-monitor"))
+
+    def reconcile_current_release_governance(self) -> None:
+        self.sync_governance_files()
+        self.install_provider_monitor_cron()
+        run([str(self.app_dir / "scripts/check-new-api-release-state.sh")])
 
     def switch(self, previous_manifest: dict[str, Any]) -> None:
         timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")

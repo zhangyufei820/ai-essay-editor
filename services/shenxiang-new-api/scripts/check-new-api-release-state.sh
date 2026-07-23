@@ -14,8 +14,11 @@ expected_upstream="$(jq -er '.upstream_commit' "$MANIFEST")"
 expected_patch="$(jq -er '.patch_sha256' "$MANIFEST")"
 expected_policy="$(jq -er '.policy_sha256' "$MANIFEST")"
 expected_model_sync_runner="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/sync_app_model_permissions.sh"
+expected_release_tool="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/release_new_api.py"
 expected_provider_monitor_runner="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/provider_monitor.sh"
 expected_provider_monitor_cron="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/cron/shenxiang-new-api-provider-monitor"
+legacy_provider_monitor_runner_sha256="3954e206e1ce2da52b8df272d207bf1b1bae23e630dce0ef019ba6d61c7d7ad9"
+legacy_provider_monitor_cron_sha256="4c4028656770a7911bcbd58b20b0bcacc8ce7eb9e5fc38a667901d5fca24d170"
 
 actual_image="$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')"
 actual_image_id="$(docker inspect "$CONTAINER" --format '{{.Image}}')"
@@ -37,14 +40,18 @@ cmp -s "${APP_DIR}/scripts/sync_app_model_permissions.sh" "$expected_model_sync_
   exit 1
 }
 [ -r "$expected_provider_monitor_runner" ] || { printf 'release provider monitor runner missing\n' >&2; exit 1; }
-cmp -s "${APP_DIR}/scripts/provider_monitor.sh" "$expected_provider_monitor_runner" || {
-  printf 'release provider monitor runner drift\n' >&2
-  exit 1
-}
 [ -r "$expected_provider_monitor_cron" ] || { printf 'release provider monitor cron missing\n' >&2; exit 1; }
-cmp -s "/etc/cron.d/shenxiang-new-api-provider-monitor" "$expected_provider_monitor_cron" || {
-  printf 'release provider monitor cron drift\n' >&2
-  exit 1
-}
+if ! cmp -s "${APP_DIR}/scripts/provider_monitor.sh" "$expected_provider_monitor_runner" || \
+   ! cmp -s "/etc/cron.d/shenxiang-new-api-provider-monitor" "$expected_provider_monitor_cron"; then
+  actual_runner_sha256="$(sha256sum "${APP_DIR}/scripts/provider_monitor.sh" | awk '{print $1}')"
+  actual_cron_sha256="$(sha256sum "/etc/cron.d/shenxiang-new-api-provider-monitor" | awk '{print $1}')"
+  if ! cmp -s "${APP_DIR}/scripts/release_new_api.py" "$expected_release_tool" || \
+     [ "$actual_runner_sha256" != "$legacy_provider_monitor_runner_sha256" ] || \
+     [ "$actual_cron_sha256" != "$legacy_provider_monitor_cron_sha256" ]; then
+    printf 'release provider monitor runner or cron drift\n' >&2
+    exit 1
+  fi
+  printf 'release provider monitor bootstrap pending; rerun the guarded release immediately\n' >&2
+fi
 
 printf 'release state verified: %s %s\n' "$expected_commit" "$expected_image"

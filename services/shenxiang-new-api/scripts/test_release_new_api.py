@@ -7,6 +7,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).with_name("release_new_api.py")
@@ -105,8 +106,21 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertIn("provider_monitor.sh --full", cron)
 
         release_guard = MODULE_PATH.with_name("check-new-api-release-state.sh").read_text(encoding="utf-8")
-        self.assertIn("release provider monitor runner drift", release_guard)
-        self.assertIn("release provider monitor cron drift", release_guard)
+        self.assertIn("release provider monitor runner or cron drift", release_guard)
+        self.assertIn("release provider monitor bootstrap pending", release_guard)
+        self.assertIn("legacy_provider_monitor_runner_sha256", release_guard)
+
+    def test_active_release_reconciles_governance_before_returning(self) -> None:
+        release = object.__new__(MODULE.Release)
+        release.app_dir = Path("/tmp/test-new-api")
+        release.sync_governance_files = mock.Mock()
+        release.install_provider_monitor_cron = mock.Mock()
+        with mock.patch.object(MODULE, "run") as run:
+            release.reconcile_current_release_governance()
+
+        release.sync_governance_files.assert_called_once_with()
+        release.install_provider_monitor_cron.assert_called_once_with()
+        run.assert_called_once_with(["/tmp/test-new-api/scripts/check-new-api-release-state.sh"])
 
 
 if __name__ == "__main__":
