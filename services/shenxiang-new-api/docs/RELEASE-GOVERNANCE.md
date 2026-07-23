@@ -52,6 +52,7 @@ The release script fails closed unless all of these conditions hold:
 10. No media-workshop image or video task is in progress.
 11. At least 12 GiB of host disk space remains before the build begins.
 12. The periodic model-permission runner is installed from the release and resolves its Python scripts only from the checkout pinned by the live manifest.
+13. The provider monitor runner and Cron are installed from the release, resolve the monitor only from the manifest-pinned checkout, and pass the runtime drift guard.
 
 The script changes only the `shenxiang-new-api` application image. It does not recreate MySQL or Redis and does not modify their data.
 
@@ -90,7 +91,8 @@ The candidate is built and checked before Compose is changed. The script then:
 3. Recreates only `shenxiang-new-api` with `--no-deps`.
 4. Waits for container health.
 5. Checks local New API status, public New API status, the media runtime contract, and main-site health.
-6. Installs the manifest-pinned model-permission runner and writes the new manifest only after all checks pass.
+6. Syncs the manifest-pinned model-permission and provider-monitor runners, writes the new manifest, and installs the versioned provider-monitor Cron.
+7. Verifies the manifest, runner, and Cron identities; any failure restores their previous files with the application rollback.
 
 Any failure after the switch restores the previous Compose file and application image automatically. MySQL, Redis, volumes, networks, 1Panel, and OpenResty remain untouched.
 

@@ -19,6 +19,95 @@ func withTokenGroupChainChannelSelector(t *testing.T, selector func(string, stri
 	})
 }
 
+func withCircuitAbilityChecker(t *testing.T, checker func(string, string, int) (bool, error)) {
+	t.Helper()
+	original := isChannelAbilityEnabledForCircuit
+	isChannelAbilityEnabledForCircuit = checker
+	t.Cleanup(func() {
+		isChannelAbilityEnabledForCircuit = original
+	})
+}
+
+func TestModelAbilityCircuitSkipsDisabledPrimary(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(nil)
+	seenRetries := make([]int, 0, 2)
+	selector := func(_ string, _ string, retry int, _ string) (*model.Channel, error) {
+		seenRetries = append(seenRetries, retry)
+		if retry == 0 {
+			return &model.Channel{Id: 43}, nil
+		}
+		return &model.Channel{Id: 44}, nil
+	}
+	withCircuitAbilityChecker(t, func(_ string, _ string, channelID int) (bool, error) {
+		return channelID == 44, nil
+	})
+
+	channel, err := getRandomSatisfiedChannelWithCircuit(
+		ctx,
+		selector,
+		PlusPricingGroupName,
+		"gpt-5.6-sol",
+		0,
+		"/v1/responses",
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	require.Equal(t, 44, channel.Id)
+	require.Equal(t, []int{0, 1}, seenRetries)
+}
+
+func TestModelAbilityCircuitReturnsNoChannelWhenEveryRouteIsDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(nil)
+	selector := func(_ string, _ string, retry int, _ string) (*model.Channel, error) {
+		if retry == 0 {
+			return &model.Channel{Id: 43}, nil
+		}
+		return &model.Channel{Id: 44}, nil
+	}
+	withCircuitAbilityChecker(t, func(_ string, _ string, _ int) (bool, error) {
+		return false, nil
+	})
+
+	channel, err := getRandomSatisfiedChannelWithCircuit(
+		ctx,
+		selector,
+		PlusPricingGroupName,
+		"gpt-5.4",
+		0,
+		"/v1/responses",
+	)
+
+	require.NoError(t, err)
+	require.Nil(t, channel)
+}
+
+func TestModelAbilityCircuitDoesNotAffectDefaultGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(nil)
+	withCircuitAbilityChecker(t, func(_ string, _ string, _ int) (bool, error) {
+		require.Fail(t, "default routing must not query the model circuit")
+		return false, nil
+	})
+
+	channel, err := getRandomSatisfiedChannelWithCircuit(
+		ctx,
+		func(_ string, _ string, _ int, _ string) (*model.Channel, error) {
+			return &model.Channel{Id: 2}, nil
+		},
+		"default",
+		"gpt-5.5",
+		0,
+		"/v1/responses",
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	require.Equal(t, 2, channel.Id)
+}
+
 func TestCacheGetRandomSatisfiedChannelFallsThroughMissingPrimaryGroup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(nil)

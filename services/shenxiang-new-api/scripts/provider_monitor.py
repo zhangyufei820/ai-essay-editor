@@ -24,6 +24,7 @@ ROOT = Path(os.environ.get("SHENXIANG_NEW_API_ROOT", "/opt/shenxiang-new-api"))
 STATE_PATH = ROOT / "data" / "provider-monitor-state.json"
 LOG_PATH = ROOT / "logs" / "provider-monitor.jsonl"
 LOCK_PATH = ROOT / "data" / "provider-monitor.lock"
+MODEL_SYNC_LOCK_PATH = Path("/tmp/shenxiang-new-api-model-sync.lock")
 
 HTTP_TIMEOUT = float(os.environ.get("PROVIDER_MONITOR_HTTP_TIMEOUT", "35"))
 MAX_WORKERS = int(os.environ.get("PROVIDER_MONITOR_MAX_WORKERS", "8"))
@@ -64,6 +65,8 @@ class TextFamily:
     standalone: bool = False
     request_format: str = "chat"
     expected_tags: dict[int, str] | None = None
+    ability_group: str | None = None
+    manage_model_abilities: bool = False
 
 
 TEXT_FAMILIES = (
@@ -72,6 +75,45 @@ TEXT_FAMILIES = (
         models=("gpt-5.5", "gpt-5.4", "gpt-5.4-mini"),
         channel_ids=(2, 14),
         baseline_priorities={2: 40, 14: 30},
+    ),
+    TextFamily(
+        name="discount_text",
+        models=("gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"),
+        channel_ids=(28, 42, 41),
+        baseline_priorities={28: 30, 42: 20, 41: 10},
+        allow_disable=False,
+        standalone=True,
+        request_format="responses",
+        expected_tags={
+            28: "xingren-discount-text-reserve",
+            42: "xingren-discount-text-pdhlzy",
+            41: "xingren-discount-text-wangwang",
+        },
+        ability_group="discount",
+        manage_model_abilities=True,
+    ),
+    TextFamily(
+        name="plus_text",
+        models=(
+            "gpt-5.4",
+            "gpt-5.4-mini",
+            "gpt-5.5",
+            "gpt-5.6-luna",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "codex-auto-review",
+        ),
+        channel_ids=(43, 44),
+        baseline_priorities={43: 20, 44: 10},
+        allow_disable=False,
+        standalone=True,
+        request_format="responses",
+        expected_tags={
+            43: "xingren-plus-text-wangwang",
+            44: "xingren-plus-text-pdhlzy",
+        },
+        ability_group="plus",
+        manage_model_abilities=True,
     ),
     TextFamily(
         name="claude_kiro_text",
@@ -316,6 +358,7 @@ SELECT JSON_OBJECT(
   'base_url', base_url,
   'type', type,
   'models', models,
+  'model_mapping', model_mapping,
   'group', `group`,
   'status', status,
   'priority', priority,
@@ -343,6 +386,56 @@ def redact_channel(channel: dict[str, Any]) -> dict[str, Any]:
 
 def split_models(channel: dict[str, Any]) -> set[str]:
     return {part.strip() for part in str(channel.get("models") or "").split(",") if part.strip()}
+
+
+def parse_model_mapping(channel: dict[str, Any]) -> dict[str, str]:
+    raw_mapping = str(channel.get("model_mapping") or "").strip()
+    if not raw_mapping:
+        return {}
+    try:
+        parsed = json.loads(raw_mapping)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {
+        str(public_model): str(upstream_model)
+        for public_model, upstream_model in parsed.items()
+        if isinstance(public_model, str)
+        and isinstance(upstream_model, str)
+        and public_model.strip()
+        and upstream_model.strip()
+    }
+
+
+def load_abilities(
+    env: dict[str, str],
+    channel_ids: tuple[int, ...],
+    group: str,
+) -> dict[tuple[int, str], dict[str, Any]]:
+    if not channel_ids or not group:
+        return {}
+    ids = ",".join(str(int(channel_id)) for channel_id in sorted(set(channel_ids)))
+    select = f"""
+SELECT JSON_OBJECT(
+  'channel_id', channel_id,
+  'group_name', `group`,
+  'model', model,
+  'enabled', enabled,
+  'priority', priority,
+  'weight', weight,
+  'tag', tag
+)
+FROM abilities
+WHERE channel_id IN ({ids})
+  AND `group` = {shell_quote(group)}
+"""
+    rows = mysql_json(select, env)
+    return {
+        (int(row["channel_id"]), str(row["model"])): row
+        for row in rows
+        if row.get("channel_id") is not None and row.get("model")
+    }
 
 
 def first_key(raw_key: str) -> str:
@@ -531,6 +624,98 @@ def request_messages(base_url: str, api_key: str, model: str) -> dict[str, Any]:
         }
 
 
+def request_responses(base_url: str, api_key: str, model: str) -> dict[str, Any]:
+    normalized_base = base_url.rstrip("/")
+    url = normalized_base + "/responses" if normalized_base.endswith("/v1") else normalized_base + "/v1/responses"
+    body = json.dumps(
+        {
+            "model": model,
+            "input": "Reply with OK only.",
+            "stream": True,
+            "store": False,
+            "max_output_tokens": 8,
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            "User-Agent": "shenxiang-new-api-model-circuit/1.0",
+        },
+        method="POST",
+    )
+    start = time.monotonic()
+    first_ms: int | None = None
+    saw_data = False
+    completed = False
+    failed = False
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            status = resp.getcode()
+            deadline = time.monotonic() + HTTP_TIMEOUT
+            while time.monotonic() < deadline:
+                line = resp.readline(8192)
+                if not line:
+                    break
+                text = line.decode("utf-8", "replace").strip()
+                if not text.startswith("data:"):
+                    continue
+                payload = text[5:].strip()
+                if payload == "[DONE]":
+                    completed = saw_data and not failed
+                    break
+                try:
+                    event = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                saw_data = True
+                if first_ms is None:
+                    first_ms = int((time.monotonic() - start) * 1000)
+                event_type = str(event.get("type") or "")
+                response = event.get("response") if isinstance(event.get("response"), dict) else {}
+                response_status = str(response.get("status") or event.get("status") or "")
+                if event_type == "response.completed" or response_status == "completed":
+                    completed = True
+                    break
+                if event_type in {"error", "response.error", "response.failed", "response.incomplete"} or response_status in {
+                    "failed",
+                    "incomplete",
+                    "cancelled",
+                }:
+                    failed = True
+                    break
+            if first_ms is None:
+                first_ms = int((time.monotonic() - start) * 1000)
+            ok = 200 <= status < 300 and completed and not failed
+            return {
+                "ok": bool(ok),
+                "status": status,
+                "first_token_ms": first_ms,
+                "reason": "ok" if ok else "response_not_completed",
+            }
+    except urllib.error.HTTPError as exc:
+        _ = exc.read(512)
+        return {
+            "ok": False,
+            "status": exc.code,
+            "first_token_ms": int((time.monotonic() - start) * 1000),
+            "reason": classify_http_error(exc.code),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": 0,
+            "first_token_ms": int((time.monotonic() - start) * 1000),
+            "reason": classify_exception(exc),
+        }
+
+
 def percentile(values: list[int], pct: float) -> int | None:
     if not values:
         return None
@@ -624,6 +809,10 @@ def summarize_route(route: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def should_open_managed_model_circuit(summary: dict[str, Any]) -> bool:
+    return int(summary.get("consecutive_failures") or 0) >= CONSECUTIVE_FAILURES_TO_OPEN
+
+
 def channel_state(state: dict[str, Any], channel_id: int, baseline_priority: int) -> dict[str, Any]:
     channels = state.setdefault("channels", {})
     key = str(channel_id)
@@ -645,9 +834,125 @@ def channel_state(state: dict[str, Any], channel_id: int, baseline_priority: int
     return ch_state
 
 
+def managed_ability_state(state: dict[str, Any], family: str, model: str, channel_id: int) -> dict[str, Any]:
+    abilities = state.setdefault("managed_abilities", {})
+    key = f"{family}:{model}:{channel_id}"
+    ability_state = abilities.setdefault(
+        key,
+        {
+            "auto_disabled": False,
+            "disabled_at": 0,
+            "last_action": "none",
+        },
+    )
+    ability_state.setdefault("auto_disabled", False)
+    ability_state.setdefault("disabled_at", 0)
+    ability_state.setdefault("last_action", "none")
+    return ability_state
+
+
+def managed_channel_state(state: dict[str, Any], family: str, channel_id: int) -> dict[str, Any]:
+    channels = state.setdefault("managed_channels", {})
+    key = f"{family}:{channel_id}"
+    channel = channels.setdefault(key, {"auto_disabled": False, "disabled_at": 0, "last_action": "none"})
+    channel.setdefault("auto_disabled", False)
+    channel.setdefault("disabled_at", 0)
+    channel.setdefault("last_action", "none")
+    return channel
+
+
 def execute_sql(env: dict[str, str], sql: str, dry_run: bool) -> None:
     if not dry_run:
         docker_mysql([], env, input_text=sql, capture=True)
+
+
+def execute_guarded_update(env: dict[str, str], sql: str, dry_run: bool) -> bool:
+    if dry_run:
+        return True
+    output = docker_mysql(["--batch", "--skip-column-names"], env, input_text=sql + "\nSELECT ROW_COUNT();\n")
+    values = [line.strip() for line in output.splitlines() if line.strip()]
+    return bool(values) and values[-1] == "1"
+
+
+def set_model_ability_enabled(
+    env: dict[str, str],
+    family: TextFamily,
+    channel_id: int,
+    model: str,
+    current_enabled: bool,
+    target_enabled: bool,
+    reason: str,
+    dry_run: bool,
+) -> bool:
+    if not family.manage_model_abilities or not family.ability_group:
+        raise RuntimeError("model ability update requires a managed family")
+    expected_tag = (family.expected_tags or {}).get(channel_id)
+    if not expected_tag or model not in family.models:
+        raise RuntimeError("model ability update is outside the managed route")
+    sql = f"""
+UPDATE abilities AS ability
+JOIN channels AS channel ON channel.id = ability.channel_id
+SET ability.enabled = {1 if target_enabled else 0}
+WHERE ability.channel_id = {int(channel_id)}
+  AND ability.`group` = {shell_quote(family.ability_group)}
+  AND ability.model = {shell_quote(model)}
+  AND ability.tag = {shell_quote(expected_tag)}
+  AND ability.enabled = {1 if current_enabled else 0}
+  AND channel.id = {int(channel_id)}
+  AND channel.status = 1
+  AND channel.tag = {shell_quote(expected_tag)}
+  AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = {shell_quote(family.ability_group)};
+"""
+    updated = execute_guarded_update(env, sql, dry_run)
+    write_event(
+        {
+            "ts": now_iso(),
+            "event": "model_ability_update",
+            "family": family.name,
+            "channel_id": channel_id,
+            "model": model,
+            "enabled": target_enabled,
+            "reason": reason,
+            "dry_run": dry_run,
+            "updated": updated,
+        }
+    )
+    return updated
+
+
+def adopt_managed_disabled_channel(
+    env: dict[str, str],
+    family: TextFamily,
+    channel_id: int,
+    current_status: int,
+    dry_run: bool,
+) -> bool:
+    if not family.manage_model_abilities or not family.ability_group:
+        raise RuntimeError("channel adoption requires a managed family")
+    expected_tag = (family.expected_tags or {}).get(channel_id)
+    if not expected_tag or current_status not in {2, 3}:
+        raise RuntimeError("channel adoption is outside the managed route")
+    sql = f"""
+UPDATE channels
+SET status = 1
+WHERE id = {int(channel_id)}
+  AND status = {int(current_status)}
+  AND tag = {shell_quote(expected_tag)}
+  AND REPLACE(COALESCE(`group`, ''), ' ', '') = {shell_quote(family.ability_group)};
+"""
+    updated = execute_guarded_update(env, sql, dry_run)
+    write_event(
+        {
+            "ts": now_iso(),
+            "event": "managed_channel_adopted",
+            "family": family.name,
+            "channel_id": channel_id,
+            "status_before": current_status,
+            "dry_run": dry_run,
+            "updated": updated,
+        }
+    )
+    return updated
 
 
 def set_channel_status(env: dict[str, str], channel_id: int, status: int, reason: str, dry_run: bool) -> None:
@@ -858,13 +1163,213 @@ def ingest_real_request_samples(
     return event
 
 
+def evaluate_managed_model_family(
+    family: TextFamily,
+    channels: dict[int, dict[str, Any]],
+    state: dict[str, Any],
+    env: dict[str, str],
+    dry_run: bool,
+    adopt_managed_disabled: bool,
+) -> dict[str, Any]:
+    if not family.manage_model_abilities or not family.ability_group:
+        raise RuntimeError("managed model evaluation requires an ability group")
+    abilities = load_abilities(env, family.channel_ids, family.ability_group)
+    route_results: dict[str, Any] = {}
+    futures: dict[concurrent.futures.Future[dict[str, Any]], tuple[int, str]] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        for channel_id in family.channel_ids:
+            channel = channels.get(channel_id)
+            expected_tag = (family.expected_tags or {}).get(channel_id)
+            if not channel or not expected_tag or str(channel.get("tag") or "") != expected_tag:
+                continue
+            if str(channel.get("group") or "").replace(" ", "") != family.ability_group:
+                continue
+            api_key = first_key(str(channel.get("key") or ""))
+            base_url = str(channel.get("base_url") or "").strip()
+            if not api_key or not base_url:
+                continue
+            model_mapping = parse_model_mapping(channel)
+            for model in family.models:
+                ability = abilities.get((channel_id, model))
+                if not ability or str(ability.get("tag") or "") != expected_tag:
+                    continue
+                upstream_model = model_mapping.get(model, model).strip()
+                if not upstream_model:
+                    continue
+                futures[pool.submit(request_responses, base_url, api_key, upstream_model)] = (channel_id, model)
+        for future in concurrent.futures.as_completed(futures):
+            channel_id, model = futures[future]
+            result = future.result()
+            route = append_sample(state, family.name, model, channel_id, result)
+            route_results[f"{model}:{channel_id}"] = {
+                "model": model,
+                "channel_id": channel_id,
+                "result": result,
+                "summary": summarize_route(route),
+            }
+
+    channel_summaries: dict[int, dict[str, Any]] = {}
+    for channel_id in family.channel_ids:
+        channel = channels.get(channel_id)
+        expected_tag = (family.expected_tags or {}).get(channel_id)
+        if not channel:
+            channel_summaries[channel_id] = {"missing": True}
+            continue
+        if not expected_tag or str(channel.get("tag") or "") != expected_tag:
+            channel_summaries[channel_id] = {"tag_mismatch": True}
+            continue
+        if str(channel.get("group") or "").replace(" ", "") != family.ability_group:
+            channel_summaries[channel_id] = {"group_mismatch": True}
+            continue
+
+        current_status = int(channel.get("status") or 0)
+        adopted = False
+        channel_action = "none"
+        managed_ch_state = managed_channel_state(state, family.name, channel_id)
+        if current_status == 3:
+            if not managed_ch_state.get("auto_disabled") and not dry_run:
+                managed_ch_state["auto_disabled"] = True
+                managed_ch_state["disabled_at"] = now_ts()
+                managed_ch_state["last_action"] = "observed_auto_disabled"
+                for model in family.models:
+                    ability = abilities.get((channel_id, model))
+                    if ability and not bool(int(ability.get("enabled") or 0)):
+                        ability_state = managed_ability_state(state, family.name, model, channel_id)
+                        ability_state["auto_disabled"] = True
+                        ability_state["disabled_at"] = int(managed_ch_state["disabled_at"])
+                        ability_state["last_action"] = "channel_auto_disabled"
+            cooldown_ok = now_ts() - int(managed_ch_state.get("disabled_at") or 0) >= RECOVER_COOLDOWN_SECONDS
+            healthy_model_seen = any(
+                int(((route_results.get(f"{model}:{channel_id}") or {}).get("summary") or {}).get("consecutive_successes") or 0)
+                >= RECOVER_SUCCESS_STREAK
+                for model in family.models
+            )
+            if managed_ch_state.get("auto_disabled") and cooldown_ok and healthy_model_seen:
+                adopted = adopt_managed_disabled_channel(env, family, channel_id, 3, dry_run)
+                if adopted:
+                    channel_action = "would_recover_auto_disabled" if dry_run else "recovered_auto_disabled"
+                    current_status = 1
+                    if not dry_run:
+                        managed_ch_state["auto_disabled"] = False
+                        managed_ch_state["disabled_at"] = 0
+                        managed_ch_state["last_action"] = "recovered_auto_disabled"
+            else:
+                channel_action = "auto_disabled_cooldown" if not cooldown_ok else "auto_disabled_health_wait"
+        if adopt_managed_disabled and current_status == 2:
+            adopted = adopt_managed_disabled_channel(env, family, channel_id, 2, dry_run)
+            if adopted:
+                channel_action = "would_adopt_manual_disabled" if dry_run else "adopted_manual_disabled"
+                current_status = 1
+                if not dry_run:
+                    for model in family.models:
+                        ability_state = managed_ability_state(state, family.name, model, channel_id)
+                        ability_state["auto_disabled"] = True
+                        ability_state["disabled_at"] = now_ts() - RECOVER_COOLDOWN_SECONDS
+                        ability_state["last_action"] = "adopted_disabled"
+
+        model_summaries: dict[str, Any] = {}
+        for model in family.models:
+            ability = abilities.get((channel_id, model))
+            route_result = route_results.get(f"{model}:{channel_id}")
+            if not ability:
+                model_summaries[model] = {"missing_ability": True, "action": "none"}
+                continue
+            if str(ability.get("tag") or "") != expected_tag:
+                model_summaries[model] = {"tag_mismatch": True, "action": "none"}
+                continue
+            current_enabled = bool(int(ability.get("enabled") or 0))
+            summary = dict((route_result or {}).get("summary") or {})
+            ability_state = managed_ability_state(state, family.name, model, channel_id)
+            action = "none"
+            if current_status != 1:
+                action = "channel_not_enabled"
+            elif current_enabled and should_open_managed_model_circuit(summary):
+                updated = set_model_ability_enabled(
+                    env,
+                    family,
+                    channel_id,
+                    model,
+                    True,
+                    False,
+                    f"{family.name}_model_circuit_open",
+                    dry_run,
+                )
+                action = "would_circuit_open" if dry_run else "circuit_open" if updated else "guard_mismatch"
+                if updated and not dry_run:
+                    ability_state["auto_disabled"] = True
+                    ability_state["disabled_at"] = now_ts()
+                    ability_state["last_action"] = "circuit_open"
+                    current_enabled = False
+            elif not current_enabled and ability_state.get("auto_disabled"):
+                cooldown_ok = now_ts() - int(ability_state.get("disabled_at") or 0) >= RECOVER_COOLDOWN_SECONDS
+                recent_success = int(summary.get("consecutive_successes") or 0) >= RECOVER_SUCCESS_STREAK
+                if cooldown_ok and recent_success:
+                    updated = set_model_ability_enabled(
+                        env,
+                        family,
+                        channel_id,
+                        model,
+                        False,
+                        True,
+                        f"{family.name}_model_recovered",
+                        dry_run,
+                    )
+                    action = "would_recover" if dry_run else "recovered" if updated else "guard_mismatch"
+                    if updated and not dry_run:
+                        ability_state["auto_disabled"] = False
+                        ability_state["disabled_at"] = 0
+                        ability_state["last_action"] = "recovered"
+                        current_enabled = True
+                else:
+                    action = "cooldown_wait" if not cooldown_ok else "recovery_streak_wait"
+            elif not current_enabled:
+                action = "manual_disabled_noop"
+            ability_state["last_checked_at"] = now_iso()
+            model_summaries[model] = {
+                "enabled": current_enabled,
+                "auto_disabled": bool(ability_state.get("auto_disabled")),
+                "action": action,
+                "summary": summary,
+            }
+
+        channel_summaries[channel_id] = {
+            "channel_id": channel_id,
+            "status": current_status,
+            "priority": int(channel.get("priority") or 0),
+            "adopted": adopted,
+            "action": channel_action,
+            "models": model_summaries,
+        }
+
+    event = {
+        "ts": now_iso(),
+        "event": "managed_model_circuit_family",
+        "family": family.name,
+        "dry_run": dry_run,
+        "routes": route_results,
+        "channels": channel_summaries,
+    }
+    write_event(event)
+    return event
+
+
 def evaluate_text_family(
     family: TextFamily,
     channels: dict[int, dict[str, Any]],
     state: dict[str, Any],
     env: dict[str, str],
     dry_run: bool,
+    adopt_managed_disabled: bool = False,
 ) -> dict[str, Any]:
+    if family.manage_model_abilities:
+        return evaluate_managed_model_family(
+            family,
+            channels,
+            state,
+            env,
+            dry_run,
+            adopt_managed_disabled,
+        )
     route_results: dict[str, Any] = {}
     futures: dict[concurrent.futures.Future[dict[str, Any]], tuple[int, str]] = {}
     requester = request_messages if family.request_format == "messages" else request_chat
@@ -1262,10 +1767,28 @@ def evaluate_image_long_tail_real_p95(
     return event
 
 
-def all_configured_channel_ids() -> list[int]:
-    ids: set[int] = {IMAGE2_PRIMARY["channel_id"], IMAGE2_PRIMARY["fallback_channel_id"]}
-    ids.update(parse_int_list(IMAGE_LONG_TAIL_CHANNEL_IDS))
-    for family in TEXT_FAMILIES:
+def select_text_families(raw_names: list[str] | None) -> tuple[TextFamily, ...]:
+    if not raw_names:
+        return TEXT_FAMILIES
+    requested = {
+        name.strip()
+        for raw_name in raw_names
+        for name in raw_name.split(",")
+        if name.strip()
+    }
+    known = {family.name: family for family in TEXT_FAMILIES}
+    unknown = sorted(requested - set(known))
+    if unknown:
+        raise ValueError("unknown provider monitor families: " + ",".join(unknown))
+    return tuple(family for family in TEXT_FAMILIES if family.name in requested)
+
+
+def all_configured_channel_ids(families: tuple[TextFamily, ...] = TEXT_FAMILIES, include_images: bool = True) -> list[int]:
+    ids: set[int] = set()
+    if include_images:
+        ids.update({IMAGE2_PRIMARY["channel_id"], IMAGE2_PRIMARY["fallback_channel_id"]})
+        ids.update(parse_int_list(IMAGE_LONG_TAIL_CHANNEL_IDS))
+    for family in families:
         ids.update(family.channel_ids)
     return sorted(ids)
 
@@ -1274,53 +1797,86 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="probe and log without database changes")
     parser.add_argument("--no-probe", action="store_true", help="only print current state")
+    parser.add_argument(
+        "--family",
+        action="append",
+        help="run only the named text family; may be repeated or comma-separated",
+    )
+    parser.add_argument(
+        "--adopt-managed-disabled",
+        action="store_true",
+        help="one-time adoption of exact-tag managed channels currently manually disabled",
+    )
     args = parser.parse_args()
+    selected_families = select_text_families(args.family)
+    family_only = bool(args.family)
 
     ROOT.joinpath("logs").mkdir(exist_ok=True)
     ROOT.joinpath("data").mkdir(exist_ok=True)
     with LOCK_PATH.open("w") as lock_fp:
         fcntl.flock(lock_fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        env = load_dotenv(ROOT / ".env")
-        required = ["MYSQL_ROOT_PASSWORD", "MYSQL_DATABASE"]
-        missing = [key for key in required if not env.get(key)]
-        if missing:
-            raise RuntimeError(f"missing env keys: {','.join(missing)}")
+        with MODEL_SYNC_LOCK_PATH.open("a") as model_sync_lock_fp:
+            os.chmod(MODEL_SYNC_LOCK_PATH, 0o600)
+            fcntl.flock(model_sync_lock_fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            env = load_dotenv(ROOT / ".env")
+            required = ["MYSQL_ROOT_PASSWORD", "MYSQL_DATABASE"]
+            missing = [key for key in required if not env.get(key)]
+            if missing:
+                raise RuntimeError(f"missing env keys: {','.join(missing)}")
 
-        channels = load_channels(env, all_configured_channel_ids())
-        state = load_state()
-        if args.no_probe:
-            print(
-                json.dumps(
-                    sanitize_for_event({
-                        "text_families": [family.__dict__ for family in TEXT_FAMILIES],
-                        "channels": {channel_id: redact_channel(channel) for channel_id, channel in channels.items()},
-                        "state": state,
-                    }),
-                    ensure_ascii=False,
-                    default=str,
-                )
+            channels = load_channels(
+                env,
+                all_configured_channel_ids(selected_families, include_images=not family_only),
             )
-            return 0
+            state = load_state()
+            if args.no_probe:
+                print(
+                    json.dumps(
+                        sanitize_for_event({
+                            "text_families": [family.__dict__ for family in selected_families],
+                            "channels": {channel_id: redact_channel(channel) for channel_id, channel in channels.items()},
+                            "state": state,
+                        }),
+                        ensure_ascii=False,
+                        default=str,
+                    )
+                )
+                return 0
 
-        results: dict[str, Any] = {}
-        results["real_request_latency_ingest"] = ingest_real_request_samples(TEXT_FAMILIES, state, env)
-        results[IMAGE2_PRIMARY["name"]] = evaluate_image2_primary(
-            load_channels_by_id(env, [IMAGE2_PRIMARY["channel_id"], IMAGE2_PRIMARY["fallback_channel_id"]]),
-            state,
-            env,
-            args.dry_run,
-        )
-        results[IMAGE_LONG_TAIL["name"]] = evaluate_image_long_tail_real_p95(
-            channels,
-            state,
-            env,
-            args.dry_run,
-        )
-        for family in TEXT_FAMILIES:
-            results[family.name] = evaluate_text_family(family, channels, state, env, args.dry_run)
-        save_state(state)
-        print(json.dumps({"ok": True, "dry_run": args.dry_run, "results": results}, ensure_ascii=False))
-        return 0
+            results: dict[str, Any] = {}
+            if not family_only:
+                real_request_families = tuple(
+                    family for family in selected_families if not family.manage_model_abilities
+                )
+                results["real_request_latency_ingest"] = ingest_real_request_samples(
+                    real_request_families,
+                    state,
+                    env,
+                )
+                results[IMAGE2_PRIMARY["name"]] = evaluate_image2_primary(
+                    load_channels_by_id(env, [IMAGE2_PRIMARY["channel_id"], IMAGE2_PRIMARY["fallback_channel_id"]]),
+                    state,
+                    env,
+                    args.dry_run,
+                )
+                results[IMAGE_LONG_TAIL["name"]] = evaluate_image_long_tail_real_p95(
+                    channels,
+                    state,
+                    env,
+                    args.dry_run,
+                )
+            for family in selected_families:
+                results[family.name] = evaluate_text_family(
+                    family,
+                    channels,
+                    state,
+                    env,
+                    args.dry_run,
+                    args.adopt_managed_disabled,
+                )
+            save_state(state)
+            print(json.dumps({"ok": True, "dry_run": args.dry_run, "results": results}, ensure_ascii=False))
+            return 0
 
 
 if __name__ == "__main__":

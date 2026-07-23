@@ -102,6 +102,42 @@ func IsChannelEnabledForGroupModel(group string, modelName string, channelID int
 	return false
 }
 
+// IsChannelAbilityEnabled reads the live ability row instead of the 60-second
+// channel cache. Discount and Plus circuit breakers use it to stop selecting a
+// failed model immediately after the monitor disables that exact route.
+func IsChannelAbilityEnabled(group string, modelName string, channelID int) (bool, error) {
+	group = strings.TrimSpace(group)
+	modelName = strings.TrimSpace(modelName)
+	if group == "" || modelName == "" || channelID <= 0 {
+		return false, nil
+	}
+	var count int64
+	err := DB.Model(&Ability{}).
+		Joins("JOIN channels ON channels.id = abilities.channel_id").
+		Where("abilities.`group` = ? and abilities.model = ? and abilities.channel_id = ? and abilities.enabled = ?", group, modelName, channelID, true).
+		Where("channels.status = ? and abilities.tag = channels.tag", common.ChannelStatusEnabled).
+		Where("REPLACE(COALESCE(channels.`group`, ''), ' ', '') = ?", group).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	if count > 0 {
+		return true, nil
+	}
+	normalized := ratio_setting.FormatMatchingModelName(modelName)
+	if normalized == "" || normalized == modelName {
+		return false, nil
+	}
+	count = 0
+	err = DB.Model(&Ability{}).
+		Joins("JOIN channels ON channels.id = abilities.channel_id").
+		Where("abilities.`group` = ? and abilities.model = ? and abilities.channel_id = ? and abilities.enabled = ?", group, normalized, channelID, true).
+		Where("channels.status = ? and abilities.tag = channels.tag", common.ChannelStatusEnabled).
+		Where("REPLACE(COALESCE(channels.`group`, ''), ' ', '') = ?", group).
+		Count(&count).Error
+	return count > 0, err
+}
+
 func IsChannelEnabledForAnyGroupModel(groups []string, modelName string, channelID int) bool {
 	if len(groups) == 0 {
 		return false

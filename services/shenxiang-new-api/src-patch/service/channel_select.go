@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -12,6 +13,48 @@ import (
 )
 
 var getRandomSatisfiedChannelForTokenGroupChain = model.GetRandomSatisfiedChannel
+var isChannelAbilityEnabledForCircuit = model.IsChannelAbilityEnabled
+
+type randomSatisfiedChannelSelector func(string, string, int, string) (*model.Channel, error)
+
+func usesModelAbilityCircuit(group string) bool {
+	return group == DiscountPricingGroupName || group == PlusPricingGroupName
+}
+
+func getRandomSatisfiedChannelWithCircuit(
+	ctx *gin.Context,
+	selector randomSatisfiedChannelSelector,
+	group string,
+	modelName string,
+	retry int,
+	requestPath string,
+) (*model.Channel, error) {
+	channel, err := selector(group, modelName, retry, requestPath)
+	if err != nil || channel == nil || !usesModelAbilityCircuit(group) {
+		return channel, err
+	}
+	seen := make(map[int]struct{})
+	for attempts := 0; attempts < 16 && channel != nil; attempts++ {
+		if _, duplicate := seen[channel.Id]; duplicate {
+			return nil, nil
+		}
+		seen[channel.Id] = struct{}{}
+		enabled, abilityErr := isChannelAbilityEnabledForCircuit(group, modelName, channel.Id)
+		if abilityErr != nil {
+			logger.LogError(ctx, fmt.Sprintf("model ability circuit lookup failed: %s", abilityErr.Error()))
+			return channel, nil
+		}
+		if enabled {
+			return channel, nil
+		}
+		retry++
+		channel, err = selector(group, modelName, retry, requestPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
 
 func GetTokenGroupChain(c *gin.Context) []string {
 	if c == nil {
@@ -139,7 +182,14 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		}
 		for index := startGroupIndex; index < len(groupChain); index++ {
 			group := groupChain[index]
-			channel, err = getRandomSatisfiedChannelForTokenGroupChain(group, param.ModelName, 0, param.RequestPath)
+			channel, err = getRandomSatisfiedChannelWithCircuit(
+				param.Ctx,
+				getRandomSatisfiedChannelForTokenGroupChain,
+				group,
+				param.ModelName,
+				0,
+				param.RequestPath,
+			)
 			if err != nil {
 				return nil, group, err
 			}
@@ -185,7 +235,14 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", autoGroup, priorityRetry)
 
-			channel, _ = model.GetRandomSatisfiedChannel(autoGroup, param.ModelName, priorityRetry, param.RequestPath)
+			channel, _ = getRandomSatisfiedChannelWithCircuit(
+				param.Ctx,
+				model.GetRandomSatisfiedChannel,
+				autoGroup,
+				param.ModelName,
+				priorityRetry,
+				param.RequestPath,
+			)
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
 				// 当前分组没有该模型的可用渠道，尝试下一个分组
@@ -223,7 +280,14 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			break
 		}
 	} else {
-		channel, err = model.GetRandomSatisfiedChannel(param.TokenGroup, param.ModelName, param.GetRetry(), param.RequestPath)
+		channel, err = getRandomSatisfiedChannelWithCircuit(
+			param.Ctx,
+			model.GetRandomSatisfiedChannel,
+			param.TokenGroup,
+			param.ModelName,
+			param.GetRetry(),
+			param.RequestPath,
+		)
 		if err != nil {
 			return nil, param.TokenGroup, err
 		}

@@ -36,6 +36,7 @@ LABELS = {
 }
 GOVERNANCE_FILES = (
     "docs/RELEASE-GOVERNANCE.md",
+    "docs/PROVIDER-MODEL-CIRCUIT.md",
     "release/upstream-ref",
     "release/image-contract-markers.txt",
     "release/go-test-contracts.json",
@@ -46,6 +47,9 @@ GOVERNANCE_FILES = (
     "scripts/deploy.sh",
     "scripts/codex_entry_guard.sh",
     "scripts/sync_app_model_permissions.sh",
+    "scripts/provider_monitor.py",
+    "scripts/provider_monitor.sh",
+    "cron/shenxiang-new-api-provider-monitor",
 )
 
 
@@ -551,6 +555,12 @@ WHERE platform IN ('playground_image', 'playground_video')
                 raise ReleaseError(f"candidate governance file is missing: {relative}")
             atomic_copy(source, self.app_dir / relative)
 
+    def install_provider_monitor_cron(self) -> None:
+        source = self.checkout / "services/shenxiang-new-api/cron/shenxiang-new-api-provider-monitor"
+        if not source.is_file():
+            raise ReleaseError("candidate provider monitor cron is missing")
+        atomic_copy(source, Path("/etc/cron.d/shenxiang-new-api-provider-monitor"))
+
     def switch(self, previous_manifest: dict[str, Any]) -> None:
         timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         self.rollback_dir.mkdir(parents=True, exist_ok=True)
@@ -558,8 +568,23 @@ WHERE platform IN ('playground_image', 'playground_video')
         manifest_backup = self.rollback_dir / f"release-manifest.{timestamp}.json"
         shutil.copy2(self.compose_path, compose_backup)
         shutil.copy2(self.manifest_path, manifest_backup)
+        governance_backup_dir = self.rollback_dir / f"governance.{timestamp}"
+        governance_backup_dir.mkdir(parents=True, exist_ok=True)
+        governed_targets = [self.app_dir / relative for relative in GOVERNANCE_FILES]
+        governed_targets.append(Path("/etc/cron.d/shenxiang-new-api-provider-monitor"))
+        governance_backups: list[tuple[Path, Path | None]] = []
+        for index, target in enumerate(governed_targets):
+            if target.is_file():
+                backup = governance_backup_dir / f"{index:02d}-{target.name}"
+                shutil.copy2(target, backup)
+                governance_backups.append((target, backup))
+            elif target.exists():
+                raise ReleaseError(f"governed release target is not a file: {target}")
+            else:
+                governance_backups.append((target, None))
         compose_changed = False
         switch_attempted = False
+        governance_changed = False
         try:
             candidate_compose = replace_compose_image(self.compose_path.read_text(encoding="utf-8"), self.image)
             atomic_write(self.compose_path, candidate_compose.encode(), stat.S_IMODE(self.compose_path.stat().st_mode))
@@ -587,8 +612,10 @@ WHERE platform IN ('playground_image', 'playground_video')
                 "previous_image": previous_manifest.get("image", ""),
                 "bootstrapped": False,
             }
+            governance_changed = True
             self.sync_governance_files()
             write_json(self.manifest_path, manifest)
+            self.install_provider_monitor_cron()
             run([str(self.app_dir / "scripts/check-new-api-release-state.sh")])
             print(f"release completed: {self.candidate} {self.image}")
         except Exception as release_error:
@@ -597,6 +624,12 @@ WHERE platform IN ('playground_image', 'playground_video')
                 try:
                     atomic_copy(compose_backup, self.compose_path)
                     atomic_copy(manifest_backup, self.manifest_path)
+                    if governance_changed:
+                        for target, backup in governance_backups:
+                            if backup is not None:
+                                atomic_copy(backup, target)
+                            elif target.is_file():
+                                target.unlink()
                     self.compose("config", "-q")
                     if switch_attempted:
                         self.compose("up", "-d", "--no-deps", "--force-recreate", "shenxiang-new-api")

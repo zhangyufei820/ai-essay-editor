@@ -89,6 +89,25 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertIn("release model-permission runner drift", release_guard)
         self.assertIn('cmp -s "${APP_DIR}/scripts/sync_app_model_permissions.sh"', release_guard)
 
+    def test_release_installs_manifest_pinned_provider_monitor(self) -> None:
+        self.assertIn("scripts/provider_monitor.py", MODULE.GOVERNANCE_FILES)
+        self.assertIn("scripts/provider_monitor.sh", MODULE.GOVERNANCE_FILES)
+        self.assertIn("cron/shenxiang-new-api-provider-monitor", MODULE.GOVERNANCE_FILES)
+
+        runner = MODULE_PATH.with_name("provider_monitor.sh").read_text(encoding="utf-8")
+        self.assertIn('MANIFEST="$ROOT/release-manifest.json"', runner)
+        self.assertIn('MONITOR="$CHECKOUT/services/shenxiang-new-api/scripts/provider_monitor.py"', runner)
+        self.assertIn("--family discount_text --family plus_text", runner)
+        self.assertNotIn('python3 "$ROOT/scripts/provider_monitor.py"', runner)
+
+        cron = (MODULE_PATH.parent.parent / "cron" / "shenxiang-new-api-provider-monitor").read_text(encoding="utf-8")
+        self.assertIn("provider_monitor.sh --fast", cron)
+        self.assertIn("provider_monitor.sh --full", cron)
+
+        release_guard = MODULE_PATH.with_name("check-new-api-release-state.sh").read_text(encoding="utf-8")
+        self.assertIn("release provider monitor runner drift", release_guard)
+        self.assertIn("release provider monitor cron drift", release_guard)
+
 
 if __name__ == "__main__":
     unittest.main()

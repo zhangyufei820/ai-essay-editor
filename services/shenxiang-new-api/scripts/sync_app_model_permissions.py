@@ -2235,6 +2235,9 @@ def sync_abilities() -> None:
                             + ", REPLACE(COALESCE(current_channel.`group`, ''), ' ', '')) = 0",
                         ]
                     )
+                duplicate_update = "enabled = 1, priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag)"
+                if tag in discount_channel_tags or tag in plus_channel_tags:
+                    duplicate_update = "priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag)"
                 statements.append(
                     "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) SELECT "
                     + ", ".join(
@@ -2250,7 +2253,9 @@ def sync_abilities() -> None:
                     )
                     + " FROM channels AS current_channel WHERE "
                     + " AND ".join(current_channel_conditions)
-                    + " ON DUPLICATE KEY UPDATE enabled = 1, priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag);"
+                    + " ON DUPLICATE KEY UPDATE "
+                    + duplicate_update
+                    + ";"
                 )
     statements.extend(
         [

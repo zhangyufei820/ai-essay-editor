@@ -14,6 +14,8 @@ expected_upstream="$(jq -er '.upstream_commit' "$MANIFEST")"
 expected_patch="$(jq -er '.patch_sha256' "$MANIFEST")"
 expected_policy="$(jq -er '.policy_sha256' "$MANIFEST")"
 expected_model_sync_runner="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/sync_app_model_permissions.sh"
+expected_provider_monitor_runner="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/provider_monitor.sh"
+expected_provider_monitor_cron="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/cron/shenxiang-new-api-provider-monitor"
 
 actual_image="$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')"
 actual_image_id="$(docker inspect "$CONTAINER" --format '{{.Image}}')"
@@ -32,6 +34,16 @@ label_policy="$(docker image inspect "$actual_image" --format '{{index .Config.L
 [ -r "$expected_model_sync_runner" ] || { printf 'release model-permission runner missing\n' >&2; exit 1; }
 cmp -s "${APP_DIR}/scripts/sync_app_model_permissions.sh" "$expected_model_sync_runner" || {
   printf 'release model-permission runner drift\n' >&2
+  exit 1
+}
+[ -r "$expected_provider_monitor_runner" ] || { printf 'release provider monitor runner missing\n' >&2; exit 1; }
+cmp -s "${APP_DIR}/scripts/provider_monitor.sh" "$expected_provider_monitor_runner" || {
+  printf 'release provider monitor runner drift\n' >&2
+  exit 1
+}
+[ -r "$expected_provider_monitor_cron" ] || { printf 'release provider monitor cron missing\n' >&2; exit 1; }
+cmp -s "/etc/cron.d/shenxiang-new-api-provider-monitor" "$expected_provider_monitor_cron" || {
+  printf 'release provider monitor cron drift\n' >&2
   exit 1
 }
 

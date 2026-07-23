@@ -398,6 +398,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
         self.assertIn("REGEXP BINARY", sql)
         self.assertGreater(sql.index("UPDATE abilities SET enabled = 0"), sql.rindex("ON DUPLICATE KEY UPDATE"))
+        discount_insert = next(
+            statement
+            for statement in sql.splitlines()
+            if "SELECT 'discount', 'gpt-5.5', 31" in statement
+        )
+        self.assertNotIn("enabled = 1", discount_insert.split("ON DUPLICATE KEY UPDATE", 1)[1])
 
     def test_sync_abilities_keeps_pdhlzy_claude_channels_isolated(self) -> None:
         captured: list[str] = []
@@ -468,6 +474,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("'internal', 'claude-sonnet-5', 21", sql)
         self.assertIn("FIND_IN_SET('plus'", sql)
         self.assertIn("ability.model NOT IN", sql)
+        plus_insert = next(
+            statement
+            for statement in sql.splitlines()
+            if "SELECT 'plus', 'gpt-5.5', 41" in statement
+        )
+        self.assertNotIn("enabled = 1", plus_insert.split("ON DUPLICATE KEY UPDATE", 1)[1])
 
     def test_sync_abilities_rejects_plus_channel_with_compact(self) -> None:
         captured: list[str] = []
