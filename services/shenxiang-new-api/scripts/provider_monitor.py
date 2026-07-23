@@ -27,6 +27,7 @@ LOCK_PATH = ROOT / "data" / "provider-monitor.lock"
 MODEL_SYNC_LOCK_PATH = Path("/tmp/shenxiang-new-api-model-sync.lock")
 
 HTTP_TIMEOUT = float(os.environ.get("PROVIDER_MONITOR_HTTP_TIMEOUT", "35"))
+SSE_LINE_MAX_BYTES = int(os.environ.get("PROVIDER_MONITOR_SSE_LINE_MAX_BYTES", str(1024 * 1024)))
 MAX_WORKERS = int(os.environ.get("PROVIDER_MONITOR_MAX_WORKERS", "8"))
 WINDOW_SIZE = int(os.environ.get("PROVIDER_MONITOR_WINDOW_SIZE", "24"))
 WINDOW_MAX_AGE_SECONDS = int(os.environ.get("PROVIDER_MONITOR_WINDOW_MAX_AGE_SECONDS", "7200"))
@@ -658,9 +659,16 @@ def request_responses(base_url: str, api_key: str, model: str) -> dict[str, Any]
             status = resp.getcode()
             deadline = time.monotonic() + HTTP_TIMEOUT
             while time.monotonic() < deadline:
-                line = resp.readline(8192)
+                line = resp.readline(SSE_LINE_MAX_BYTES + 1)
                 if not line:
                     break
+                if len(line) > SSE_LINE_MAX_BYTES:
+                    return {
+                        "ok": False,
+                        "status": status,
+                        "first_token_ms": int((time.monotonic() - start) * 1000),
+                        "reason": "response_event_too_large",
+                    }
                 text = line.decode("utf-8", "replace").strip()
                 if not text.startswith("data:"):
                     continue
