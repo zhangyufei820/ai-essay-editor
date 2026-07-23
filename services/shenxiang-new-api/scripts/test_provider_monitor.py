@@ -20,15 +20,18 @@ def load_module():
 
 
 class FakeResponsesStream:
-    def __init__(self) -> None:
-        self.lines = iter(
-            [
-                b"event: response.created\n",
-                b'data: {"type":"response.created"}\n',
-                b"event: response.completed\n",
-                b'data: {"type":"response.completed","response":{"status":"completed"}}\n',
-            ]
-        )
+    def __init__(self, completed_padding: int = 0) -> None:
+        completed = {"type": "response.completed", "response": {"status": "completed"}}
+        if completed_padding:
+            completed["response"]["metadata"] = "x" * completed_padding
+        self.completed_line = b"data: " + json.dumps(completed).encode("utf-8") + b"\n"
+        self.lines = [
+            b"event: response.created\n",
+            b'data: {"type":"response.created"}\n',
+            b"event: response.completed\n",
+            self.completed_line,
+        ]
+        self.pending = b""
 
     def __enter__(self):
         return self
@@ -40,7 +43,17 @@ class FakeResponsesStream:
         return 200
 
     def readline(self, _limit: int) -> bytes:
-        return next(self.lines, b"")
+        if self.pending:
+            line = self.pending
+            self.pending = b""
+        elif self.lines:
+            line = self.lines.pop(0)
+        else:
+            return b""
+        if _limit >= 0 and len(line) > _limit:
+            self.pending = line[_limit:]
+            return line[:_limit]
+        return line
 
 
 class ProviderMonitorModelCircuitTest(unittest.TestCase):
@@ -102,6 +115,14 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(body["input"], "Reply with OK only.")
         self.assertTrue(body["stream"])
         self.assertFalse(body["store"])
+        self.assertTrue(result["ok"])
+
+    def test_responses_probe_accepts_large_completed_event(self) -> None:
+        stream = FakeResponsesStream(completed_padding=24_000)
+        self.assertGreater(len(stream.completed_line), 8192)
+        with mock.patch.object(self.module.urllib.request, "urlopen", return_value=stream):
+            result = self.module.request_responses("https://example.invalid", "test-secret", "gpt-5.5")
+
         self.assertTrue(result["ok"])
 
     def test_codex_auto_review_maps_to_gpt_55(self) -> None:
