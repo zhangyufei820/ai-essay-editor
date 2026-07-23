@@ -80,6 +80,29 @@ func PublicClaudeTokenModels(group string) ([]string, bool) {
 	}
 }
 
+func PublicClaudeTokenModelsForGroupChain(groupChain string) ([]string, bool) {
+	_, groups, err := NormalizeTokenGroupChain(groupChain)
+	if err != nil || len(groups) == 0 {
+		return nil, false
+	}
+	models := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, group := range groups {
+		groupModels, ok := PublicClaudeTokenModels(group)
+		if !ok {
+			return nil, false
+		}
+		for _, modelName := range groupModels {
+			if _, exists := seen[modelName]; exists {
+				continue
+			}
+			seen[modelName] = struct{}{}
+			models = append(models, modelName)
+		}
+	}
+	return models, true
+}
+
 func videoTokenModels() []string {
 	return []string{
 		"grok-video-super-720p",
@@ -168,13 +191,14 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 					return err
 				}
 			} else {
-				if profile.Mode == "codex" && !hasPreferredTextGroup {
-					if legacyGroup, ok := model.NormalizeTextPricingGroup(token.Group); ok {
-						tokenGroup = legacyGroup
+				if profile.Mode == "codex" {
+					if legacyGroupChain, _, ok := model.NormalizeTextPricingGroupChain(token.Group); ok &&
+						(strings.Contains(legacyGroupChain, ",") || !hasPreferredTextGroup) {
+						tokenGroup = legacyGroupChain
 					}
 				}
 				if profile.Mode == "claude" {
-					if claudeGroup := strings.TrimSpace(token.Group); IsPublicClaudeTokenGroup(claudeGroup) {
+					if claudeGroup, _, chainErr := NormalizeTokenGroupChain(token.Group); chainErr == nil && IsPublicClaudeTokenGroupChain(claudeGroup) {
 						tokenGroup = claudeGroup
 					}
 				}
@@ -292,7 +316,7 @@ func ReconcileUserSystemTokensForEnabledUsers(ctx context.Context) (UserSystemTo
 }
 
 func mustPublicClaudeTokenModels(group string) []string {
-	models, ok := PublicClaudeTokenModels(group)
+	models, ok := PublicClaudeTokenModelsForGroupChain(group)
 	if !ok {
 		panic("invalid public Claude token group: " + group)
 	}

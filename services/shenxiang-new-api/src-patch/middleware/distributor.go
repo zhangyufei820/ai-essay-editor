@@ -146,7 +146,7 @@ func Distribute() func(c *gin.Context) {
 							return
 						}
 						usingGroup = playgroundRequest.Group
-						common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
+						service.SetTokenGroupChain(c, []string{usingGroup})
 					}
 				}
 
@@ -163,6 +163,7 @@ func Distribute() func(c *gin.Context) {
 					channel = routedChannel
 					selectGroup = routedGroup
 					c.Set(DurationRoutedVideoChannelIDContextKey, routedChannel.Id)
+					service.MarkTokenGroupChainSelected(c, routedGroup)
 					if usingGroup == "auto" {
 						common.SetContextKey(c, constant.ContextKeyAutoGroup, routedGroup)
 					}
@@ -183,6 +184,7 @@ func Distribute() func(c *gin.Context) {
 										channel = preferred
 										affinityUsable = true
 										service.MarkChannelAffinityUsed(c, g, preferred.Id)
+										service.MarkTokenGroupChainSelected(c, g)
 										break
 									}
 								}
@@ -191,6 +193,7 @@ func Distribute() func(c *gin.Context) {
 								selectGroup = usingGroup
 								affinityUsable = true
 								service.MarkChannelAffinityUsed(c, usingGroup, preferred.Id)
+								service.MarkTokenGroupChainSelected(c, usingGroup)
 							}
 						}
 						if !affinityUsable && !service.ShouldKeepChannelAffinityOnChannelDisabled() {
@@ -261,7 +264,10 @@ func selectGrokVideo15DurationChannel(c *gin.Context, modelRequest *ModelRequest
 		return nil, "", true, errInvalidGrokVideo15Duration
 	}
 
-	groups := []string{strings.TrimSpace(usingGroup)}
+	groups := service.GetTokenGroupChain(c)
+	if len(groups) <= 1 {
+		groups = []string{strings.TrimSpace(usingGroup)}
+	}
 	if strings.TrimSpace(usingGroup) == "auto" {
 		groups = service.GetUserAutoGroup(common.GetContextKeyString(c, constant.ContextKeyUserGroup))
 	}
@@ -286,8 +292,7 @@ func applyPlaygroundTextPricingPreference(c *gin.Context, modelRequest *ModelReq
 		return "", err
 	}
 	modelRequest.Group = preferredGroup
-	common.SetContextKey(c, constant.ContextKeyUsingGroup, preferredGroup)
-	common.SetContextKey(c, constant.ContextKeyTokenGroup, preferredGroup)
+	service.SetTokenGroupChain(c, []string{preferredGroup})
 	c.Header("X-Aiphui-Pricing-Group", preferredGroup)
 	return preferredGroup, nil
 }

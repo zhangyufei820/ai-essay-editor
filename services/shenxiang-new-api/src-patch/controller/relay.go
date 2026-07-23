@@ -379,6 +379,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 	maxRetryTimes := playgroundImageRetryTimes(c)
+	if groupChainLength := len(service.GetTokenGroupChain(c)); groupChainLength > 1 && maxRetryTimes < groupChainLength-1 {
+		maxRetryTimes = groupChainLength - 1
+	}
 	forcePlaygroundImageChannel(c, request, relayInfo)
 
 	for ; retryParam.GetRetry() <= maxRetryTimes; retryParam.IncreaseRetry() {
@@ -387,6 +390,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
 			newAPIError = channelErr
+			break
+		}
+		if fallbackBillingErr := prepareTokenGroupFallbackBilling(c, relayInfo, meta); fallbackBillingErr != nil {
+			newAPIError = fallbackBillingErr
+			relayInfo.LastError = fallbackBillingErr
 			break
 		}
 
@@ -578,6 +586,86 @@ func applyPlaygroundDiscountFallbackReserve(
 	priceData.QuotaToPreConsume = playgroundDiscountDefaultReserveQuota(info, meta, priceData)
 	info.PriceData = priceData
 	return priceData, nil
+}
+
+func prepareTokenGroupFallbackBilling(
+	c *gin.Context,
+	info *relaycommon.RelayInfo,
+	meta *types.TokenCountMeta,
+) *types.NewAPIError {
+	if c == nil || info == nil || !service.HasExplicitTokenGroupChain(c) {
+		return nil
+	}
+	selectedGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	if selectedGroup == "" || selectedGroup == info.UsingGroup {
+		return nil
+	}
+	if service.HasTextOutputSent(c) {
+		return types.NewError(
+			errors.New("响应已开始，不能切换分组重放请求"),
+			types.ErrorCodeDoRequestFailed,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
+
+	previousUsingGroup := info.UsingGroup
+	previousPriceData := info.PriceData
+	previousTieredSnapshot := info.TieredBillingSnapshot
+	previousBillingRequestInput := info.BillingRequestInput
+	previousBilling := info.Billing
+	previousBillingSource := info.BillingSource
+	previousFinalPreConsumedQuota := info.FinalPreConsumedQuota
+	previousUserQuota := info.UserQuota
+	previousSubscriptionID := info.SubscriptionId
+	previousSubscriptionPreConsumed := info.SubscriptionPreConsumed
+	previousSubscriptionPostDelta := info.SubscriptionPostDelta
+	previousSubscriptionPlanID := info.SubscriptionPlanId
+	previousSubscriptionPlanTitle := info.SubscriptionPlanTitle
+	previousSubscriptionAmountTotal := info.SubscriptionAmountTotal
+	previousSubscriptionAmountUsed := info.SubscriptionAmountUsedAfterPreConsume
+	restore := func() {
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, previousUsingGroup)
+		common.SetContextKey(c, constant.ContextKeyAutoGroup, previousUsingGroup)
+		info.UsingGroup = previousUsingGroup
+		info.PriceData = previousPriceData
+		info.TieredBillingSnapshot = previousTieredSnapshot
+		info.BillingRequestInput = previousBillingRequestInput
+		info.Billing = previousBilling
+		info.BillingSource = previousBillingSource
+		info.FinalPreConsumedQuota = previousFinalPreConsumedQuota
+		info.UserQuota = previousUserQuota
+		info.SubscriptionId = previousSubscriptionID
+		info.SubscriptionPreConsumed = previousSubscriptionPreConsumed
+		info.SubscriptionPostDelta = previousSubscriptionPostDelta
+		info.SubscriptionPlanId = previousSubscriptionPlanID
+		info.SubscriptionPlanTitle = previousSubscriptionPlanTitle
+		info.SubscriptionAmountTotal = previousSubscriptionAmountTotal
+		info.SubscriptionAmountUsedAfterPreConsume = previousSubscriptionAmountUsed
+	}
+
+	info.UsingGroup = selectedGroup
+	priceData, err := helper.ModelPriceHelper(c, info, info.GetEstimatePromptTokens(), meta)
+	if err != nil {
+		restore()
+		return types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithSkipRetry(), types.ErrOptionWithStatusCode(http.StatusBadRequest))
+	}
+	if !priceData.FreeModel {
+		if info.Billing == nil {
+			if billingErr := service.PreConsumeBilling(c, priceData.QuotaToPreConsume, info); billingErr != nil {
+				restore()
+				return billingErr
+			}
+		} else if reserveErr := info.Billing.Reserve(priceData.QuotaToPreConsume); reserveErr != nil {
+			restore()
+			var apiErr *types.NewAPIError
+			if errors.As(reserveErr, &apiErr) {
+				return apiErr
+			}
+			return types.NewError(reserveErr, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+		}
+	}
+	logger.LogWarn(c, fmt.Sprintf("令牌分组链路已切换后备分组重试（model=%s）", info.OriginModelName))
+	return nil
 }
 
 func preparePlaygroundDiscountFallback(
@@ -1035,12 +1123,21 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(selectRetryParam)
 
-	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
+	if !service.HasExplicitTokenGroupChain(c) {
+		info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
+	}
 
 	if err != nil {
+		if service.HasExplicitTokenGroupChain(c) {
+			common.SysLog(fmt.Sprintf("explicit token group chain channel selection failed: model=%s error=%v", info.OriginModelName, err))
+			return nil, types.NewError(errors.New("当前分组链路暂时没有可用渠道，请稍后重试"), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
+		}
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
+		if service.HasExplicitTokenGroupChain(c) {
+			return nil, types.NewError(errors.New("当前分组链路暂时没有可用渠道，请稍后重试"), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
+		}
 		return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的可用渠道不存在（retry）", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 
@@ -1094,6 +1191,9 @@ func getNextPlaygroundForcedChannel(c *gin.Context, info *relaycommon.RelayInfo,
 
 func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
 	if openaiErr == nil {
+		return false
+	}
+	if service.HasExplicitTokenGroupChain(c) && service.HasTextOutputSent(c) {
 		return false
 	}
 	if shouldRetryPlusTextTimeout(c, openaiErr, retryTimes) {

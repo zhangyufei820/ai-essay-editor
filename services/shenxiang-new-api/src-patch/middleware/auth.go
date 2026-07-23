@@ -295,6 +295,28 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 	}
 }
 
+func resolveTokenGroupChain(userGroup, rawTokenGroup string) (string, []string, error) {
+	rawTokenGroup = strings.TrimSpace(rawTokenGroup)
+	if rawTokenGroup == "" {
+		return userGroup, []string{userGroup}, nil
+	}
+
+	normalized, groups, err := service.NormalizeTokenGroupChain(rawTokenGroup)
+	if err != nil {
+		return "", nil, err
+	}
+	usableGroups := service.GetUserUsableGroups(userGroup)
+	for _, group := range groups {
+		if _, ok := usableGroups[group]; !ok {
+			return "", nil, fmt.Errorf("token group is not available")
+		}
+		if group != "auto" && !ratio_setting.ContainsGroupRatio(group) {
+			return "", nil, fmt.Errorf("token group has been deprecated")
+		}
+	}
+	return normalized, groups, nil
+}
+
 func TokenAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		// 先检测是否为ws
@@ -403,23 +425,15 @@ func TokenAuth() func(c *gin.Context) {
 		userCache.WriteContext(c)
 
 		userGroup := userCache.Group
-		tokenGroup := token.Group
-		if tokenGroup != "" {
-			// check common.UserUsableGroups[userGroup]
-			if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
-				abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
-				return
-			}
-			// check group in common.GroupRatio
-			if !ratio_setting.ContainsGroupRatio(tokenGroup) {
-				if tokenGroup != "auto" {
-					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", tokenGroup))
-					return
-				}
-			}
-			userGroup = tokenGroup
+		_, tokenGroups, groupErr := resolveTokenGroupChain(userGroup, token.Group)
+		if groupErr != nil || len(tokenGroups) == 0 {
+			abortWithOpenAiMessage(c, http.StatusForbidden, "令牌分组链路无效或已不可用")
+			return
 		}
-		common.SetContextKey(c, constant.ContextKeyUsingGroup, userGroup)
+		usingGroup := tokenGroups[0]
+		common.SetContextKey(c, constant.ContextKeyTokenGroupChain, tokenGroups)
+		common.SetContextKey(c, constant.ContextKeyTokenGroupChainIndex, 0)
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
 
 		err = SetupContextForToken(c, token, parts...)
 		if err != nil {
@@ -455,7 +469,23 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	} else {
 		c.Set("token_model_limit_enabled", false)
 	}
-	common.SetContextKey(c, constant.ContextKeyTokenGroup, token.Group)
+	tokenGroup := strings.TrimSpace(token.Group)
+	tokenGroups := common.GetContextKeyStringSlice(c, constant.ContextKeyTokenGroupChain)
+	if len(tokenGroups) == 0 {
+		_, parsedGroups, err := service.NormalizeTokenGroupChain(tokenGroup)
+		if err != nil {
+			return err
+		}
+		tokenGroups = parsedGroups
+		if len(tokenGroups) > 0 {
+			common.SetContextKey(c, constant.ContextKeyTokenGroupChain, tokenGroups)
+			common.SetContextKey(c, constant.ContextKeyTokenGroupChainIndex, 0)
+		}
+	}
+	if len(tokenGroups) > 0 {
+		tokenGroup = tokenGroups[0]
+	}
+	common.SetContextKey(c, constant.ContextKeyTokenGroup, tokenGroup)
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, token.CrossGroupRetry)
 	if len(parts) > 1 {
 		if model.IsAdmin(token.UserId) {

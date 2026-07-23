@@ -199,3 +199,31 @@ func TestGetUserGroupRatioPinsPlusMarketplaceRatio(t *testing.T) {
 	require.Equal(t, 0.5, PlusPricingGroupRatio)
 	require.Equal(t, PlusPricingGroupRatio, GetUserGroupRatio("vip", PlusPricingGroupName))
 }
+
+func TestNormalizeTokenGroupChainTrimsDeduplicatesAndPreservesOrder(t *testing.T) {
+	normalized, groups, err := NormalizeTokenGroupChain(" default, discount,default , plus ")
+
+	require.NoError(t, err)
+	require.Equal(t, "default,discount,plus", normalized)
+	require.Equal(t, []string{"default", DiscountPricingGroupName, PlusPricingGroupName}, groups)
+}
+
+func TestNormalizeTokenGroupChainRejectsInvalidShapes(t *testing.T) {
+	tests := []string{
+		"default,,discount",
+		"auto,default",
+		"default,discount,plus,kiro",
+	}
+	for _, rawGroup := range tests {
+		t.Run(rawGroup, func(t *testing.T) {
+			_, _, err := NormalizeTokenGroupChain(rawGroup)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestIsPublicClaudeTokenGroupChainRequiresOnlyPublicClaudeGroups(t *testing.T) {
+	require.True(t, IsPublicClaudeTokenGroupChain("kiro,claude-external"))
+	require.False(t, IsPublicClaudeTokenGroupChain("kiro,default"))
+	require.False(t, IsPublicClaudeTokenGroupChain("kiro,ccmax-terminal"))
+}

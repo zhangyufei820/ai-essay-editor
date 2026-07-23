@@ -19,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 )
 
 type playgroundDiscountBillingStub struct {
@@ -164,6 +165,75 @@ func TestPlaygroundDiscountAvailabilityErrorClassification(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPrepareTokenGroupFallbackBillingRepricesAndReservesActualGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	withTokenCounting(t)
+	withPlaygroundDiscountPricing(t)
+	ctx, _ := newPlaygroundDiscountFallbackContext()
+	service.SetTokenGroupChain(ctx, []string{service.DiscountPricingGroupName, "default"})
+	service.MarkTokenGroupChainSelected(ctx, "default")
+	billing := &playgroundDiscountBillingStub{preConsumed: 120}
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.5",
+		UserGroup:       "default",
+		UsingGroup:      service.DiscountPricingGroupName,
+		Billing:         billing,
+		PriceData: types.PriceData{
+			QuotaToPreConsume: 120,
+			GroupRatioInfo:    types.GroupRatioInfo{GroupRatio: service.DiscountPricingGroupRatio},
+		},
+	}
+	info.SetEstimatePromptTokens(100)
+
+	apiErr := prepareTokenGroupFallbackBilling(ctx, info, &types.TokenCountMeta{MaxTokens: 100})
+
+	require.Nil(t, apiErr)
+	require.Equal(t, "default", info.UsingGroup)
+	require.Equal(t, 1.0, info.PriceData.GroupRatioInfo.GroupRatio)
+	require.Len(t, billing.reserveTargets, 1)
+	require.Greater(t, billing.reserveTargets[0], 120)
+}
+
+func TestPrepareTokenGroupFallbackBillingRestoresPricingWhenReserveFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	withTokenCounting(t)
+	withPlaygroundDiscountPricing(t)
+	ctx, _ := newPlaygroundDiscountFallbackContext()
+	service.SetTokenGroupChain(ctx, []string{service.DiscountPricingGroupName, "default"})
+	service.MarkTokenGroupChainSelected(ctx, "default")
+	previousPrice := types.PriceData{
+		QuotaToPreConsume: 120,
+		GroupRatioInfo:    types.GroupRatioInfo{GroupRatio: service.DiscountPricingGroupRatio},
+	}
+	billing := &playgroundDiscountBillingStub{preConsumed: 120, reserveErr: errors.New("reserve rejected")}
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.5",
+		UserGroup:       "default",
+		UsingGroup:      service.DiscountPricingGroupName,
+		Billing:         billing,
+		PriceData:       previousPrice,
+	}
+	info.SetEstimatePromptTokens(100)
+
+	apiErr := prepareTokenGroupFallbackBilling(ctx, info, &types.TokenCountMeta{MaxTokens: 100})
+
+	require.NotNil(t, apiErr)
+	require.Equal(t, service.DiscountPricingGroupName, info.UsingGroup)
+	require.Equal(t, service.DiscountPricingGroupName, common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup))
+	require.Equal(t, previousPrice, info.PriceData)
+}
+
+func TestShouldRetryExplicitGroupChainStopsAfterResponsesOutput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newPlaygroundDiscountFallbackContext()
+	service.SetTokenGroupChain(ctx, []string{"default", service.DiscountPricingGroupName})
+	ctx.Set("responses_stream_output_tracking", true)
+	ctx.Set("response_stream_output_sent", true)
+	upstreamErr := types.NewOpenAIError(errors.New("upstream unavailable"), types.ErrorCodeDoRequestFailed, http.StatusServiceUnavailable)
+
+	require.False(t, shouldRetry(ctx, upstreamErr, 1))
 }
 
 func TestShouldFallbackPlaygroundDiscountRequiresUnwrittenFirstAttempt(t *testing.T) {

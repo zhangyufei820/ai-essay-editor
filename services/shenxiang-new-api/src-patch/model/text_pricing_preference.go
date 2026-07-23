@@ -13,6 +13,7 @@ const (
 	TextPricingGroupDefault  = "default"
 	TextPricingGroupDiscount = "discount"
 	TextPricingGroupPlus     = "plus"
+	maxTextPricingGroupChain = 3
 )
 
 var managedTextPricingTokenNames = []string{
@@ -28,6 +29,29 @@ func NormalizeTextPricingGroup(group string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func NormalizeTextPricingGroupChain(rawGroup string) (string, string, bool) {
+	groups := make([]string, 0, maxTextPricingGroupChain)
+	seen := make(map[string]struct{}, maxTextPricingGroupChain)
+	for _, rawPart := range strings.Split(rawGroup, ",") {
+		group, ok := NormalizeTextPricingGroup(rawPart)
+		if !ok {
+			return "", "", false
+		}
+		if _, exists := seen[group]; exists {
+			continue
+		}
+		seen[group] = struct{}{}
+		groups = append(groups, group)
+		if len(groups) > maxTextPricingGroupChain {
+			return "", "", false
+		}
+	}
+	if len(groups) == 0 {
+		return "", "", false
+	}
+	return strings.Join(groups, ","), groups[0], true
 }
 
 func IsManagedTextPricingTokenName(name string) bool {
@@ -59,8 +83,8 @@ func ResolveUserTextPricingGroup(userID int) (string, error) {
 		var token Token
 		err = DB.Select("group").Where("user_id = ? AND name = ?", userID, tokenName).Order("id desc").First(&token).Error
 		if err == nil {
-			if group, ok := NormalizeTextPricingGroup(token.Group); ok {
-				return group, nil
+			if _, primaryGroup, ok := NormalizeTextPricingGroupChain(token.Group); ok {
+				return primaryGroup, nil
 			}
 			continue
 		}
@@ -80,11 +104,11 @@ func UpdateTokenWithTextPricingPreference(token *Token, syncPreference bool) err
 	if !syncPreference {
 		return token.Update()
 	}
-	group, ok := NormalizeTextPricingGroup(token.Group)
+	groupChain, primaryGroup, ok := NormalizeTextPricingGroupChain(token.Group)
 	if !ok {
-		return errors.New("文本令牌仅支持 default、discount 或 plus 分组")
+		return errors.New("文本令牌仅支持最多三个 default、discount 或 plus 分组")
 	}
-	token.Group = group
+	token.Group = groupChain
 	token.CrossGroupRetry = false
 
 	err := DB.Transaction(func(tx *gorm.DB) error {
@@ -93,7 +117,7 @@ func UpdateTokenWithTextPricingPreference(token *Token, syncPreference bool) err
 			return err
 		}
 		setting := user.GetSetting()
-		setting.TextPricingGroup = group
+		setting.TextPricingGroup = primaryGroup
 		user.SetSetting(setting)
 		if err := tx.Model(&User{}).Where("id = ?", user.Id).Update("setting", user.Setting).Error; err != nil {
 			return err
@@ -109,7 +133,7 @@ func UpdateTokenWithTextPricingPreference(token *Token, syncPreference bool) err
 		return tx.Model(&Token{}).
 			Where("user_id = ? AND id <> ? AND name IN ?", token.UserId, token.Id, managedTextPricingTokenNames).
 			Updates(map[string]interface{}{
-				"group":             group,
+				"group":             groupChain,
 				"cross_group_retry": false,
 			}).Error
 	})

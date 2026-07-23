@@ -82,6 +82,37 @@ func TestManagedTextTokenRejectsUnsupportedPricingGroup(t *testing.T) {
 	require.Equal(t, model.TextPricingGroupDefault, current.Group)
 }
 
+func TestManagedTextTokenUpdateSupportsOrderedGroupChain(t *testing.T) {
+	db := openTokenControllerTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}))
+	user := model.User{Username: "pricing-chain-user", Password: "password-for-test", Status: common.UserStatusEnabled, Group: "default"}
+	require.NoError(t, db.Create(&user).Error)
+	primary := seedToken(t, db, user.Id, "星人 Codex 文本令牌", "pricing-chain-primary-key")
+	legacy := seedToken(t, db, user.Id, "星人 Codex 自动令牌", "pricing-chain-legacy-key")
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPut, "/api/token/", model.Token{
+		Id:              primary.Id,
+		Name:            primary.Name,
+		Status:          common.TokenStatusEnabled,
+		ExpiredTime:     -1,
+		UnlimitedQuota:  true,
+		Group:           " default,discount,default,plus ",
+		CrossGroupRetry: true,
+	}, user.Id)
+	UpdateTokenWithTextPricingSync(ctx)
+
+	require.True(t, decodeAPIResponse(t, recorder).Success, recorder.Body.String())
+	var currentUser model.User
+	require.NoError(t, db.First(&currentUser, user.Id).Error)
+	require.Equal(t, model.TextPricingGroupDefault, currentUser.GetSetting().TextPricingGroup)
+	for _, tokenID := range []int{primary.Id, legacy.Id} {
+		var currentToken model.Token
+		require.NoError(t, db.First(&currentToken, tokenID).Error)
+		require.Equal(t, "default,discount,plus", currentToken.Group)
+		require.False(t, currentToken.CrossGroupRetry)
+	}
+}
+
 func TestResolveUserTextPricingGroupMigratesLegacyTokenChoice(t *testing.T) {
 	db := openTokenControllerTestDB(t)
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}))

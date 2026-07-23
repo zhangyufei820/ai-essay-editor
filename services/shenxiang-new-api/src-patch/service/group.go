@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/QuantumNous/new-api/setting"
@@ -8,11 +9,65 @@ import (
 )
 
 const (
+	MaxTokenGroupChainLength         = 3
 	ClaudeKiroPricingGroupName       = "kiro"
 	ClaudeKiroStablePricingGroupName = "kiro-stable"
 	ClaudeTerminalPricingGroupName   = "ccmax-terminal"
 	ClaudeExternalPricingGroupName   = "claude-external"
 )
+
+func ParseTokenGroupChain(rawGroup string) ([]string, error) {
+	rawGroup = strings.TrimSpace(rawGroup)
+	if rawGroup == "" {
+		return nil, nil
+	}
+
+	groups := make([]string, 0, MaxTokenGroupChainLength)
+	seen := make(map[string]struct{}, MaxTokenGroupChainLength)
+	for _, rawPart := range strings.Split(rawGroup, ",") {
+		group := strings.TrimSpace(rawPart)
+		if group == "" {
+			return nil, fmt.Errorf("token group chain contains an empty group")
+		}
+		if _, exists := seen[group]; exists {
+			continue
+		}
+		seen[group] = struct{}{}
+		groups = append(groups, group)
+		if len(groups) > MaxTokenGroupChainLength {
+			return nil, fmt.Errorf("token group chain exceeds %d groups", MaxTokenGroupChainLength)
+		}
+	}
+
+	if len(groups) > 1 {
+		for _, group := range groups {
+			if group == "auto" {
+				return nil, fmt.Errorf("auto group cannot be combined with explicit groups")
+			}
+		}
+	}
+	return groups, nil
+}
+
+func NormalizeTokenGroupChain(rawGroup string) (string, []string, error) {
+	groups, err := ParseTokenGroupChain(rawGroup)
+	if err != nil {
+		return "", nil, err
+	}
+	return strings.Join(groups, ","), groups, nil
+}
+
+func ValidateTokenGroupChain(groups []string, allowed func(string) bool) error {
+	if len(groups) == 0 {
+		return fmt.Errorf("token group chain is empty")
+	}
+	for _, group := range groups {
+		if allowed == nil || !allowed(group) {
+			return fmt.Errorf("token group is unavailable")
+		}
+	}
+	return nil
+}
 
 var publicClaudeTokenGroups = []string{
 	ClaudeKiroPricingGroupName,
@@ -52,6 +107,14 @@ func IsPublicClaudeTokenGroup(group string) bool {
 		}
 	}
 	return false
+}
+
+func IsPublicClaudeTokenGroupChain(rawGroup string) bool {
+	_, groups, err := NormalizeTokenGroupChain(rawGroup)
+	if err != nil || len(groups) == 0 {
+		return false
+	}
+	return ValidateTokenGroupChain(groups, IsPublicClaudeTokenGroup) == nil
 }
 
 func NormalizePublicTokenGroup(group string) string {

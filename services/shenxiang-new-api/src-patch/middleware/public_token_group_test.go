@@ -356,3 +356,153 @@ func TestEnforcePublicTokenGroupSelectionRejectsNonExactGrok45Profile(t *testing
 	require.Equal(t, http.StatusBadRequest, recorder.Code)
 	require.False(t, called)
 }
+
+func TestEnforcePublicTokenGroupSelectionNormalizesOrderedGroupChain(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		request := struct {
+			Group           string `json:"group"`
+			CrossGroupRetry bool   `json:"cross_group_retry"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.Equal(t, "default,discount,plus", request.Group)
+		require.False(t, request.CrossGroupRetry)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"group":" default,discount,default,plus ","cross_group_retry":true}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestEnforcePublicTokenGroupSelectionRejectsPrivateGroupInChain(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		called = true
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"group":"default,internal"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.False(t, called)
+}
+
+func TestEnforcePublicTokenGroupSelectionMergesClaudeChainModelLimits(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		request := struct {
+			Group       string `json:"group"`
+			ModelLimits string `json:"model_limits"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.Equal(t, "kiro,claude-external", request.Group)
+		models, ok := service.PublicClaudeTokenModelsForGroupChain(request.Group)
+		require.True(t, ok)
+		require.Equal(t, strings.Join(models, ","), request.ModelLimits)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":"Claude","group":"kiro,claude-external"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestEnforcePublicTokenGroupSelectionRejectsGrokInFallbackChain(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		called = true
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":"星人 Grok 4.5 专用令牌","group":"grok45,default","model_limits_enabled":true,"model_limits":"grok-4.5","unlimited_quota":true,"remain_quota":0,"expired_time":-1}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.False(t, called)
+}
+
+func TestEnforcePublicTokenGroupSelectionAllowsManagedCodexTextChain(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.PUT("/api/token/", func(c *gin.Context) {
+		request := struct {
+			Group string `json:"group"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.Equal(t, "default,discount,plus", request.Group)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/api/token/",
+		strings.NewReader(`{"id":9,"name":"星人 Codex 文本令牌","group":"default,discount,plus"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestEnforcePublicTokenGroupSelectionRejectsClaudeGroupForManagedCodexTextToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.PUT("/api/token/", func(c *gin.Context) {
+		called = true
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/api/token/",
+		strings.NewReader(`{"id":9,"name":"星人 Codex 文本令牌","group":"default,kiro"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.False(t, called)
+}
