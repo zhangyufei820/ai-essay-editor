@@ -38,6 +38,16 @@ import {
 import { useTranslation } from 'react-i18next';
 const { Text, Title } = Typography;
 
+const CLAUDE_TERMINAL_GROUP = 'ccmax-terminal';
+
+const isPublicClaudeTokenName = (name) => {
+  const normalizedName = String(name || '').trim();
+  return (
+    normalizedName === '星人 Claude 高阶令牌' ||
+    normalizedName.toLowerCase() === 'claude'
+  );
+};
+
 const EditTokenModal = (props) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -111,7 +121,7 @@ const EditTokenModal = (props) => {
   };
 
   const loadGroups = async () => {
-    let res = await API.get(`/api/user/self/groups`);
+    let res = await API.get(`/api/user/self/groups?purpose=token-config`);
     const { success, message, data } = res.data;
     if (success) {
       const localGroupOptions = Object.entries(data)
@@ -380,7 +390,11 @@ const EditTokenModal = (props) => {
                             '令牌分组（可多选，分组异常时自动切换，建议选择 2–3 个分组）',
                           )}
                           placeholder={t('按主分组、后备分组顺序选择')}
-                          optionList={groups}
+                          optionList={groups.filter(
+                            (option) =>
+                              option.value !== CLAUDE_TERMINAL_GROUP ||
+                              isPublicClaudeTokenName(values.name),
+                          )}
                           renderOptionItem={renderGroupOption}
                           filter={(input, option) => {
                             const q = input.toLowerCase();

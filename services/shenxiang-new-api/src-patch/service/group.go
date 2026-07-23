@@ -72,6 +72,7 @@ func ValidateTokenGroupChain(groups []string, allowed func(string) bool) error {
 var publicClaudeTokenGroups = []string{
 	ClaudeKiroPricingGroupName,
 	ClaudeKiroStablePricingGroupName,
+	ClaudeTerminalPricingGroupName,
 	ClaudeExternalPricingGroupName,
 }
 

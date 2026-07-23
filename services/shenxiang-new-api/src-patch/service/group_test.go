@@ -55,6 +55,7 @@ func TestIsPublicTokenGroupRejectsLegacyAndAutoGroups(t *testing.T) {
 	require.False(t, IsPublicTokenGroup(ClaudeTerminalPricingGroupName))
 	require.True(t, IsPublicClaudeTokenGroup(ClaudeKiroPricingGroupName))
 	require.True(t, IsPublicClaudeTokenGroup(ClaudeKiroStablePricingGroupName))
+	require.True(t, IsPublicClaudeTokenGroup(ClaudeTerminalPricingGroupName))
 	require.True(t, IsPublicClaudeTokenGroup(ClaudeExternalPricingGroupName))
 	require.False(t, IsPublicClaudeTokenGroup("default"))
 	require.False(t, IsPublicTokenGroup("internal"))
@@ -224,6 +225,6 @@ func TestNormalizeTokenGroupChainRejectsInvalidShapes(t *testing.T) {
 
 func TestIsPublicClaudeTokenGroupChainRequiresOnlyPublicClaudeGroups(t *testing.T) {
 	require.True(t, IsPublicClaudeTokenGroupChain("kiro,claude-external"))
+	require.True(t, IsPublicClaudeTokenGroupChain("kiro,ccmax-terminal"))
 	require.False(t, IsPublicClaudeTokenGroupChain("kiro,default"))
-	require.False(t, IsPublicClaudeTokenGroupChain("kiro,ccmax-terminal"))
 }

@@ -83,6 +83,7 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 		}
 		request["group"] = json.RawMessage(groupJSON)
 		request["cross_group_retry"] = json.RawMessage(`false`)
+		isPublicClaudeToken := false
 		if rawName, ok := request["name"]; ok {
 			var name string
 			if common.Unmarshal(rawName, &name) == nil {
@@ -106,6 +107,7 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 				}
 			}
 			if common.Unmarshal(rawName, &name) == nil && service.IsPublicClaudeTokenName(name) {
+				isPublicClaudeToken = true
 				if group == "default" {
 					group = service.ClaudeExternalPricingGroupName
 					groupChain = []string{group}
@@ -153,6 +155,9 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 		managedGrokProfileAllowed := common.Unmarshal(validationBody, &managedGrokProfile) == nil &&
 			service.IsManagedGrok45UserTokenProfile(managedGrokProfile)
 		publicGroupChainAllowed := service.ValidateTokenGroupChain(groupChain, service.IsPublicTokenGroup) == nil
+		if isPublicClaudeToken {
+			publicGroupChainAllowed = service.ValidateTokenGroupChain(groupChain, service.IsPublicClaudeTokenGroup) == nil
+		}
 		if !publicGroupChainAllowed && !managedGrokProfileAllowed {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"success": false,

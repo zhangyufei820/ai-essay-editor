@@ -97,6 +97,15 @@ func TestSystemTokenProfilesClaudeModelsMatchExternalChannel(t *testing.T) {
 	require.NotContains(t, claudeModels, "claude-sonnet-4-5-20250929")
 }
 
+func TestPublicClaudeTokenModelsSupportsTerminalGroup(t *testing.T) {
+	terminalModels, terminalOK := PublicClaudeTokenModels(ClaudeTerminalPricingGroupName)
+	externalModels, externalOK := PublicClaudeTokenModels(ClaudeExternalPricingGroupName)
+
+	require.True(t, terminalOK)
+	require.True(t, externalOK)
+	require.Equal(t, externalModels, terminalModels)
+}
+
 func TestMergeModelLimitsCanonicalizesRawGPTImage2(t *testing.T) {
 	limits := mergeModelLimits("gpt-5.5,gpt-image-2,gpt-image-2-4K", []string{"gpt-image-2-4K"})
 
@@ -163,6 +172,41 @@ func TestEnsureSystemTokensPreservesPublicClaudeGroupAndRepairsModelLimits(t *te
 	models, ok := PublicClaudeTokenModels(ClaudeKiroPricingGroupName)
 	require.True(t, ok)
 	require.Equal(t, ClaudeKiroPricingGroupName, token.Group)
+	require.Equal(t, strings.Join(models, ","), token.ModelLimits)
+	require.False(t, token.CrossGroupRetry)
+}
+
+func TestEnsureSystemTokensPreservesPublicClaudeTerminalGroupAndRepairsModelLimits(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	userID := AdminSystemTokenUserID + 205
+	require.NoError(t, model.DB.Create(&model.User{
+		Id:       userID,
+		Username: "system-token-claude-terminal-user",
+		AffCode:  "system-token-claude-terminal-user-aff",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+	}).Error)
+
+	_, err := EnsureSystemTokensForUserID(context.Background(), userID)
+	require.NoError(t, err)
+
+	var token model.Token
+	require.NoError(t, model.DB.Where("user_id = ? AND name = ?", userID, SystemClaudeTokenName).First(&token).Error)
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", token.Id).Updates(map[string]interface{}{
+		"group":             ClaudeTerminalPricingGroupName,
+		"model_limits":      "claude-sonnet-5",
+		"cross_group_retry": true,
+	}).Error)
+
+	result, err := EnsureSystemTokensForUserID(context.Background(), userID)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Updated)
+	require.NoError(t, model.DB.First(&token, token.Id).Error)
+	models, ok := PublicClaudeTokenModels(ClaudeTerminalPricingGroupName)
+	require.True(t, ok)
+	require.Equal(t, ClaudeTerminalPricingGroupName, token.Group)
 	require.Equal(t, strings.Join(models, ","), token.ModelLimits)
 	require.False(t, token.CrossGroupRetry)
 }

@@ -99,6 +99,28 @@ func TestSetupContextForSelectedChannelRejectsTerminalChannelOnRetry(t *testing.
 	require.Equal(t, claudeTerminalOnlyMessage, newAPIError.Error())
 }
 
+func TestSetupContextForSelectedChannelRejectsTerminalFallbackFromClaudeGroupChain(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{}`))
+	service.SetTokenGroupChain(context, []string{
+		service.ClaudeExternalPricingGroupName,
+		service.ClaudeTerminalPricingGroupName,
+	})
+	service.MarkTokenGroupChainSelected(context, service.ClaudeTerminalPricingGroupName)
+	tag := claudeTerminalChannelTag
+	channel := &model.Channel{Tag: &tag}
+
+	newAPIError := SetupContextForSelectedChannel(context, channel, "claude-sonnet-5")
+
+	require.Equal(t, service.ClaudeTerminalPricingGroupName, common.GetContextKeyString(context, constant.ContextKeyUsingGroup))
+	require.Equal(t, 2, common.GetContextKeyInt(context, constant.ContextKeyTokenGroupChainIndex))
+	require.Error(t, newAPIError)
+	require.Equal(t, http.StatusForbidden, newAPIError.StatusCode)
+	require.Equal(t, types.ErrorCodeAccessDenied, newAPIError.GetErrorCode())
+	require.Equal(t, claudeTerminalOnlyMessage, newAPIError.Error())
+}
+
 func TestSetupContextForSelectedChannelDoesNotRejectTerminalMessages(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())

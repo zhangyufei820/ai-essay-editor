@@ -11,6 +11,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const tokenConfigurationGroupsPurpose = "token-config"
+
+func selectUserGroupsForPurpose(userGroup, purpose string) map[string]string {
+	if purpose == tokenConfigurationGroupsPurpose {
+		return service.GetMarketplacePricingGroups(userGroup, false)
+	}
+	return service.GetPublicUserUsableGroups(userGroup)
+}
+
 func GetGroups(c *gin.Context) {
 	groupNames := make([]string, 0)
 	for groupName := range ratio_setting.GetGroupRatioCopy() {
@@ -27,7 +36,7 @@ func GetUserGroups(c *gin.Context) {
 	usableGroups := make(map[string]map[string]interface{})
 	userId := c.GetInt("id")
 	userGroup, _ := model.GetUserGroup(userId, false)
-	userUsableGroups := service.GetPublicUserUsableGroups(userGroup)
+	userUsableGroups := selectUserGroupsForPurpose(userGroup, c.Query("purpose"))
 	for groupName := range ratio_setting.GetGroupRatioCopy() {
 		if desc, ok := userUsableGroups[groupName]; ok {
 			usableGroups[groupName] = map[string]interface{}{

@@ -436,6 +436,58 @@ func TestEnforcePublicTokenGroupSelectionMergesClaudeChainModelLimits(t *testing
 	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
+func TestEnforcePublicTokenGroupSelectionAllowsClaudeTerminalGroupChain(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		request := struct {
+			Group       string `json:"group"`
+			ModelLimits string `json:"model_limits"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.Equal(t, "kiro,ccmax-terminal,claude-external", request.Group)
+		models, ok := service.PublicClaudeTokenModelsForGroupChain(request.Group)
+		require.True(t, ok)
+		require.Equal(t, strings.Join(models, ","), request.ModelLimits)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":"星人 Claude 高阶令牌","group":"kiro,ccmax-terminal,claude-external"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestEnforcePublicTokenGroupSelectionRejectsTerminalGroupForGenericToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		called = true
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":"普通令牌","group":"ccmax-terminal"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.False(t, called)
+}
+
 func TestEnforcePublicTokenGroupSelectionRejectsGrokInFallbackChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	called := false
