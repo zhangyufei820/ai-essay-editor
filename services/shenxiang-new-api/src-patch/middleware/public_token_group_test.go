@@ -6,9 +6,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func publicClaudeTokenModelLimits(t *testing.T, group string) string {
+	t.Helper()
+	models, ok := service.PublicClaudeTokenModels(group)
+	require.True(t, ok)
+	return strings.Join(models, ",")
+}
 
 func TestEnforcePublicTokenGroupSelectionRejectsLegacyGroup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -98,7 +106,7 @@ func TestEnforcePublicTokenGroupSelectionRestrictsClaudeTokenModels(t *testing.T
 		}{}
 		require.NoError(t, c.ShouldBindJSON(&request))
 		require.True(t, request.ModelLimitsEnabled)
-		require.Equal(t, strings.Join(claudeUserTokenModels, ","), request.ModelLimits)
+		require.Equal(t, publicClaudeTokenModelLimits(t, service.ClaudeExternalPricingGroupName), request.ModelLimits)
 		require.Equal(t, "claude-external", request.Group)
 		require.False(t, request.CrossGroupRetry)
 		c.Status(http.StatusNoContent)
@@ -126,7 +134,7 @@ func TestEnforcePublicTokenGroupSelectionAllowsStableClaudeModels(t *testing.T) 
 			Group       string `json:"group"`
 		}{}
 		require.NoError(t, c.ShouldBindJSON(&request))
-		require.Equal(t, strings.Join(claudeStableUserTokenModels, ","), request.ModelLimits)
+		require.Equal(t, publicClaudeTokenModelLimits(t, service.ClaudeKiroStablePricingGroupName), request.ModelLimits)
 		require.Equal(t, "kiro-stable", request.Group)
 		c.Status(http.StatusNoContent)
 	})
@@ -153,7 +161,7 @@ func TestEnforcePublicTokenGroupSelectionAllowsKiroClaudeModels(t *testing.T) {
 			Group       string `json:"group"`
 		}{}
 		require.NoError(t, c.ShouldBindJSON(&request))
-		require.Equal(t, strings.Join(claudeKiroUserTokenModels, ","), request.ModelLimits)
+		require.Equal(t, publicClaudeTokenModelLimits(t, service.ClaudeKiroPricingGroupName), request.ModelLimits)
 		require.Equal(t, "kiro", request.Group)
 		c.Status(http.StatusNoContent)
 	})
@@ -161,6 +169,37 @@ func TestEnforcePublicTokenGroupSelectionAllowsKiroClaudeModels(t *testing.T) {
 		http.MethodPost,
 		"/api/token/",
 		strings.NewReader(`{"name":"Claude","group":"kiro"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestEnforcePublicTokenGroupSelectionNormalizesSystemClaudeTokenUpdate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.PUT("/api/token/", func(c *gin.Context) {
+		request := struct {
+			Group              string `json:"group"`
+			ModelLimitsEnabled bool   `json:"model_limits_enabled"`
+			ModelLimits        string `json:"model_limits"`
+			CrossGroupRetry    bool   `json:"cross_group_retry"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.Equal(t, service.ClaudeKiroPricingGroupName, request.Group)
+		require.True(t, request.ModelLimitsEnabled)
+		require.Equal(t, publicClaudeTokenModelLimits(t, service.ClaudeKiroPricingGroupName), request.ModelLimits)
+		require.False(t, request.CrossGroupRetry)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/api/token/",
+		strings.NewReader(`{"id":28,"name":"星人 Claude 高阶令牌","group":"kiro","model_limits_enabled":false,"model_limits":"claude-haiku-4-5-20251001","cross_group_retry":true}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()

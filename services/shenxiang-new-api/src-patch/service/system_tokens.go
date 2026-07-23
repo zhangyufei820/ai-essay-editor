@@ -29,10 +29,56 @@ type SystemTokenEnsureResult struct {
 const AdminSystemTokenUserID = 1
 
 const (
+	SystemClaudeTokenName     = "星人 Claude 高阶令牌"
+	claudeUserTokenName       = "claude"
 	rawGPTImage2ModelName     = "gpt-image-2"
 	productGPTImage2ModelName = "gpt-image-2-4K"
 	codexImage15KModelName    = "image 2电商商品图快速通道(1.5K)"
 )
+
+func IsPublicClaudeTokenName(name string) bool {
+	name = strings.TrimSpace(name)
+	return strings.EqualFold(name, claudeUserTokenName) || name == SystemClaudeTokenName
+}
+
+func PublicClaudeTokenModels(group string) ([]string, bool) {
+	switch strings.TrimSpace(group) {
+	case ClaudeKiroPricingGroupName:
+		return []string{
+			"claude-fable-5",
+			"claude-opus-4-6",
+			"claude-opus-4-7",
+			"claude-opus-4-8",
+			"claude-sonnet-4-5-20250929",
+			"claude-sonnet-4-6",
+			"claude-sonnet-5",
+		}, true
+	case ClaudeKiroStablePricingGroupName:
+		return []string{
+			"claude-fable-5",
+			"claude-haiku-4-5-20251001",
+			"claude-opus-4-5-20251101",
+			"claude-opus-4-6",
+			"claude-opus-4-7",
+			"claude-opus-4-8",
+			"claude-sonnet-4-5-20250929",
+			"claude-sonnet-4-6",
+			"claude-sonnet-5",
+		}, true
+	case ClaudeExternalPricingGroupName:
+		return []string{
+			"claude-fable-5",
+			"claude-haiku-4-5-20251001",
+			"claude-opus-4-6",
+			"claude-opus-4-7",
+			"claude-opus-4-8",
+			"claude-sonnet-4-6",
+			"claude-sonnet-5",
+		}, true
+	default:
+		return nil, false
+	}
+}
 
 func videoTokenModels() []string {
 	return []string{
@@ -53,8 +99,8 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		},
 		{
 			Mode:   "claude",
-			Name:   "星人 Claude 高阶令牌",
-			Models: []string{"claude-fable-5", "claude-haiku-4-5-20251001", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6", "claude-sonnet-5"},
+			Name:   SystemClaudeTokenName,
+			Models: mustPublicClaudeTokenModels(ClaudeExternalPricingGroupName),
 			Group:  ClaudeExternalPricingGroupName,
 		},
 		{
@@ -127,12 +173,18 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 						tokenGroup = legacyGroup
 					}
 				}
+				if profile.Mode == "claude" {
+					if claudeGroup := strings.TrimSpace(token.Group); IsPublicClaudeTokenGroup(claudeGroup) {
+						tokenGroup = claudeGroup
+					}
+				}
+				profileModels := systemTokenModelsForGroup(profile, tokenGroup)
 				updates := map[string]interface{}{}
 				if !token.ModelLimitsEnabled {
 					updates["model_limits_enabled"] = true
-					updates["model_limits"] = strings.Join(profile.Models, ",")
-				} else if profile.Mode == "grok" {
-					nextLimits := systemTokenModelLimits(token.ModelLimits, profile)
+					updates["model_limits"] = strings.Join(profileModels, ",")
+				} else if profile.Mode == "grok" || profile.Mode == "claude" {
+					nextLimits := systemTokenModelLimits(token.ModelLimits, profile, profileModels)
 					if nextLimits != token.ModelLimits {
 						updates["model_limits"] = nextLimits
 					}
@@ -239,11 +291,26 @@ func ReconcileUserSystemTokensForEnabledUsers(ctx context.Context) (UserSystemTo
 	return result, nil
 }
 
-func systemTokenModelLimits(existing string, profile SystemTokenProfile) string {
-	if profile.Mode == "grok" {
-		return strings.Join(profile.Models, ",")
+func mustPublicClaudeTokenModels(group string) []string {
+	models, ok := PublicClaudeTokenModels(group)
+	if !ok {
+		panic("invalid public Claude token group: " + group)
 	}
-	return mergeModelLimits(existing, profile.Models)
+	return models
+}
+
+func systemTokenModelsForGroup(profile SystemTokenProfile, group string) []string {
+	if profile.Mode == "claude" {
+		return mustPublicClaudeTokenModels(group)
+	}
+	return profile.Models
+}
+
+func systemTokenModelLimits(existing string, profile SystemTokenProfile, models []string) string {
+	if profile.Mode == "grok" || profile.Mode == "claude" {
+		return strings.Join(models, ",")
+	}
+	return mergeModelLimits(existing, models)
 }
 
 func mergeModelLimits(existing string, required []string) string {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -131,6 +132,68 @@ func TestEnsureSystemTokensForCommonUserCreatesPublicProfilesOnly(t *testing.T) 
 	}
 }
 
+func TestEnsureSystemTokensPreservesPublicClaudeGroupAndRepairsModelLimits(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	userID := AdminSystemTokenUserID + 201
+	require.NoError(t, model.DB.Create(&model.User{
+		Id:       userID,
+		Username: "system-token-claude-group-user",
+		AffCode:  "system-token-claude-group-user-aff",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+	}).Error)
+
+	_, err := EnsureSystemTokensForUserID(context.Background(), userID)
+	require.NoError(t, err)
+
+	var token model.Token
+	require.NoError(t, model.DB.Where("user_id = ? AND name = ?", userID, SystemClaudeTokenName).First(&token).Error)
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", token.Id).Updates(map[string]interface{}{
+		"group":             ClaudeKiroPricingGroupName,
+		"model_limits":      "claude-haiku-4-5-20251001",
+		"cross_group_retry": true,
+	}).Error)
+
+	result, err := EnsureSystemTokensForUserID(context.Background(), userID)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Updated)
+	require.NoError(t, model.DB.First(&token, token.Id).Error)
+	models, ok := PublicClaudeTokenModels(ClaudeKiroPricingGroupName)
+	require.True(t, ok)
+	require.Equal(t, ClaudeKiroPricingGroupName, token.Group)
+	require.Equal(t, strings.Join(models, ","), token.ModelLimits)
+	require.False(t, token.CrossGroupRetry)
+}
+
+func TestEnsureSystemTokensRepairsInvalidClaudeGroupToDefault(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	userID := AdminSystemTokenUserID + 202
+	require.NoError(t, model.DB.Create(&model.User{
+		Id:       userID,
+		Username: "system-token-invalid-claude-group-user",
+		AffCode:  "system-token-invalid-claude-group-user-aff",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+	}).Error)
+
+	_, err := EnsureSystemTokensForUserID(context.Background(), userID)
+	require.NoError(t, err)
+
+	var token model.Token
+	require.NoError(t, model.DB.Where("user_id = ? AND name = ?", userID, SystemClaudeTokenName).First(&token).Error)
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", token.Id).Update("group", "internal").Error)
+
+	result, err := EnsureSystemTokensForUserID(context.Background(), userID)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Updated)
+	require.NoError(t, model.DB.First(&token, token.Id).Error)
+	require.Equal(t, ClaudeExternalPricingGroupName, token.Group)
+}
+
 func TestReconcileUserSystemTokensForEnabledUsersBackfillsAndIsIdempotent(t *testing.T) {
 	setupGrok45EntitlementTestDB(t)
 	require.NoError(t, model.DB.Create(&[]model.User{
@@ -198,10 +261,10 @@ func TestGrok45SystemTokenLimitsAreReconciledExactly(t *testing.T) {
 		Group:  Grok45PricingGroupName,
 	}
 
-	require.Equal(t, Grok45ModelName, systemTokenModelLimits("gpt-5.5,"+Grok45ModelName, profile))
+	require.Equal(t, Grok45ModelName, systemTokenModelLimits("gpt-5.5,"+Grok45ModelName, profile, profile.Models))
 }
 
-func TestSystemTokenProfilesReconcilePreservesExternallyManagedModelLimits(t *testing.T) {
+func TestSystemTokenProfilesReconcilePreservesExternallyManagedModelLimitsExceptClaude(t *testing.T) {
 	setupGrok45EntitlementTestDB(t)
 	require.NoError(t, model.DB.Create(&model.User{
 		Id:       AdminSystemTokenUserID,
@@ -238,8 +301,8 @@ func TestSystemTokenProfilesReconcilePreservesExternallyManagedModelLimits(t *te
 	result, err := EnsureSystemTokensForUserID(context.Background(), AdminSystemTokenUserID)
 	require.NoError(t, err)
 	require.Zero(t, result.Created)
-	require.Zero(t, result.Updated)
-	require.Equal(t, len(SystemTokenProfiles()), result.Skipped)
+	require.Equal(t, 1, result.Updated)
+	require.Equal(t, len(SystemTokenProfiles())-1, result.Skipped)
 
 	for _, profile := range SystemTokenProfiles() {
 		if profile.Mode == "grok" {
@@ -247,6 +310,10 @@ func TestSystemTokenProfilesReconcilePreservesExternallyManagedModelLimits(t *te
 		}
 		var token model.Token
 		require.NoError(t, model.DB.Where("user_id = ? AND name = ?", AdminSystemTokenUserID, profile.Name).First(&token).Error)
+		if profile.Mode == "claude" {
+			require.Equal(t, strings.Join(profile.Models, ","), token.ModelLimits)
+			continue
+		}
 		require.Equal(t, "externally-managed-"+profile.Mode, token.ModelLimits)
 	}
 }
