@@ -157,6 +157,11 @@ def test_pkce_and_public_tool_contract_are_strict():
     assert "private.invalid" not in visible
     image_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_generate_image")
     video_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_generate_video")
+    media_list_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_list_media_models")
+    ask_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_ask")
+    assert "唯一用于查询当前账户图像和视频能力" in media_list_tool["description"]
+    assert "不得调用 xingren_ask" in media_list_tool["description"]
+    assert "不得用于查询模型列表、图像、视频、价格或媒体能力" in ask_tool["description"]
     assert {"aspect_ratio", "resolution", "quality", "output_format", "output_compression", "background"} <= set(image_tool["inputSchema"]["properties"])
     assert "negative_prompt" not in image_tool["inputSchema"]["properties"]
     assert "size" not in image_tool["inputSchema"]["properties"]
