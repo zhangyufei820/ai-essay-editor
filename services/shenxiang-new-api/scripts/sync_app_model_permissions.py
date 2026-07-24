@@ -169,6 +169,7 @@ CODEX_ALLOWED_MODELS = [
     "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
+    "kimi-k3",
     "gpt-5.5-openai-compact",
     CODEX_AUTO_REVIEW_MODEL,
     CODEX_IMAGE_15K_MODEL,
@@ -381,6 +382,19 @@ PUBLIC_OPENAI_TEXT_MODELS = {
         "longcontext_output_cny": Decimal("45.0000"),
         "longcontext_cache_read_cny": Decimal("1.0000"),
         "longcontext_cache_create_cny": Decimal("12.5000"),
+    },
+    "kimi-k3": {
+        "description": "Kimi K3 文本模型，适合复杂推理、长文写作、分析和代码任务。人民币输入 ¥13/M、输出 ¥65/M、缓存读取 ¥1.30/M。",
+        "icon": "Kimi",
+        "tags": "text,kimi,codex",
+        "input_cny": Decimal("13"),
+        "output_cny": Decimal("65"),
+        "cache_read_cny": Decimal("1.30"),
+        "cache_create_cny": Decimal("13"),
+        "longcontext_input_cny": Decimal("13"),
+        "longcontext_output_cny": Decimal("65"),
+        "longcontext_cache_read_cny": Decimal("1.30"),
+        "longcontext_cache_create_cny": Decimal("13"),
     },
 }
 PUBLIC_OPENAI_TEXT_MODELS[CODEX_AUTO_REVIEW_MODEL] = {

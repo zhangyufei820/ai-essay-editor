@@ -22,6 +22,7 @@ CHECKOUT="$ROOT/release-state/checkouts/$RELEASE_COMMIT"
 SERVICE_DIR="$CHECKOUT/services/shenxiang-new-api"
 SYNC_SCRIPT="$SERVICE_DIR/scripts/sync_app_model_permissions.py"
 GROK45_SCRIPT="$SERVICE_DIR/scripts/configure_grok45_model.py"
+KIMI_K3_SCRIPT="$SERVICE_DIR/scripts/configure_kimi_k3_channel.py"
 
 if [[ "$(git -C "$CHECKOUT" rev-parse HEAD)" != "$RELEASE_COMMIT" ]]; then
   echo "release checkout does not match manifest commit $RELEASE_COMMIT" >&2
@@ -31,7 +32,7 @@ if [[ -n "$(git -C "$CHECKOUT" status --porcelain)" ]]; then
   echo "release checkout is dirty: $CHECKOUT" >&2
   exit 1
 fi
-for script in "$SYNC_SCRIPT" "$GROK45_SCRIPT"; do
+for script in "$SYNC_SCRIPT" "$GROK45_SCRIPT" "$KIMI_K3_SCRIPT"; do
   if [[ ! -f "$script" ]]; then
     echo "missing release script: $script" >&2
     exit 1
@@ -50,5 +51,6 @@ set +a
 
 exec 9>"$LOCK"
 flock -n 9
+KIMI_K3_CHANNEL_SYNC_LOCK_HELD=1 python3 "$KIMI_K3_SCRIPT" --reconcile-if-configured
 python3 "$SYNC_SCRIPT"
 GROK45_MODEL_SYNC_LOCK_HELD=1 python3 "$GROK45_SCRIPT" --reconcile-if-configured

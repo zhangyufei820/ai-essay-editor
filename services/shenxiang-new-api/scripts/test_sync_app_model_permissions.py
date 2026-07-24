@@ -36,6 +36,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("gpt-5.6-luna", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.6-terra", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.6-sol", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("kimi-k3", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.5-openai-compact", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("gpt-5.3-codex-spark", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("gpt-5.3-spark", self.module.CODEX_ALLOWED_MODELS)
@@ -43,6 +44,16 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("codex-auto-review", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("geek2api-image-2", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("gpt-image-2-4K", self.module.CODEX_ALLOWED_MODELS)
+
+    def test_kimi_k3_price_config_is_exact_rmb_sale_price(self) -> None:
+        prices = self.module.PUBLIC_OPENAI_TEXT_MODELS["kimi-k3"]
+
+        self.assertEqual(prices["input_cny"], self.module.Decimal("13"))
+        self.assertEqual(prices["output_cny"], self.module.Decimal("65"))
+        self.assertEqual(prices["cache_read_cny"], self.module.Decimal("1.30"))
+        self.assertEqual(prices["cache_create_cny"], self.module.Decimal("13"))
+        self.assertEqual(prices["longcontext_input_cny"], self.module.Decimal("13"))
+        self.assertEqual(prices["longcontext_output_cny"], self.module.Decimal("65"))
 
     def test_discount_text_models_are_exactly_the_public_text_aliases(self) -> None:
         self.assertEqual(
@@ -195,7 +206,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -203,7 +214,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_token_cache_key_uses_crypto_secret_hmac(self) -> None:
@@ -909,8 +920,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '106'", sql)
         self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105,key-106", sql)
         self.assertIn("model_limits_enabled = 1", sql)
-        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
-        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("gpt-5.3-codex-spark", sql)
         self.assertNotIn("gpt-5.3-spark", sql)
         self.assertNotIn("gpt-5.4-openai-compact", sql)
