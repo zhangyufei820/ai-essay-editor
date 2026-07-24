@@ -21,7 +21,7 @@
   },
   {
     "package": "./relay",
-    "run": "^(TestDiscountImage2V2OutboundBodyPreservesVerifiedFields|TestUseGeminiAdaptorForApprovedOpenAIChatImageModels)$"
+    "run": "^(TestDiscountImage2V2OutboundBodyPreservesVerifiedFields|TestUseGeminiAdaptorForApprovedOpenAIChatImageModels|TestNormalizeWangwangClaudeFunctionTools.*)$"
   },
   {
     "package": "./service/relayconvert",
