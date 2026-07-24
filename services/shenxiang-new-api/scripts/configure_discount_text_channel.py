@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 
 DISCOUNT_GROUP = "discount"
-DISCOUNT_RATIO = 0.06
+DISCOUNT_RATIO = 0.25
 DEFAULT_GROUP_DESCRIPTION = "原价稳定通道"
 DISCOUNT_GROUP_DESCRIPTION = "特价通道（可能随时下架；不可用时请切回原价）"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"

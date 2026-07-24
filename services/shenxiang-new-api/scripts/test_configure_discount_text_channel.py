@@ -77,7 +77,7 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
 
         self.assertEqual(
             self.module.json.loads(updates["GroupRatio"]),
-            {"default": 1, "discount": 0.06, "internal": 1},
+            {"default": 1, "discount": 0.25, "internal": 1},
         )
         self.assertEqual(
             self.module.json.loads(updates["UserUsableGroups"]),

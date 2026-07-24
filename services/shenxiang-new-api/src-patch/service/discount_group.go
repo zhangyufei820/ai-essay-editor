@@ -8,7 +8,7 @@ import (
 
 const (
 	DiscountPricingGroupName  = "discount"
-	DiscountPricingGroupRatio = 0.06
+	DiscountPricingGroupRatio = 0.25
 )
 
 var textPricingPreferenceModels = map[string]struct{}{

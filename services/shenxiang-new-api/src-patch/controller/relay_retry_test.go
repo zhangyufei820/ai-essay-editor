@@ -82,7 +82,7 @@ func withPlaygroundDiscountPricing(t *testing.T) {
 	if err := ratio_setting.UpdateModelRatioByJSONString(`{"gpt-5.5":2}`); err != nil {
 		t.Fatalf("configure model ratio: %v", err)
 	}
-	if err := ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"discount":0.06}`); err != nil {
+	if err := ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"discount":0.25}`); err != nil {
 		t.Fatalf("configure group ratio: %v", err)
 	}
 	if err := ratio_setting.UpdateCompletionRatioByJSONString(`{"gpt-5.5":6}`); err != nil {
