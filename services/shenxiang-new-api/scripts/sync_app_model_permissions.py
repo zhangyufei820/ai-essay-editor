@@ -2006,6 +2006,14 @@ def sync_abilities() -> None:
     discount_allowed_models_sql = ", ".join(sql_quote(model) for model in DISCOUNT_TEXT_ALLOWED_MODELS)
     plus_allowed_models = set(PLUS_TEXT_ALLOWED_MODELS)
     plus_allowed_models_sql = ", ".join(sql_quote(model) for model in PLUS_TEXT_ALLOWED_MODELS)
+    kimi_enabled_channel_sql = (
+        "SELECT id FROM channels WHERE status = 1 AND tag = "
+        + sql_quote(KIMI_K3_CHANNEL_TAG)
+        + " AND REPLACE(COALESCE(`group`, ''), ' ', '') = "
+        + sql_quote(KIMI_K3_GROUP)
+        + " AND REPLACE(COALESCE(models, ''), ' ', '') = "
+        + sql_quote(KIMI_K3_MODEL)
+    )
     statements = [
         "START TRANSACTION;",
         "UPDATE channels SET status = 2 WHERE tag IN ("
@@ -2322,6 +2330,10 @@ def sync_abilities() -> None:
             + sql_quote(DISCOUNT_TEXT_GROUP)
             + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag IN ("
             + discount_channel_tags_sql
+            + ")) AND NOT (model = "
+            + sql_quote(KIMI_K3_MODEL)
+            + " AND channel_id IN ("
+            + kimi_enabled_channel_sql
             + "));",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
             + "(SELECT id FROM channels WHERE tag IN ("
@@ -2348,6 +2360,10 @@ def sync_abilities() -> None:
             + sql_quote(PLUS_TEXT_GROUP)
             + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag IN ("
             + plus_channel_tags_sql
+            + ")) AND NOT (model = "
+            + sql_quote(KIMI_K3_MODEL)
+            + " AND channel_id IN ("
+            + kimi_enabled_channel_sql
             + "));",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
             + "(SELECT id FROM channels WHERE tag IN ("

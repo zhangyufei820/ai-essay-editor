@@ -62,6 +62,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.mysql = lambda _query: []
         self.assertIn(self.module.KIMI_K3_GROUP, self.module.active_groups())
 
+    def test_kimi_k3_ability_sync_preserves_discount_and_plus_visibility(self) -> None:
+        source = SCRIPT_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("kimi_enabled_channel_sql", source)
+        self.assertGreaterEqual(source.count("AND NOT (model = "), 2)
+
     def test_discount_text_models_are_exactly_the_public_text_aliases(self) -> None:
         self.assertEqual(
             self.module.DISCOUNT_TEXT_ALLOWED_MODELS,
