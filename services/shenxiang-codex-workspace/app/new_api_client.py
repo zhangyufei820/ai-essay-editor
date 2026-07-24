@@ -40,11 +40,13 @@ class NewApiClient:
         self,
         user_id: str,
         cookie_header: str,
+        *,
+        token_modes: frozenset[str] | None = None,
     ) -> dict[str, Any]:
         requested_user_id = str(user_id or "").strip()
         if not requested_user_id:
             raise NewApiAuthError("缺少登录用户 ID，请先登录。")
-        cache_key = self._user_bootstrap_cache_key(requested_user_id, cookie_header)
+        cache_key = self._user_bootstrap_cache_key(requested_user_id, cookie_header, token_modes)
         cached = self._cache_get_json(cache_key)
         if cached:
             return cached
@@ -59,7 +61,14 @@ class NewApiClient:
                 raise NewApiAuthError("登录身份不一致，请退出后重新登录。")
             mode_models = await self.resolve_mode_models(client, headers, actual_user_id or requested_user_id, user)
             self._attach_mode_models(user, mode_models)
-            token_keys = await self.ensure_mode_tokens(client, actual_user_id or requested_user_id, headers, user, mode_models)
+            token_keys = await self.ensure_mode_tokens(
+                client,
+                actual_user_id or requested_user_id,
+                headers,
+                user,
+                mode_models,
+                token_modes=token_modes,
+            )
             token_key = token_keys["codex"]
         result = {
             "user": user,
@@ -99,6 +108,8 @@ class NewApiClient:
         headers: dict[str, str],
         user: dict[str, Any],
         mode_models: dict[str, tuple[str, ...]] | None = None,
+        *,
+        token_modes: frozenset[str] | None = None,
     ) -> dict[str, str]:
         effective_models = self._effective_mode_models(mode_models)
         grok_models = set(effective_models["grok"])
@@ -116,6 +127,8 @@ class NewApiClient:
             profiles["video"] = (self.settings.video_token_name, effective_models["video"], None)
         if effective_models["grok"]:
             profiles["grok"] = (self.settings.grok_token_name, effective_models["grok"], GROK_TOKEN_GROUP)
+        if token_modes is not None:
+            profiles = {mode: profile for mode, profile in profiles.items() if mode in token_modes}
         tokens = await self._list_tokens(client, headers)
         result: dict[str, str] = {}
         for mode, (name, models, token_group) in profiles.items():
@@ -511,8 +524,14 @@ class NewApiClient:
             return
         self.redis.set(key, json.dumps(value, ensure_ascii=False, separators=(",", ":")), ex=max(1, ttl_seconds))
 
-    def _user_bootstrap_cache_key(self, user_id: str, cookie_header: str) -> str:
-        digest = hashlib.sha256(f"{user_id}\n{cookie_header}".encode("utf-8")).hexdigest()
+    def _user_bootstrap_cache_key(
+        self,
+        user_id: str,
+        cookie_header: str,
+        token_modes: frozenset[str] | None = None,
+    ) -> str:
+        mode_suffix = ",".join(sorted(token_modes or ()))
+        digest = hashlib.sha256(f"{user_id}\n{cookie_header}\n{mode_suffix}".encode("utf-8")).hexdigest()
         return f"codex:user-bootstrap:{digest}"
 
     def _key_hint(self, key: str) -> str:

@@ -231,6 +231,57 @@ def test_ensure_mode_tokens_skips_empty_media_profiles() -> None:
     assert "video" not in result
 
 
+def test_ensure_mode_tokens_for_agent_connection_skips_claude_but_requires_image() -> None:
+    client = NewApiClient(Settings())
+    calls: list[str] = []
+
+    async def run() -> dict[str, str]:
+        async def fake_list_tokens(*_args, **_kwargs):
+            return []
+
+        async def fake_ensure_named_token(
+            _client,
+            _user_id,
+            _headers,
+            _user,
+            _tokens,
+            token_name,
+            _models,
+            *,
+            token_group=None,
+        ):
+            calls.append(token_name)
+            if token_name == Settings().image_token_name:
+                raise NewApiAuthError("image token update failed")
+            return f"sk-{token_name}"
+
+        client._list_tokens = fake_list_tokens  # type: ignore[method-assign]
+        client._ensure_named_token = fake_ensure_named_token  # type: ignore[method-assign]
+        return await client.ensure_mode_tokens(
+            object(),  # type: ignore[arg-type]
+            "user-1",
+            {},
+            {"group": "default"},
+            {
+                "codex": ("gpt-5.5",),
+                "claude": ("claude-opus-4-8",),
+                "image": ("gpt-image-2-4K",),
+                "video": (),
+            },
+            token_modes=frozenset({"codex", "image", "video"}),
+        )
+
+    try:
+        asyncio.run(run())
+    except NewApiAuthError as exc:
+        assert str(exc) == "image token update failed"
+    else:
+        raise AssertionError("image token synchronization must block agent connection")
+
+    assert Settings().claude_token_name not in calls
+    assert Settings().image_token_name in calls
+
+
 def test_effective_mode_models_derives_grok_credential_profile_without_hiding_text_model() -> None:
     client = NewApiClient(Settings())
 

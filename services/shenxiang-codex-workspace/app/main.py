@@ -318,12 +318,40 @@ async def require_codex_user(
     credentials=Depends(optional_new_api_user),
     new_api_user: str = Header(default="", alias="X-New-Api-User"),
 ) -> UserContext:
+    return await resolve_codex_user(request, credentials, new_api_user)
+
+
+async def require_codex_agent_user(
+    request: Request,
+    credentials=Depends(optional_new_api_user),
+    new_api_user: str = Header(default="", alias="X-New-Api-User"),
+) -> UserContext:
+    # Local Codex MCP needs only text and media credentials; Claude provisioning is unrelated.
+    return await resolve_codex_user(
+        request,
+        credentials,
+        new_api_user,
+        token_modes=frozenset({"codex", "image", "video"}),
+    )
+
+
+async def resolve_codex_user(
+    request: Request,
+    credentials: UserContext | None,
+    new_api_user: str,
+    *,
+    token_modes: frozenset[str] | None = None,
+) -> UserContext:
     if credentials is not None:
         return credentials
     user_id = new_api_user or request.headers.get("New-Api-User", "")
     cookie_header = request.headers.get("cookie", "")
     try:
-        data = await NewApiClient(settings, redis_client()).bootstrap_user(user_id.strip(), cookie_header)
+        data = await NewApiClient(settings, redis_client()).bootstrap_user(
+            user_id.strip(),
+            cookie_header,
+            token_modes=token_modes,
+        )
     except NewApiAuthError as exc:
         raise HTTPException(status_code=401, detail=public_error_message(str(exc), "登录态无效，请重新登录。")) from exc
     user = data.get("user") if isinstance(data.get("user"), dict) else {}
@@ -417,7 +445,7 @@ def is_allowed_browser_origin(origin: str, target_settings: Settings) -> bool:
 @app.post("/codex/agent/codex/connection-code")
 async def create_codex_connection_code(
     request: Request,
-    user: UserContext = Depends(require_codex_user),
+    user: UserContext = Depends(require_codex_agent_user),
 ) -> JSONResponse:
     if not is_allowed_browser_origin(request.headers.get("origin", ""), settings):
         raise HTTPException(status_code=403, detail="请求无效")
@@ -429,7 +457,7 @@ async def create_codex_connection_code(
 @app.delete("/codex/agent/codex/connection-code")
 async def revoke_codex_connection_code(
     request: Request,
-    user: UserContext = Depends(require_codex_user),
+    user: UserContext = Depends(require_codex_agent_user),
 ) -> JSONResponse:
     if not is_allowed_browser_origin(request.headers.get("origin", ""), settings):
         raise HTTPException(status_code=403, detail="请求无效")
