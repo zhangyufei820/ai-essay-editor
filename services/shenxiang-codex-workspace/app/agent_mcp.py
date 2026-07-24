@@ -46,6 +46,17 @@ MEDIA_PREVIEW_WAIT_SECONDS = 60
 MEDIA_WAIT_MESSAGE = "生成仍在进行。请等待 10 秒后用同一个任务编号再次查询；不要重新生成、换模型或自动重试。"
 MEDIA_PREPARING_MESSAGE = "结果正在准备预览。请等待 10 秒后用同一个任务编号再次查询；不要重新生成、换模型或自动重试。"
 MEDIA_CONFIRMING_MESSAGE = "生成已提交，正在确认。请等待 10 秒后用同一个任务编号再次查询；不要重新提交、换模型或自动重试。"
+MEDIA_MODEL_QUERY_TERMS = (
+    "模型列表",
+    "有哪些模型",
+    "有什么模型",
+    "可用模型",
+    "图像模型",
+    "图片模型",
+    "视频模型",
+    "媒体模型",
+    "模型价格",
+)
 
 def resolved_media_model(model: str, mode: str) -> str | None:
     return resolve_public_media_model(model, mode)
@@ -109,6 +120,11 @@ def media_model_options(model: str, mode: str) -> str:
 
 def media_api_key(user: UserContext, mode: str) -> str:
     return str((user.api_keys or {}).get(mode) or "").strip()
+
+
+def is_media_model_query(prompt: str) -> bool:
+    normalized = str(prompt or "").strip().lower()
+    return any(term in normalized for term in MEDIA_MODEL_QUERY_TERMS)
 
 
 async def live_media_models(settings: Settings, api_key: str, mode: str) -> tuple[str, ...]:
@@ -435,11 +451,7 @@ async def call_agent_tool(
     if name == "xingren_connection_status":
         return {"content": [{"type": "text", "text": "已连接。使用图片或视频前，我会先检查当前可用模型。"}]}
     if name == "xingren_list_media_models":
-        image_models, video_models = await asyncio.gather(
-            live_media_models(settings, media_api_key(user, "image"), "image"),
-            live_media_models(settings, media_api_key(user, "video"), "video"),
-        )
-        return {"content": [{"type": "text", "text": media_models_message(image_models, video_models)}]}
+        return await media_models_response(settings, user)
     if name == "xingren_get_media_result":
         return await _media_result_response(settings, user, str(arguments.get("task_id") or ""), authorization_store)
     prompt = str(arguments.get("prompt") or "").strip()
@@ -476,6 +488,8 @@ async def call_agent_tool(
 
 
 async def _ask(settings: Settings, user: UserContext, prompt: str) -> dict[str, Any]:
+    if is_media_model_query(prompt):
+        return await media_models_response(settings, user)
     api_key = (user.api_keys or {}).get("codex") or user.api_key
     payload = {"model": settings.default_chat_model, "messages": [{"role": "user", "content": prompt}], "stream": False, "max_tokens": settings.fast_path_max_output_tokens}
     timeout = httpx.Timeout(120.0, connect=8.0, read=120.0, write=20.0)
@@ -489,6 +503,14 @@ async def _ask(settings: Settings, user: UserContext, prompt: str) -> dict[str, 
     except (AttributeError, ValueError, TypeError):
         text = ""
     return {"content": [{"type": "text", "text": text or "暂时没有生成内容，请稍后重试。"}]}
+
+
+async def media_models_response(settings: Settings, user: UserContext) -> dict[str, Any]:
+    image_models, video_models = await asyncio.gather(
+        live_media_models(settings, media_api_key(user, "image"), "image"),
+        live_media_models(settings, media_api_key(user, "video"), "video"),
+    )
+    return {"content": [{"type": "text", "text": media_models_message(image_models, video_models)}]}
 
 
 async def _prepare_image_generation(

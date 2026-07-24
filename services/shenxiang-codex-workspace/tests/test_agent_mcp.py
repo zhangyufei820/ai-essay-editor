@@ -217,6 +217,36 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
     assert "grok-imagine-image" not in message
 
 
+def test_text_tool_redirects_media_model_queries_to_the_media_directory(monkeypatch) -> None:
+    async def fake_live_media_models(_settings, api_key, mode):
+        assert api_key == f"sk-{mode}"
+        return {"image": ("gpt-image-2-4K",), "video": ("seedance-2.0-dj-fast",)}[mode]
+
+    monkeypatch.setattr("app.agent_mcp.live_media_models", fake_live_media_models)
+    user = UserContext(
+        api_key="sk-codex",
+        user_id="user-1",
+        key_hint="agent",
+        api_keys={"codex": "sk-codex", "image": "sk-image", "video": "sk-video"},
+    )
+
+    response = asyncio.run(
+        call_agent_tool(
+            Settings(),
+            user,
+            "xingren_ask",
+            {"prompt": "当前 AIPHUI 模型列表有哪些？包括图像和视频。"},
+            AgentAuthorizationStore(FakeRedis(), Settings()),
+        )
+    )
+
+    text = response["content"][0]["text"]
+    assert "可用图像模型" in text
+    assert "GPT Image 2" in text
+    assert "可用视频模型" in text
+    assert "Seedance 2.0 DJ Fast" in text
+
+
 def test_media_model_selection_accepts_only_public_website_names():
     assert resolved_media_model("特价 image-2", "image") == "geek2api-image-2"
     assert resolved_media_model("官转image 2稳定", "image") == "internal-image2-stable-v1"
