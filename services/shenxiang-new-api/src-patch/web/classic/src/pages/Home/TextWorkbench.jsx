@@ -134,7 +134,7 @@ const DISCOUNT_GROUP = 'discount';
 const PLUS_GROUP = 'plus';
 const DEFAULT_GROUP = 'default';
 const CLAUDE_STABLE_GROUP = 'kiro-stable';
-const DISCOUNT_PRICING_LABEL = '特价 0.06x';
+const DISCOUNT_PRICING_LABEL = '特价 0.25x';
 const PLUS_PRICING_LABEL = 'Plus 0.5x';
 const DEFAULT_PRICING_LABEL = '原价 1x';
 const CLAUDE_STABLE_PRICING_LABEL = 'Claude 稳定 0.22x';
@@ -1739,7 +1739,7 @@ const TextWorkbench = ({ isMobile }) => {
           </div>
           {activeModelGroup === DISCOUNT_GROUP ? (
             <div className='sx-gpt-message-name' role='note'>
-              当前跟随“星人 Codex 文本令牌”：特价 0.06x。若特价通道异常，请在接入设置中手动切换原价 1x。
+              当前跟随“星人 Codex 文本令牌”：特价 0.25x。若特价通道异常，请在接入设置中手动切换原价 1x。
             </div>
           ) : activeModelGroup === DEFAULT_GROUP ? (
             <div className='sx-gpt-message-name' role='note'>

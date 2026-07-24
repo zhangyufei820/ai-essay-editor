@@ -1,8 +1,8 @@
 # 特价文本渠道运维
 
-三个独立渠道固定使用 `discount` 分组和 `0.06` 倍率，只暴露 `gpt-5.5`、`gpt-5.6-luna`、`gpt-5.6-sol`、`gpt-5.6-terra`。它们不加入自动分组，用户令牌和外部 API 请求也不会跨组回退。
+三个独立渠道固定使用 `discount` 分组和 `0.25` 倍率，只暴露 `gpt-5.5`、`gpt-5.6-luna`、`gpt-5.6-sol`、`gpt-5.6-terra`。它们不加入自动分组，用户令牌和外部 API 请求也不会跨组回退。
 
-用户编辑“星人 Codex 文本令牌”选择 `discount` 或 `default` 时，系统把该选择保存为用户级文本倍率偏好，并同步旧版令牌别名。Classic 主页会话和云端 Codex 都读取同一偏好；主页在每次发送前重新确认，云端 Codex 的自动令牌校正也以该偏好为准。特价通道异常时不再自动切换原价，用户需要在接入设置中手动切到 `default`；恢复后切回 `discount`，三处会再次统一使用 `0.06x`。
+用户编辑“星人 Codex 文本令牌”选择 `discount` 或 `default` 时，系统把该选择保存为用户级文本倍率偏好，并同步旧版令牌别名。Classic 主页会话和云端 Codex 都读取同一偏好；主页在每次发送前重新确认，云端 Codex 的自动令牌校正也以该偏好为准。特价通道异常时不再自动切换原价，用户需要在接入设置中手动切到 `default`；恢复后切回 `discount`，三处会再次统一使用 `0.25x`。
 
 默认优先级为 `wangwang → pdhlzy → reserve`，对应 `30 → 20 → 10`。三条链路统一使用原生 OpenAI Responses；禁止为 pdhlzy 配置 Responses 到 Chat Completions 的转换，否则真实 Codex 工具续接可能丢失 `function_call` / `function_call_output` 关联。运行脚本时可用 `--order pdhlzy,wangwang,reserve` 等完整排列切换主通道，禁止把三把不同成本或不同供应商密钥合并到同一个随机轮询渠道。
 
@@ -47,13 +47,13 @@ python3 scripts/configure_discount_text_channel.py --disable
 
 停用会关闭保留 Tag 渠道及任何声明 `discount` 的冲突渠道，同时关闭全部 `discount` abilities，并从公开组和自动组中移除 `discount`。即使可见性 options 损坏，渠道仍会先停用，输出中的 `group_hidden` 会说明公开组是否同步隐藏。
 
-随后必须仅刷新 `shenxiang-new-api` 应用容器并复查健康；脚本返回的 `runtime_cache_refresh_required` 在刷新前始终为 `true`。保留 `GroupRatio.discount=0.06`，用于保护停用瞬间的在途请求。
+随后必须仅刷新 `shenxiang-new-api` 应用容器并复查健康；脚本返回的 `runtime_cache_refresh_required` 在刷新前始终为 `true`。保留 `GroupRatio.discount=0.25`，用于保护停用瞬间的在途请求。
 
 ## 验证重点
 
 - 普通用户和月卡用户都能在令牌中选择 `default` 或 `discount`。
 - 新建/编辑令牌不能手工写入历史组；旧历史组令牌仍可鉴权和启停。
 - `discount` 不出现在自动分组，且其 abilities 只指向三个受管 Tag 渠道。
-- 模型广场只展示原价/特价组，特价倍率固定为 `0.06`。
+- 模型广场只展示原价/特价组，特价倍率固定为 `0.25`。
 - 上游响应中的成本字段不能覆盖特价静态计费。
-- 月卡在特价组不再叠加月卡价值倍率，最终仍按模型广场价的 `0.06` 扣减。
+- 月卡在特价组不再叠加月卡价值倍率，最终仍按模型广场价的 `0.25` 扣减。

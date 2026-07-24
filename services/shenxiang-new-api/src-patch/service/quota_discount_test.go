@@ -62,6 +62,6 @@ func TestPreWssConsumeQuotaReservesCumulativeDiscountQuota(t *testing.T) {
 	require.NoError(t, PreWssConsumeQuota(ctx, relayInfo, usage))
 	require.NoError(t, relayInfo.Billing.Settle(10))
 
-	require.Equal(t, []int{5, 10}, billing.reserveTargets)
+	require.Equal(t, []int{25, 50}, billing.reserveTargets)
 	require.Equal(t, []int{10}, billing.settleTargets)
 }

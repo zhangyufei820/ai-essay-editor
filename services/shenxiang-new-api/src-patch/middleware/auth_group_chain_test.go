@@ -23,7 +23,7 @@ func withTokenGroupChainSettings(t *testing.T) {
 		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalRatios))
 	})
 	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"原价","discount":"特价","plus":"Plus"}`))
-	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"discount":0.06,"plus":0.5}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"discount":0.25,"plus":0.5}`))
 }
 
 func TestResolveTokenGroupChainValidatesEveryGroup(t *testing.T) {
