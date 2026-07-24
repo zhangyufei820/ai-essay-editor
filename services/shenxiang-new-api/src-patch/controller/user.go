@@ -1474,7 +1474,6 @@ func UpdateUserSetting(c *gin.Context) {
 		AcceptUnsetRatioModel:            req.AcceptUnsetModelRatioModel,
 		RecordIpLog:                      req.RecordIpLog,
 		BillingPreference:                existingSettings.BillingPreference,
-		LegacyMonthlyCardClaudeEnabled:   existingSettings.LegacyMonthlyCardClaudeEnabled,
 		TextPricingGroup:                 existingSettings.TextPricingGroup,
 	}
 

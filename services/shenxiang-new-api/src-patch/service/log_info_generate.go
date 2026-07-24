@@ -206,9 +206,6 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other map[string]interf
 	if relayInfo.UserSetting.BillingPreference != "" {
 		other["billing_preference"] = relayInfo.UserSetting.BillingPreference
 	}
-	if relayInfo.UserSetting.LegacyMonthlyCardClaudeEnabled && LegacyMonthlyCardClaudeSupportsModel(relayInfo.OriginModelName) {
-		other["legacy_monthly_card_claude_enabled"] = true
-	}
 	if relayInfo.BillingSource == "image_benefit" {
 		other["wallet_quota_deducted"] = 0
 	}
