@@ -162,6 +162,9 @@ function main() {
   if (!gptImage2Block.includes('resolutions: GPT_IMAGE_2_RESOLUTIONS')) {
     errors.push('gpt-image-2-4K must use GPT_IMAGE_2_RESOLUTIONS')
   }
+  if (!gptImage2Block.includes('maxCount: 1')) {
+    errors.push('gpt-image-2-4K must limit image generations to one')
+  }
 
   if (!discountImage2Block) {
     errors.push('classic media playground must expose public model 特价 image-2')
@@ -191,6 +194,9 @@ function main() {
     if (!classic.includes(marker)) {
       errors.push(`image workflow/model guard missing marker: ${marker}`)
     }
+    if (!discountImage2Block.includes('maxCount: 1')) {
+      errors.push('特价 image-2 must limit image generations to one')
+    }
   }
 
   if (!stableImage2Block) {
@@ -204,6 +210,9 @@ function main() {
     }
     if (!stableImage2Block.includes("priceLabel: '¥0.135/张'")) {
       errors.push('官转image 2稳定 must show ¥0.135 fixed price')
+    }
+    if (!stableImage2Block.includes('maxCount: 1')) {
+      errors.push('官转image 2稳定 must limit image generations to one')
     }
   }
 
