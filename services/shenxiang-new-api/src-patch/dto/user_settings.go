@@ -15,9 +15,8 @@ type UserSetting struct {
 	RecordIpLog                      bool    `json:"record_ip_log,omitempty"`                        // 是否记录请求和错误日志IP
 	SidebarModules                   string  `json:"sidebar_modules,omitempty"`                      // SidebarModules 左侧边栏模块配置
 	BillingPreference                string  `json:"billing_preference,omitempty"`                   // BillingPreference 扣费策略（订阅/钱包）
-	LegacyMonthlyCardClaudeEnabled   bool    `json:"legacy_monthly_card_claude_enabled,omitempty"`
-	TextPricingGroup                 string  `json:"text_pricing_group,omitempty"` // TextPricingGroup 文本请求倍率分组（default/discount）
-	Language                         string  `json:"language,omitempty"`           // Language 用户语言偏好 (zh, en)
+	TextPricingGroup                 string  `json:"text_pricing_group,omitempty"`                   // TextPricingGroup 文本请求倍率分组（default/discount）
+	Language                         string  `json:"language,omitempty"`                             // Language 用户语言偏好 (zh, en)
 }
 
 var (

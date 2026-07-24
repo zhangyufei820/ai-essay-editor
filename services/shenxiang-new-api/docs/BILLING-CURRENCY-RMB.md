@@ -86,12 +86,11 @@ monthly_quota = floor(月卡人民币价格 / USDExchangeRate * QuotaPerUnit)
 
 任何历史月卡如果 `currency != CNY`，或 quota 反算人民币与标题价格不一致，都属于数据异常，必须先保留快照，再通过可审计、可回滚的事务修正。
 
-### 旧 VIP Claude 兼容权益
+### 月卡模型范围
 
-- `legacy_monthly_card_claude_enabled` 是用户级旧 VIP 兼容开关，默认关闭，不得因此向所有月卡用户开放 Claude。
-- 开关仅在用户存在有效月卡时生效，并仅允许既有 Claude 文本模型从月卡扣费；视频、Grok 和其他非月卡模型仍按原规则处理。
-- Claude 请求按网站人民币零售价的 `1x` quota 扣减，不享受新月卡文本价值赠送倍率。
-- 成功消费日志必须同时记录 `billing_source=subscription`、实际 `subscription_id` 和 `legacy_monthly_card_claude_enabled=true`，便于逐请求审计。
+- 现有月卡仅支持 `monthlyCardAllowedModels` 白名单中的 OpenAI/Codex 系列模型及 OpenAI 图像福利模型。
+- Claude 不属于现有月卡权益，必须使用余额或后续单独发布的 Claude 月卡；不得以用户设置、Key 名称或历史兼容逻辑绕过该限制。
+- 成功月卡消费日志必须记录 `billing_source=subscription` 与实际 `subscription_id`，便于逐请求审计。
 
 ## 修改与审计要求
 
