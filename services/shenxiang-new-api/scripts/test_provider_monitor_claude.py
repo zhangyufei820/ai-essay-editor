@@ -44,12 +44,26 @@ class ProviderMonitorClaudeTest(unittest.TestCase):
     def test_claude_channels_are_monitored_as_isolated_families(self) -> None:
         families = {family.name: family for family in self.module.TEXT_FAMILIES}
 
-        self.assertEqual(families["claude_kiro_text"].channel_ids, (46,))
-        self.assertEqual(families["claude_kiro_stable_text"].channel_ids, (47,))
+        self.assertEqual(families["claude_kiro_text"].channel_ids, (50, 46))
+        self.assertEqual(families["claude_kiro_stable_text"].channel_ids, (51, 47))
         self.assertEqual(families["claude_ccmax_terminal_text"].channel_ids, (48,))
         self.assertEqual(families["claude_external_text"].channel_ids, (49,))
         self.assertEqual(families["claude_ccmax_terminal_text"].request_format, "messages")
         self.assertEqual(families["claude_external_text"].request_format, "messages")
+        self.assertEqual(
+            families["claude_kiro_text"].expected_tags,
+            {
+                50: "kiro-primary-20260724",
+                46: "xingren-claude-pdhlzy-kiro",
+            },
+        )
+        self.assertEqual(
+            families["claude_kiro_stable_text"].expected_tags,
+            {
+                51: "kiro-stable-primary-20260724",
+                47: "xingren-claude-pdhlzy-kiro-stable",
+            },
+        )
         self.assertEqual(
             families["claude_ccmax_terminal_text"].expected_tags,
             {48: "xingren-claude-pdhlzy-ccmax-terminal"},

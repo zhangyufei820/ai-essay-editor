@@ -127,10 +127,13 @@ TEXT_FAMILIES = (
             "claude-sonnet-4-6",
             "claude-sonnet-5",
         ),
-        channel_ids=(46,),
-        baseline_priorities={46: 10},
+        channel_ids=(50, 46),
+        baseline_priorities={50: 20, 46: 10},
         standalone=True,
-        expected_tags={46: "xingren-claude-pdhlzy-kiro"},
+        expected_tags={
+            50: "kiro-primary-20260724",
+            46: "xingren-claude-pdhlzy-kiro",
+        },
     ),
     TextFamily(
         name="claude_kiro_stable_text",
@@ -145,10 +148,13 @@ TEXT_FAMILIES = (
             "claude-sonnet-4-6",
             "claude-sonnet-5",
         ),
-        channel_ids=(47,),
-        baseline_priorities={47: 20},
+        channel_ids=(51, 47),
+        baseline_priorities={51: 30, 47: 20},
         standalone=True,
-        expected_tags={47: "xingren-claude-pdhlzy-kiro-stable"},
+        expected_tags={
+            51: "kiro-stable-primary-20260724",
+            47: "xingren-claude-pdhlzy-kiro-stable",
+        },
     ),
     TextFamily(
         name="claude_ccmax_terminal_text",
