@@ -132,6 +132,18 @@ PDHLZY_CLAUDE_CHANNEL_GROUPS = {
     "xingren-claude-pdhlzy-ccmax-terminal": "ccmax-terminal",
     "xingren-claude-pdhlzy-claude-external": "claude-external",
 }
+WANGWANG_CLAUDE_CHANNEL_GROUPS = {
+    "kiro-primary-20260724": "kiro",
+    "kiro-stable-primary-20260724": "kiro-stable",
+}
+CLAUDE_CHANNEL_GROUPS = {
+    **PDHLZY_CLAUDE_CHANNEL_GROUPS,
+    **WANGWANG_CLAUDE_CHANNEL_GROUPS,
+}
+CLAUDE_CHANNEL_TAGS_BY_GROUP = {
+    group: tuple(tag for tag, tag_group in CLAUDE_CHANNEL_GROUPS.items() if tag_group == group)
+    for group in set(CLAUDE_CHANNEL_GROUPS.values())
+}
 PDHLZY_CLAUDE_GROUPS = frozenset(PDHLZY_CLAUDE_CHANNEL_GROUPS.values())
 SUPPLIER_EXPOSED_MARKERS = (
     "ccapi",
@@ -1968,7 +1980,7 @@ def sync_abilities() -> None:
             *DISCOUNT_TEXT_CHANNEL_TAGS,
             *PLUS_TEXT_CHANNEL_TAGS,
             *GROK45_CHANNEL_TAGS,
-            *PDHLZY_CLAUDE_CHANNEL_GROUPS,
+            *CLAUDE_CHANNEL_GROUPS,
             DISCOUNT_IMAGE2_CHANNEL_TAG,
         )
     )
@@ -2041,19 +2053,20 @@ def sync_abilities() -> None:
             + sql_quote(model)
             + ");"
         )
-    for pdhlzy_tag, pdhlzy_group in PDHLZY_CLAUDE_CHANNEL_GROUPS.items():
+    for claude_group, allowed_tags in CLAUDE_CHANNEL_TAGS_BY_GROUP.items():
+        allowed_tags_sql = ", ".join(sql_quote(tag) for tag in allowed_tags)
         statements.extend(
             [
-                "UPDATE channels SET status = 2 WHERE tag = "
-                + sql_quote(pdhlzy_tag)
-                + " AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
-                + sql_quote(pdhlzy_group)
-                + ";",
-                "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
-                + sql_quote(pdhlzy_tag)
-                + " AND FIND_IN_SET("
-                + sql_quote(pdhlzy_group)
+                "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') NOT IN ("
+                + allowed_tags_sql
+                + ") AND FIND_IN_SET("
+                + sql_quote(claude_group)
                 + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
+                "UPDATE channels SET status = 2 WHERE tag IN ("
+                + allowed_tags_sql
+                + ") AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+                + sql_quote(claude_group)
+                + ";",
             ]
         )
     invalid_discount_channels: list[str] = []
@@ -2155,8 +2168,8 @@ def sync_abilities() -> None:
             else:
                 invalid_gemini_ddpapi_channels.append(channel_id)
                 sync_groups = []
-        elif tag in PDHLZY_CLAUDE_CHANNEL_GROUPS:
-            expected_group = PDHLZY_CLAUDE_CHANNEL_GROUPS[tag]
+        elif tag in CLAUDE_CHANNEL_GROUPS:
+            expected_group = CLAUDE_CHANNEL_GROUPS[tag]
             if channel_groups != [expected_group]:
                 invalid_pdhlzy_channels.append(channel_id)
                 sync_groups = []
@@ -2216,7 +2229,7 @@ def sync_abilities() -> None:
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
                     )
-                elif tag in PDHLZY_CLAUDE_CHANNEL_GROUPS:
+                elif tag in CLAUDE_CHANNEL_GROUPS:
                     pass
                 elif tag not in grok45_channel_tags:
                     current_channel_conditions.extend(
@@ -2369,26 +2382,31 @@ def sync_abilities() -> None:
                 + ");",
             ]
         )
-    for pdhlzy_tag, pdhlzy_group in PDHLZY_CLAUDE_CHANNEL_GROUPS.items():
+    for claude_group, allowed_tags in CLAUDE_CHANNEL_TAGS_BY_GROUP.items():
+        allowed_tags_sql = ", ".join(sql_quote(tag) for tag in allowed_tags)
         statements.extend(
             [
                 "UPDATE abilities SET enabled = 0 WHERE `group` = "
-                + sql_quote(pdhlzy_group)
-                + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
-                + sql_quote(pdhlzy_tag)
+                + sql_quote(claude_group)
+                + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag IN ("
+                + allowed_tags_sql
+                + ") AND REPLACE(COALESCE(`group`, ''), ' ', '') = "
+                + sql_quote(claude_group)
                 + ");",
-                "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE tag = "
-                + sql_quote(pdhlzy_tag)
-                + ") AND `group` <> "
-                + sql_quote(pdhlzy_group)
-                + ";",
+                "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE tag IN ("
+                + allowed_tags_sql
+                + ") AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+                + sql_quote(claude_group)
+                + ");",
                 "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
-                "SET ability.enabled = 0 WHERE channel.tag = "
-                + sql_quote(pdhlzy_tag)
+                "SET ability.enabled = 0 WHERE channel.tag IN ("
+                + allowed_tags_sql
+                + ") AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = "
+                + sql_quote(claude_group)
                 + " AND FIND_IN_SET(ability.model, REPLACE(COALESCE(channel.models, ''), ' ', '')) = 0;",
-                "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE status <> 1 AND tag = "
-                + sql_quote(pdhlzy_tag)
-                + ");",
+                "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE status <> 1 AND tag IN ("
+                + allowed_tags_sql
+                + "));",
             ]
         )
     statements.append("COMMIT;")
