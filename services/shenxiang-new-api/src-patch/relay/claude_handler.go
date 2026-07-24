@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -18,7 +19,32 @@ import (
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
+
+func normalizeWangwangClaudeFunctionTools(jsonData []byte, info *relaycommon.RelayInfo) ([]byte, error) {
+	if info == nil {
+		return jsonData, nil
+	}
+	baseURL, err := url.Parse(info.ChannelBaseUrl)
+	if err != nil || !strings.EqualFold(baseURL.Hostname(), "wangwang.sbs") {
+		return jsonData, nil
+	}
+
+	toolCount := int(gjson.GetBytes(jsonData, "tools.#").Int())
+	for index := 0; index < toolCount; index++ {
+		path := fmt.Sprintf("tools.%d.type", index)
+		if !strings.EqualFold(gjson.GetBytes(jsonData, path).String(), "function") {
+			continue
+		}
+		jsonData, err = sjson.DeleteBytes(jsonData, path)
+		if err != nil {
+			return nil, fmt.Errorf("remove Wangwang function tool type at index %d: %w", index, err)
+		}
+	}
+	return jsonData, nil
+}
 
 func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 
@@ -179,6 +205,10 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			if err != nil {
 				return newAPIErrorFromParamOverride(err)
 			}
+		}
+		jsonData, err = normalizeWangwangClaudeFunctionTools(jsonData, info)
+		if err != nil {
+			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 		}
 
 		logDebugRequestBody(c, jsonData)
