@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -220,6 +221,24 @@ func TestApplyPlaygroundTextPricingPreferenceOverridesStaleClientGroup(t *testin
 		t.Fatalf("update preference: %v", err)
 	}
 	assertGroup(model.TextPricingGroupDiscount, model.TextPricingGroupDefault)
+}
+
+func TestApplyKimiK3PricingRouteOverridesDiscountAndPlusGroups(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tokenGroup := range []string{service.DiscountPricingGroupName, service.PlusPricingGroupName} {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		common.SetContextKey(ctx, constant.ContextKeyUsingGroup, tokenGroup)
+		modelRequest := &ModelRequest{Model: service.KimiK3ModelName, Group: tokenGroup}
+
+		got := applyKimiK3PricingRoute(ctx, modelRequest)
+
+		require.Equal(t, service.KimiK3PricingGroupName, got)
+		require.Equal(t, service.KimiK3PricingGroupName, modelRequest.Group)
+		require.Equal(t, service.KimiK3PricingGroupName, common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup))
+		require.Equal(t, []string{service.KimiK3PricingGroupName}, service.GetTokenGroupChain(ctx))
+		require.Equal(t, service.KimiK3PricingGroupName, recorder.Header().Get("X-Aiphui-Pricing-Group"))
+	}
 }
 
 func truncateMiddlewareTestDB(t *testing.T) {

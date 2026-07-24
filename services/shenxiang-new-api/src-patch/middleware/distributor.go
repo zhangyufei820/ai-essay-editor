@@ -150,6 +150,10 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
+				if kimiGroup := applyKimiK3PricingRoute(c, modelRequest); kimiGroup != "" {
+					usingGroup = kimiGroup
+				}
+
 				if routedChannel, routedGroup, handled, routeErr := selectGrokVideo15DurationChannel(c, modelRequest, usingGroup); handled {
 					if routeErr != nil {
 						if errors.Is(routeErr, errInvalidGrokVideo15Duration) {
@@ -295,6 +299,17 @@ func applyPlaygroundTextPricingPreference(c *gin.Context, modelRequest *ModelReq
 	service.SetTokenGroupChain(c, []string{preferredGroup})
 	c.Header("X-Aiphui-Pricing-Group", preferredGroup)
 	return preferredGroup, nil
+}
+
+func applyKimiK3PricingRoute(c *gin.Context, modelRequest *ModelRequest) string {
+	if c == nil || modelRequest == nil || !service.IsKimiK3Model(modelRequest.Model) {
+		return ""
+	}
+	group := service.KimiK3PricingGroupName
+	modelRequest.Group = group
+	service.SetTokenGroupChain(c, []string{group})
+	c.Header("X-Aiphui-Pricing-Group", group)
+	return group
 }
 
 func canUsePlaygroundGroup(usingGroup, requestedGroup, modelName string, managedGrok45Entitled bool) bool {

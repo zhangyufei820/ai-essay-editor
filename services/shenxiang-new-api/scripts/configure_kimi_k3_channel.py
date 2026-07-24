@@ -19,7 +19,7 @@ import sync_app_model_permissions as sync
 MODEL_NAME = "kimi-k3"
 CHANNEL_TAG = "xingren-kimi-k3"
 CHANNEL_NAME = "Kimi K3 独立通道"
-CHANNEL_GROUP = "default"
+CHANNEL_GROUP = "kimi"
 CHANNEL_REMARK = "Kimi K3 独立通道"
 EXPECTED_UPSTREAM_BASE_URL = "https://www.geek2api.com"
 UPSTREAM_KEY_ENV = "KIMI_K3_UPSTREAM_API_KEY"

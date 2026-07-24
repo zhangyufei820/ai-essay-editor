@@ -123,6 +123,9 @@ PLUS_TEXT_MODELS_REGEX = (
 )
 GROK45_MODEL = "grok-4.5"
 GROK45_GROUP = "grok45"
+KIMI_K3_MODEL = "kimi-k3"
+KIMI_K3_GROUP = "kimi"
+KIMI_K3_CHANNEL_TAG = "xingren-kimi-k3"
 GROK45_CHANNEL_TAG = "xingren-grok45"
 GROK45_PRIMARY_CHANNEL_TAG = "xingren-grok45-primary"
 GROK45_CHANNEL_TAGS = (GROK45_PRIMARY_CHANNEL_TAG, GROK45_CHANNEL_TAG)
@@ -1343,7 +1346,7 @@ def system_token_profiles(profiles: dict[str, list[str]]) -> dict[str, list[str]
 
 
 def active_groups() -> list[str]:
-    groups = {"default", "standard", "pro", "code", "internal"}
+    groups = {"default", "standard", "pro", "code", "internal", KIMI_K3_GROUP}
     for row in mysql("SELECT DISTINCT `group` FROM users WHERE status = 1 AND `group` <> ''"):
         if row and row[0]:
             groups.add(row[0])
@@ -1994,6 +1997,7 @@ def sync_abilities() -> None:
             *DISCOUNT_TEXT_CHANNEL_TAGS,
             *PLUS_TEXT_CHANNEL_TAGS,
             *GROK45_CHANNEL_TAGS,
+            KIMI_K3_CHANNEL_TAG,
             *CLAUDE_CHANNEL_GROUPS,
             DISCOUNT_IMAGE2_CHANNEL_TAG,
         )
@@ -2050,6 +2054,18 @@ def sync_abilities() -> None:
         + sql_quote(PUBLIC_GROK15_1080_VIDEO_CHANNEL_GROUPS)
         + ");",
         "UPDATE channels SET status = 2 WHERE tag = "
+        + sql_quote(KIMI_K3_CHANNEL_TAG)
+        + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+        + sql_quote(KIMI_K3_GROUP)
+        + " OR REPLACE(COALESCE(models, ''), ' ', '') <> "
+        + sql_quote(KIMI_K3_MODEL)
+        + ");",
+        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
+        + sql_quote(KIMI_K3_CHANNEL_TAG)
+        + " AND FIND_IN_SET("
+        + sql_quote(KIMI_K3_GROUP)
+        + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
+        "UPDATE channels SET status = 2 WHERE tag = "
         + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
         + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') NOT IN ('internal', "
         + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
@@ -2086,6 +2102,7 @@ def sync_abilities() -> None:
     invalid_discount_channels: list[str] = []
     invalid_plus_channels: list[str] = []
     invalid_grok_channels: list[str] = []
+    invalid_kimi_channels: list[str] = []
     invalid_grok1080_channels: list[str] = []
     invalid_discount_image2_channels: list[str] = []
     invalid_gemini_ddpapi_channels: list[str] = []
@@ -2132,6 +2149,17 @@ def sync_abilities() -> None:
                 sync_groups = channel_groups
         elif GROK45_GROUP in channel_groups:
             invalid_grok_channels.append(channel_id)
+            sync_groups = []
+        elif tag == KIMI_K3_CHANNEL_TAG:
+            if channel_groups != [KIMI_K3_GROUP] or channel_models != [KIMI_K3_MODEL]:
+                invalid_kimi_channels.append(channel_id)
+                sync_groups = []
+            else:
+                # Kimi is visible to normal token groups, but requests are
+                # forced to the dedicated Kimi group before channel selection.
+                sync_groups = groups
+        elif KIMI_K3_GROUP in channel_groups:
+            invalid_kimi_channels.append(channel_id)
             sync_groups = []
         elif tag == PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG:
             normalized_groups = ",".join(channel_groups)
@@ -2212,6 +2240,10 @@ def sync_abilities() -> None:
                 continue
             if tag in grok45_channel_tags and model != GROK45_MODEL:
                 continue
+            if model == KIMI_K3_MODEL and tag != KIMI_K3_CHANNEL_TAG:
+                continue
+            if tag == KIMI_K3_CHANNEL_TAG and model != KIMI_K3_MODEL:
+                continue
             if not should_sync_ability_model(model):
                 continue
             if model not in existing_models:
@@ -2243,7 +2275,7 @@ def sync_abilities() -> None:
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
                     )
-                elif tag in CLAUDE_CHANNEL_GROUPS:
+                elif tag in CLAUDE_CHANNEL_GROUPS or tag == KIMI_K3_CHANNEL_TAG:
                     pass
                 elif tag not in grok45_channel_tags:
                     current_channel_conditions.extend(
@@ -2362,6 +2394,19 @@ def sync_abilities() -> None:
             + "));",
             "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
             "SET ability.enabled = 0 WHERE channel.tag = "
+            + sql_quote(KIMI_K3_CHANNEL_TAG)
+            + " AND (ability.model <> "
+            + sql_quote(KIMI_K3_MODEL)
+            + " OR REPLACE(COALESCE(channel.`group`, ''), ' ', '') <> "
+            + sql_quote(KIMI_K3_GROUP)
+            + ");",
+            "UPDATE abilities SET enabled = 0 WHERE model = "
+            + sql_quote(KIMI_K3_MODEL)
+            + " AND channel_id NOT IN (SELECT id FROM channels WHERE status = 1 AND tag = "
+            + sql_quote(KIMI_K3_CHANNEL_TAG)
+            + ");",
+            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+            "SET ability.enabled = 0 WHERE channel.tag = "
             + sql_quote(PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG)
             + " AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = 'internal' "
             "AND ability.`group` <> 'internal';",
@@ -2439,6 +2484,11 @@ def sync_abilities() -> None:
         raise RuntimeError(
             "Grok group isolation violation; disabled channel count: "
             + str(len(invalid_grok_channels))
+        )
+    if invalid_kimi_channels:
+        raise RuntimeError(
+            "Kimi K3 group isolation violation; disabled channel count: "
+            + str(len(invalid_kimi_channels))
         )
     if invalid_grok1080_channels:
         raise RuntimeError(

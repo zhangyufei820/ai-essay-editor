@@ -123,6 +123,10 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 		result.FallbackReason = "grok45_static_pricing"
 		return currentQuota, result
 	}
+	if IsKimiK3PricingGroup(relayInfo) {
+		result.FallbackReason = "kimi_k3_static_pricing"
+		return currentQuota, result
+	}
 	declaredCurrency, reason := upstreamCostCurrencyForChannel(relayInfo)
 	if reason != "" {
 		result.FallbackReason = reason

@@ -57,6 +57,10 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 		groupRatioInfo.GroupRatio = service.Grok45PricingGroupRatio
 		return groupRatioInfo
 	}
+	if service.IsKimiK3PricingGroup(relayInfo) {
+		groupRatioInfo.GroupRatio = service.KimiK3PricingGroupRatio
+		return groupRatioInfo
+	}
 
 	// check user group special ratio
 	userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)

@@ -60,3 +60,22 @@ func TestModelPriceHelperPinsExactGrok45CNYRatios(t *testing.T) {
 	require.Equal(t, service.Grok45CacheReadRatio, priceData.CacheRatio)
 	require.Equal(t, service.Grok45PricingGroupRatio, priceData.GroupRatioInfo.GroupRatio)
 }
+
+func TestHandleGroupRatioPinsKimiK3Price(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	originalGroupRatio := ratio_setting.GroupRatio2JSONString()
+	originalSpecialRatio := ratio_setting.GroupGroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatio))
+		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(originalSpecialRatio))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"kimi":0.25}`))
+	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"vip":{"kimi":0.5}}`))
+	ctx, _ := gin.CreateTestContext(nil)
+	relayInfo := &relaycommon.RelayInfo{UserGroup: "vip", UsingGroup: service.KimiK3PricingGroupName}
+
+	ratioInfo := HandleGroupRatio(ctx, relayInfo)
+
+	require.Equal(t, service.KimiK3PricingGroupRatio, ratioInfo.GroupRatio)
+	require.False(t, ratioInfo.HasSpecialRatio)
+}

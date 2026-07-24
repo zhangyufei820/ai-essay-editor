@@ -48,7 +48,7 @@ class ConfigureKimiK3ChannelTests(unittest.TestCase):
         sql = self.module.build_apply_sql(secret, "https://www.geek2api.com")
 
         self.assertIn("'xingren-kimi-k3'", sql)
-        self.assertIn("'default'", sql)
+        self.assertIn("'kimi'", sql)
         self.assertIn("model = 'kimi-k3' AND channel_id <> @kimi_channel_id", sql)
         self.assertNotIn("grok45", sql)
         self.assertIn(secret, sql)

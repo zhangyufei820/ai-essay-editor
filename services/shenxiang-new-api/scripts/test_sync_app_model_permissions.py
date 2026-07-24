@@ -55,6 +55,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(prices["longcontext_input_cny"], self.module.Decimal("13"))
         self.assertEqual(prices["longcontext_output_cny"], self.module.Decimal("65"))
 
+    def test_kimi_k3_uses_a_dedicated_fixed_price_group(self) -> None:
+        self.assertEqual(self.module.KIMI_K3_MODEL, "kimi-k3")
+        self.assertEqual(self.module.KIMI_K3_GROUP, "kimi")
+        self.assertEqual(self.module.KIMI_K3_CHANNEL_TAG, "xingren-kimi-k3")
+        self.module.mysql = lambda _query: []
+        self.assertIn(self.module.KIMI_K3_GROUP, self.module.active_groups())
+
     def test_discount_text_models_are_exactly_the_public_text_aliases(self) -> None:
         self.assertEqual(
             self.module.DISCOUNT_TEXT_ALLOWED_MODELS,
