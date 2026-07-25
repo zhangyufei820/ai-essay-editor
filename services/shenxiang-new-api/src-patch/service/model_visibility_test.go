@@ -39,9 +39,9 @@ func TestImage2PublicAliasesDoNotCrossAuthorize(t *testing.T) {
 	))
 }
 
-func TestOnlyLegacyDiscountImage2NameIsRetired(t *testing.T) {
+func TestDiscountImage2PrimaryNameIsAvailable(t *testing.T) {
 	require.False(t, IsRetiredImageModelName(PublicDiscountImage2ModelName))
 	require.False(t, IsRetiredImageModelName(InternalDiscountImage2ModelName))
-	require.True(t, IsRetiredImageModelName(RetiredDiscountImage2ModelName))
+	require.False(t, IsRetiredImageModelName(FallbackDiscountImage2ModelName))
 	require.False(t, IsRetiredImageModelName(PublicStableImage2ModelName))
 }

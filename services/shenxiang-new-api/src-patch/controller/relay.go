@@ -87,6 +87,8 @@ const (
 	playgroundImage2Channel24TempCircuitChannelID = 24
 	playgroundImage2Channel16TempCircuitChannelID = 16
 	playgroundImage2VipMappedChannelID            = 4
+	discountImage2PrimaryChannelID                = 27
+	discountImage2FallbackChannelID               = 36
 
 	playgroundForcedChannelIDsKey           = "playground_forced_channel_ids"
 	playgroundImage2TempCircuitScopeKey     = "playground_image2_temp_circuit_scope"
@@ -383,6 +385,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		maxRetryTimes = (maxRetryTimes+1)*groupChainLength - 1
 	}
 	forcePlaygroundImageChannel(c, request, relayInfo)
+	if forcedChannelIDs := getPlaygroundForcedChannelIDs(c); len(forcedChannelIDs) > 1 && maxRetryTimes < len(forcedChannelIDs)-1 {
+		maxRetryTimes = len(forcedChannelIDs) - 1
+	}
 
 	for ; retryParam.GetRetry() <= maxRetryTimes; retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
@@ -857,11 +862,31 @@ func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo 
 		return
 	}
 	path := c.Request.URL.Path
-	if (!strings.HasPrefix(path, "/pg/images/") && !strings.HasPrefix(path, "/v1/images/")) || relayInfo.OriginModelName != "gpt-image-2-4K" {
+	if !strings.HasPrefix(path, "/pg/images/") && !strings.HasPrefix(path, "/v1/images/") {
 		return
 	}
 	imageReq, ok := request.(*dto.ImageRequest)
 	if !ok || imageReq == nil {
+		return
+	}
+	if relayInfo.OriginModelName == service.InternalDiscountImage2ModelName {
+		setPlaygroundForcedChannelIDs(c, []int{discountImage2PrimaryChannelID, discountImage2FallbackChannelID})
+		for _, channelID := range getPlaygroundForcedChannelIDs(c) {
+			if !model.IsChannelEnabledForGroupModel(relayInfo.TokenGroup, relayInfo.OriginModelName, channelID) {
+				continue
+			}
+			channel, err := model.CacheGetChannel(channelID)
+			if err != nil || channel == nil || channel.Status != common.ChannelStatusEnabled {
+				continue
+			}
+			c.Set("playground_forced_channel_id", channelID)
+			logger.LogInfo(c, "discount image-2 selected configured channel")
+			return
+		}
+		c.Set("playground_forced_channel_unavailable", true)
+		return
+	}
+	if relayInfo.OriginModelName != "gpt-image-2-4K" {
 		return
 	}
 	resolution := playgroundImage2ForcedChannelResolution(imageReq)

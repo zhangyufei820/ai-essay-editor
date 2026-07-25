@@ -28,17 +28,20 @@ CLAUDE_USER_TOKEN_NAME = "claude"
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
 DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
-INTERNAL_DISCOUNT_IMAGE2_MODEL = "internal-image2-discount-v2"
-RETIRED_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
-DISCOUNT_IMAGE2_CHANNEL_TAG = "xingren-discount-image2-v2"
+INTERNAL_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
+FALLBACK_DISCOUNT_IMAGE2_MODEL = "internal-image2-discount-v2"
+DISCOUNT_IMAGE2_CHANNEL_TAG = "geek2api-image2"
+DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG = "xingren-discount-image2-v2"
+DISCOUNT_IMAGE2_CHANNEL_TAGS = (
+    DISCOUNT_IMAGE2_CHANNEL_TAG,
+    DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG,
+)
 DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
 DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：仅支持文生图；已验证 1K/2K/4K 方图，固定 high 质量与 PNG 输出。人民币 1K ¥0.06、2K ¥0.09、4K ¥0.10/张。"
 DISCOUNT_IMAGE2_TAGS = "image,openai,internal-hidden"
 DISCOUNT_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
 DISCOUNT_IMAGE2_BASE_PRICE_CNY = Decimal("0.06")
-RETIRED_IMAGE_MODELS = (
-    RETIRED_DISCOUNT_IMAGE2_MODEL,
-)
+RETIRED_IMAGE_MODELS: tuple[str, ...] = ()
 INTERNAL_STABLE_IMAGE2_MODEL = "internal-image2-stable-v1"
 STABLE_IMAGE2_PUBLIC_MODEL = "官转image 2稳定"
 STABLE_IMAGE2_DESCRIPTION = "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.135/张。"
@@ -71,7 +74,7 @@ CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL,
-    RETIRED_DISCOUNT_IMAGE2_MODEL,
+    FALLBACK_DISCOUNT_IMAGE2_MODEL,
     INTERNAL_STABLE_IMAGE2_MODEL,
 }
 PUBLIC_ALIAS_BACKING_MODELS = {
@@ -1595,6 +1598,34 @@ def ensure_discount_image2_backing_model() -> None:
     mysql_exec("\n".join(statements))
 
 
+def ensure_discount_image2_primary_and_fallback_channels() -> None:
+    """Keep the verified primary/fallback pair ordered without touching credentials."""
+    mapping = json.dumps({INTERNAL_DISCOUNT_IMAGE2_MODEL: RAW_GPT_IMAGE2_MODEL}, separators=(",", ":"))
+    statements = [
+        "START TRANSACTION;",
+        "UPDATE channels SET status = 1, priority = 16, weight = 100, models = "
+        + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+        + ", `group` = "
+        + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
+        + ", model_mapping = "
+        + sql_quote(mapping)
+        + " WHERE tag = "
+        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+        + ";",
+        "UPDATE channels SET status = 1, priority = 0, weight = 100, models = "
+        + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+        + ", `group` = "
+        + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
+        + ", model_mapping = "
+        + sql_quote(mapping)
+        + " WHERE tag = "
+        + sql_quote(DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG)
+        + ";",
+        "COMMIT;",
+    ]
+    mysql_exec("\n".join(statements))
+
+
 def ensure_stable_image2_backing_model() -> None:
     statements = [
         "START TRANSACTION;",
@@ -1999,7 +2030,7 @@ def sync_abilities() -> None:
             *GROK45_CHANNEL_TAGS,
             KIMI_K3_CHANNEL_TAG,
             *CLAUDE_CHANNEL_GROUPS,
-            DISCOUNT_IMAGE2_CHANNEL_TAG,
+            *DISCOUNT_IMAGE2_CHANNEL_TAGS,
         )
     )
     discount_allowed_models = set(DISCOUNT_TEXT_ALLOWED_MODELS)
@@ -2073,8 +2104,9 @@ def sync_abilities() -> None:
         + " AND FIND_IN_SET("
         + sql_quote(KIMI_K3_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
-        "UPDATE channels SET status = 2 WHERE tag = "
-        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+        "UPDATE channels SET status = 2 WHERE tag IN ("
+        + ", ".join(sql_quote(tag) for tag in DISCOUNT_IMAGE2_CHANNEL_TAGS)
+        + ")"
         + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') NOT IN ('internal', "
         + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
         + ") OR REPLACE(COALESCE(models, ''), ' ', '') <> "
@@ -2183,7 +2215,7 @@ def sync_abilities() -> None:
             else:
                 invalid_grok1080_channels.append(channel_id)
                 sync_groups = []
-        elif tag == DISCOUNT_IMAGE2_CHANNEL_TAG:
+        elif tag in DISCOUNT_IMAGE2_CHANNEL_TAGS:
             normalized_groups = ",".join(channel_groups)
             if channel_models != [INTERNAL_DISCOUNT_IMAGE2_MODEL]:
                 invalid_discount_image2_channels.append(channel_id)
@@ -2236,9 +2268,9 @@ def sync_abilities() -> None:
                 and group not in PDHLZY_CLAUDE_GROUPS
             ]
         for model in channel_models:
-            if model == INTERNAL_DISCOUNT_IMAGE2_MODEL and tag != DISCOUNT_IMAGE2_CHANNEL_TAG:
+            if model == INTERNAL_DISCOUNT_IMAGE2_MODEL and tag not in DISCOUNT_IMAGE2_CHANNEL_TAGS:
                 continue
-            if tag == DISCOUNT_IMAGE2_CHANNEL_TAG and model != INTERNAL_DISCOUNT_IMAGE2_MODEL:
+            if tag in DISCOUNT_IMAGE2_CHANNEL_TAGS and model != INTERNAL_DISCOUNT_IMAGE2_MODEL:
                 continue
             if model in gemini_tag_by_model and tag != gemini_tag_by_model[model]:
                 continue
@@ -2278,7 +2310,7 @@ def sync_abilities() -> None:
                     current_channel_conditions.append(
                         plus_text_models_allowed_sql("current_channel.models")
                     )
-                elif tag == DISCOUNT_IMAGE2_CHANNEL_TAG:
+                elif tag in DISCOUNT_IMAGE2_CHANNEL_TAGS:
                     current_channel_conditions.append(
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
@@ -2427,17 +2459,18 @@ def sync_abilities() -> None:
             + " AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = 'internal' "
             "AND ability.`group` <> 'internal';",
             "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
-            "SET ability.enabled = 0 WHERE channel.tag = "
-            + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+            "SET ability.enabled = 0 WHERE channel.tag IN ("
+            + ", ".join(sql_quote(tag) for tag in DISCOUNT_IMAGE2_CHANNEL_TAGS)
+            + ")"
             + " AND (ability.model <> "
             + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
             + " OR (REPLACE(COALESCE(channel.`group`, ''), ' ', '') = 'internal' "
             "AND ability.`group` <> 'internal'));",
             "UPDATE abilities SET enabled = 0 WHERE model = "
             + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
-            + " AND channel_id NOT IN (SELECT id FROM channels WHERE status = 1 AND tag = "
-            + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
-            + ");",
+            + " AND channel_id NOT IN (SELECT id FROM channels WHERE status = 1 AND tag IN ("
+            + ", ".join(sql_quote(tag) for tag in DISCOUNT_IMAGE2_CHANNEL_TAGS)
+            + "));",
         ]
     )
     for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
@@ -2664,8 +2697,8 @@ def refresh_codex() -> None:
 
 def main() -> int:
     ensure_public_video_models()
-    retired_discount_image2_result = retire_legacy_discount_image2()
     ensure_discount_image2_backing_model()
+    ensure_discount_image2_primary_and_fallback_channels()
     ensure_stable_image2_backing_model()
     ensure_gemini_ddpapi_image_models()
     sync_grok_image_metadata()
@@ -2700,7 +2733,6 @@ def main() -> int:
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
         + f", retired_claude={retired_claude_result}"
-        + f", retired_discount_image2={retired_discount_image2_result}"
     )
     return 0
 

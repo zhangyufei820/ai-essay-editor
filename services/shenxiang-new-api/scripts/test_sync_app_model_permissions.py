@@ -356,7 +356,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertTrue(self.module.is_disabled_ability_pair("21", "gpt-image-2"))
         self.assertFalse(self.module.is_disabled_ability_pair("8", "gpt-image-2-4K"))
 
-    def test_sync_abilities_skips_retired_discount_image2_models(self) -> None:
+    def test_sync_abilities_allows_primary_discount_image2_model(self) -> None:
         captured: list[str] = []
 
         def fake_mysql(query: str) -> list[list[str]]:
@@ -373,7 +373,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.sync_abilities()
 
         sql = "\n".join(captured)
-        self.assertNotIn("geek2api-image-2", sql)
+        self.assertIn("geek2api-image-2", sql)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("custom-geek2api-leak", sql)
 
@@ -687,62 +687,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("'default', 'gpt-5.5', 21", sql)
         self.assertNotIn("'discount', 'gpt-5.5', 21", sql)
 
-    def test_retire_legacy_discount_image2_preserves_new_public_product(self) -> None:
-        captured: list[str] = []
-
-        def fake_mysql(query: str) -> list[list[str]]:
-            if "FROM tokens" in query:
-                return [
-                    ["72", "key-72", "geek2api-image-2,官转image 2稳定"],
-                ]
-            if "FROM channels WHERE status = 2" in query:
-                return [["27"]]
-            if "FROM models WHERE status = 0" in query:
-                return [["61"]]
-            if "FROM abilities WHERE enabled = 0" in query:
-                return [["27"]]
-            return []
-
-        self.module.mysql = fake_mysql
-        self.module.parse_json_option = lambda _key: {
-            "特价 image-2": 1.0,
-            "geek2api-image-2": 2.0,
-            "other-image": 3.0,
-        }
-        self.module.parse_json_string_option = lambda _key: {
-            "特价 image-2": "retired-public",
-            "geek2api-image-2": "retired-internal",
-            "other-image": "keep",
-        }
-        self.module.mysql_exec = captured.append
-        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
-
-        result = self.module.retire_legacy_discount_image2()
-
-        self.assertEqual(
-            result,
-            {
-                "channels_disabled": 1,
-                "models_disabled": 1,
-                "abilities_disabled": 1,
-                "tokens_rewritten": 1,
-                "token_caches_deleted": 1,
-                "pricing_options_sanitized": 8,
-            },
-        )
-        self.assertEqual(len(captured), 2)
-        sql = captured[0]
-        self.assertTrue(sql.startswith("START TRANSACTION;"))
-        self.assertTrue(sql.endswith("COMMIT;"))
-        self.assertIn("UPDATE channels SET status = 2, priority = 0, weight = 0", sql)
-        self.assertNotIn("FIND_IN_SET('特价 image-2', COALESCE(models, ''))", sql)
-        self.assertIn("FIND_IN_SET('geek2api-image-2', COALESCE(models, ''))", sql)
-        self.assertIn("UPDATE abilities SET enabled = 0", sql)
-        self.assertIn("UPDATE models SET status = 0", sql)
-        self.assertIn("model_limits = '官转image 2稳定'", sql)
-        self.assertIn('"特价 image-2":1.0', sql)
-        self.assertIn('"特价 image-2":"retired-public"', sql)
-        self.assertEqual(captured[1], "CACHE:key-72")
+    def test_primary_discount_image2_is_not_retired(self) -> None:
+        self.assertFalse(self.module.is_retired_image_model("geek2api-image-2"))
 
     def test_ensure_discount_image2_backing_model_uses_public_metadata(self) -> None:
         captured: list[str] = []
@@ -751,7 +697,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.ensure_discount_image2_backing_model()
 
         sql = "\n".join(captured)
-        self.assertIn("internal-image2-discount-v2", sql)
+        self.assertIn("geek2api-image-2", sql)
         self.assertIn("特价 image-2", sql)
         self.assertIn("1K ¥0.06、2K ¥0.09、4K ¥0.10", sql)
         self.assertNotIn("new.ddpapi.top", sql)
@@ -1080,14 +1026,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             if "FROM channels" in query:
                 return [[
                     "45",
-                    "internal-image2-discount-v2",
+                    "geek2api-image-2",
                     "0",
                     "100",
-                    "xingren-discount-image2-v2",
+                    "geek2api-image2",
                     "internal",
                 ]]
             if "SELECT model_name FROM models" in query:
-                return [["internal-image2-discount-v2"]]
+                return [["geek2api-image-2"]]
             return []
 
         self.module.active_groups = lambda: ["default", "internal", "pro"]
@@ -1097,9 +1043,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.sync_abilities()
 
         sql = "\n".join(captured)
-        self.assertIn("SELECT 'internal', 'internal-image2-discount-v2', 45", sql)
-        self.assertNotIn("SELECT 'default', 'internal-image2-discount-v2', 45", sql)
-        self.assertNotIn("SELECT 'pro', 'internal-image2-discount-v2', 45", sql)
+        self.assertIn("SELECT 'internal', 'geek2api-image-2', 45", sql)
+        self.assertNotIn("SELECT 'default', 'geek2api-image-2', 45", sql)
+        self.assertNotIn("SELECT 'pro', 'geek2api-image-2', 45", sql)
         self.assertIn("ability.`group` <> 'internal'", sql)
 
     def test_sync_abilities_publishes_discount_image2_to_public_groups(self) -> None:
@@ -1109,14 +1055,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             if "FROM channels" in query:
                 return [[
                     "45",
-                    "internal-image2-discount-v2",
+                    "geek2api-image-2",
                     "0",
                     "100",
-                    "xingren-discount-image2-v2",
+                    "geek2api-image2",
                     "default,standard,pro,code,internal",
                 ]]
             if "SELECT model_name FROM models" in query:
-                return [["internal-image2-discount-v2"]]
+                return [["geek2api-image-2"]]
             return []
 
         self.module.active_groups = lambda: ["code", "default", "discount", "grok45", "internal", "pro", "standard"]
@@ -1127,9 +1073,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         sql = "\n".join(captured)
         for group in ("default", "standard", "pro", "code", "internal"):
-            self.assertIn(f"SELECT '{group}', 'internal-image2-discount-v2', 45", sql)
-        self.assertNotIn("SELECT 'discount', 'internal-image2-discount-v2', 45", sql)
-        self.assertNotIn("SELECT 'grok45', 'internal-image2-discount-v2', 45", sql)
+            self.assertIn(f"SELECT '{group}', 'geek2api-image-2', 45", sql)
+        self.assertNotIn("SELECT 'discount', 'geek2api-image-2', 45", sql)
+        self.assertNotIn("SELECT 'grok45', 'geek2api-image-2', 45", sql)
 
     def test_sync_abilities_disables_invalid_discount_image2_channel(self) -> None:
         captured: list[str] = []
@@ -1138,14 +1084,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             if "FROM channels" in query:
                 return [[
                     "45",
-                    "internal-image2-discount-v2",
+                    "geek2api-image-2",
                     "0",
                     "100",
-                    "xingren-discount-image2-v2",
+                    "geek2api-image2",
                     "default,internal",
                 ]]
             if "SELECT model_name FROM models" in query:
-                return [["internal-image2-discount-v2"]]
+                return [["geek2api-image-2"]]
             return []
 
         self.module.active_groups = lambda: ["default", "internal"]
@@ -1157,8 +1103,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         sql = "\n".join(captured)
         self.assertIn("UPDATE channels SET status = 2", sql)
-        self.assertNotIn("SELECT 'default', 'internal-image2-discount-v2', 45", sql)
-        self.assertNotIn("SELECT 'internal', 'internal-image2-discount-v2', 45", sql)
+        self.assertNotIn("SELECT 'default', 'geek2api-image-2', 45", sql)
+        self.assertNotIn("SELECT 'internal', 'geek2api-image-2', 45", sql)
 
     def test_sync_user_image_tokens_replaces_all_public_image_limits(self) -> None:
         captured: list[str] = []

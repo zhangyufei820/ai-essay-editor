@@ -698,6 +698,40 @@ function aspectRatioLabelForPixelSize(value) {
   return `${parsed.width / divisor}:${parsed.height / divisor}`;
 }
 
+function imageAspectRatioFromDimensions(width, height) {
+  const normalizedWidth = Math.floor(Number(width) || 0);
+  const normalizedHeight = Math.floor(Number(height) || 0);
+  if (normalizedWidth <= 0 || normalizedHeight <= 0) return '';
+  const divisor = gcd(normalizedWidth, normalizedHeight);
+  return `${normalizedWidth / divisor}:${normalizedHeight / divisor}`;
+}
+
+async function imageAspectRatioFromFile(file) {
+  if (!file || !String(file.type || '').startsWith('image/')) return '';
+  if (typeof window.createImageBitmap === 'function') {
+    const bitmap = await window.createImageBitmap(file);
+    try {
+      return imageAspectRatioFromDimensions(bitmap.width, bitmap.height);
+    } finally {
+      bitmap.close();
+    }
+  }
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const ratio = imageAspectRatioFromDimensions(image.naturalWidth, image.naturalHeight);
+      URL.revokeObjectURL(objectUrl);
+      resolve(ratio);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve('');
+    };
+    image.src = objectUrl;
+  });
+}
+
 function gptImage2CustomSizeError(value) {
   const parsed = parsePixelSize(value);
   if (!parsed) return '请输入有效尺寸，例如 3840x2160。';
@@ -2829,6 +2863,7 @@ const MediaPlayground = () => {
   const [enhancePrompt, setEnhancePrompt] = useState(true);
   const [watermark, setWatermark] = useState(false);
   const [referenceFiles, setReferenceFiles] = useState([]);
+  const [referenceImageAspectRatio, setReferenceImageAspectRatio] = useState('');
   const [reversePromptFile, setReversePromptFile] = useState(null);
   const [reversePromptText, setReversePromptText] = useState('');
   const [reversePromptRunning, setReversePromptRunning] = useState(false);
@@ -2966,6 +3001,14 @@ const MediaPlayground = () => {
     activeImageModel.aspectRatios?.length
       ? activeImageModel.aspectRatios
       : activeImageModel.sizes || [];
+  const canUseAutoEditAspectRatio =
+    mode === 'image' &&
+    imageWorkflow === 'edit' &&
+    referenceFiles.some((item) => fileMediaType(referenceFileOf(item)) === 'image');
+  const imageRatioSelectOptions =
+    canUseAutoEditAspectRatio && !imageRatioOptions.includes('auto')
+      ? ['auto', ...imageRatioOptions]
+      : imageRatioOptions;
   const imageRatioValue = activeImageModel.aspectRatios?.length
     ? aspectRatio
     : size;
@@ -2987,7 +3030,7 @@ const MediaPlayground = () => {
       : imageRatioValue;
   const showImageRatioOptions =
     mode === 'image' &&
-    imageRatioOptions.length > 0 &&
+    imageRatioSelectOptions.length > 0 &&
     !(isGptImage2Model(imageModel) && resolution === 'custom');
   const showGptImage2CustomSize =
     mode === 'image' && isGptImage2Model(imageModel) && resolution === 'custom';
@@ -3185,6 +3228,25 @@ const MediaPlayground = () => {
   }, [mode, referenceFileLimit, videoRefPolicy]);
 
   useEffect(() => {
+    let cancelled = false;
+    const imageReference = referenceFiles.find(
+      (item) => fileMediaType(referenceFileOf(item)) === 'image',
+    );
+    if (imageWorkflow !== 'edit' || !imageReference) {
+      setReferenceImageAspectRatio('');
+      return () => { cancelled = true; };
+    }
+    imageAspectRatioFromFile(referenceFileOf(imageReference))
+      .then((ratio) => {
+        if (!cancelled) setReferenceImageAspectRatio(ratio);
+      })
+      .catch(() => {
+        if (!cancelled) setReferenceImageAspectRatio('');
+      });
+    return () => { cancelled = true; };
+  }, [imageWorkflow, referenceFiles]);
+
+  useEffect(() => {
     if (!mentionState.visible) return;
     if (mentionMenuItems.length === 0) {
       setMentionState((current) => ({ ...current, activeIndex: 0 }));
@@ -3320,7 +3382,10 @@ const MediaPlayground = () => {
   const requestPayload = useMemo(() => {
     if (mode === 'image') {
       const effectiveCount = clampCount(count, activeImageModel);
-      const effectiveAspectRatio = imageAspectRatioFor(size, aspectRatio);
+      const effectiveAspectRatio =
+        aspectRatio === 'auto' && imageWorkflow === 'edit'
+          ? referenceImageAspectRatio || imageAspectRatioFor(size, aspectRatio)
+          : imageAspectRatioFor(size, aspectRatio);
       const payload = {
         model: imageModel,
         group: effectiveGroup,
@@ -3458,6 +3523,7 @@ const MediaPlayground = () => {
     inputFidelity,
     mode,
     activeNegativePrompt,
+    referenceImageAspectRatio,
     prompt,
     quality,
     aspectRatio,
@@ -5101,7 +5167,7 @@ const MediaPlayground = () => {
                     <NativeSelect
                       label='比例'
                       value={imageRatioValue}
-                      options={toSelectOptions(imageRatioOptions)}
+                      options={toSelectOptions(imageRatioSelectOptions)}
                       onChange={handleImageRatioChange}
                       agentKey='media-aspect-ratio'
                       className='mp-param-control is-ratio'

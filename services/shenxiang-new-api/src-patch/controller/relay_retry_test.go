@@ -971,6 +971,19 @@ func TestShouldRetryAllowsPlaygroundForcedTimeoutFallback(t *testing.T) {
 	}
 }
 
+func TestShouldRetryAllowsDiscountImage2Fallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("channel_affinity_skip_retry_on_failure", true)
+	setPlaygroundForcedChannelIDs(c, []int{discountImage2PrimaryChannelID, discountImage2FallbackChannelID})
+	c.Set("use_channel", []string{"27"})
+
+	err := types.NewOpenAIError(errors.New("upstream unavailable"), types.ErrorCodeDoRequestFailed, http.StatusServiceUnavailable)
+	if !shouldRetry(c, err, 1) {
+		t.Fatal("shouldRetry() = false, want true with the discount image-2 fallback remaining")
+	}
+}
+
 func TestShouldRetryAllowsPlaygroundForcedUpstreamBalanceFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())

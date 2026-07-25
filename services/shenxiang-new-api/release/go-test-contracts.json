@@ -12,6 +12,10 @@
     "run": "^(TestCreateImageTaskRejectsRetiredImage2BeforePersistence|TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel|TestNormalizePlaygroundImageTaskPayloadPreservesExplicitDiscountImage2ExtraBody|TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility|TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing|TestPublicPricingGroupsExposesPlusOnlyWhenExplicitlyEnabled|TestPublicPricingGroupsExposesAllClaudeMarketplaceGroups|TestManagedTextTokenUpdateSynchronizesPreferenceAndLegacyToken|TestManagedTextTokenUpdateSupportsOrderedGroupChain|TestManagedTextTokenRejectsUnsupportedPricingGroup|TestResolveUserTextPricingGroupMigratesLegacyTokenChoice|TestPublicPlaygroundTaskFailureReason.*|TestPlaygroundTaskResponsesExposeOnlyPublicFailureMessage|TestGetAllTokensWithSystemSyncCreatesPublicTokensBeforeListing|TestSelectUserGroupsForPurposeIncludesTerminalOnlyForTokenConfig|TestShouldRetryAllowsPlusTextTimeoutFallback|TestShouldRetryPlusTextTimeoutGuardrails|TestPrepareTokenGroupFallbackBilling.*|TestShouldRetryExplicitGroupChainStopsAfterResponsesOutput)$"
   },
   {
+    "package": "./controller",
+    "run": "^TestShouldRetryAllowsDiscountImage2Fallback$"
+  },
+  {
     "package": "./relay/channel/task/sora",
     "run": ""
   },
@@ -22,6 +26,10 @@
   {
     "package": "./relay",
     "run": "^(TestDiscountImage2V2OutboundBodyPreservesVerifiedFields|TestUseGeminiAdaptorForApprovedOpenAIChatImageModels|TestNormalizeWangwangClaudeFunctionTools.*)$"
+  },
+  {
+    "package": "./relay",
+    "run": "^TestSanitizeGeek2APIImage2OutboundBodyStripsWorkshopOnlyFields$"
   },
   {
     "package": "./service/relayconvert",
@@ -41,7 +49,7 @@
   },
   {
     "package": "./service",
-    "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestPublicClaudeTokenModels.*|TestMergeModelLimits.*|TestEnsureSystemTokensForCommonUserCreatesPublicProfilesOnly|TestEnsureSystemTokensPreservesPublicClaudeGroup.*|TestEnsureSystemTokensPreservesManagedCodexGroupChain|TestEnsureSystemTokensRepairsInvalidClaudeGroupToDefault|TestReconcileUserSystemTokensForEnabledUsersBackfillsAndIsIdempotent|TestManagedGrok45.*|TestEnsureManagedGrok45.*|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestDiscountImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize|TestOnlyLegacyDiscountImage2NameIsRetired|TestGetPublicUserUsableGroupsOnlyReturnsStableDiscountAndPlusGroups|TestIsPublicTokenGroupRejectsLegacyAndAutoGroups|TestMarketplacePricingGroupsAddsTerminalWithChineseLabelsWithoutMakingItPublic|TestManagedPricingGroupGlobalSwitchOverridesSpecialGroupRules|TestGetPublicUserAutoGroupHidesLegacyGroups|TestResolveRealtimeGroupRatioPinsDiscountMarketplaceRatio|TestPreWssConsumeQuotaReservesCumulativeDiscountQuota|TestGetUserGroupRatioPinsPlusMarketplaceRatio|TestNormalizeTokenGroupChain.*|TestIsPublicClaudeTokenGroupChain.*|TestCacheGetRandomSatisfiedChannel.*|TestModelAbilityCircuit.*)$"
+    "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestPublicClaudeTokenModels.*|TestMergeModelLimits.*|TestEnsureSystemTokensForCommonUserCreatesPublicProfilesOnly|TestEnsureSystemTokensPreservesPublicClaudeGroup.*|TestEnsureSystemTokensPreservesManagedCodexGroupChain|TestEnsureSystemTokensRepairsInvalidClaudeGroupToDefault|TestReconcileUserSystemTokensForEnabledUsersBackfillsAndIsIdempotent|TestManagedGrok45.*|TestEnsureManagedGrok45.*|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestDiscountImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize|TestDiscountImage2PrimaryNameIsAvailable|TestGetPublicUserUsableGroupsOnlyReturnsStableDiscountAndPlusGroups|TestIsPublicTokenGroupRejectsLegacyAndAutoGroups|TestMarketplacePricingGroupsAddsTerminalWithChineseLabelsWithoutMakingItPublic|TestManagedPricingGroupGlobalSwitchOverridesSpecialGroupRules|TestGetPublicUserAutoGroupHidesLegacyGroups|TestResolveRealtimeGroupRatioPinsDiscountMarketplaceRatio|TestPreWssConsumeQuotaReservesCumulativeDiscountQuota|TestGetUserGroupRatioPinsPlusMarketplaceRatio|TestNormalizeTokenGroupChain.*|TestIsPublicClaudeTokenGroupChain.*|TestCacheGetRandomSatisfiedChannel.*|TestModelAbilityCircuit.*)$"
   },
   {
     "package": "./model",
