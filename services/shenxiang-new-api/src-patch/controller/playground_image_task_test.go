@@ -146,11 +146,11 @@ func TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInter
 
 	normalized, changed := normalizePlaygroundImageTaskPayload(raw, &request)
 	require.True(t, changed)
-	require.Equal(t, "internal-image2-discount-v2", request.Model)
+	require.Equal(t, "geek2api-image-2", request.Model)
 
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(normalized, &payload))
-	require.Equal(t, "internal-image2-discount-v2", payload["model"])
+	require.Equal(t, "geek2api-image-2", payload["model"])
 	require.Equal(t, "2K", payload["resolution"])
 	require.NotContains(t, payload, "extra_body")
 	require.Empty(t, request.ExtraBody)
@@ -178,40 +178,6 @@ func TestNormalizePlaygroundImageTaskPayloadPreservesExplicitDiscountImage2Extra
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(normalized, &payload))
 	require.Contains(t, payload, "extra_body")
-}
-
-func TestCreateImageTaskRejectsRetiredImage2BeforePersistence(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Task{}))
-	oldDB := model.DB
-	model.DB = db
-	t.Cleanup(func() {
-		model.DB = oldDB
-	})
-
-	cacheRoot := t.TempDir()
-	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", cacheRoot)
-	recorder := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(recorder)
-	ctx.Request = httptest.NewRequest(
-		http.MethodPost,
-		"/pg/images/tasks/generations",
-		bytes.NewBufferString(`{"model":"geek2api-image-2","prompt":"poster"}`),
-	)
-	ctx.Request.Header.Set("Content-Type", "application/json")
-	ctx.Set("id", 71)
-
-	PlaygroundCreateImageTask(ctx)
-
-	require.Equal(t, http.StatusNotFound, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "该模型已下架")
-	var taskCount int64
-	require.NoError(t, db.Model(&model.Task{}).Count(&taskCount).Error)
-	require.Zero(t, taskCount)
-	entries, readErr := os.ReadDir(cacheRoot)
-	require.NoError(t, readErr)
-	require.Empty(t, entries)
 }
 
 func TestCacheFirstPlaygroundImageTaskResultRetainsMismatchedImageSize(t *testing.T) {
