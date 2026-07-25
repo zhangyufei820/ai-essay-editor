@@ -1098,7 +1098,7 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		}
 		return channel, nil
 	}
-	if info.ChannelMeta == nil {
+	if shouldReuseInitialSelectedChannel(c, info, retryParam) {
 		autoBan := c.GetBool("auto_ban")
 		autoBanInt := 1
 		if !autoBan {
@@ -1145,7 +1145,20 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	if newAPIError != nil {
 		return nil, newAPIError
 	}
+	if info.ChannelMeta == nil {
+		info.InitChannelMeta(c)
+	}
 	return channel, nil
+}
+
+// Explicit group chains must reselect on retry so the next group priority can
+// be tried. Reusing the distributor-selected channel here bypasses the chain
+// selector and pins every retry to an affinity hit.
+func shouldReuseInitialSelectedChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) bool {
+	if info == nil || info.ChannelMeta != nil || retryParam == nil {
+		return false
+	}
+	return retryParam.GetRetry() == 0 || !service.HasExplicitTokenGroupChain(c)
 }
 
 func getNextPlaygroundForcedChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, bool, *types.NewAPIError) {

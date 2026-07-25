@@ -28,6 +28,21 @@ type playgroundDiscountBillingStub struct {
 	reserveErr     error
 }
 
+func TestShouldReuseInitialSelectedChannelReselectsExplicitGroupChainRetry(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	info := &relaycommon.RelayInfo{}
+
+	retry := 0
+	require.True(t, shouldReuseInitialSelectedChannel(ctx, info, &service.RetryParam{Ctx: ctx, Retry: &retry}))
+
+	service.SetTokenGroupChain(ctx, []string{service.DiscountPricingGroupName, service.PlusPricingGroupName})
+	retry = 0
+	require.True(t, shouldReuseInitialSelectedChannel(ctx, info, &service.RetryParam{Ctx: ctx, Retry: &retry}))
+	retry = 1
+	require.False(t, shouldReuseInitialSelectedChannel(ctx, info, &service.RetryParam{Ctx: ctx, Retry: &retry}))
+}
+
 func (s *playgroundDiscountBillingStub) Settle(int) error { return nil }
 
 func (s *playgroundDiscountBillingStub) Refund(*gin.Context) {}
