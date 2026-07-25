@@ -134,18 +134,61 @@ func TestCacheGetRandomSatisfiedChannelFallsThroughMissingPrimaryGroup(t *testin
 	require.Equal(t, DiscountPricingGroupName, selectedGroup)
 	require.Equal(t, []string{"default", DiscountPricingGroupName}, selectedGroups)
 	require.Equal(t, DiscountPricingGroupName, common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup))
-	require.Equal(t, 2, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
+	require.Equal(t, 1, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
 }
 
-func TestCacheGetRandomSatisfiedChannelMovesToNextGroupAfterRetryableFailure(t *testing.T) {
+func TestCacheGetRandomSatisfiedChannelExhaustsGroupPrioritiesBeforeFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(nil)
+	SetTokenGroupChain(ctx, []string{"default", DiscountPricingGroupName})
+	selected := make([]string, 0, 3)
+	withTokenGroupChainChannelSelector(t, func(group, _ string, retry int, _ string) (*model.Channel, error) {
+		selected = append(selected, group+string(rune('0'+retry)))
+		if group == "default" && retry == 0 {
+			return &model.Channel{Id: 22}, nil
+		}
+		if group == "default" && retry == 1 {
+			return &model.Channel{Id: 23}, nil
+		}
+		return nil, nil
+	})
+
+	first, firstGroup, err := CacheGetRandomSatisfiedChannel(&RetryParam{
+		Ctx:        ctx,
+		TokenGroup: "default",
+		ModelName:  "gpt-5.6-sol",
+		Retry:      common.GetPointer(0),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 22, first.Id)
+	require.Equal(t, "default", firstGroup)
+
+	channel, selectedGroup, err := CacheGetRandomSatisfiedChannel(&RetryParam{
+		Ctx:        ctx,
+		TokenGroup: "default",
+		ModelName:  "gpt-5.6-sol",
+		Retry:      common.GetPointer(1),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 23, channel.Id)
+	require.Equal(t, "default", selectedGroup)
+	require.Equal(t, []string{"default0", "default1"}, selected)
+	require.Equal(t, 0, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
+}
+
+func TestCacheGetRandomSatisfiedChannelMovesToNextGroupOnlyAfterPrioritiesAreExhausted(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(nil)
 	SetTokenGroupChain(ctx, []string{"default", DiscountPricingGroupName})
 	MarkTokenGroupChainSelected(ctx, "default")
+	selected := make([]string, 0, 2)
 	withTokenGroupChainChannelSelector(t, func(group, _ string, retry int, _ string) (*model.Channel, error) {
-		require.Equal(t, DiscountPricingGroupName, group)
-		require.Zero(t, retry)
-		return &model.Channel{Id: 23}, nil
+		selected = append(selected, group+string(rune('0'+retry)))
+		if group == DiscountPricingGroupName && retry == 0 {
+			return &model.Channel{Id: 23}, nil
+		}
+		return nil, nil
 	})
 
 	channel, selectedGroup, err := CacheGetRandomSatisfiedChannel(&RetryParam{
@@ -158,4 +201,6 @@ func TestCacheGetRandomSatisfiedChannelMovesToNextGroupAfterRetryableFailure(t *
 	require.NoError(t, err)
 	require.Equal(t, 23, channel.Id)
 	require.Equal(t, DiscountPricingGroupName, selectedGroup)
+	require.Equal(t, []string{"default1", "discount0"}, selected)
+	require.Equal(t, 1, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
 }

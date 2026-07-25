@@ -379,8 +379,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 	maxRetryTimes := playgroundImageRetryTimes(c)
-	if groupChainLength := len(service.GetTokenGroupChain(c)); groupChainLength > 1 && maxRetryTimes < groupChainLength-1 {
-		maxRetryTimes = groupChainLength - 1
+	if groupChainLength := len(service.GetTokenGroupChain(c)); groupChainLength > 1 {
+		maxRetryTimes = (maxRetryTimes+1)*groupChainLength - 1
 	}
 	forcePlaygroundImageChannel(c, request, relayInfo)
 
