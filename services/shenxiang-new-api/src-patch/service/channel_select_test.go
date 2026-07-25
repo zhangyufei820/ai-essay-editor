@@ -134,7 +134,7 @@ func TestCacheGetRandomSatisfiedChannelFallsThroughMissingPrimaryGroup(t *testin
 	require.Equal(t, DiscountPricingGroupName, selectedGroup)
 	require.Equal(t, []string{"default", DiscountPricingGroupName}, selectedGroups)
 	require.Equal(t, DiscountPricingGroupName, common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup))
-	require.Equal(t, 1, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
+	require.Equal(t, 2, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
 }
 
 func TestCacheGetRandomSatisfiedChannelExhaustsGroupPrioritiesBeforeFallback(t *testing.T) {
@@ -174,7 +174,7 @@ func TestCacheGetRandomSatisfiedChannelExhaustsGroupPrioritiesBeforeFallback(t *
 	require.Equal(t, 23, channel.Id)
 	require.Equal(t, "default", selectedGroup)
 	require.Equal(t, []string{"default0", "default1"}, selected)
-	require.Equal(t, 0, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
+	require.Equal(t, 1, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
 }
 
 func TestCacheGetRandomSatisfiedChannelMovesToNextGroupOnlyAfterPrioritiesAreExhausted(t *testing.T) {
@@ -202,5 +202,5 @@ func TestCacheGetRandomSatisfiedChannelMovesToNextGroupOnlyAfterPrioritiesAreExh
 	require.Equal(t, 23, channel.Id)
 	require.Equal(t, DiscountPricingGroupName, selectedGroup)
 	require.Equal(t, []string{"default1", "discount0"}, selected)
-	require.Equal(t, 1, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
+	require.Equal(t, 2, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
 }

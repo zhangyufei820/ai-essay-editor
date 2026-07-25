@@ -92,7 +92,9 @@ func MarkTokenGroupChainSelected(c *gin.Context, group string) {
 		if candidate != group {
 			continue
 		}
-		common.SetContextKey(c, constant.ContextKeyTokenGroupChainIndex, index)
+		// Keep the next fallback group as the chain index. Callers outside the
+		// selector rely on this value to determine whether the chain is exhausted.
+		common.SetContextKey(c, constant.ContextKeyTokenGroupChainIndex, index+1)
 		common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
 		common.SetContextKey(c, constant.ContextKeyAutoGroup, group)
 		return
@@ -185,6 +187,36 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		if groupStartRetry < 0 || groupStartRetry > param.GetRetry() {
 			groupStartRetry = 0
 		}
+		usingGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUsingGroup)
+		selectedGroupIndex := -1
+		for index, group := range groupChain {
+			if group == usingGroup {
+				selectedGroupIndex = index
+				break
+			}
+		}
+
+		// The chain index points at the next fallback group. On a retry, exhaust
+		// the already-selected group at its next priority before advancing.
+		if param.GetRetry() > groupStartRetry && selectedGroupIndex >= 0 && selectedGroupIndex < startGroupIndex {
+			priorityRetry := param.GetRetry() - groupStartRetry
+			channel, err = getRandomSatisfiedChannelWithCircuit(
+				param.Ctx,
+				getRandomSatisfiedChannelForTokenGroupChain,
+				usingGroup,
+				param.ModelName,
+				priorityRetry,
+				param.RequestPath,
+			)
+			if err != nil {
+				return nil, usingGroup, err
+			}
+			if channel != nil {
+				return channel, usingGroup, nil
+			}
+			groupStartRetry = param.GetRetry()
+			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainRetryIndex, groupStartRetry)
+		}
 		for index := startGroupIndex; index < len(groupChain); index++ {
 			group := groupChain[index]
 			priorityRetry := param.GetRetry() - groupStartRetry
@@ -209,7 +241,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 				continue
 			}
 			selectGroup = group
-			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainIndex, index)
+			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainIndex, index+1)
 			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainRetryIndex, groupStartRetry)
 			common.SetContextKey(param.Ctx, constant.ContextKeyUsingGroup, group)
 			common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroup, group)
