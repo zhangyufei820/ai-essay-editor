@@ -1226,6 +1226,38 @@ function toSelectOptions(values) {
   return values.map((value) => ({ value, label: String(value) }));
 }
 
+function aspectRatioPreview(value) {
+  const normalized = String(value || '').trim();
+  if (normalized === 'auto') {
+    return <span className='mp-aspect-preview is-auto' aria-hidden='true' />;
+  }
+  const [rawWidth, rawHeight] = normalized.split(':');
+  const ratio = Number(rawWidth) / Number(rawHeight);
+  if (!Number.isFinite(ratio) || ratio <= 0) return null;
+  const maxEdge = 22;
+  const width = ratio >= 1 ? maxEdge : Math.max(5, Math.round(maxEdge * ratio));
+  const height = ratio >= 1 ? Math.max(5, Math.round(maxEdge / ratio)) : maxEdge;
+  return (
+    <span
+      className='mp-aspect-preview'
+      aria-hidden='true'
+      style={{ width: `${width}px`, height: `${height}px` }}
+    />
+  );
+}
+
+function toAspectRatioSelectOptions(values) {
+  return values.map((value) => ({
+    value,
+    label: (
+      <span className='mp-aspect-option'>
+        <span>{String(value)}</span>
+        {aspectRatioPreview(value)}
+      </span>
+    ),
+  }));
+}
+
 function toResolutionSelectOptions(values) {
   return values.map((value) => ({
     value,
@@ -5167,7 +5199,7 @@ const MediaPlayground = () => {
                     <NativeSelect
                       label='比例'
                       value={imageRatioValue}
-                      options={toSelectOptions(imageRatioSelectOptions)}
+                      options={toAspectRatioSelectOptions(imageRatioSelectOptions)}
                       onChange={handleImageRatioChange}
                       agentKey='media-aspect-ratio'
                       className='mp-param-control is-ratio'

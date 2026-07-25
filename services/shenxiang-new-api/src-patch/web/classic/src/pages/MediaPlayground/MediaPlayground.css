@@ -6314,6 +6314,29 @@ body.mp-route-active .mp-select-dropdown .semi-select-option-selected {
   box-shadow: inset 3px 0 0 var(--mp-accent-primary);
 }
 
+body.mp-route-active .mp-aspect-option {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+body.mp-route-active .mp-aspect-preview {
+  display: inline-block;
+  flex: 0 0 auto;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.78;
+}
+
+body.mp-route-active .mp-aspect-preview.is-auto {
+  width: 20px;
+  height: 16px;
+  border-style: dashed;
+  border-radius: 3px;
+}
+
 body.mp-route-active .mp-result-action-stack {
   gap: 7px;
   padding: 10px;
