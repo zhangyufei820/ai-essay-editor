@@ -75,6 +75,7 @@ func SetTokenGroupChain(c *gin.Context, groups []string) {
 	groups = append([]string(nil), groups...)
 	common.SetContextKey(c, constant.ContextKeyTokenGroupChain, groups)
 	common.SetContextKey(c, constant.ContextKeyTokenGroupChainIndex, 0)
+	common.SetContextKey(c, constant.ContextKeyTokenGroupChainRetryIndex, 0)
 	if len(groups) > 0 {
 		common.SetContextKey(c, constant.ContextKeyTokenGroup, groups[0])
 		common.SetContextKey(c, constant.ContextKeyUsingGroup, groups[0])
@@ -91,7 +92,7 @@ func MarkTokenGroupChainSelected(c *gin.Context, group string) {
 		if candidate != group {
 			continue
 		}
-		common.SetContextKey(c, constant.ContextKeyTokenGroupChainIndex, index+1)
+		common.SetContextKey(c, constant.ContextKeyTokenGroupChainIndex, index)
 		common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
 		common.SetContextKey(c, constant.ContextKeyAutoGroup, group)
 		return
@@ -180,14 +181,22 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		if startGroupIndex < 0 {
 			startGroupIndex = 0
 		}
+		groupStartRetry := common.GetContextKeyInt(param.Ctx, constant.ContextKeyTokenGroupChainRetryIndex)
+		if groupStartRetry < 0 || groupStartRetry > param.GetRetry() {
+			groupStartRetry = 0
+		}
 		for index := startGroupIndex; index < len(groupChain); index++ {
 			group := groupChain[index]
+			priorityRetry := param.GetRetry() - groupStartRetry
+			if index > startGroupIndex {
+				priorityRetry = 0
+			}
 			channel, err = getRandomSatisfiedChannelWithCircuit(
 				param.Ctx,
 				getRandomSatisfiedChannelForTokenGroupChain,
 				group,
 				param.ModelName,
-				0,
+				priorityRetry,
 				param.RequestPath,
 			)
 			if err != nil {
@@ -195,11 +204,15 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			if channel == nil {
 				common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainIndex, index+1)
+				common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainRetryIndex, param.GetRetry())
 				logger.LogDebug(param.Ctx, "No available channel in explicit token group chain for model %s, trying next group", param.ModelName)
 				continue
 			}
 			selectGroup = group
-			MarkTokenGroupChainSelected(param.Ctx, group)
+			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainIndex, index)
+			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainRetryIndex, groupStartRetry)
+			common.SetContextKey(param.Ctx, constant.ContextKeyUsingGroup, group)
+			common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroup, group)
 			logger.LogDebug(param.Ctx, "Selected explicit token group chain entry for model %s", param.ModelName)
 			return channel, selectGroup, nil
 		}
