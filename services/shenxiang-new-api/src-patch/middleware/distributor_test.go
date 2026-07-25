@@ -295,8 +295,8 @@ func TestNormalizeImageEndpointModelRequestMapsDiscountImage2PublicAlias(t *test
 
 	normalizeImageEndpointModelRequest(ctx, modelRequest)
 
-	if modelRequest.Model != "internal-image2-discount-v2" {
-		t.Fatalf("model = %q, want internal-image2-discount-v2", modelRequest.Model)
+	if modelRequest.Model != "geek2api-image-2" {
+		t.Fatalf("model = %q, want geek2api-image-2", modelRequest.Model)
 	}
 	if publicAlias := PublicImageModelAliasForRequest(ctx); publicAlias != "特价 image-2" {
 		t.Fatalf("public alias = %q, want 特价 image-2", publicAlias)
@@ -316,7 +316,7 @@ func TestGetTaskOriginModelNameUsesPublicDiscountImage2Alias(t *testing.T) {
 		TaskID: "task_public_alias",
 		UserId: 1,
 		Properties: model.Properties{
-			OriginModelName: "internal-image2-discount-v2",
+			OriginModelName: "geek2api-image-2",
 		},
 	}
 	if err := model.DB.Create(task).Error; err != nil {
@@ -420,7 +420,7 @@ func TestDistributeRejectsSupplierExposedModelWithoutEchoingName(t *testing.T) {
 	}
 }
 
-func TestDistributeRejectsLegacyDiscountImage2BeforeChannelSelection(t *testing.T) {
+func TestDistributeRejectsInternalDiscountImage2WithoutEchoingName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
@@ -429,8 +429,7 @@ func TestDistributeRejectsLegacyDiscountImage2BeforeChannelSelection(t *testing.
 
 	Distribute()(ctx)
 
-	require.Equal(t, http.StatusNotFound, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "模型服务暂时不可用")
-	require.Contains(t, recorder.Body.String(), string(types.ErrorCodeModelNotFound))
+	require.Equal(t, http.StatusForbidden, recorder.Code)
+	require.Contains(t, recorder.Body.String(), string(types.ErrorCodeAccessDenied))
 	require.NotContains(t, recorder.Body.String(), "geek2api")
 }
