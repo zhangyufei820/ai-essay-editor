@@ -3035,8 +3035,7 @@ const MediaPlayground = () => {
       : activeImageModel.sizes || [];
   const canUseAutoEditAspectRatio =
     mode === 'image' &&
-    imageWorkflow === 'edit' &&
-    referenceFiles.some((item) => fileMediaType(referenceFileOf(item)) === 'image');
+    imageWorkflow === 'edit';
   const imageRatioSelectOptions =
     canUseAutoEditAspectRatio && !imageRatioOptions.includes('auto')
       ? ['auto', ...imageRatioOptions]
