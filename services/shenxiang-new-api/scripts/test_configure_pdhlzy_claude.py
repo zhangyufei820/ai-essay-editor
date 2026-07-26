@@ -113,11 +113,14 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
 
     def test_existing_enabled_channel_key_is_used_when_environment_key_is_absent(self) -> None:
         previous_mysql = self.module.mysql
+        queries: list[str] = []
         try:
             self.module.mysql = (
-                lambda _env, query: [["stored-channel-key-not-printed"]]
-                if "SELECT COALESCE(`key`, '')" in query
-                else []
+                lambda _env, query: (
+                    queries.append(query) or [["stored-channel-key-not-printed"]]
+                    if "SELECT COALESCE(`key`, '')" in query
+                    else []
+                )
             )
             with mock.patch.dict(
                 os.environ,
@@ -130,6 +133,7 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
 
         self.assertEqual(set(keys), {channel["tag"] for channel in self.module.CHANNELS})
         self.assertTrue(all(key == "stored-channel-key-not-printed" for key in keys.values()))
+        self.assertTrue(all("AND status = 1" not in query for query in queries))
 
 
 if __name__ == "__main__":

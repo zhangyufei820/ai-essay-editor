@@ -293,7 +293,7 @@ def require_keys(env: dict[str, str]) -> dict[str, str]:
                 env,
                 "SELECT COALESCE(`key`, '') FROM channels WHERE tag = "
                 + sql_quote(channel["tag"])
-                + " AND status = 1 ORDER BY id LIMIT 1",
+                + " ORDER BY (status = 1) DESC, id LIMIT 1",
             )
             key = rows[0][0].strip() if rows and rows[0] else ""
         if len(key) < 16 or any(character.isspace() for character in key):
