@@ -157,6 +157,14 @@ TEXT_FAMILIES = (
         },
     ),
     TextFamily(
+        name="claude_opus5_kiro_stable_text",
+        models=("claude-opus-5",),
+        channel_ids=(47,),
+        baseline_priorities={47: 30},
+        standalone=True,
+        expected_tags={47: "xingren-claude-pdhlzy-kiro-stable"},
+    ),
+    TextFamily(
         name="claude_ccmax_terminal_text",
         models=(
             "claude-fable-5",

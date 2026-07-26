@@ -836,8 +836,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("geek2api-image-2", sql)
         self.assertIn("官转image 2稳定", sql)
         self.assertIn("claude-haiku-4-5-20251001", sql)
-        self.assertNotIn("claude-opus-4-5-20251101", sql)
-        self.assertNotIn("claude-sonnet-4-5-20250929", sql)
+        self.assertIn("claude-opus-4-5-20251101", sql)
+        self.assertIn("claude-opus-5", sql)
+        self.assertIn("claude-sonnet-4-5-20250929", sql)
         self.assertIn("CACHE:admin-codex-key,user-claude-key,user-image-key", sql)
 
     def test_sync_user_codex_tokens_updates_non_admin_codex_tokens(self) -> None:
@@ -929,7 +930,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '202'", sql)
         self.assertIn("model_limits_enabled = 1", sql)
         self.assertIn("claude-opus-4-6,claude-sonnet-5", sql)
-        self.assertIn("`group` = 'claude-external'", sql)
+        self.assertNotIn("`group` = 'claude-external'", sql)
         self.assertIn("`group` = 'kiro-stable'", sql)
         self.assertIn("cross_group_retry = 0", sql)
         self.assertIn("CACHE:key-201,key-202", sql)
@@ -948,6 +949,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("claude-haiku-4-5-20251001", kiro_models)
         self.assertIn("claude-haiku-4-5-20251001", external_models)
         self.assertNotIn("claude-sonnet-4-5-20250929", external_models)
+        self.assertIn("claude-opus-5", stable_models)
+        self.assertNotIn("claude-opus-5", kiro_models)
+        self.assertNotIn("claude-opus-5", external_models)
 
     def test_sync_user_video_tokens_replaces_all_public_video_limits(self) -> None:
         captured: list[str] = []

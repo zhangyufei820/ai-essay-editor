@@ -75,6 +75,13 @@ def test_claude_allowed_models_env_hides_group_suffixes(monkeypatch) -> None:
     )
 
 
+def test_default_claude_models_include_verified_opus5(monkeypatch) -> None:
+    monkeypatch.delenv("CLAUDE_ALLOWED_MODELS", raising=False)
+
+    assert "claude-opus-5" in Settings().claude_allowed_models
+    assert "claude-opus-5" in get_settings().claude_allowed_models
+
+
 def test_grok_profile_settings_support_production_env_names(monkeypatch) -> None:
     monkeypatch.setenv("GROK_ALLOWED_MODELS", GROK_MODEL)
     monkeypatch.setenv("GROK_TOKEN_NAME", GROK_TOKEN_NAME)

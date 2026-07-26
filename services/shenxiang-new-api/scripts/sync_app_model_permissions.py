@@ -185,6 +185,7 @@ CODEX_STANDARD_ALLOWED_MODELS = [
 ]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
+CLAUDE_PRODUCT_GROUP = "kiro-stable"
 CLAUDE_ALLOWED_MODELS = [
     "claude-fable-5",
     "claude-haiku-4-5-20251001",
@@ -192,6 +193,7 @@ CLAUDE_ALLOWED_MODELS = [
     "claude-opus-4-6",
     "claude-opus-4-7",
     "claude-opus-4-8",
+    "claude-opus-5",
     "claude-sonnet-4-5-20250929",
     "claude-sonnet-4-6",
     "claude-sonnet-5",
@@ -1771,7 +1773,7 @@ def sync_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
     for profile, names in TOKEN_PROFILES.items():
         profile_models = sanitize_token_models(profiles[profile])
         if profile == "claude":
-            profile_models = claude_token_models_for_group(profile_models, "claude-external")
+            profile_models = claude_token_models_for_group(profile_models, CLAUDE_PRODUCT_GROUP)
         models = ",".join(profile_models)
         for name in names:
             expected_models_by_name[name] = models
@@ -1910,7 +1912,7 @@ def sync_user_claude_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
     )
     token_updates: list[tuple[str, str, str, str]] = []
     for token_id, token_key, raw_limits, raw_enabled, raw_group, raw_cross_group_retry in token_rows:
-        next_group = raw_group if raw_group in CLAUDE_TOKEN_MODELS_BY_GROUP else "claude-external"
+        next_group = CLAUDE_PRODUCT_GROUP
         claude_models = ",".join(claude_token_models_for_group(available_models, next_group))
         if (
             raw_limits != claude_models
@@ -2661,7 +2663,7 @@ def sync_codex_env(profiles: dict[str, list[str]]) -> bool:
         "CODEX_CHAT_FALLBACK_MODEL": CODEX_CHAT_FALLBACK_MODEL,
         "CODEX_ALLOWED_MODELS": ",".join(profiles["codex"]),
         "CLAUDE_ALLOWED_MODELS": ",".join(
-            claude_token_models_for_group(profiles["claude"], "claude-external")
+            claude_token_models_for_group(profiles["claude"], CLAUDE_PRODUCT_GROUP)
         ),
         "IMAGE_ALLOWED_MODELS": ",".join(
             model for model in profiles["image"] if model != DISCOUNT_IMAGE2_PUBLIC_MODEL

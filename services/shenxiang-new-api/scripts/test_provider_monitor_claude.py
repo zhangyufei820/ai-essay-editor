@@ -46,6 +46,10 @@ class ProviderMonitorClaudeTest(unittest.TestCase):
 
         self.assertEqual(families["claude_kiro_text"].channel_ids, (50, 46))
         self.assertEqual(families["claude_kiro_stable_text"].channel_ids, (51, 47))
+        self.assertEqual(families["claude_opus5_kiro_stable_text"].channel_ids, (47,))
+        self.assertEqual(families["claude_opus5_kiro_stable_text"].models, ("claude-opus-5",))
+        self.assertNotIn("claude-opus-5", families["claude_kiro_text"].models)
+        self.assertNotIn("claude-opus-5", families["claude_kiro_stable_text"].models)
         self.assertEqual(families["claude_ccmax_terminal_text"].channel_ids, (48,))
         self.assertEqual(families["claude_external_text"].channel_ids, (49,))
         self.assertEqual(families["claude_ccmax_terminal_text"].request_format, "messages")

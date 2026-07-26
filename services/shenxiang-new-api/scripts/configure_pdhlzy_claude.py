@@ -30,6 +30,7 @@ MODEL_PRICES_CNY = {
     "claude-opus-4-6": (Decimal("5"), Decimal("25"), Decimal("6.25"), Decimal("0.5")),
     "claude-opus-4-7": (Decimal("5"), Decimal("25"), Decimal("6.25"), Decimal("0.5")),
     "claude-opus-4-8": (Decimal("5"), Decimal("25"), Decimal("6.25"), Decimal("0.5")),
+    "claude-opus-5": (Decimal("5"), Decimal("25"), Decimal("6.25"), Decimal("0.5")),
     "claude-sonnet-4-5-20250929": (Decimal("3"), Decimal("15"), Decimal("3.75"), Decimal("0.3")),
     "claude-sonnet-4-6": (Decimal("3"), Decimal("15"), Decimal("3.75"), Decimal("0.3")),
     "claude-sonnet-5": (Decimal("2"), Decimal("10"), Decimal("2.5"), Decimal("0.2")),
@@ -313,8 +314,8 @@ def build_sql(env: dict[str, str], keys: dict[str, str], updates: dict[str, str]
         [
             "UPDATE channels SET status = 0, weight = 0, priority = 99, remark = CONCAT(COALESCE(remark, ''), ' | disabled by pdhlzy Claude replacement ', FROM_UNIXTIME(@now)) WHERE tag IN (" + old_tags + ");",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE tag IN (" + old_tags + "));",
-            "UPDATE tokens SET `group` = " + sql_quote("claude-external") + ", model_limits_enabled = 1, model_limits = " + sql_quote(",".join(CHANNELS[3]["models"])) + ", cross_group_retry = 0 WHERE deleted_at IS NULL AND name = " + sql_quote("星人 Claude 高阶令牌") + ";",
-            "UPDATE tokens SET `group` = " + sql_quote("claude-external") + ", model_limits_enabled = 1, model_limits = " + sql_quote(",".join(CHANNELS[3]["models"])) + ", cross_group_retry = 0 WHERE deleted_at IS NULL AND LOWER(TRIM(name)) = 'claude';",
+            "UPDATE tokens SET `group` = " + sql_quote("kiro-stable") + ", model_limits_enabled = 1, model_limits = " + sql_quote(",".join(CHANNELS[1]["models"])) + ", cross_group_retry = 0 WHERE deleted_at IS NULL AND name = " + sql_quote("星人 Claude 高阶令牌") + ";",
+            "UPDATE tokens SET `group` = " + sql_quote("kiro-stable") + ", model_limits_enabled = 1, model_limits = " + sql_quote(",".join(CHANNELS[1]["models"])) + ", cross_group_retry = 0 WHERE deleted_at IS NULL AND LOWER(TRIM(name)) = 'claude';",
             "COMMIT;",
         ]
     )

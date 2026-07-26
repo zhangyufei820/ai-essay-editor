@@ -71,6 +71,7 @@ class Settings:
         "claude-opus-4-6",
         "claude-opus-4-7",
         "claude-opus-4-8",
+        "claude-opus-5",
     )
     image_allowed_models: tuple[str, ...] = DEFAULT_IMAGE_ALLOWED_MODELS
     video_allowed_models: tuple[str, ...] = (
@@ -137,7 +138,7 @@ def get_settings() -> Settings:
         grok_allowed_models=_env_list("GROK_ALLOWED_MODELS", GROK_MODEL),
         claude_allowed_models=_env_list(
             "CLAUDE_ALLOWED_MODELS",
-            "claude-fable-5,claude-opus-4-6,claude-opus-4-7,claude-opus-4-8",
+            "claude-fable-5,claude-opus-4-6,claude-opus-4-7,claude-opus-4-8,claude-opus-5",
             normalize_claude_group_suffix=True,
         ),
         image_allowed_models=_env_list("IMAGE_ALLOWED_MODELS", DEFAULT_IMAGE_ALLOWED_MODELS_ENV),

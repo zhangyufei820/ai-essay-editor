@@ -32,10 +32,12 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertEqual([channel["group_label"] for channel in channels], [
             "Kiro", "Kiro 稳定版", "ccmax 终端专用", "Claude 外接"
         ])
-        self.assertEqual([len(channel["models"]) for channel in channels], [7, 9, 7, 7])
+        self.assertEqual([len(channel["models"]) for channel in channels], [7, 10, 7, 7])
         self.assertEqual(tuple(channels[1]["models"]), self.module.ALL_MODELS)
+        self.assertIn("claude-opus-5", channels[1]["models"])
         for channel in (channels[0], channels[2], channels[3]):
             self.assertNotIn("claude-opus-4-5-20251101", channel["models"])
+            self.assertNotIn("claude-opus-5", channel["models"])
         for channel in (channels[2], channels[3]):
             self.assertNotIn("claude-sonnet-4-5-20250929", channel["models"])
 
@@ -71,6 +73,10 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertEqual(completion_ratios["claude-fable-5"], 5)
         self.assertEqual(cache_ratios["claude-fable-5"], 0.1)
         self.assertEqual(create_cache_ratios["claude-fable-5"], 1.25)
+        self.assertAlmostEqual(model_ratios["claude-opus-5"], 5 / 14)
+        self.assertEqual(completion_ratios["claude-opus-5"], 5)
+        self.assertEqual(cache_ratios["claude-opus-5"], 0.1)
+        self.assertEqual(create_cache_ratios["claude-opus-5"], 1.25)
         self.assertEqual(json.loads(updates["AutoGroups"]), ["default"])
 
     def test_sql_disables_legacy_channels_and_pins_claude_tokens(self) -> None:
@@ -84,7 +90,8 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertIn("status = 0, weight = 0, priority = 99", sql)
         self.assertIn("xingren-claude-moonapix-fallback", sql)
         self.assertIn("xingren-claude-geek2api-primary", sql)
-        self.assertIn("`group` = 'claude-external'", sql)
+        self.assertIn("`group` = 'kiro-stable'", sql)
+        self.assertIn("claude-opus-5", sql)
         self.assertIn("cross_group_retry = 0", sql)
 
 
