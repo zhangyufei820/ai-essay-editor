@@ -186,6 +186,12 @@ CODEX_STANDARD_ALLOWED_MODELS = [
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
 CLAUDE_PRODUCT_GROUP = "kiro-stable"
+CLAUDE_OPUS5_MODEL = "claude-opus-5"
+CLAUDE_OPUS5_CHANNEL_TAG = "xingren-claude-pdhlzy-kiro-stable"
+CLAUDE_OPUS5_INPUT_CNY_PER_M = Decimal("5")
+CLAUDE_OPUS5_OUTPUT_CNY_PER_M = Decimal("25")
+CLAUDE_OPUS5_CACHE_READ_CNY_PER_M = Decimal("0.5")
+CLAUDE_OPUS5_CACHE_CREATE_CNY_PER_M = Decimal("6.25")
 CLAUDE_ALLOWED_MODELS = [
     "claude-fable-5",
     "claude-haiku-4-5-20251001",
@@ -933,6 +939,62 @@ def sync_public_openai_text_pricing() -> None:
     upsert_json_option("ModelPrice", model_prices)
     upsert_json_string_option("billing_setting.billing_mode", billing_modes)
     upsert_json_string_option("billing_setting.billing_expr", billing_exprs)
+
+
+def ensure_claude_opus5_stable_model() -> None:
+    rows = mysql(
+        "SELECT id, COALESCE(models, ''), COALESCE(model_mapping, '') FROM channels WHERE tag = "
+        + sql_quote(CLAUDE_OPUS5_CHANNEL_TAG)
+        + " AND status = 1 AND REPLACE(COALESCE(`group`, ''), ' ', '') = "
+        + sql_quote(CLAUDE_PRODUCT_GROUP)
+        + " ORDER BY id"
+    )
+    if len(rows) != 1:
+        raise RuntimeError("Claude Opus 5 requires exactly one enabled Kiro stable channel")
+    channel_id, raw_models, raw_mapping = rows[0]
+    models = [model.strip() for model in raw_models.split(",") if model.strip()]
+    if CLAUDE_OPUS5_MODEL not in models:
+        models.append(CLAUDE_OPUS5_MODEL)
+    try:
+        mapping = json.loads(raw_mapping) if raw_mapping else {}
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Kiro stable channel model mapping is invalid JSON") from exc
+    if not isinstance(mapping, dict):
+        raise RuntimeError("Kiro stable channel model mapping must be an object")
+    mapping[CLAUDE_OPUS5_MODEL] = CLAUDE_OPUS5_MODEL
+    description = (
+        "Claude claude-opus-5｜输入人民币 ¥5.0000/M Tokens｜输出人民币 ¥25.0000/M Tokens｜"
+        "缓存读取人民币 ¥0.5000/M Tokens｜缓存写入人民币 ¥6.2500/M Tokens"
+    )
+    statements = [
+        "START TRANSACTION;",
+        "SET @now := UNIX_TIMESTAMP();",
+        "SET @model_id := (SELECT MIN(id) FROM models WHERE model_name = " + sql_quote(CLAUDE_OPUS5_MODEL) + " AND deleted_at IS NULL);",
+        "INSERT INTO models (model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) "
+        "SELECT " + ", ".join([sql_quote(CLAUDE_OPUS5_MODEL), sql_quote(description), sql_quote("Claude.Color"), sql_quote("text,claude"), "2", sql_quote('{\"chat-completion\":\"/v1/chat/completions\"}'), "1", "0", "@now", "@now", "0"]) + " WHERE @model_id IS NULL;",
+        "SET @model_id := IFNULL(@model_id, LAST_INSERT_ID());",
+        "UPDATE models SET description = " + sql_quote(description) + ", icon = " + sql_quote("Claude.Color") + ", tags = " + sql_quote("text,claude") + ", vendor_id = 2, endpoints = " + sql_quote('{\"chat-completion\":\"/v1/chat/completions\"}') + ", status = 1, sync_official = 0, deleted_at = NULL, updated_time = @now, name_rule = 0 WHERE id = @model_id;",
+        "UPDATE channels SET models = " + sql_quote(",".join(models)) + ", model_mapping = " + sql_quote(json.dumps(mapping, ensure_ascii=False, sort_keys=True, separators=(",", ":"))) + " WHERE id = " + sql_quote(channel_id) + " AND tag = " + sql_quote(CLAUDE_OPUS5_CHANNEL_TAG) + " AND status = 1 AND REPLACE(COALESCE(`group`, ''), ' ', '') = " + sql_quote(CLAUDE_PRODUCT_GROUP) + ";",
+        "COMMIT;",
+    ]
+    mysql_exec("\n".join(statements))
+
+    exchange_rate = usd_exchange_rate()
+    model_ratios = parse_json_option("ModelRatio")
+    completion_ratios = parse_json_option("CompletionRatio")
+    cache_ratios = parse_json_option("CacheRatio")
+    create_cache_ratios = parse_json_option("CreateCacheRatio")
+    model_prices = parse_json_option("ModelPrice")
+    model_ratios[CLAUDE_OPUS5_MODEL] = decimal_to_float(CLAUDE_OPUS5_INPUT_CNY_PER_M / (Decimal("2") * exchange_rate))
+    completion_ratios[CLAUDE_OPUS5_MODEL] = decimal_to_float(CLAUDE_OPUS5_OUTPUT_CNY_PER_M / CLAUDE_OPUS5_INPUT_CNY_PER_M)
+    cache_ratios[CLAUDE_OPUS5_MODEL] = decimal_to_float(CLAUDE_OPUS5_CACHE_READ_CNY_PER_M / CLAUDE_OPUS5_INPUT_CNY_PER_M)
+    create_cache_ratios[CLAUDE_OPUS5_MODEL] = decimal_to_float(CLAUDE_OPUS5_CACHE_CREATE_CNY_PER_M / CLAUDE_OPUS5_INPUT_CNY_PER_M)
+    model_prices.pop(CLAUDE_OPUS5_MODEL, None)
+    upsert_json_option("ModelRatio", model_ratios)
+    upsert_json_option("CompletionRatio", completion_ratios)
+    upsert_json_option("CacheRatio", cache_ratios)
+    upsert_json_option("CreateCacheRatio", create_cache_ratios)
+    upsert_json_option("ModelPrice", model_prices)
 
 
 def ensure_codex_text_channel_models() -> dict[str, int]:
@@ -2709,6 +2771,7 @@ def main() -> int:
     sync_public_image_pricing()
     sync_public_openai_text_pricing()
     codex_text_channel_result = ensure_codex_text_channel_models()
+    ensure_claude_opus5_stable_model()
     retired_codex_text_result = retire_codex_text_models()
     retired_claude_result = retire_claude_models()
     metadata_result = sync_supplier_safe_public_metadata()

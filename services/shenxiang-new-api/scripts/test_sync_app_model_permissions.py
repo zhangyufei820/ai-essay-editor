@@ -953,6 +953,35 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("claude-opus-5", kiro_models)
         self.assertNotIn("claude-opus-5", external_models)
 
+    def test_ensure_claude_opus5_stable_model_updates_only_verified_stable_channel(self) -> None:
+        captured: list[str] = []
+        option_updates: dict[str, dict[str, float]] = {}
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels WHERE tag" in query:
+                return [["47", "claude-opus-4-8", '{"claude-opus-4-8":"claude-opus-4-8"}']]
+            if "FROM options WHERE `key`" in query:
+                return [["7.3"]]
+            raise AssertionError(query)
+
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+        self.module.parse_json_option = lambda _key: {}
+        self.module.upsert_json_option = lambda key, values: option_updates.setdefault(key, values)
+        self.module.usd_exchange_rate = lambda: self.module.Decimal("7.3")
+
+        self.module.ensure_claude_opus5_stable_model()
+
+        sql = "\n".join(captured)
+        self.assertIn("WHERE id = '47'", sql)
+        self.assertIn("claude-opus-5", sql)
+        self.assertIn("xingren-claude-pdhlzy-kiro-stable", sql)
+        self.assertNotIn("xingren-claude-pdhlzy-kiro'", sql)
+        self.assertAlmostEqual(option_updates["ModelRatio"]["claude-opus-5"], 5 / 14.6)
+        self.assertEqual(option_updates["CompletionRatio"]["claude-opus-5"], 5.0)
+        self.assertEqual(option_updates["CacheRatio"]["claude-opus-5"], 0.1)
+        self.assertEqual(option_updates["CreateCacheRatio"]["claude-opus-5"], 1.25)
+
     def test_sync_user_video_tokens_replaces_all_public_video_limits(self) -> None:
         captured: list[str] = []
 
