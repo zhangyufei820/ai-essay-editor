@@ -271,6 +271,36 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("REGEXP BINARY", sql)
         self.assertGreater(sql.index("UPDATE abilities SET enabled = 0"), sql.rindex("ON DUPLICATE KEY UPDATE"))
 
+    def test_sync_abilities_keeps_pdhlzy_claude_channels_isolated(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "47",
+                    "claude-opus-4-5-20251101,claude-sonnet-4-6",
+                    "20",
+                    "100",
+                    "xingren-claude-pdhlzy-kiro-stable",
+                    "kiro-stable",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["claude-opus-4-5-20251101"], ["claude-sonnet-4-6"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "kiro", "kiro-stable", "claude-external"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        self.assertIn("SELECT 'kiro-stable', 'claude-opus-4-5-20251101', 47", sql)
+        self.assertIn("SELECT 'kiro-stable', 'claude-sonnet-4-6', 47", sql)
+        self.assertNotIn("SELECT 'default', 'claude-sonnet-4-6', 47", sql)
+        self.assertNotIn("SELECT 'kiro', 'claude-sonnet-4-6', 47", sql)
+        self.assertIn("WHERE `group` = 'kiro-stable'", sql)
+
     def test_ensure_public_video_models_restores_only_callable_models(self) -> None:
         captured: list[str] = []
         self.module.mysql_exec = captured.append
@@ -903,21 +933,21 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(result["active_models_retired"], 4)
         self.assertEqual(result["abilities_disabled"], 12)
-        self.assertEqual(result["channel_models_removed"], 2)
+        self.assertEqual(result["channel_models_removed"], 1)
         self.assertEqual(result["channel_mapping_removed"], 1)
         self.assertEqual(result["pricing_options_sanitized"], 5)
-        self.assertEqual(result["tokens_rewritten"], 2)
-        self.assertEqual(result["token_caches_deleted"], 2)
+        self.assertEqual(result["tokens_rewritten"], 1)
+        self.assertEqual(result["token_caches_deleted"], 1)
         for values in captured_options.values():
-            self.assertEqual(values, {"claude-sonnet-5": 1.0})
+            self.assertEqual(values, {"claude-sonnet-5": 1.0, "claude-fable-5": 2.0})
         sql = "\n".join(captured_sql)
         self.assertIn("UPDATE models SET status = 0", sql)
         self.assertIn("UPDATE abilities SET enabled = 0", sql)
-        self.assertIn("UPDATE channels SET models = 'claude-sonnet-5,claude-opus-4-8'", sql)
+        self.assertIn("UPDATE channels SET models = 'claude-sonnet-5,claude-fable-5,claude-opus-4-8'", sql)
         self.assertIn("model_mapping = '{\"custom\":\"target\"}'", sql)
-        self.assertIn("UPDATE tokens SET model_limits = 'claude-sonnet-5' WHERE id = '301'", sql)
-        self.assertIn("UPDATE tokens SET model_limits = 'claude-opus-4-6' WHERE id = '302'", sql)
-        self.assertEqual(captured_caches, ["key-301", "key-302"])
+        self.assertIn("UPDATE tokens SET model_limits = 'claude-sonnet-5,claude-fable-5' WHERE id = '301'", sql)
+        self.assertNotIn("UPDATE tokens SET model_limits = 'claude-opus-4-6' WHERE id = '302'", sql)
+        self.assertEqual(captured_caches, ["key-301"])
 
     def test_ensure_codex_text_channel_models_adds_openai_models_and_retires_spark_mapping(self) -> None:
         captured: list[str] = []

@@ -228,6 +228,8 @@ export const useModelPricingData = () => {
       const visibleVendorName = getPricingModelVisibleVendorName(m);
       if (visibleVendorName) {
         m.vendor_name = visibleVendorName;
+        m.vendor_icon = null;
+        m.vendor_description = '';
       }
       m.visible_tags = getPricingModelVisibleTags(m).join(',');
     }

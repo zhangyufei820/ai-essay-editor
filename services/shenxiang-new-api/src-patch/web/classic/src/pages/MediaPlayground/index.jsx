@@ -138,7 +138,6 @@ const IMAGE_MODELS = [
     value: 'gpt-image-2-4K',
     label: 'GPT Image 2',
     badge: '4K',
-    vendor: '星人图像',
     sizes: OPENAI_IMAGE_ASPECT_RATIOS,
     aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS,
     resolutions: GPT_IMAGE_2_RESOLUTIONS,
@@ -182,7 +181,6 @@ const IMAGE_MODELS = [
     value: '特价 image-2',
     label: '特价 image-2',
     badge: '4K',
-    vendor: '星人图像',
     sizes: OPENAI_IMAGE_ASPECT_RATIOS,
     aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS,
     resolutions: GPT_IMAGE_2_RESOLUTIONS,
@@ -205,7 +203,6 @@ const IMAGE_MODELS = [
     value: 'banana-2',
     label: 'Banana 2',
     badge: '4K',
-    vendor: '星人图像',
     sizes: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
     aspectRatios: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
     resolutions: GOOGLE_GEMINI_31_FLASH_IMAGE_RESOLUTIONS,
@@ -227,7 +224,6 @@ const IMAGE_MODELS = [
     value: 'gemini-3-pro-image-preview',
     label: 'Gemini 3 Pro Image',
     badge: '4K',
-    vendor: '星人图像',
     sizes: GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS,
     aspectRatios: GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS,
     resolutions: ['1K', '2K', '4K'],
@@ -249,7 +245,6 @@ const IMAGE_MODELS = [
     value: 'image 2电商商品图快速通道(1.5K)',
     label: 'image 2电商商品图快速通道(1.5K)',
     badge: '1.5K',
-    vendor: '星人图像',
     sizes: OPENAI_IMAGE_ASPECT_RATIOS,
     aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS,
     resolutions: ['auto'],
@@ -273,7 +268,6 @@ const IMAGE_MODELS = [
     value: 'ecommerce-banana-2',
     label: '电商特价banana-2',
     badge: '1K',
-    vendor: '星人图像',
     sizes: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
     aspectRatios: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
     resolutions: ['1K'],
@@ -295,7 +289,6 @@ const IMAGE_MODELS = [
     value: 'grok-imagine-image',
     label: 'Grok Image Pro',
     badge: 'Pro',
-    vendor: '星人图像',
     sizes: XAI_GROK_IMAGE_ASPECT_RATIOS,
     aspectRatios: XAI_GROK_IMAGE_ASPECT_RATIOS,
     resolutions: ['1k', '2k'],
@@ -552,18 +545,14 @@ function resultModelLabel(result, fallbackImageModel, fallbackVideoModel) {
   if (result?.kind === 'image') {
     const modelValue = resultImageModelValue(result);
     return (
-      result?.modelLabel ||
       imageModelConfig(modelValue)?.label ||
-      modelValue ||
       fallbackImageModel?.label ||
       '图片模型'
     );
   }
   const modelValue = resultVideoModelValue(result);
   return (
-    result?.modelLabel ||
     videoModelConfig(modelValue)?.label ||
-    modelValue ||
     fallbackVideoModel?.label ||
     '视频模型'
   );
@@ -747,8 +736,7 @@ const VIDEO_MODELS = [
   {
     value: 'seedance-2.0-dj-fast',
     label: 'Seedance 2.0 DJ Fast',
-    badge: '豆包',
-    vendor: '豆包视频',
+    badge: 'Fast',
     sizes: ['1280x720', '720x1280'],
     durations: [5, 10, 15],
     defaultSize: '1280x720',
@@ -764,7 +752,6 @@ const VIDEO_MODELS = [
     value: 'seedance-2.0-cl-mini',
     label: 'Seedance 2.0 CL Mini',
     badge: 'Seedance',
-    vendor: '星人视频',
     sizes: ['1280x720', '720x1280', '1024x1024'],
     durations: SEEDANCE_EXTENDED_VIDEO_DURATIONS,
     defaultSize: '1280x720',
@@ -797,7 +784,6 @@ const VIDEO_MODELS = [
     value: 'seedance-nsfw',
     label: 'Seedance 私测视频',
     badge: '私测',
-    vendor: '星人视频',
     private: true,
     sizes: ['1280x720', '720x1280', '1024x1024'],
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
@@ -986,13 +972,13 @@ function toCountSelectOptions(maxCount = 1) {
 const IMAGE_REQUEST_TIMEOUT_MS = 240000;
 const IMAGE_POLL_REQUEST_TIMEOUT_MS = 30000;
 const IMAGE_WAIT_MESSAGE =
-  '图像任务已提交，后台会持久化结果，可用任务 ID 查询。';
+  '图像任务已提交，正在准备生成结果。';
 const IMAGE_LONG_WAIT_MS = 70 * 1000;
 const IMAGE_LONG_WAIT_MESSAGE =
-  '图像任务仍在生成中，耗时接近 70 秒。请不要重复提交，可继续等待或稍后用任务 ID 查询结果。';
+  '图像任务仍在生成中，耗时接近 70 秒。请不要重复提交，可继续等待或稍后回到媒体工坊查看结果。';
 const IMAGE_VERY_LONG_WAIT_MS = 180 * 1000;
 const IMAGE_VERY_LONG_WAIT_MESSAGE =
-  '图像任务已进入长尾等待，系统仍会继续轮询并保留任务结果。请保持当前页面或稍后用任务 ID 查询。';
+  '图像任务已进入长尾等待，系统仍会继续轮询并保留任务结果。请保持当前页面或稍后回到媒体工坊查看。';
 const REVERSE_PROMPT_MODEL = 'gpt-5.4-mini';
 const REVERSE_PROMPT_MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const REVERSE_PROMPT_REFERENCE_PREFIX = '我需要按参考图生成图片：';
@@ -1129,12 +1115,27 @@ function toSizeSelectOptions(values, model) {
   }));
 }
 
+const USER_FACING_GENERATION_MESSAGES = [
+  '提示词或参考图被安全策略拒绝，请调整内容后重试。',
+  '视频任务已失败，生成服务没有返回可下载视频；请调整提示词或参考图后重试。',
+  '本次生成等待时间过长，请稍后刷新媒体工坊查看结果；如果没有结果，再降低分辨率或重试。',
+  '当前账号暂未开通该模型，请联系管理员或切换模型。',
+  '模型服务暂时不可用，请稍后重试。',
+  '当前参数不符合所选模型要求，请检查尺寸、数量和参考素材后重试。',
+  '本次生成暂时未完成，请稍后重试或切换模型。',
+];
+
 function userFacingGenerationError(error) {
   const message =
     typeof error === 'string' ? error || '生成失败' : error?.message || '生成失败';
+  if (USER_FACING_GENERATION_MESSAGES.includes(message)) return message;
   const lower = String(message).toLowerCase();
   const code =
     typeof error === 'string' ? '' : String(error?.code || '').toLowerCase();
+  const status =
+    typeof error === 'string'
+      ? 0
+      : Number(error?.response?.status || error?.status || 0);
   if (
     lower.includes('prompt_blocked') ||
     lower.includes('content_policy_violation') ||
@@ -1146,19 +1147,31 @@ function userFacingGenerationError(error) {
     return '提示词或参考图被安全策略拒绝，请调整内容后重试。';
   }
   if (lower.includes('current status: failure')) {
-    return '视频任务已失败，上游没有返回可下载视频；请调整提示词或参考图后重试。';
+    return '视频任务已失败，生成服务没有返回可下载视频；请调整提示词或参考图后重试。';
   }
   if (
     code === 'econnaborted' ||
     lower.includes('timeout') ||
-    lower.includes('network error')
+    lower.includes('超时') ||
+    lower.includes('network error') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('load failed') ||
+    [408, 425, 429, 500, 502, 503, 504].includes(status)
   ) {
     return '本次生成等待时间过长，请稍后刷新媒体工坊查看结果；如果没有结果，再降低分辨率或重试。';
   }
   if (
     lower.includes('no access to model') ||
     lower.includes('has no access to model') ||
-    lower.includes('token has no access')
+    lower.includes('token has no access') ||
+    lower.includes('access denied') ||
+    lower.includes('permission denied') ||
+    lower.includes('forbidden') ||
+    lower.includes('unauthorized') ||
+    lower.includes('http 401') ||
+    lower.includes('http 403') ||
+    status === 401 ||
+    status === 403
   ) {
     return '当前账号暂未开通该模型，请联系管理员或切换模型。';
   }
@@ -1173,20 +1186,35 @@ function userFacingGenerationError(error) {
   ) {
     return '模型服务暂时不可用，请稍后重试。';
   }
-  return message;
+  if (
+    lower.includes('invalid') ||
+    lower.includes('unsupported') ||
+    lower.includes('parameter') ||
+    lower.includes('size') ||
+    lower.includes('resolution') ||
+    lower.includes('aspect ratio')
+  ) {
+    return '当前参数不符合所选模型要求，请检查尺寸、数量和参考素材后重试。';
+  }
+  return '本次生成暂时未完成，请稍后重试或切换模型。';
 }
 
 function userFacingReversePromptError(error) {
   const message = generationErrorMessage(error);
   const lower = String(message || '').toLowerCase();
+  const status = Number(error?.response?.status || error?.status || 0);
   if (
     lower.includes('no access to model') ||
     lower.includes('has no access to model') ||
     lower.includes('token has no access') ||
     lower.includes('access denied') ||
-    lower.includes('forbidden')
+    lower.includes('forbidden') ||
+    lower.includes('http 401') ||
+    lower.includes('http 403') ||
+    status === 401 ||
+    status === 403
   ) {
-    return '当前用户分组暂未开放图像反推模型。';
+    return '当前用户分组暂未开放图像反推能力。';
   }
   if (
     lower.includes('context length') ||
@@ -1207,7 +1235,7 @@ function userFacingReversePromptError(error) {
   if (lower.includes('timeout') || lower.includes('network')) {
     return '图像反推连接超时，请稍后重试。';
   }
-  return message || '图像反推失败，请稍后重试。';
+  return '图像反推暂时不可用，请稍后重试。';
 }
 
 function isPersistentMediaURL(url) {
@@ -1667,7 +1695,8 @@ function getPreviewURLs(result) {
 }
 
 async function resultMediaFile(result, purpose = 'reference') {
-  const sourceUrl = getPreviewURLs(result)[0] || normalizeURL(result?.url || '');
+  const sourceUrl =
+    result?.cacheStatus === 'failed' ? '' : getPreviewURLs(result)[0] || '';
   if (!sourceUrl) throw new Error('这个结果没有可复用的媒体链接。');
   const absoluteUrl = toAbsoluteMediaURL(sourceUrl);
   const response = await fetch(absoluteUrl, { credentials: 'include' });
@@ -1933,10 +1962,7 @@ function isTransientVideoPollError(error) {
 }
 
 function videoPollErrorMessage(error) {
-  const status = videoPollErrorStatus(error);
-  const message = generationErrorMessage(error);
-  if (message) return message;
-  return status ? `HTTP ${status}` : '查询请求暂时失败';
+  return userFacingGenerationError(error);
 }
 
 function isTransientImagePollError(error) {
@@ -1945,6 +1971,15 @@ function isTransientImagePollError(error) {
 
 function imagePollErrorMessage(error) {
   return videoPollErrorMessage(error);
+}
+
+function mediaTaskStatusLabel(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (['queued', 'pending', 'waiting'].includes(normalized)) return '排队中';
+  if (['processing', 'running', 'in_progress'].includes(normalized)) return '生成中';
+  if (['completed', 'succeeded', 'success'].includes(normalized)) return '正在整理结果';
+  if (['failed', 'failure', 'error'].includes(normalized)) return '处理失败';
+  return '生成中';
 }
 
 function createTerminalImageTaskError(message) {
@@ -2467,28 +2502,23 @@ function ResultCard({
   selected = false,
   onToggleSelect,
 }) {
-  const previewUrls = getPreviewURLs(result);
+  const cacheFailed = result.cacheStatus === 'failed';
+  const previewUrls = cacheFailed ? [] : getPreviewURLs(result);
   const [activeUrlIndex, setActiveUrlIndex] = useState(0);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
   const displayUrl = previewUrls[activeUrlIndex] || '';
-  const originalUrl = normalizeURL(result.url);
-  const cacheFailed = result.cacheStatus === 'failed';
   const previewUnavailable = previewFailed || !displayUrl;
-  const usedFallbackPreview = activeUrlIndex > 0;
-  const openUrl = originalUrl || displayUrl;
   const displayPrompt = firstPromptText(
     result.displayPrompt,
     result.revisedPrompt,
     result.prompt,
   );
-  const statusText = cacheFailed
-    ? '临时缓存不可用，作品已生成，请用原始链接保存。'
-    : '浏览器暂时无法直接预览，请打开原始链接保存。';
+  const statusText = '结果暂时无法展示，请稍后刷新媒体工坊或重新生成。';
   const kindLabel = result.kind === 'image' ? '图片作品' : '视频作品';
   const fileLabel = result.kind === 'image' ? 'PNG / URL' : 'MP4 / URL';
   const createdLabel = formatResultTime(result.createdAt);
-  const taskLabel = result.taskId ? `任务 ${result.taskId}` : '即时结果';
+  const taskLabel = result.taskId ? '已完成' : '即时结果';
   const promptFoldable = displayPrompt.length > 86;
 
   useEffect(() => {
@@ -2522,7 +2552,7 @@ function ResultCard({
           <span>{taskLabel}</span>
         </div>
         <Tag color={cacheFailed ? 'orange' : 'green'}>
-          {cacheFailed ? '原始链接' : '已完成'}
+          {cacheFailed ? '暂不可用' : '已完成'}
         </Tag>
       </div>
       <div className='mp-result-frame'>
@@ -2530,7 +2560,7 @@ function ResultCard({
           <button
             type='button'
             className='mp-result-open-media'
-            onClick={() => openMediaUrl(openUrl)}
+            onClick={() => openMediaUrl(displayUrl)}
             aria-label='查看原图'
           >
             <img
@@ -2551,37 +2581,11 @@ function ResultCard({
             onError={handlePreviewError}
           />
         ) : null}
-        {(cacheFailed || usedFallbackPreview) && !previewUnavailable ? (
-          <div className='mp-media-notice'>
-            已使用原始链接预览，请尽快下载保存。
-          </div>
-        ) : null}
         {previewUnavailable ? (
           <div className='mp-media-error'>
             <IconEyeOpened />
             <strong>作品已生成，预览暂不可用</strong>
             <span>{statusText}</span>
-            <Space spacing={8}>
-              {originalUrl ? (
-                <Button
-                  size='small'
-                  icon={<IconExternalOpen />}
-                  onClick={() => openMediaUrl(originalUrl)}
-                >
-                  打开原始链接
-                </Button>
-              ) : null}
-              <Button
-                size='small'
-                icon={<IconCopy />}
-                onClick={async () => {
-                  const ok = await copy(originalUrl || displayUrl);
-                  if (ok) Toast.success('链接已复制');
-                }}
-              >
-                复制链接
-              </Button>
-            </Space>
           </div>
         ) : null}
       </div>
@@ -2641,9 +2645,10 @@ function ResultCard({
             theme='borderless'
             className='mp-btn-tool'
             icon={<IconDownload />}
+            disabled={!displayUrl}
             onClick={() =>
               downloadURL(
-                displayUrl || originalUrl,
+                displayUrl,
                 result.kind === 'image'
                   ? 'xingren-image.png'
                   : 'xingren-video.mp4',
@@ -2814,7 +2819,7 @@ const MediaPlayground = () => {
         isVideoModelAllowed(item.value),
     );
     if (!nextModel?.value || nextModel.value === videoModel) return;
-    const previousLabel = videoModelConfig(videoModel)?.label || videoModel;
+    const previousLabel = videoModelConfig(videoModel)?.label || '当前视频模型';
     setVideoModel(nextModel.value);
     Toast.info(`当前分组未开放 ${previousLabel}，已切换到 ${nextModel.label}。`);
   }, [mode, models, videoModel]);
@@ -3361,16 +3366,13 @@ const MediaPlayground = () => {
       return {
         ...result,
         cacheStatus: 'failed',
-        cacheMessage: res.data?.message || '临时下载缓存失败。',
+        cacheMessage: '结果暂时无法展示。',
       };
     } catch (error) {
       return {
         ...result,
         cacheStatus: 'failed',
-        cacheMessage:
-          error?.response?.data?.message ||
-          error.message ||
-          '临时下载缓存失败。',
+        cacheMessage: '结果暂时无法展示。',
       };
     }
   }
@@ -3636,7 +3638,7 @@ const MediaPlayground = () => {
     const submittedModelLabel =
       imageModelConfig(submittedModel)?.label ||
       activeImageModel.label ||
-      submittedModel;
+      '图片模型';
     if (imageWorkflow === 'edit') {
       const form = new FormData();
       Object.entries(effectiveRequestPayload).forEach(([key, value]) => {
@@ -3663,9 +3665,8 @@ const MediaPlayground = () => {
     if (payload?.error?.message) throw new Error(payload.error.message);
     if (!payload?.success) throw new Error(payload?.message || '图像任务提交失败。');
     const taskId = getImageTaskId(payload);
-    if (!taskId) throw new Error('图像任务提交成功但没有返回任务 ID。');
-    setImageTaskLookup(taskId);
-    setTaskMessage(`图像任务已提交：${taskId}，正在等待持久化结果...`);
+    if (!taskId) throw new Error('图像任务提交完成但未返回任务信息。');
+    setTaskMessage('图像任务已提交，正在等待结果...');
     upsertLiveQueueTask({
       id: taskId,
       title: '图片生成中',
@@ -3675,7 +3676,7 @@ const MediaPlayground = () => {
       statusText: '生成中',
       progress: 3,
       createdAt: Date.now(),
-      message: `图像任务已提交：${taskId}`,
+      message: '图像任务已提交，正在等待结果。',
     });
     let result;
     try {
@@ -3694,7 +3695,7 @@ const MediaPlayground = () => {
         status: 'failed',
         statusText: '失败',
         progress: 100,
-        message: generationErrorMessage(error),
+        message: userFacingGenerationError(error),
       });
       throw error;
     }
@@ -3731,6 +3732,7 @@ const MediaPlayground = () => {
           throw new Error(res.data?.message || '图像任务查询失败。');
         }
         const status = getImageTaskStatus(res.data);
+        const statusLabel = mediaTaskStatusLabel(status);
         const progress = getImageTaskProgress(res.data);
         if (!longWaitNotified && elapsedMs >= IMAGE_LONG_WAIT_MS) {
           longWaitNotified = true;
@@ -3744,16 +3746,16 @@ const MediaPlayground = () => {
         if (elapsedMs >= IMAGE_VERY_LONG_WAIT_MS) {
           waitSuffix = '，已进入长尾等待，后台仍会继续保留结果';
         } else if (elapsedMs >= IMAGE_LONG_WAIT_MS) {
-          waitSuffix = '，生成耗时较长，请继续等待或稍后用任务 ID 查询';
+          waitSuffix = '，生成耗时较长，请继续等待或稍后回到媒体工坊查看结果';
         }
-        const nextMessage = `图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${waitSuffix}`;
+        const nextMessage = `图像${statusLabel}，进度 ${progress}%${waitSuffix}`;
         setTaskMessage(nextMessage);
         upsertLiveQueueTask({
           id: taskId,
           title: '图片生成中',
           kind: 'image',
           status: status === 'completed' ? 'running' : status || 'running',
-          statusText: status === 'completed' ? '回收结果' : status || '生成中',
+          statusText: status === 'completed' ? '正在整理结果' : statusLabel,
           progress,
           message: nextMessage,
         });
@@ -3768,6 +3770,11 @@ const MediaPlayground = () => {
           throw new Error('图像任务完成但没有返回持久化图片。');
         }
         if (status === 'failed') {
+          const failureMessage = userFacingGenerationError(
+            res.data.data.fail_reason ||
+              res.data.data.data?.error ||
+              '图像任务失败。',
+          );
           upsertLiveQueueTask({
             id: taskId,
             title: '图片生成失败',
@@ -3775,16 +3782,9 @@ const MediaPlayground = () => {
             status: 'failed',
             statusText: '失败',
             progress: 100,
-            message:
-              res.data.data.fail_reason ||
-              res.data.data.data?.error ||
-              '图像任务失败。',
+            message: failureMessage,
           });
-          throw createTerminalImageTaskError(
-            res.data.data.fail_reason ||
-              res.data.data.data?.error ||
-              '图像任务失败。',
-          );
+          throw createTerminalImageTaskError(failureMessage);
         }
       } catch (error) {
         if (error?.imageTaskTerminal) throw error;
@@ -3795,13 +3795,13 @@ const MediaPlayground = () => {
           Toast.info(IMAGE_LONG_WAIT_MESSAGE);
         }
         if (elapsedMs >= IMAGE_VERY_LONG_WAIT_MS) {
-          waitSuffix = '，后台仍会保留结果，可稍后用任务 ID 查询';
+          waitSuffix = '，后台仍会保留结果，可稍后回到媒体工坊查看';
           if (!veryLongWaitNotified) {
             veryLongWaitNotified = true;
             Toast.info(IMAGE_VERY_LONG_WAIT_MESSAGE);
           }
         }
-        const nextMessage = `图像任务 ${taskId} 查询暂时失败：${imagePollErrorMessage(error)}${waitSuffix}`;
+        const nextMessage = `图像任务暂时无法确认状态：${imagePollErrorMessage(error)}${waitSuffix}`;
         setTaskMessage(nextMessage);
         upsertLiveQueueTask({
           id: taskId,
@@ -3815,17 +3815,17 @@ const MediaPlayground = () => {
       }
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-    throw new Error('图像生成等待超时，请稍后用任务 ID 查询结果。');
+    throw new Error('图像生成等待超时，请稍后回到媒体工坊查看结果。');
   }
 
   async function lookupImageTask() {
     const taskId = imageTaskLookup.trim();
     if (!taskId) {
-      Toast.error('请输入任务 ID。');
+      Toast.error('请输入任务编号。');
       return;
     }
     setSubmitting(true);
-    setTaskMessage(`正在查询图像任务：${taskId}`);
+    setTaskMessage('正在查询图像任务...');
     try {
       const res = await API.get(`/pg/images/tasks/${encodeURIComponent(taskId)}`, {
         skipErrorHandler: true,
@@ -3853,7 +3853,7 @@ const MediaPlayground = () => {
             '图像任务失败。',
         );
       }
-      Toast.info(`图像任务仍在处理中：${status}`);
+      Toast.info(`图像任务仍在${mediaTaskStatusLabel(status)}。`);
     } catch (error) {
       Toast.error(userFacingGenerationError(generationErrorMessage(error)));
     } finally {
@@ -3876,6 +3876,7 @@ const MediaPlayground = () => {
           disableDuplicate: true,
         });
         const status = getVideoStatus(res.data);
+        const statusLabel = mediaTaskStatusLabel(status);
         const progress = getVideoProgress(res.data);
         const url = extractVideoURL(res.data);
         const elapsedMs = Date.now() - startedAt;
@@ -3885,13 +3886,13 @@ const MediaPlayground = () => {
           longWaitNotified = true;
         }
         if (elapsedMs >= VIDEO_BACKGROUND_WAIT_MS) {
-          waitSuffix = '，已转入长时间后台轮询，上游完成后会回写日志和媒体工坊';
+          waitSuffix = '，已转入长时间后台轮询，生成完成后会回写日志和媒体工坊';
           if (!backgroundNotified) {
             Toast.info('视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。');
             backgroundNotified = true;
           }
         }
-        const nextMessage = `视频任务 ${status}，进度 ${progress}%${waitSuffix}`;
+        const nextMessage = `视频${statusLabel}，进度 ${progress}%${waitSuffix}`;
         setTaskMessage(nextMessage);
         upsertLiveQueueTask({
           id: taskId,
@@ -3899,7 +3900,7 @@ const MediaPlayground = () => {
           kind: 'video',
           model: activeVideoModel.label,
           status: status === 'completed' ? 'polling' : status || 'polling',
-          statusText: status === 'completed' ? '回收结果' : status || '轮询中',
+          statusText: status === 'completed' ? '正在整理结果' : statusLabel,
           progress,
           message: nextMessage,
         });
@@ -3911,6 +3912,9 @@ const MediaPlayground = () => {
           activeVideoModel.label,
         );
         if (status === 'failed') {
+          const failureMessage = userFacingGenerationError(
+            extractVideoFailureReason(res.data) || '视频任务失败。',
+          );
           upsertLiveQueueTask({
             id: taskId,
             title: '视频生成失败',
@@ -3919,9 +3923,9 @@ const MediaPlayground = () => {
             status: 'failed',
             statusText: '失败',
             progress: 100,
-            message: extractVideoFailureReason(res.data) || '视频任务失败。',
+            message: failureMessage,
           });
-          throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
+          throw new Error(failureMessage);
         }
         if (status === 'completed') {
           throw new Error('视频完成但没有返回视频地址。');
@@ -3929,19 +3933,19 @@ const MediaPlayground = () => {
       } catch (error) {
         if (!isTransientVideoPollError(error)) throw error;
         const elapsedMs = Date.now() - startedAt;
-        let waitSuffix = '，页面会继续轮询，不会中断上游生成任务';
+        let waitSuffix = '，页面会继续轮询，不会中断当前生成任务';
         if (!longWaitNotified && elapsedMs >= VIDEO_LONG_WAIT_MS) {
           Toast.info('视频任务仍在生成中，请不要重复提交，完成后会自动回写日志和媒体工坊。');
           longWaitNotified = true;
         }
         if (elapsedMs >= VIDEO_BACKGROUND_WAIT_MS) {
-          waitSuffix = '，已转入长时间后台轮询，上游完成后会回写日志和媒体工坊';
+          waitSuffix = '，已转入长时间后台轮询，生成完成后会回写日志和媒体工坊';
           if (!backgroundNotified) {
             Toast.info('视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。');
             backgroundNotified = true;
           }
         }
-        const nextMessage = `视频任务查询暂时失败：${videoPollErrorMessage(error)}${waitSuffix}`;
+        const nextMessage = `视频任务暂时无法确认状态：${videoPollErrorMessage(error)}${waitSuffix}`;
         setTaskMessage(nextMessage);
         upsertLiveQueueTask({
           id: taskId,
@@ -3991,7 +3995,7 @@ const MediaPlayground = () => {
       return;
     }
     const taskId = getVideoTaskId(res.data);
-    if (!taskId) throw new Error('视频任务提交成功但没有返回任务 ID。');
+    if (!taskId) throw new Error('视频任务提交完成但未返回任务信息。');
     setActiveVideoTask({
       taskId,
       model: activeVideoModel.label,
@@ -3999,7 +4003,7 @@ const MediaPlayground = () => {
       spec: outputSpec,
     });
     setVideoPolling(true);
-    setTaskMessage(`视频任务已提交：${taskId}，页面保持打开时会后台自动轮询结果。`);
+    setTaskMessage('视频任务已提交，页面会自动等待结果。');
     upsertLiveQueueTask({
       id: taskId,
       title: '视频生成中',
@@ -4009,7 +4013,7 @@ const MediaPlayground = () => {
       statusText: '轮询中',
       progress: 3,
       createdAt: Date.now(),
-      message: `视频任务已提交：${taskId}`,
+      message: '视频任务已提交，正在等待结果。',
     });
     Toast.info('视频任务已进入后台轮询，可以继续修改提示词或参数。');
     window.setTimeout(async () => {
@@ -4018,7 +4022,7 @@ const MediaPlayground = () => {
         const result = await pollVideo(taskId);
         if (!result) {
           Toast.info('页面轮询已暂停，任务仍在后台继续生成，完成后会写入日志和媒体工坊。');
-          setTaskMessage(`视频任务 ${taskId} 已转入后台生成，完成后可在任务日志和媒体工坊查看。`);
+          setTaskMessage('视频任务已转入后台生成，完成后可在任务日志和媒体工坊查看。');
           keepTaskMessage = true;
           return;
         }
@@ -4030,6 +4034,7 @@ const MediaPlayground = () => {
         );
         Toast.success('视频已生成，请立即下载保存。');
       } catch (error) {
+        const failureMessage = userFacingGenerationError(error);
         upsertLiveQueueTask({
           id: taskId,
           title: '视频生成失败',
@@ -4038,10 +4043,10 @@ const MediaPlayground = () => {
           status: 'failed',
           statusText: '失败',
           progress: 100,
-          message: generationErrorMessage(error),
+          message: failureMessage,
         });
-        Toast.error(userFacingGenerationError(generationErrorMessage(error)));
-        setTaskMessage(`视频任务 ${taskId} 后台轮询结束：${generationErrorMessage(error)}`);
+        Toast.error(failureMessage);
+        setTaskMessage(`视频任务已结束：${failureMessage}`);
         keepTaskMessage = true;
       } finally {
         setVideoPolling(false);
@@ -4106,7 +4111,7 @@ const MediaPlayground = () => {
     setResults((prev) => prev.filter((item) => item.id !== id));
     setSelectedResultIds((prev) => prev.filter((item) => item !== id));
   };
-  const inspectorResultPreview = inspectorResult
+  const inspectorResultPreview = inspectorResult && inspectorResult.cacheStatus !== 'failed'
     ? getPreviewURLs(inspectorResult)[0] || ''
     : '';
   const inspectorResultPrompt = inspectorResult
@@ -4270,7 +4275,7 @@ const MediaPlayground = () => {
       const targetImageModel = sourceModel || activeImageModel;
       if (action === 'edit' || action === 'reference') {
         if (!hydratedSourceModelValue) {
-          Toast.warning('结果缺少原模型标记，请先用任务 ID 查询或重新选择原模型后再提交。');
+          Toast.warning('结果缺少原模型信息，请重新选择模型后再提交。');
           return;
         }
         if (!sourceModel || !isImageModelAllowed(hydratedSourceModelValue)) {
@@ -4320,7 +4325,7 @@ const MediaPlayground = () => {
         Toast.success('已放入反推图。');
       }
     } catch (error) {
-      Toast.error(generationErrorMessage(error) || '结果复用失败，请下载后手动上传。');
+      Toast.error('结果暂时无法复用，请下载后重新上传。');
     }
   }
 
@@ -4392,7 +4397,7 @@ const MediaPlayground = () => {
     runningQueueItems[0] ||
     (submitting || videoPolling
       ? {
-        id: activeVideoTask?.taskId || imageTaskLookup || 'current-generation',
+        id: 'current-generation',
         title: workflowLabel,
         kind: mode,
         model: activeModel.label,
@@ -4400,7 +4405,7 @@ const MediaPlayground = () => {
         statusText: videoPolling ? '轮询中' : '生成中',
         progress: parseProgressPercent(taskMessage),
         createdAt: submitStartedAt || Date.now(),
-        message: taskMessage || '任务已提交，等待上游返回。',
+        message: taskMessage || '任务已提交，等待生成服务返回。',
       }
       : null);
   const queueItems = [
@@ -4864,7 +4869,7 @@ const MediaPlayground = () => {
                   }}
                   onApplyResult={applyReversePrompt}
                   message={reversePromptMessage}
-                  modelName={REVERSE_PROMPT_MODEL}
+                  modelName='图像反推'
                   imageWorkflow={imageWorkflow}
                   fileDrop={null}
                   modelSelector={
@@ -5128,7 +5133,7 @@ const MediaPlayground = () => {
                 <div className='mp-task-lookup'>
                   <Input
                     value={imageTaskLookup}
-                    placeholder='task_id'
+                    placeholder='输入任务编号'
                     onChange={setImageTaskLookup}
                   />
                   <Button
@@ -5304,7 +5309,7 @@ const MediaPlayground = () => {
                         <div className='mp-queue-progress'>
                           <span style={{ width: `${activeQueueItem.progress || 18}%` }} />
                         </div>
-                        <em>{activeQueueElapsedSeconds} 秒 · {activeQueueItem.id}</em>
+                        <em>{activeQueueElapsedSeconds} 秒</em>
                       </div>
                     </div>
                   ) : (
@@ -5370,7 +5375,7 @@ const MediaPlayground = () => {
                 {inspectorResult ? (
                   <div className='mp-result-inspector-head-actions'>
                     <Tag color={inspectorResult.cacheStatus === 'failed' ? 'orange' : 'green'}>
-                      {inspectorResult.cacheStatus === 'failed' ? '原始链接' : '已完成'}
+                      {inspectorResult.cacheStatus === 'failed' ? '暂不可用' : '已完成'}
                     </Tag>
                     <Button
                       size='small'
@@ -5394,7 +5399,7 @@ const MediaPlayground = () => {
                     ) : (
                       <div className='mp-result-inspector-empty'>
                         <IconEyeOpened />
-                        <span>预览暂不可用</span>
+                        <span>结果暂时无法展示，请稍后刷新媒体工坊。</span>
                       </div>
                     )}
                   </div>
@@ -5488,34 +5493,38 @@ const MediaPlayground = () => {
                         套用提示词
                       </Button>
                     ) : null}
-                    <Button
-                      size='small'
-                      theme='borderless'
-                      className='mp-btn-tool'
-                      icon={<IconDownload />}
-                      onClick={() =>
-                        downloadURL(
-                          inspectorResultPreview || normalizeURL(inspectorResult.url),
-                          inspectorResult.kind === 'image'
-                            ? 'xingren-image.png'
-                            : 'xingren-video.mp4',
-                        )
-                      }
-                    >
-                      下载
-                    </Button>
-                    <Button
-                      size='small'
-                      theme='borderless'
-                      className='mp-btn-tool'
-                      icon={<IconCopy />}
-                      onClick={async () => {
-                        const ok = await copy(inspectorResultPreview || normalizeURL(inspectorResult.url));
-                        if (ok) Toast.success('链接已复制');
-                      }}
-                    >
-                      复制
-                    </Button>
+                    {inspectorResultPreview ? (
+                      <>
+                        <Button
+                          size='small'
+                          theme='borderless'
+                          className='mp-btn-tool'
+                          icon={<IconDownload />}
+                          onClick={() =>
+                            downloadURL(
+                              inspectorResultPreview,
+                              inspectorResult.kind === 'image'
+                                ? 'xingren-image.png'
+                                : 'xingren-video.mp4',
+                            )
+                          }
+                        >
+                          下载
+                        </Button>
+                        <Button
+                          size='small'
+                          theme='borderless'
+                          className='mp-btn-tool'
+                          icon={<IconCopy />}
+                          onClick={async () => {
+                            const ok = await copy(inspectorResultPreview);
+                            if (ok) Toast.success('链接已复制');
+                          }}
+                        >
+                          复制
+                        </Button>
+                      </>
+                    ) : null}
                   </div>
                   <div className='mp-result-danger-zone'>
                     <Button

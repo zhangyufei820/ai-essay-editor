@@ -93,10 +93,12 @@ func TestEnforcePublicTokenGroupSelectionRestrictsClaudeTokenModels(t *testing.T
 		request := struct {
 			ModelLimitsEnabled bool   `json:"model_limits_enabled"`
 			ModelLimits        string `json:"model_limits"`
+			Group              string `json:"group"`
 		}{}
 		require.NoError(t, c.ShouldBindJSON(&request))
 		require.True(t, request.ModelLimitsEnabled)
 		require.Equal(t, strings.Join(claudeUserTokenModels, ","), request.ModelLimits)
+		require.Equal(t, "claude-external", request.Group)
 		c.Status(http.StatusNoContent)
 	})
 	request := httptest.NewRequest(

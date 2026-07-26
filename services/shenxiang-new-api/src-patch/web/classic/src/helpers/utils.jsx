@@ -30,16 +30,19 @@ import { MOBILE_BREAKPOINT } from '../hooks/common/useIsMobile';
 
 const PRICING_DISPLAY_OVERRIDES = {
   'gpt-image-2': {
-    display_name: 'gpt-image-2',
-    description: '高质量 OpenAI 图像模型，适合图片生成、编辑和电商商品图场景。',
-    icon: 'OpenAI',
+    display_name: 'GPT Image 2',
+    description: '高质量图像模型，适合图片生成、编辑和电商商品图场景。',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   'banana-2': {
-    display_name: 'gemini-3.1-flash-image-preview',
-    description: '星人 Gemini 3.1 Flash Image 图像生成，支持 512/1K/2K/4K 与极端比例，人民币 ¥0.162/张。',
+    display_name: 'Banana 2',
+    description: '高分辨率图像模型，支持 512/1K/2K/4K 与多种画面比例，人民币 ¥0.162/张。',
     fixed_price_label: '¥0.162',
     price_unit_label: '张',
     billing_label: '按张计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   'ecommerce-banana-2': {
     display_name: '电商特价banana-2',
@@ -47,6 +50,8 @@ const PRICING_DISPLAY_OVERRIDES = {
     fixed_price_label: '¥0.085',
     price_unit_label: '张',
     billing_label: '按张计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   'image 2电商商品图快速通道(1.5K)': {
     display_name: 'image 2电商商品图快速通道(1.5K)',
@@ -54,6 +59,8 @@ const PRICING_DISPLAY_OVERRIDES = {
     fixed_price_label: '¥0.055',
     price_unit_label: '张',
     billing_label: '按张计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   'gemini-3-pro-image-preview': {
     display_name: 'Gemini 3 Pro Image',
@@ -61,14 +68,17 @@ const PRICING_DISPLAY_OVERRIDES = {
     fixed_price_label: '¥0.238',
     price_unit_label: '张',
     billing_label: '按张计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   'gpt-image-2-4K': {
-    display_name: 'gpt-image-2-4K',
-    description: '星人 OpenAI 图像生成，支持 1K/2K/4K 与官方约束内自动或自定义尺寸；gpt-image-2 最大边 3840，4K 横竖图为 3840x2160 / 2160x3840。',
+    display_name: 'GPT Image 2',
+    description: '支持 1K/2K/4K 与合法自定义尺寸；4K 横竖图最高为 3840x2160 / 2160x3840。',
     fixed_price_label: '¥0.108',
     price_unit_label: '张',
     billing_label: '按张计费',
-    icon: 'OpenAI',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   '官转image 2稳定': {
     display_name: '官转image 2稳定',
@@ -85,7 +95,8 @@ const PRICING_DISPLAY_OVERRIDES = {
     fixed_price_label: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
     price_unit_label: '张',
     billing_label: '按张计费',
-    icon: 'OpenAI',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   'grok-imagine-image': {
     display_name: 'Grok Image Pro',
@@ -93,6 +104,8 @@ const PRICING_DISPLAY_OVERRIDES = {
     fixed_price_label: '¥0.12',
     price_unit_label: '张',
     billing_label: '按张计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   'grok-video-super-720p': {
     display_name: 'Grok Video',
@@ -104,20 +117,31 @@ const PRICING_DISPLAY_OVERRIDES = {
     icon: null,
   },
   'seedance-2.0-dj-fast': {
-    display_name: 'seedance-2.0-dj-fast',
-    description: '豆包 Seedance 2.0 DJ Fast：人民币 ¥0.162/秒，按秒计费；支持 5/10/15 秒，只接收图片参考，不能过人脸。',
+    display_name: 'Seedance 2.0 DJ Fast',
+    description: '人民币 ¥0.162/秒，按秒计费；支持 5/10/15 秒，只接收图片参考，不能过人脸。',
     fixed_price_label: '¥0.162',
     price_unit_label: '秒',
     billing_label: '按秒计费',
-    icon: 'Doubao',
+    visible_vendor_name: '星人媒体',
+    icon: null,
+  },
+  'seedance-2.0-cl-mini': {
+    display_name: 'Seedance 2.0 CL Mini',
+    description: '支持图片参考，也可传 1 个视频参考；输入含视频 ¥12.852/1M Token，输出 ¥21.114/1M Token。',
+    fixed_price_label: '输入含视频 ¥12.852/1M｜输出 ¥21.114/1M',
+    price_unit_label: 'Token',
+    billing_label: '按 Token 计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
   'seedance-2.0-ld-17': {
-    display_name: 'seedance-2.0-ld-17',
-    description: '豆包 Seedance 2.0 LD-17：人民币 ¥6.48/次，按次计费；支持 5-15 秒，可过人脸，支持 9 图 / 3 视频 / 3 音频参考。',
+    display_name: 'Seedance 2.0 LD-17',
+    description: '人民币 ¥6.48/次，按次计费；支持 5-15 秒，可过人脸，支持 9 图 / 3 视频 / 3 音频参考。',
     fixed_price_label: '¥6.48',
     price_unit_label: '次',
     billing_label: '按次计费',
-    icon: 'Doubao',
+    visible_vendor_name: '星人媒体',
+    icon: null,
   },
 };
 
@@ -136,7 +160,9 @@ export function applyPricingDisplayOverrides(model) {
     ...model,
     display_name: override.display_name || model.display_name,
     description: override.description || model.description,
-    icon: override.icon || model.icon,
+    icon: Object.prototype.hasOwnProperty.call(override, 'icon')
+      ? override.icon
+      : model.icon,
   };
 }
 
@@ -149,7 +175,11 @@ export function getPricingModelDescription(model) {
 }
 
 export function getPricingModelVisibleVendorName(model) {
-  return getPricingDisplayOverride(model)?.visible_vendor_name || model?.vendor_name || '';
+  const override = getPricingDisplayOverride(model);
+  if (Object.prototype.hasOwnProperty.call(override || {}, 'visible_vendor_name')) {
+    return override.visible_vendor_name || '';
+  }
+  return model?.vendor_name || '';
 }
 
 export function getPricingModelVisibleTags(model) {

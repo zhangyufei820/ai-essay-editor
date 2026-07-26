@@ -111,6 +111,10 @@
     },
   };
 
+  var SAFE_REQUEST_FAILURE = "当前操作暂时无法完成，请使用下方固定操作继续或稍后重试。";
+  var SAFE_OPERATION_FAILURE = "我暂时无法完成这个页面操作。请刷新页面后重试。";
+  var SAFE_ONLINE_FAILURE = "在线接入老师暂时无法完成这次回答。请使用下方固定操作继续或稍后重试。";
+
   var state = {
     open: false,
     loading: false,
@@ -120,7 +124,6 @@
     selectedModel: CONFIG.codexModel,
     selectedOS: "windows",
     aiphuiMode: "desktop",
-    allowKeyPrint: true,
     generatedKey: "",
     awaitingCustomModel: false,
     operationRunning: false,
@@ -242,14 +245,14 @@
           })
           .then(function (payload) {
             if (!res.ok || payload.success === false) {
-              throw new Error(payload.message || "API Key 创建失败，请稍后重试。");
+              throw new Error(SAFE_REQUEST_FAILURE);
             }
             return payload;
           });
       })
       .then(function (payload) {
         if (!payload.key || !/^sk-[A-Za-z0-9._-]+$/.test(payload.key)) {
-          throw new Error("API Key 已创建，但没有拿到可复制的 Key。请到令牌管理页查看或重新生成。");
+          throw new Error(SAFE_REQUEST_FAILURE);
         }
         return payload;
       });
@@ -319,7 +322,6 @@
 
   function windowsAiphuiConfigCommand(model, key, options) {
     options = options || {};
-    var allowPrint = options.allowPrint !== false;
     var includeTrust = options.includeTrust !== false;
     var configLines = aiphuiConfigLines(model, includeTrust);
     var command =
@@ -341,26 +343,19 @@
       " -Force | Out-Null; " +
       'Write-Host "===== AIPHUI Codex 配置写入完成 =====" -ForegroundColor Green; ' +
       'Write-Host "CONFIG = $configPath"; ' +
-      (allowPrint ? 'Write-Host "AIPHUI_API_KEY = $env:AIPHUI_API_KEY"; ' : 'Write-Host "AIPHUI_API_KEY = 已写入"; ') +
+      'Write-Host "AIPHUI_API_KEY 已写入（已隐藏）"; ' +
       "Get-Content $configPath";
-    if (allowPrint) {
-      command =
-        'Write-Host "注意：下面会打印完整 AIPHUI_API_KEY，只发给接入老师时可用，公开截图前请遮住。" -ForegroundColor Yellow; ' +
-        command;
-    }
     return command;
   }
 
   function windowsCodexCommand(model, key) {
     return windowsAiphuiConfigCommand(model, key, {
-      allowPrint: state.allowKeyPrint,
       includeTrust: true,
     });
   }
 
   function macAiphuiConfigCommand(model, key, options) {
     options = options || {};
-    var allowPrint = options.allowPrint !== false;
     var config = configLinesForOS(model, "mac", true);
     var body = config.join("\n");
     var command =
@@ -371,11 +366,8 @@
       ' > "$HOME/.codex/config.toml"; ' +
       'echo "===== AIPHUI Codex 配置写入完成 ====="; ' +
       'echo "CONFIG = $HOME/.codex/config.toml"; ' +
-      (allowPrint ? 'echo "AIPHUI_API_KEY = $AIPHUI_API_KEY"; ' : 'echo "AIPHUI_API_KEY = 已写入"; ') +
+      'echo "AIPHUI_API_KEY 已写入（已隐藏）"; ' +
       'cat "$HOME/.codex/config.toml"';
-    if (allowPrint) {
-      command = 'echo "注意：下面会打印完整 AIPHUI_API_KEY，公开截图前请遮住。"; ' + command;
-    }
     return command;
   }
 
@@ -386,7 +378,7 @@
     return (
       apiKeySetter +
       'if [ -z "$AIPHUI_API_KEY" ]; then echo "没有读到 AIPHUI_API_KEY，请先执行配置命令。"; exit 1; fi; ' +
-      'echo "AIPHUI_API_KEY = $AIPHUI_API_KEY"; ' +
+      'echo "AIPHUI_API_KEY 已读取（已隐藏）"; ' +
       "curl -sS " +
       shellSingleQuote(CONFIG.baseUrl + "/responses") +
       ' -H "Authorization: Bearer $AIPHUI_API_KEY" -H "Content-Type: application/json" -d ' +
@@ -410,7 +402,8 @@
     var configLines = aiphuiConfigLines(model, true);
     var command =
       '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; ' +
-      "$ApiKey=Read-Host '请粘贴 AIPHUI API Key'; " +
+      "$SecureApiKey=Read-Host '请粘贴 AIPHUI API Key' -AsSecureString; " +
+      "$ApiKey=[System.Net.NetworkCredential]::new('', $SecureApiKey).Password; " +
       '[Environment]::SetEnvironmentVariable("AIPHUI_API_KEY",$ApiKey,"User"); ' +
       "$env:AIPHUI_API_KEY=$ApiKey; " +
       '$codexDir=Join-Path $env:USERPROFILE ".codex"; ' +
@@ -425,11 +418,8 @@
       " -Force | Out-Null; " +
       'Write-Host "===== AIPHUI Codex 配置写入完成 =====" -ForegroundColor Green; ' +
       'Write-Host "CONFIG = $configPath"; ' +
-      'Write-Host "AIPHUI_API_KEY = $env:AIPHUI_API_KEY"; ' +
+      'Write-Host "AIPHUI_API_KEY 已写入（已隐藏）"; ' +
       "Get-Content $configPath";
-    command =
-      'Write-Host "注意：下面会打印完整 AIPHUI_API_KEY，只发给接入老师时可用，公开截图前请遮住。" -ForegroundColor Yellow; ' +
-      command;
     return command;
   }
 
@@ -437,12 +427,11 @@
     var config = configLinesForOS(model, "mac", true);
     var body = config.join("\n");
     return (
-      'echo "注意：下面会打印完整 AIPHUI_API_KEY，公开截图前请遮住。"; ' +
-      'printf "请粘贴 AIPHUI API Key: "; IFS= read -r AIPHUI_API_KEY; export AIPHUI_API_KEY; ' +
+      'printf "请粘贴 AIPHUI API Key: "; IFS= read -r -s AIPHUI_API_KEY; printf "\\n"; export AIPHUI_API_KEY; ' +
       'printf "\\nexport AIPHUI_API_KEY=%s\\n" "$(printf %q "$AIPHUI_API_KEY")" >> "$HOME/.zshrc"; ' +
       'mkdir -p "$HOME/.codex" "$HOME/codex-work"; printf %b ' +
       shellPrintfLiteral(body) +
-      ' > "$HOME/.codex/config.toml"; echo "CONFIG = $HOME/.codex/config.toml"; echo "AIPHUI_API_KEY = $AIPHUI_API_KEY"; cat "$HOME/.codex/config.toml"'
+      ' > "$HOME/.codex/config.toml"; echo "CONFIG = $HOME/.codex/config.toml"; echo "AIPHUI_API_KEY 已写入（已隐藏）"; cat "$HOME/.codex/config.toml"'
     );
   }
 
@@ -548,7 +537,7 @@
       "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; " +
       apiKeySetter +
       'if (-not $env:AIPHUI_API_KEY) { Write-Host "没有读到 AIPHUI_API_KEY，请先执行配置命令。" -ForegroundColor Red; exit 1 }; ' +
-      'Write-Host "AIPHUI_API_KEY = $env:AIPHUI_API_KEY"; ' +
+      'Write-Host "AIPHUI_API_KEY 已读取（已隐藏）"; ' +
       '$headers=@{"Authorization"="Bearer $env:AIPHUI_API_KEY";"Content-Type"="application/json"}; ' +
       '$body=@{model="' +
       CONFIG.codexModel +
@@ -702,21 +691,7 @@
 
   function collectPageContext() {
     var routeKey = currentRouteKey();
-    var route = routeKey ? SITE_ROUTES[routeKey] : null;
-    return {
-      url: window.location.origin + window.location.pathname,
-      path: window.location.pathname || "/",
-      title: document.title || "",
-      route_title: route ? route.title : "",
-      route_hint: route ? route.hint : "",
-      headings: collectLabels("h1,h2,h3,[role='heading']", 12),
-      buttons: collectLabels("button,[role='button'],a", 24),
-      fields: collectLabels("label,[aria-label],input[placeholder],textarea[placeholder]", 24),
-      controls: collectInteractiveInventory(28).map(function (item) {
-        return item.label + "|" + item.kind + (item.routeTitle ? "|to:" + item.routeTitle : "") + (item.sensitive ? "|confirm" : "");
-      }),
-      visible_text: visiblePageText(),
-    };
+    return { route: routeKey || "" };
   }
 
   function uniqueActions(actions) {
@@ -1537,8 +1512,8 @@
     state.operationRunning = true;
     document.documentElement.classList.add("xr-api-assistant-operating");
     return runOperationSequence(actions)
-      .catch(function (error) {
-        typeAssistant(error.message || "我在页面操作时没有找到目标控件。你可以刷新后再试一次。", {
+      .catch(function () {
+        typeAssistant(SAFE_OPERATION_FAILURE, {
           tone: "error",
           actions: inferOperationRetryActions(actions),
         });
@@ -1897,7 +1872,7 @@
           })
           .then(function (payload) {
             if (!res.ok || payload.success === false) {
-              throw new Error(payload.message || "暂时没有判断出明确意图");
+              throw new Error(SAFE_REQUEST_FAILURE);
             }
             return normalizeModelIntent(payload);
           });
@@ -2164,7 +2139,7 @@
     var clicked = clickVisibleButton();
     typeAssistant(
       clicked
-        ? "我已经帮你点开创建令牌入口。\n\n接下来只填写名称、分组和模型权限。接入命令可以打印完整 Key，公开截图或发到群里之前要遮住。"
+        ? "我已经帮你点开创建令牌入口。\n\n接下来只填写名称、分组和模型权限。接入命令只会确认 Key 已写入（已隐藏）；不要转发命令或截图。"
         : "我在当前页面没有找到明确的创建按钮。\n\n你可以点“开始自动接入 Codex”，我会通过安全接口直接为当前账号创建 Key。",
       {
         actions: [
@@ -2270,7 +2245,6 @@
     state.selectedModel = CONFIG.codexModel;
     state.selectedOS = "windows";
     state.aiphuiMode = "desktop";
-    state.allowKeyPrint = true;
     state.generatedKey = "";
     state.awaitingCustomModel = false;
     state.pendingPageOperation = null;
@@ -2284,7 +2258,7 @@
         CONFIG.baseUrl +
         "，env_key=AIPHUI_API_KEY，model=" +
         CONFIG.codexModel +
-        "，wire_api=responses。\n\n我会直接打印完整命令和完整读取到的 API Key，避免你手动替换格式出错。截图公开发送前记得遮住 Key。",
+        "，wire_api=responses。\n\n我会给你一条可直接复制的命令；Key 只会写入本机环境变量，终端只显示已隐藏状态。不要转发命令或截图。",
       {
         actions: [
           { label: "开始接入 AIPHUI", value: "codex" },
@@ -2386,7 +2360,7 @@
         : isCli
           ? "可以。CLI 是验证工具，不是桌面 App 接入 AIPHUI 的必要条件。\n\n我会先生成 AIPHUI 标准配置，再给你 Node/npm、Codex CLI 和 C:\\codex-work 的验证命令。"
           : "可以。不安装 Codex CLI 也能接入桌面 App。\n\n最稳的做法是：完全退出 Codex 桌面 App，把 AIPHUI_API_KEY 写入 User 级环境变量，再写入 %USERPROFILE%\\.codex\\config.toml。") +
-        "\n\n我建议直接为当前登录账号创建一枚 Codex 专用 Key。命令里会包含完整 Key，执行结果也会打印完整读取到的 Key，避免你手动替换格式出错。",
+        "\n\n我建议直接为当前登录账号创建一枚 Codex 专用 Key。配置命令只在你的本机使用，执行时不会回显 Key。",
       {
         actions: [
           { label: "创建 Key 并生成命令", value: "authorize-create" },
@@ -2409,26 +2383,15 @@
     return chooseAiphuiMode(state.aiphuiMode);
   }
 
-  function enableKeyPrint() {
-    state.allowKeyPrint = true;
-    typeAssistant("已确认：接下来生成的命令会显示完整 AIPHUI_API_KEY。\n\n这是为了让零代码用户不用手动替换占位符。截图公开发送前请遮住 Key；如果 Key 已经外泄，测试完重置。", {
-      tone: "warning",
-      actions: [
-        { label: "创建 Key 并生成命令", value: "authorize-create" },
-        { label: "关闭重开会话", value: "end-session" },
-      ],
-    });
-  }
-
   function confirmCreateToken() {
     var configPath = state.selectedOS === "mac" ? "~/.codex/config.toml" : "%USERPROFILE%\\.codex\\config.toml";
     var envTarget = state.selectedOS === "mac" ? "当前终端和 ~/.zshrc" : "Windows User 级环境变量";
     typeAssistant(
-      "接下来我会为当前登录账号创建一枚 AIPHUI Codex 专用 Key，并生成完整终端命令。\n\n命令会把 AIPHUI_API_KEY 写入 " +
+      "接下来我会为当前登录账号创建一枚 AIPHUI Codex 专用 Key，并生成可直接复制的终端命令。\n\n命令会把 AIPHUI_API_KEY 写入 " +
         envTarget +
         "，并写入 " +
         configPath +
-        "。config.toml 只保存 env_key，不保存明文 Key。\n\n完整 Key 会出现在命令里，执行后也会打印读取到的完整 Key，方便新手核对格式。",
+        "。config.toml 只保存 env_key，不保存明文 Key。\n\n执行时终端只会显示“已写入（已隐藏）”，不要转发命令或截图。",
       {
         actions: [
           { label: "授权创建并生成配置", value: "authorize-create" },
@@ -2467,10 +2430,10 @@
           showCodexConfig(state.selectedOS, model, payload.key, payload.token_name || "");
         }, 360);
       })
-      .catch(function (error) {
+      .catch(function () {
         operationSettled = true;
         updateMessage(operationId, {
-          content: error.message || "创建失败，请稍后重试。",
+          content: SAFE_REQUEST_FAILURE,
           tone: "error",
           actions: [
             { label: "重新授权", value: "authorize-create" },
@@ -2488,7 +2451,7 @@
 
   function showCodexConfig(os, model, key, tokenName) {
     var isMac = os === "mac";
-    var command = isMac ? macAiphuiConfigCommand(model, key, { allowPrint: true }) : windowsCodexCommand(model, key);
+    var command = isMac ? macAiphuiConfigCommand(model, key) : windowsCodexCommand(model, key);
     if (state.aiphuiMode === "cli") {
       command += "\n\n# CLI 验证步骤：如果只写配置，可以不执行下面这些。\n" + installCodexCommand();
     }
@@ -2501,7 +2464,7 @@
         "\n\n" +
         codexNextStepGuide(os, model) +
         nameLine +
-        "\n\n本次命令会打印完整 Key。脱敏预览：" +
+        "\n\n终端只会显示“已写入（已隐藏）”。脱敏预览：" +
         maskKey(key) +
         "\n结束会话会清空本窗口历史，请先完成复制和测试。",
       {
@@ -2540,7 +2503,7 @@
     typeAssistant(
       "这是“我已有 Key”的终端输入命令。\n\n它不会让你把完整 Key 发到网页聊天框，而是在你自己的" +
         (isMac ? "Mac 终端" : "PowerShell") +
-        "里输入 Key。执行后会打印读取到的完整 Key，方便核对。",
+        "里输入 Key。输入内容会隐藏，执行后只显示已写入状态。",
       {
         code: command,
         actions: [
@@ -2565,7 +2528,7 @@
 
   function showModelsCheck() {
     if (!state.generatedKey) {
-      typeAssistant("这是 AIPHUI /v1/responses 连通性测试。\n\n我会先从当前" + (state.selectedOS === "mac" ? "Mac 终端环境或 ~/.zshrc" : "PowerShell 的 User 级环境变量") + "读取 AIPHUI_API_KEY，并打印完整读取结果，方便新手核对。", {
+      typeAssistant("这是 AIPHUI /v1/responses 连通性测试。\n\n我会先从当前" + (state.selectedOS === "mac" ? "Mac 终端环境或 ~/.zshrc" : "PowerShell 的 User 级环境变量") + "读取 AIPHUI_API_KEY，并只确认已读取（已隐藏）。", {
         code: modelsCheckCommand(""),
         actions: [
           { label: "创建 Key 并生成配置", value: "authorize-create" },
@@ -2575,7 +2538,7 @@
       });
       return;
     }
-    typeAssistant("这是 AIPHUI /v1/responses 连通性测试。\n\n它会发送“只回复 OK”，并打印完整读取到的 AIPHUI_API_KEY。成功说明 Key、base_url、model 和 responses 接口大概率没问题。", {
+    typeAssistant("这是 AIPHUI /v1/responses 连通性测试。\n\n它会发送“只回复 OK”，并只确认 AIPHUI_API_KEY 已读取（已隐藏）。成功说明 Key、base_url、model 和 responses 接口大概率没问题。", {
       code: modelsCheckCommand(state.generatedKey),
       actions: [
         { label: "401 怎么办", value: "err-401" },
@@ -2835,7 +2798,7 @@
           })
           .then(function (payload) {
             if (!res.ok || payload.success === false) {
-              throw new Error(payload.message || "在线接入老师暂时不可用");
+              throw new Error(SAFE_ONLINE_FAILURE);
             }
             return payload;
           });
@@ -2845,8 +2808,8 @@
           actions: smartActions(payload.reply || value, value),
         });
       })
-      .catch(function (error) {
-        typeAssistant(error.message || "在线接入老师暂时没有连上模型。你仍然可以走自动接入流程。", {
+      .catch(function () {
+        typeAssistant(SAFE_ONLINE_FAILURE, {
           actions: [
             { label: "自动接入 Codex", value: "codex" },
             { label: "检查模型列表", value: "models-check" },
@@ -2979,7 +2942,6 @@
     if (value === "os:windows") return chooseOS("windows");
     if (value.indexOf("aiphui-preset:") === 0) return chooseAiphuiPreset(value.slice("aiphui-preset:".length));
     if (value.indexOf("aiphui-mode:") === 0) return chooseAiphuiMode(value.slice("aiphui-mode:".length));
-    if (value === "allow-key-print") return enableKeyPrint();
     if (value === "manual-key-command") return showManualKeyCommand();
     if (value === "node-missing") return showNodeInstall();
     if (value === "authorize-create") return authorizeAndCreate();

@@ -38,6 +38,10 @@ func TestIsPublicTokenGroupRejectsLegacyAndAutoGroups(t *testing.T) {
 	require.False(t, IsPublicTokenGroup(""))
 	require.True(t, IsPublicTokenGroup("default"))
 	require.True(t, IsPublicTokenGroup(DiscountPricingGroupName))
+	require.True(t, IsPublicTokenGroup("kiro"))
+	require.True(t, IsPublicTokenGroup("kiro-stable"))
+	require.True(t, IsPublicTokenGroup("claude-external"))
+	require.False(t, IsPublicTokenGroup("ccmax-terminal"))
 	require.False(t, IsPublicTokenGroup("internal"))
 	require.False(t, IsPublicTokenGroup("auto"))
 }

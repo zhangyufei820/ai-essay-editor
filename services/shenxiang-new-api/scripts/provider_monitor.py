@@ -73,16 +73,19 @@ TEXT_FAMILIES = (
     ),
     TextFamily(
         name="claude_text",
-        models=("claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6"),
-        channel_ids=(13, 9),
-        baseline_priorities={13: 30, 9: 20},
-    ),
-    TextFamily(
-        name="claude_fable_text",
-        models=("claude-fable-5",),
-        channel_ids=(11,),
-        baseline_priorities={11: 15},
-        standalone=True,
+        models=(
+            "claude-fable-5",
+            "claude-haiku-4-5-20251001",
+            "claude-opus-4-5-20251101",
+            "claude-opus-4-6",
+            "claude-opus-4-7",
+            "claude-opus-4-8",
+            "claude-sonnet-4-5-20250929",
+            "claude-sonnet-4-6",
+            "claude-sonnet-5",
+        ),
+        channel_ids=(46, 47, 48, 49),
+        baseline_priorities={46: 10, 47: 20, 48: 30, 49: 40},
     ),
 )
 

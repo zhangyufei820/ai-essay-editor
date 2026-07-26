@@ -16,9 +16,23 @@ const maxTokenConfigurationBodyBytes = 1 << 20
 const claudeUserTokenName = "claude"
 
 var claudeUserTokenModels = []string{
+	"claude-fable-5",
+	"claude-haiku-4-5-20251001",
 	"claude-opus-4-6",
 	"claude-opus-4-7",
 	"claude-opus-4-8",
+	"claude-sonnet-4-6",
+	"claude-sonnet-5",
+}
+
+var claudeStableUserTokenModels = []string{
+	"claude-fable-5",
+	"claude-haiku-4-5-20251001",
+	"claude-opus-4-5-20251101",
+	"claude-opus-4-6",
+	"claude-opus-4-7",
+	"claude-opus-4-8",
+	"claude-sonnet-4-5-20250929",
 	"claude-sonnet-4-6",
 	"claude-sonnet-5",
 }
@@ -79,8 +93,16 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 		if rawName, ok := request["name"]; ok {
 			var name string
 			if json.Unmarshal(rawName, &name) == nil && strings.EqualFold(strings.TrimSpace(name), claudeUserTokenName) {
+				if group == "default" {
+					group = "claude-external"
+				}
+				request["group"] = json.RawMessage(`"` + group + `"`)
 				request["model_limits_enabled"] = json.RawMessage(`true`)
-				request["model_limits"] = json.RawMessage(`"` + strings.Join(claudeUserTokenModels, `,`) + `"`)
+				models := claudeUserTokenModels
+				if group == "kiro-stable" {
+					models = claudeStableUserTokenModels
+				}
+				request["model_limits"] = json.RawMessage(`"` + strings.Join(models, `,`) + `"`)
 			}
 		}
 		validationBody, err := json.Marshal(request)

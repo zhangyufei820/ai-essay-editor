@@ -7,7 +7,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
-var publicTokenGroups = []string{"default", DiscountPricingGroupName}
+var publicTokenGroups = []string{"default", DiscountPricingGroupName, "kiro", "kiro-stable", "claude-external"}
 
 func IsPublicTokenGroup(group string) bool {
 	for _, publicGroup := range publicTokenGroups {

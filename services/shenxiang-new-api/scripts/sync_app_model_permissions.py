@@ -74,6 +74,13 @@ DISCOUNT_TEXT_MODELS_REGEX = (
 GROK45_MODEL = "grok-4.5"
 GROK45_GROUP = "grok45"
 GROK45_CHANNEL_TAG = "xingren-grok45"
+PDHLZY_CLAUDE_CHANNEL_GROUPS = {
+    "xingren-claude-pdhlzy-kiro": "kiro",
+    "xingren-claude-pdhlzy-kiro-stable": "kiro-stable",
+    "xingren-claude-pdhlzy-ccmax-terminal": "ccmax-terminal",
+    "xingren-claude-pdhlzy-claude-external": "claude-external",
+}
+PDHLZY_CLAUDE_GROUPS = frozenset(PDHLZY_CLAUDE_CHANNEL_GROUPS.values())
 SUPPLIER_EXPOSED_MARKERS = (
     "ccapi",
     "drag tokens",
@@ -108,9 +115,13 @@ CODEX_STANDARD_ALLOWED_MODELS = [
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
 CLAUDE_ALLOWED_MODELS = [
+    "claude-fable-5",
+    "claude-haiku-4-5-20251001",
+    "claude-opus-4-5-20251101",
     "claude-opus-4-6",
     "claude-opus-4-7",
     "claude-opus-4-8",
+    "claude-sonnet-4-5-20250929",
     "claude-sonnet-4-6",
     "claude-sonnet-5",
 ]
@@ -1538,8 +1549,24 @@ def sync_abilities() -> None:
         + sql_quote(GROK45_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
     ]
+    for pdhlzy_tag, pdhlzy_group in PDHLZY_CLAUDE_CHANNEL_GROUPS.items():
+        statements.extend(
+            [
+                "UPDATE channels SET status = 2 WHERE tag = "
+                + sql_quote(pdhlzy_tag)
+                + " AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+                + sql_quote(pdhlzy_group)
+                + ";",
+                "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
+                + sql_quote(pdhlzy_tag)
+                + " AND FIND_IN_SET("
+                + sql_quote(pdhlzy_group)
+                + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
+            ]
+        )
     invalid_discount_channels: list[str] = []
     invalid_grok_channels: list[str] = []
+    invalid_pdhlzy_channels: list[str] = []
     for channel_id, raw_models, _priority, _weight, tag, raw_groups in channel_rows:
         channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
         channel_models = [item.strip() for item in raw_models.split(",") if item.strip()]
@@ -1565,11 +1592,22 @@ def sync_abilities() -> None:
         elif GROK45_GROUP in channel_groups:
             invalid_grok_channels.append(channel_id)
             sync_groups = []
+        elif tag in PDHLZY_CLAUDE_CHANNEL_GROUPS:
+            expected_group = PDHLZY_CLAUDE_CHANNEL_GROUPS[tag]
+            if channel_groups != [expected_group]:
+                invalid_pdhlzy_channels.append(channel_id)
+                sync_groups = []
+            else:
+                sync_groups = channel_groups
+        elif any(group in PDHLZY_CLAUDE_GROUPS for group in channel_groups):
+            invalid_pdhlzy_channels.append(channel_id)
+            sync_groups = []
         else:
             sync_groups = [
                 group
                 for group in groups
                 if group not in {DISCOUNT_TEXT_GROUP, GROK45_GROUP}
+                and group not in PDHLZY_CLAUDE_GROUPS
             ]
         for model in channel_models:
             if model == GROK45_MODEL and tag != GROK45_CHANNEL_TAG:
@@ -1682,6 +1720,28 @@ def sync_abilities() -> None:
             + ");",
         ]
     )
+    for pdhlzy_tag, pdhlzy_group in PDHLZY_CLAUDE_CHANNEL_GROUPS.items():
+        statements.extend(
+            [
+                "UPDATE abilities SET enabled = 0 WHERE `group` = "
+                + sql_quote(pdhlzy_group)
+                + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag = "
+                + sql_quote(pdhlzy_tag)
+                + ");",
+                "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE tag = "
+                + sql_quote(pdhlzy_tag)
+                + ") AND `group` <> "
+                + sql_quote(pdhlzy_group)
+                + ";",
+                "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+                "SET ability.enabled = 0 WHERE channel.tag = "
+                + sql_quote(pdhlzy_tag)
+                + " AND FIND_IN_SET(ability.model, REPLACE(COALESCE(channel.models, ''), ' ', '')) = 0;",
+                "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE status <> 1 AND tag = "
+                + sql_quote(pdhlzy_tag)
+                + ");",
+            ]
+        )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
     if invalid_discount_channels:
@@ -1693,6 +1753,11 @@ def sync_abilities() -> None:
         raise RuntimeError(
             "Grok group isolation violation; disabled channel count: "
             + str(len(invalid_grok_channels))
+        )
+    if invalid_pdhlzy_channels:
+        raise RuntimeError(
+            "pdhlzy Claude group isolation violation; disabled channel count: "
+            + str(len(invalid_pdhlzy_channels))
         )
 
 
