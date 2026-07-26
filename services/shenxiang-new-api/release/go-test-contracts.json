@@ -32,6 +32,10 @@
     "run": "^TestSanitizeGeek2APIImage2OutboundBodyStripsWorkshopOnlyFields$"
   },
   {
+    "package": "./relay",
+    "run": "^(TestLogDebugRequestBodySkipsWorkWhenDebugDisabled|TestDebugBodyPreviewStillRedactsSensitiveValues|TestCloneOpenAIResponsesRequestDoesNotShareMutableData)$"
+  },
+  {
     "package": "./service/relayconvert",
     "run": ""
   },

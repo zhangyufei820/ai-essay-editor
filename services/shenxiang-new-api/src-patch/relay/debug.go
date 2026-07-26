@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -18,6 +19,9 @@ var (
 )
 
 func logDebugRequestBody(c *gin.Context, body []byte) {
+	if !common.DebugEnabled {
+		return
+	}
 	logger.LogDebug(c, "requestBody: bytes=%d preview=%s", len(body), debugBodyPreview(body))
 }
 
