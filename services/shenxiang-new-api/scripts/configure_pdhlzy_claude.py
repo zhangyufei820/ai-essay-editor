@@ -22,6 +22,7 @@ OLD_CHANNEL_TAGS = (
     "xingren-claude-moonapix-fallback",
     "xingren-claude-geek2api-primary",
 )
+OPUS5_STABLE_GROUP_RATIO = Decimal("0.22")
 
 MODEL_PRICES_CNY = {
     "claude-fable-5": (Decimal("10"), Decimal("50"), Decimal("12.5"), Decimal("1")),
@@ -250,6 +251,14 @@ def option_updates(options: dict[str, object], exchange_rate: Decimal) -> dict[s
 
 def model_description(model: str) -> str:
     input_price, output_price, cache_write, cache_read = MODEL_PRICES_CNY[model]
+    if model == "claude-opus-5":
+        return (
+            "Claude claude-opus-5｜Kiro 稳定版 0.22x｜"
+            f"输入人民币 ¥{input_price * OPUS5_STABLE_GROUP_RATIO:.4f}/M Tokens｜"
+            f"输出人民币 ¥{output_price * OPUS5_STABLE_GROUP_RATIO:.4f}/M Tokens｜"
+            f"缓存读取人民币 ¥{cache_read * OPUS5_STABLE_GROUP_RATIO:.4f}/M Tokens｜"
+            f"缓存写入人民币 ¥{cache_write * OPUS5_STABLE_GROUP_RATIO:.4f}/M Tokens"
+        )
     return (
         f"Claude {model}｜输入人民币 ¥{input_price:.4f}/M Tokens｜输出人民币 ¥{output_price:.4f}/M Tokens｜"
         f"缓存读取人民币 ¥{cache_read:.4f}/M Tokens｜缓存写入人民币 ¥{cache_write:.4f}/M Tokens"

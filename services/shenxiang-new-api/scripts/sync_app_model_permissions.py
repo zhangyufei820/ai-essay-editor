@@ -188,6 +188,7 @@ CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
 CLAUDE_PRODUCT_GROUP = "kiro-stable"
 CLAUDE_OPUS5_MODEL = "claude-opus-5"
 CLAUDE_OPUS5_CHANNEL_TAG = "xingren-claude-pdhlzy-kiro-stable"
+CLAUDE_OPUS5_STABLE_GROUP_RATIO = Decimal("0.22")
 CLAUDE_OPUS5_INPUT_CNY_PER_M = Decimal("5")
 CLAUDE_OPUS5_OUTPUT_CNY_PER_M = Decimal("25")
 CLAUDE_OPUS5_CACHE_READ_CNY_PER_M = Decimal("0.5")
@@ -962,9 +963,14 @@ def ensure_claude_opus5_stable_model() -> None:
     if not isinstance(mapping, dict):
         raise RuntimeError("Kiro stable channel model mapping must be an object")
     mapping[CLAUDE_OPUS5_MODEL] = CLAUDE_OPUS5_MODEL
+    # ModelRatio remains the base rate because New API applies GroupRatio at billing time.
+    # This model is intentionally available only in the stable group, so expose its final rate.
     description = (
-        "Claude claude-opus-5｜输入人民币 ¥5.0000/M Tokens｜输出人民币 ¥25.0000/M Tokens｜"
-        "缓存读取人民币 ¥0.5000/M Tokens｜缓存写入人民币 ¥6.2500/M Tokens"
+        "Claude claude-opus-5｜Kiro 稳定版 0.22x｜"
+        f"输入人民币 ¥{CLAUDE_OPUS5_INPUT_CNY_PER_M * CLAUDE_OPUS5_STABLE_GROUP_RATIO:.4f}/M Tokens｜"
+        f"输出人民币 ¥{CLAUDE_OPUS5_OUTPUT_CNY_PER_M * CLAUDE_OPUS5_STABLE_GROUP_RATIO:.4f}/M Tokens｜"
+        f"缓存读取人民币 ¥{CLAUDE_OPUS5_CACHE_READ_CNY_PER_M * CLAUDE_OPUS5_STABLE_GROUP_RATIO:.4f}/M Tokens｜"
+        f"缓存写入人民币 ¥{CLAUDE_OPUS5_CACHE_CREATE_CNY_PER_M * CLAUDE_OPUS5_STABLE_GROUP_RATIO:.4f}/M Tokens"
     )
     statements = [
         "START TRANSACTION;",

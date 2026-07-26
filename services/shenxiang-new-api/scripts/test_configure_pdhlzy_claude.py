@@ -80,6 +80,14 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertEqual(create_cache_ratios["claude-opus-5"], 1.25)
         self.assertEqual(json.loads(updates["AutoGroups"]), ["default"])
 
+    def test_opus5_description_uses_the_stable_group_effective_rate(self) -> None:
+        self.assertEqual(
+            self.module.model_description("claude-opus-5"),
+            "Claude claude-opus-5｜Kiro 稳定版 0.22x｜"
+            "输入人民币 ¥1.1000/M Tokens｜输出人民币 ¥5.5000/M Tokens｜"
+            "缓存读取人民币 ¥0.1100/M Tokens｜缓存写入人民币 ¥1.3750/M Tokens",
+        )
+
     def test_sql_disables_legacy_channels_and_pins_claude_tokens(self) -> None:
         keys = {
             channel["tag"]: f"test-key-{index}-not-a-secret"
