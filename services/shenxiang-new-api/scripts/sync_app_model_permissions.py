@@ -1832,6 +1832,7 @@ def sync_grok_image_metadata() -> None:
 
 def sync_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
     expected_models_by_name: dict[str, str] = {}
+    expected_groups_by_name: dict[str, str] = {}
     for profile, names in TOKEN_PROFILES.items():
         profile_models = sanitize_token_models(profiles[profile])
         if profile == "claude":
@@ -1839,27 +1840,34 @@ def sync_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
         models = ",".join(profile_models)
         for name in names:
             expected_models_by_name[name] = models
+            if profile == "claude":
+                expected_groups_by_name[name] = CLAUDE_PRODUCT_GROUP
     managed_names = tuple(expected_models_by_name)
     token_rows = mysql(
         "SELECT id, COALESCE(`key`, ''), name, COALESCE(model_limits, ''), "
-        "COALESCE(model_limits_enabled, 0) FROM tokens "
+        "COALESCE(model_limits_enabled, 0), COALESCE(`group`, '') FROM tokens "
         "WHERE deleted_at IS NULL AND name IN ("
         + ", ".join(sql_quote(name) for name in managed_names)
         + ");"
     )
-    token_updates: list[tuple[str, str, str]] = []
-    for token_id, token_key, name, raw_limits, raw_enabled in token_rows:
+    token_updates: list[tuple[str, str, str, str | None]] = []
+    for token_id, token_key, name, raw_limits, raw_enabled, raw_group in token_rows:
         expected_models = expected_models_by_name.get(name)
         if expected_models is None:
             continue
-        if raw_limits != expected_models or raw_enabled != "1":
-            token_updates.append((token_id, token_key, expected_models))
+        expected_group = expected_groups_by_name.get(name)
+        if raw_limits != expected_models or raw_enabled != "1" or (expected_group is not None and raw_group != expected_group):
+            token_updates.append((token_id, token_key, expected_models, expected_group))
 
     statements = ["START TRANSACTION;"]
-    for token_id, _token_key, expected_models in token_updates:
+    for token_id, _token_key, expected_models, expected_group in token_updates:
+        group_sql = ""
+        if expected_group is not None:
+            group_sql = ", `group` = " + sql_quote(expected_group) + ", cross_group_retry = 0"
         statements.append(
             "UPDATE tokens SET model_limits_enabled = 1, model_limits = "
             + sql_quote(expected_models)
+            + group_sql
             + " WHERE id = "
             + sql_quote(token_id)
             + ";"
@@ -1867,7 +1875,7 @@ def sync_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
     caches_deleted = delete_token_caches(
-        [token_key for _token_id, token_key, _expected_models in token_updates]
+        [token_key for _token_id, token_key, _expected_models, _expected_group in token_updates]
     )
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 

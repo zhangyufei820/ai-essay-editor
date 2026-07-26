@@ -798,10 +798,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         captured: list[str] = []
         self.module.mysql_exec = captured.append
         self.module.mysql = lambda query: [
-            ["101", "admin-codex-key", "星人 Codex 文本令牌", "gpt-5.4", "1"],
-            ["102", "user-claude-key", "星人 Claude 高阶令牌", "", "0"],
-            ["103", "user-image-key", "星人图像生成令牌", "gpt-image-2-4K", "1"],
-            ["104", "user-video-key", "星人视频生成令牌", "seedance-2.0-cl-mini", "1"],
+            ["101", "admin-codex-key", "星人 Codex 文本令牌", "gpt-5.4", "1", "default"],
+            ["102", "user-claude-key", "星人 Claude 高阶令牌", "", "0", "claude-external"],
+            ["103", "user-image-key", "星人图像生成令牌", "gpt-image-2-4K", "1", "default"],
+            ["104", "user-video-key", "星人视频生成令牌", "seedance-2.0-cl-mini", "1", "default"],
         ]
         self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
 
@@ -838,6 +838,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("claude-haiku-4-5-20251001", sql)
         self.assertIn("claude-opus-4-5-20251101", sql)
         self.assertIn("claude-opus-5", sql)
+        self.assertIn("`group` = 'kiro-stable'", sql)
         self.assertIn("claude-sonnet-4-5-20250929", sql)
         self.assertIn("CACHE:admin-codex-key,user-claude-key,user-image-key", sql)
 
