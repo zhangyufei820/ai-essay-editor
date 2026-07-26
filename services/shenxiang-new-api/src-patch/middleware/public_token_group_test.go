@@ -205,6 +205,33 @@ func TestEnforcePublicTokenGroupSelectionAllowsStandaloneWelfareClaudeModels(t *
 	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
+func TestEnforcePublicTokenGroupSelectionAllowsStandaloneWelfare001ClaudeModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		request := struct {
+			ModelLimits string `json:"model_limits"`
+			Group       string `json:"group"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.Equal(t, publicClaudeTokenModelLimits(t, service.ClaudeWelfare001PricingGroupName), request.ModelLimits)
+		require.Equal(t, service.ClaudeWelfare001PricingGroupName, request.Group)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":"Claude","group":"welfare-001"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
 func TestEnforcePublicTokenGroupSelectionRejectsWelfareFallbackChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	called := false

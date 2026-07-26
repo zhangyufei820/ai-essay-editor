@@ -21,7 +21,6 @@ MYSQL_CONTAINER = os.environ.get("MYSQL_CONTAINER", "shenxiang-new-api-mysql")
 OLD_CHANNEL_TAGS = (
     "xingren-claude-moonapix-fallback",
     "xingren-claude-geek2api-primary",
-    "xingren-claude-pdhlzy-welfare",
 )
 OPUS5_STABLE_GROUP_RATIO = Decimal("0.22")
 
@@ -128,6 +127,25 @@ CHANNELS = (
             "claude-sonnet-5",
         ),
         "priority": 50,
+    },
+    {
+        "env": "PDHLZY_WELFARE_KEY",
+        "tag": "xingren-claude-pdhlzy-welfare",
+        "name": "Claude 福利 0.001 渠道",
+        "group_label": "福利 0.001x",
+        "type": 1,
+        "group": "welfare-001",
+        "ratio": Decimal("0.001"),
+        "models": (
+            "claude-fable-5",
+            "claude-haiku-4-5-20251001",
+            "claude-opus-4-6",
+            "claude-opus-4-7",
+            "claude-opus-4-8",
+            "claude-sonnet-4-6",
+            "claude-sonnet-5",
+        ),
+        "priority": 60,
     },
 )
 

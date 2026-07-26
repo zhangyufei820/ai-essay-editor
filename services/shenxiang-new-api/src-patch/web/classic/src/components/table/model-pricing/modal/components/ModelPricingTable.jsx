@@ -32,6 +32,7 @@ const CLAUDE_DISPLAY_GROUP_ORDER = [
   'ccmax-terminal',
   'claude-external',
   'welfare',
+  'welfare-001',
 ];
 const CLAUDE_DISPLAY_GROUPS = new Set(CLAUDE_DISPLAY_GROUP_ORDER);
 

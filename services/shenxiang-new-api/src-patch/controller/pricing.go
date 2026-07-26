@@ -109,6 +109,7 @@ func publicPricingGroups(enableGroups []string, usableGroups map[string]string) 
 		service.ClaudeTerminalPricingGroupName,
 		service.ClaudeExternalPricingGroupName,
 		service.ClaudeWelfarePricingGroupName,
+		service.ClaudeWelfare001PricingGroupName,
 		service.Grok45PricingGroupName,
 	} {
 		if _, ok := usableGroups[group]; !ok {

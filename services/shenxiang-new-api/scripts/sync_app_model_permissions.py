@@ -138,6 +138,7 @@ MANAGED_CLAUDE_CHANNEL_GROUPS = {
     "xingren-claude-pdhlzy-ccmax-terminal": "ccmax-terminal",
     "xingren-claude-pdhlzy-claude-external": "claude-external",
     "xingren-claude-geek2api-welfare": "welfare",
+    "xingren-claude-pdhlzy-welfare": "welfare-001",
 }
 WANGWANG_CLAUDE_CHANNEL_GROUPS = {
     "kiro-primary-20260724": "kiro",

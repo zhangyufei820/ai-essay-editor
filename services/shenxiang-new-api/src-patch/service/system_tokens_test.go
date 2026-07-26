@@ -101,12 +101,15 @@ func TestPublicClaudeTokenModelsSupportsTerminalGroup(t *testing.T) {
 	terminalModels, terminalOK := PublicClaudeTokenModels(ClaudeTerminalPricingGroupName)
 	externalModels, externalOK := PublicClaudeTokenModels(ClaudeExternalPricingGroupName)
 	welfareModels, welfareOK := PublicClaudeTokenModels(ClaudeWelfarePricingGroupName)
+	welfare001Models, welfare001OK := PublicClaudeTokenModels(ClaudeWelfare001PricingGroupName)
 
 	require.True(t, terminalOK)
 	require.True(t, externalOK)
 	require.True(t, welfareOK)
+	require.True(t, welfare001OK)
 	require.Equal(t, externalModels, terminalModels)
 	require.Equal(t, externalModels, welfareModels)
+	require.Equal(t, externalModels, welfare001Models)
 }
 
 func TestMergeModelLimitsCanonicalizesRawGPTImage2(t *testing.T) {

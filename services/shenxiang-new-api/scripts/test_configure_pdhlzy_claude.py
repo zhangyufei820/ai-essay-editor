@@ -29,27 +29,34 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
 
         self.assertEqual(
             [channel["ratio"] for channel in channels],
-            [Decimal("0.18"), Decimal("0.22"), Decimal("0.75"), Decimal("0.9"), Decimal("0.06")],
+            [
+                Decimal("0.18"),
+                Decimal("0.22"),
+                Decimal("0.75"),
+                Decimal("0.9"),
+                Decimal("0.06"),
+                Decimal("0.001"),
+            ],
         )
-        self.assertEqual([channel["type"] for channel in channels], [1, 1, 14, 14, 14])
+        self.assertEqual([channel["type"] for channel in channels], [1, 1, 14, 14, 14, 1])
         self.assertEqual(
             [channel["group_label"] for channel in channels],
-            ["Kiro", "Kiro 稳定版", "ccmax 终端专用", "Claude 外接", "福利"],
+            ["Kiro", "Kiro 稳定版", "ccmax 终端专用", "Claude 外接", "福利", "福利 0.001x"],
         )
-        self.assertEqual([len(channel["models"]) for channel in channels], [7, 10, 7, 7, 7])
+        self.assertEqual([len(channel["models"]) for channel in channels], [7, 10, 7, 7, 7, 7])
         self.assertEqual(tuple(channels[1]["models"]), self.module.ALL_MODELS)
         self.assertIn("claude-opus-5", channels[1]["models"])
-        for channel in (channels[0], channels[2], channels[3], channels[4]):
+        for channel in (channels[0], channels[2], channels[3], channels[4], channels[5]):
             self.assertNotIn("claude-opus-4-5-20251101", channel["models"])
             self.assertNotIn("claude-opus-5", channel["models"])
-        for channel in (channels[2], channels[3], channels[4]):
+        for channel in (channels[2], channels[3], channels[4], channels[5]):
             self.assertNotIn("claude-sonnet-4-5-20250929", channel["models"])
 
     def test_option_updates_encode_cny_prices_and_cache_ratios(self) -> None:
         options = {
             "GroupRatio": {"default": 1},
             "UserUsableGroups": {"default": "默认"},
-            "AutoGroups": ["default", "kiro", "ccmax-terminal"],
+            "AutoGroups": ["default", "kiro", "ccmax-terminal", "welfare", "welfare-001"],
             "GroupGroupRatio": {},
             "ModelRatio": {},
             "CompletionRatio": {},
@@ -70,11 +77,13 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertEqual(group_ratios["ccmax-terminal"], 0.75)
         self.assertEqual(group_ratios["claude-external"], 0.9)
         self.assertEqual(group_ratios["welfare"], 0.06)
+        self.assertEqual(group_ratios["welfare-001"], 0.001)
         self.assertEqual(user_groups["kiro"], "Kiro")
         self.assertEqual(user_groups["kiro-stable"], "Kiro 稳定版")
         self.assertEqual(user_groups["ccmax-terminal"], "ccmax 终端专用")
         self.assertEqual(user_groups["claude-external"], "Claude 外接")
         self.assertEqual(user_groups["welfare"], "福利")
+        self.assertEqual(user_groups["welfare-001"], "福利 0.001x")
         self.assertAlmostEqual(model_ratios["claude-fable-5"], 10 / 14)
         self.assertEqual(completion_ratios["claude-fable-5"], 5)
         self.assertEqual(cache_ratios["claude-fable-5"], 0.1)
@@ -105,12 +114,15 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertIn("LEFT(COALESCE(remark, ''), 180)", sql)
         self.assertIn("xingren-claude-moonapix-fallback", sql)
         self.assertIn("xingren-claude-geek2api-primary", sql)
-        self.assertIn("xingren-claude-pdhlzy-welfare", sql)
+        self.assertNotIn("xingren-claude-pdhlzy-welfare", self.module.OLD_CHANNEL_TAGS)
         self.assertIn("`group` = 'kiro-stable'", sql)
         self.assertIn("`group` = 'welfare'", sql)
+        self.assertIn("`group` = 'welfare-001'", sql)
         self.assertIn("xingren-claude-geek2api-welfare", sql)
+        self.assertIn("xingren-claude-pdhlzy-welfare", sql)
         self.assertIn("https://www.geek2api.com", sql)
         self.assertIn("geek2api.com welfare 0.06x", sql)
+        self.assertIn("pdhlzy.com welfare-001 0.001x", sql)
         self.assertIn("claude-opus-5", sql)
         self.assertIn("cross_group_retry = 0", sql)
 

@@ -15,6 +15,7 @@ const (
 	ClaudeTerminalPricingGroupName   = "ccmax-terminal"
 	ClaudeExternalPricingGroupName   = "claude-external"
 	ClaudeWelfarePricingGroupName    = "welfare"
+	ClaudeWelfare001PricingGroupName = "welfare-001"
 )
 
 func ParseTokenGroupChain(rawGroup string) ([]string, error) {
@@ -69,7 +70,7 @@ func ValidateTokenGroupChain(groups []string, allowed func(string) bool) error {
 	}
 	if len(groups) > 1 {
 		for _, group := range groups {
-			if group == ClaudeWelfarePricingGroupName {
+			if group == ClaudeWelfarePricingGroupName || group == ClaudeWelfare001PricingGroupName {
 				return fmt.Errorf("welfare token group must be used alone")
 			}
 		}
@@ -83,6 +84,7 @@ var publicClaudeTokenGroups = []string{
 	ClaudeTerminalPricingGroupName,
 	ClaudeExternalPricingGroupName,
 	ClaudeWelfarePricingGroupName,
+	ClaudeWelfare001PricingGroupName,
 }
 
 var marketplaceClaudeGroupLabels = map[string]string{
@@ -91,6 +93,7 @@ var marketplaceClaudeGroupLabels = map[string]string{
 	ClaudeTerminalPricingGroupName:   "ccmax 终端专用",
 	ClaudeExternalPricingGroupName:   "Claude 外接",
 	ClaudeWelfarePricingGroupName:    "福利",
+	ClaudeWelfare001PricingGroupName: "福利 0.001x",
 }
 
 var publicTokenGroups = []string{
@@ -101,6 +104,7 @@ var publicTokenGroups = []string{
 	ClaudeKiroStablePricingGroupName,
 	ClaudeExternalPricingGroupName,
 	ClaudeWelfarePricingGroupName,
+	ClaudeWelfare001PricingGroupName,
 }
 
 func IsPublicTokenGroup(group string) bool {
@@ -223,7 +227,7 @@ func GetUserAutoGroup(userGroup string) []string {
 		if group == DiscountPricingGroupName || group == PlusPricingGroupName ||
 			group == ClaudeKiroPricingGroupName || group == ClaudeKiroStablePricingGroupName ||
 			group == ClaudeTerminalPricingGroupName || group == ClaudeExternalPricingGroupName ||
-			group == ClaudeWelfarePricingGroupName {
+			group == ClaudeWelfarePricingGroupName || group == ClaudeWelfare001PricingGroupName {
 			continue
 		}
 		if _, ok := groups[group]; ok {

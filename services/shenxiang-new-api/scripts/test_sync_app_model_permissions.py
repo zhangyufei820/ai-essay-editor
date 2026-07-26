@@ -451,6 +451,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                         "xingren-claude-geek2api-welfare",
                         "welfare",
                     ],
+                    [
+                        "51",
+                        "claude-haiku-4-5-20251001,claude-sonnet-4-6",
+                        "60",
+                        "100",
+                        "xingren-claude-pdhlzy-welfare",
+                        "welfare-001",
+                    ],
                 ]
             if "SELECT model_name FROM models" in query:
                 return [["claude-haiku-4-5-20251001"], ["claude-opus-4-5-20251101"], ["claude-sonnet-4-6"]]
@@ -462,6 +470,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             "kiro-stable",
             "claude-external",
             "welfare",
+            "welfare-001",
         ]
         self.module.mysql = fake_mysql
         self.module.mysql_exec = captured.append
@@ -478,6 +487,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("SELECT 'welfare', 'claude-sonnet-4-6', 50", sql)
         self.assertNotIn("SELECT 'default', 'claude-sonnet-4-6', 50", sql)
         self.assertIn("WHERE `group` = 'welfare'", sql)
+        self.assertIn("SELECT 'welfare-001', 'claude-haiku-4-5-20251001', 51", sql)
+        self.assertIn("SELECT 'welfare-001', 'claude-sonnet-4-6', 51", sql)
+        self.assertNotIn("SELECT 'default', 'claude-sonnet-4-6', 51", sql)
+        self.assertIn("WHERE `group` = 'welfare-001'", sql)
         managed_claude_insert = next(
             statement
             for statement in sql.splitlines()
