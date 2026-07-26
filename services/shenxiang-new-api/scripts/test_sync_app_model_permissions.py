@@ -429,7 +429,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
         self.assertNotIn("enabled = 1", discount_insert.split("ON DUPLICATE KEY UPDATE", 1)[1])
 
-    def test_sync_abilities_keeps_pdhlzy_claude_channels_isolated(self) -> None:
+    def test_sync_abilities_keeps_managed_claude_channels_isolated(self) -> None:
         captured: list[str] = []
 
         def fake_mysql(query: str) -> list[list[str]]:
@@ -448,7 +448,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                         "claude-haiku-4-5-20251001,claude-sonnet-4-6",
                         "50",
                         "100",
-                        "xingren-claude-pdhlzy-welfare",
+                        "xingren-claude-geek2api-welfare",
                         "welfare",
                     ],
                 ]
@@ -478,12 +478,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("SELECT 'welfare', 'claude-sonnet-4-6', 50", sql)
         self.assertNotIn("SELECT 'default', 'claude-sonnet-4-6', 50", sql)
         self.assertIn("WHERE `group` = 'welfare'", sql)
-        pdhlzy_insert = next(
+        managed_claude_insert = next(
             statement
             for statement in sql.splitlines()
             if "SELECT 'kiro-stable', 'claude-sonnet-4-6', 47" in statement
         )
-        self.assertNotIn("current_channel.tag, '') NOT IN", pdhlzy_insert)
+        self.assertNotIn("current_channel.tag, '') NOT IN", managed_claude_insert)
 
     def test_sync_abilities_keeps_plus_channels_isolated_without_compact(self) -> None:
         captured: list[str] = []

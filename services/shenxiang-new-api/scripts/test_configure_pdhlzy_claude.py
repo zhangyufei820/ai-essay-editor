@@ -29,7 +29,7 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
 
         self.assertEqual(
             [channel["ratio"] for channel in channels],
-            [Decimal("0.18"), Decimal("0.22"), Decimal("0.75"), Decimal("0.9"), Decimal("0.001")],
+            [Decimal("0.18"), Decimal("0.22"), Decimal("0.75"), Decimal("0.9"), Decimal("0.06")],
         )
         self.assertEqual([channel["type"] for channel in channels], [1, 1, 14, 14, 14])
         self.assertEqual(
@@ -69,7 +69,7 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertEqual(group_ratios["kiro-stable"], 0.22)
         self.assertEqual(group_ratios["ccmax-terminal"], 0.75)
         self.assertEqual(group_ratios["claude-external"], 0.9)
-        self.assertEqual(group_ratios["welfare"], 0.001)
+        self.assertEqual(group_ratios["welfare"], 0.06)
         self.assertEqual(user_groups["kiro"], "Kiro")
         self.assertEqual(user_groups["kiro-stable"], "Kiro 稳定版")
         self.assertEqual(user_groups["ccmax-terminal"], "ccmax 终端专用")
@@ -104,10 +104,12 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertIn("status = 0, weight = 0, priority = 99", sql)
         self.assertIn("xingren-claude-moonapix-fallback", sql)
         self.assertIn("xingren-claude-geek2api-primary", sql)
+        self.assertIn("xingren-claude-pdhlzy-welfare", sql)
         self.assertIn("`group` = 'kiro-stable'", sql)
         self.assertIn("`group` = 'welfare'", sql)
-        self.assertIn("xingren-claude-pdhlzy-welfare", sql)
-        self.assertIn("pdhlzy.com welfare 0.001x", sql)
+        self.assertIn("xingren-claude-geek2api-welfare", sql)
+        self.assertIn("https://www.geek2api.com", sql)
+        self.assertIn("geek2api.com welfare 0.06x", sql)
         self.assertIn("claude-opus-5", sql)
         self.assertIn("cross_group_retry = 0", sql)
 

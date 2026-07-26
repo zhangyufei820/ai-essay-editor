@@ -132,26 +132,26 @@ KIMI_K3_CHANNEL_TAG = "xingren-kimi-k3"
 GROK45_CHANNEL_TAG = "xingren-grok45"
 GROK45_PRIMARY_CHANNEL_TAG = "xingren-grok45-primary"
 GROK45_CHANNEL_TAGS = (GROK45_PRIMARY_CHANNEL_TAG, GROK45_CHANNEL_TAG)
-PDHLZY_CLAUDE_CHANNEL_GROUPS = {
+MANAGED_CLAUDE_CHANNEL_GROUPS = {
     "xingren-claude-pdhlzy-kiro": "kiro",
     "xingren-claude-pdhlzy-kiro-stable": "kiro-stable",
     "xingren-claude-pdhlzy-ccmax-terminal": "ccmax-terminal",
     "xingren-claude-pdhlzy-claude-external": "claude-external",
-    "xingren-claude-pdhlzy-welfare": "welfare",
+    "xingren-claude-geek2api-welfare": "welfare",
 }
 WANGWANG_CLAUDE_CHANNEL_GROUPS = {
     "kiro-primary-20260724": "kiro",
     "kiro-stable-primary-20260724": "kiro-stable",
 }
 CLAUDE_CHANNEL_GROUPS = {
-    **PDHLZY_CLAUDE_CHANNEL_GROUPS,
+    **MANAGED_CLAUDE_CHANNEL_GROUPS,
     **WANGWANG_CLAUDE_CHANNEL_GROUPS,
 }
 CLAUDE_CHANNEL_TAGS_BY_GROUP = {
     group: tuple(tag for tag, tag_group in CLAUDE_CHANNEL_GROUPS.items() if tag_group == group)
     for group in set(CLAUDE_CHANNEL_GROUPS.values())
 }
-PDHLZY_CLAUDE_GROUPS = frozenset(PDHLZY_CLAUDE_CHANNEL_GROUPS.values())
+ISOLATED_CLAUDE_GROUPS = frozenset(MANAGED_CLAUDE_CHANNEL_GROUPS.values())
 SUPPLIER_EXPOSED_MARKERS = (
     "ccapi",
     "drag tokens",
@@ -2225,7 +2225,7 @@ def sync_abilities() -> None:
     invalid_grok1080_channels: list[str] = []
     invalid_discount_image2_channels: list[str] = []
     invalid_gemini_ddpapi_channels: list[str] = []
-    invalid_pdhlzy_channels: list[str] = []
+    invalid_claude_channels: list[str] = []
     gemini_model_by_tag = {
         str(config["channel_tag"]): model
         for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items()
@@ -2289,7 +2289,7 @@ def sync_abilities() -> None:
                     group
                     for group in groups
                     if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
-                    and group not in PDHLZY_CLAUDE_GROUPS
+                    and group not in ISOLATED_CLAUDE_GROUPS
                 ]
             else:
                 invalid_grok1080_channels.append(channel_id)
@@ -2306,7 +2306,7 @@ def sync_abilities() -> None:
                     group
                     for group in groups
                     if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
-                    and group not in PDHLZY_CLAUDE_GROUPS
+                    and group not in ISOLATED_CLAUDE_GROUPS
                 ]
             else:
                 invalid_discount_image2_channels.append(channel_id)
@@ -2324,7 +2324,7 @@ def sync_abilities() -> None:
                     group
                     for group in groups
                     if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
-                    and group not in PDHLZY_CLAUDE_GROUPS
+                    and group not in ISOLATED_CLAUDE_GROUPS
                 ]
             else:
                 invalid_gemini_ddpapi_channels.append(channel_id)
@@ -2332,19 +2332,19 @@ def sync_abilities() -> None:
         elif tag in CLAUDE_CHANNEL_GROUPS:
             expected_group = CLAUDE_CHANNEL_GROUPS[tag]
             if channel_groups != [expected_group]:
-                invalid_pdhlzy_channels.append(channel_id)
+                invalid_claude_channels.append(channel_id)
                 sync_groups = []
             else:
                 sync_groups = channel_groups
-        elif any(group in PDHLZY_CLAUDE_GROUPS for group in channel_groups):
-            invalid_pdhlzy_channels.append(channel_id)
+        elif any(group in ISOLATED_CLAUDE_GROUPS for group in channel_groups):
+            invalid_claude_channels.append(channel_id)
             sync_groups = []
         else:
             sync_groups = [
                 group
                 for group in groups
                 if group not in {DISCOUNT_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
-                and group not in PDHLZY_CLAUDE_GROUPS
+                and group not in ISOLATED_CLAUDE_GROUPS
             ]
         for model in channel_models:
             if model == INTERNAL_DISCOUNT_IMAGE2_MODEL and tag not in DISCOUNT_IMAGE2_CHANNEL_TAGS:
@@ -2633,10 +2633,10 @@ def sync_abilities() -> None:
             "Gemini DDPAPI staging isolation violation; invalid channel count: "
             + str(len(invalid_gemini_ddpapi_channels))
         )
-    if invalid_pdhlzy_channels:
+    if invalid_claude_channels:
         raise RuntimeError(
-            "pdhlzy Claude group isolation violation; disabled channel count: "
-            + str(len(invalid_pdhlzy_channels))
+            "managed Claude group isolation violation; disabled channel count: "
+            + str(len(invalid_claude_channels))
         )
 
 

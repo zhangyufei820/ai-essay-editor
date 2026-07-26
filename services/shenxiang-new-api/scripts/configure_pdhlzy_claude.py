@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure the verified pdhlzy Claude channels in the production New API.
+"""Configure the verified Claude channels in the production New API.
 
 Credentials are accepted only through the production environment.  The script
 never prints channel keys and keeps the old channels disabled rather than
@@ -21,6 +21,7 @@ MYSQL_CONTAINER = os.environ.get("MYSQL_CONTAINER", "shenxiang-new-api-mysql")
 OLD_CHANNEL_TAGS = (
     "xingren-claude-moonapix-fallback",
     "xingren-claude-geek2api-primary",
+    "xingren-claude-pdhlzy-welfare",
 )
 OPUS5_STABLE_GROUP_RATIO = Decimal("0.22")
 
@@ -108,13 +109,15 @@ CHANNELS = (
         "priority": 40,
     },
     {
-        "env": "PDHLZY_WELFARE_KEY",
-        "tag": "xingren-claude-pdhlzy-welfare",
+        "env": "GEEK2API_WELFARE_KEY",
+        "tag": "xingren-claude-geek2api-welfare",
         "name": "Claude 福利渠道",
         "group_label": "福利",
         "type": 14,
         "group": "welfare",
-        "ratio": Decimal("0.001"),
+        "ratio": Decimal("0.06"),
+        "base_url": "https://www.geek2api.com",
+        "remark": "geek2api.com welfare 0.06x",
         "models": (
             "claude-fable-5",
             "claude-haiku-4-5-20251001",
@@ -328,13 +331,15 @@ def build_sql(env: dict[str, str], keys: dict[str, str], updates: dict[str, str]
         models = ",".join(channel["models"])
         mapping = json_option({model: model for model in channel["models"]})
         key = sql_quote(keys[tag])
+        base_url = str(channel.get("base_url", "https://pdhlzy.com"))
+        remark = str(channel.get("remark", f"pdhlzy.com {channel['group']} {channel['ratio']}x"))
         statements.extend(
             [
                 "SET @channel_id := (SELECT MIN(id) FROM channels WHERE tag = " + sql_quote(tag) + ");",
                 "INSERT INTO channels (type, `key`, status, name, weight, created_time, test_time, response_time, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark) "
-                "SELECT " + ", ".join([str(channel["type"]), key, "1", sql_quote(channel["name"]), "100", "@now", "0", "0", sql_quote("https://pdhlzy.com"), sql_quote(models), sql_quote(channel["group"]), sql_quote(mapping), str(channel["priority"]), "1", sql_quote(tag), sql_quote(f"pdhlzy.com {channel['group']} {channel['ratio']}x")]) + " WHERE @channel_id IS NULL;",
+                "SELECT " + ", ".join([str(channel["type"]), key, "1", sql_quote(channel["name"]), "100", "@now", "0", "0", sql_quote(base_url), sql_quote(models), sql_quote(channel["group"]), sql_quote(mapping), str(channel["priority"]), "1", sql_quote(tag), sql_quote(remark)]) + " WHERE @channel_id IS NULL;",
                 "SET @channel_id := IFNULL(@channel_id, LAST_INSERT_ID());",
-                "UPDATE channels SET type = " + str(channel["type"]) + ", `key` = " + key + ", status = 1, name = " + sql_quote(channel["name"]) + ", weight = 100, base_url = " + sql_quote("https://pdhlzy.com") + ", models = " + sql_quote(models) + ", `group` = " + sql_quote(channel["group"]) + ", model_mapping = " + sql_quote(mapping) + ", priority = " + str(channel["priority"]) + ", auto_ban = 1, tag = " + sql_quote(tag) + ", remark = " + sql_quote(f"pdhlzy.com {channel['group']} {channel['ratio']}x") + " WHERE id = @channel_id;",
+                "UPDATE channels SET type = " + str(channel["type"]) + ", `key` = " + key + ", status = 1, name = " + sql_quote(channel["name"]) + ", weight = 100, base_url = " + sql_quote(base_url) + ", models = " + sql_quote(models) + ", `group` = " + sql_quote(channel["group"]) + ", model_mapping = " + sql_quote(mapping) + ", priority = " + str(channel["priority"]) + ", auto_ban = 1, tag = " + sql_quote(tag) + ", remark = " + sql_quote(remark) + " WHERE id = @channel_id;",
                 "UPDATE abilities SET enabled = 0 WHERE channel_id = @channel_id;",
             ]
         )
@@ -348,7 +353,7 @@ def build_sql(env: dict[str, str], keys: dict[str, str], updates: dict[str, str]
     old_tags = ",".join(sql_quote(tag) for tag in OLD_CHANNEL_TAGS)
     statements.extend(
         [
-            "UPDATE channels SET status = 0, weight = 0, priority = 99, remark = CONCAT(COALESCE(remark, ''), ' | disabled by pdhlzy Claude replacement ', FROM_UNIXTIME(@now)) WHERE tag IN (" + old_tags + ");",
+            "UPDATE channels SET status = 0, weight = 0, priority = 99, remark = CONCAT(COALESCE(remark, ''), ' | disabled by Claude channel replacement ', FROM_UNIXTIME(@now)) WHERE tag IN (" + old_tags + ");",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE tag IN (" + old_tags + "));",
             "UPDATE tokens SET `group` = " + sql_quote("kiro-stable") + ", model_limits_enabled = 1, model_limits = " + sql_quote(",".join(CHANNELS[1]["models"])) + ", cross_group_retry = 0 WHERE deleted_at IS NULL AND name = " + sql_quote("星人 Claude 高阶令牌") + ";",
             "UPDATE tokens SET `group` = " + sql_quote("kiro-stable") + ", model_limits_enabled = 1, model_limits = " + sql_quote(",".join(CHANNELS[1]["models"])) + ", cross_group_retry = 0 WHERE deleted_at IS NULL AND LOWER(TRIM(name)) = 'claude';",
