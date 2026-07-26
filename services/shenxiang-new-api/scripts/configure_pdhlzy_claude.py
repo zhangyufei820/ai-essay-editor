@@ -256,10 +256,18 @@ def model_description(model: str) -> str:
     )
 
 
-def require_keys() -> dict[str, str]:
+def require_keys(env: dict[str, str]) -> dict[str, str]:
     keys: dict[str, str] = {}
     for channel in CHANNELS:
         key = os.environ.get(channel["env"], "").strip()
+        if not key:
+            rows = mysql(
+                env,
+                "SELECT COALESCE(`key`, '') FROM channels WHERE tag = "
+                + sql_quote(channel["tag"])
+                + " AND status = 1 ORDER BY id LIMIT 1",
+            )
+            key = rows[0][0].strip() if rows and rows[0] else ""
         if len(key) < 16 or any(character.isspace() for character in key):
             raise RuntimeError(f"{channel['env']} is missing or invalid")
         keys[channel["tag"]] = key
@@ -330,7 +338,7 @@ def main() -> int:
         parser.error("--apply is required")
 
     env = load_dotenv(ROOT / ".env")
-    keys = require_keys()
+    keys = require_keys(env)
     options, exchange_rate = load_options(env)
     updates = option_updates(options, exchange_rate)
     duplicate_tags = mysql(env, "SELECT tag, COUNT(*) FROM channels WHERE tag IN (" + ",".join(sql_quote(channel["tag"]) for channel in CHANNELS) + ") GROUP BY tag HAVING COUNT(*) > 1")

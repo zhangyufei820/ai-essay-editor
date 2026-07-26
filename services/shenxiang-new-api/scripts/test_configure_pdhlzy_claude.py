@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import unittest
 from decimal import Decimal
 from pathlib import Path
@@ -93,6 +94,18 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         self.assertIn("`group` = 'kiro-stable'", sql)
         self.assertIn("claude-opus-5", sql)
         self.assertIn("cross_group_retry = 0", sql)
+
+    def test_existing_enabled_channel_key_is_used_when_environment_key_is_absent(self) -> None:
+        previous_mysql = self.module.mysql
+        try:
+            self.module.mysql = lambda _env, query: [["stored-channel-key-not-printed"]] if "SELECT COALESCE(`key`, '')" in query else []
+            with unittest.mock.patch.dict(os.environ, {channel["env"]: "" for channel in self.module.CHANNELS}, clear=False):
+                keys = self.module.require_keys({"MYSQL_ROOT_PASSWORD": "test", "MYSQL_DATABASE": "test"})
+        finally:
+            self.module.mysql = previous_mysql
+
+        self.assertEqual(set(keys), {channel["tag"] for channel in self.module.CHANNELS})
+        self.assertTrue(all(key == "stored-channel-key-not-printed" for key in keys.values()))
 
 
 if __name__ == "__main__":
