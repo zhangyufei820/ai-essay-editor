@@ -264,11 +264,13 @@ func TestPublicPricingGroupsExposesAllClaudeMarketplaceGroups(t *testing.T) {
 		service.ClaudeKiroStablePricingGroupName,
 		service.ClaudeTerminalPricingGroupName,
 		service.ClaudeExternalPricingGroupName,
+		service.ClaudeWelfarePricingGroupName,
 	}, map[string]string{
 		service.ClaudeKiroPricingGroupName:       "Claude 经济",
 		service.ClaudeKiroStablePricingGroupName: "Claude 稳定",
 		service.ClaudeTerminalPricingGroupName:   "Claude 终端专用",
 		service.ClaudeExternalPricingGroupName:   "Claude 外接",
+		service.ClaudeWelfarePricingGroupName:    "Claude 福利",
 	})
 
 	require.Equal(t, []string{
@@ -276,6 +278,7 @@ func TestPublicPricingGroupsExposesAllClaudeMarketplaceGroups(t *testing.T) {
 		service.ClaudeKiroStablePricingGroupName,
 		service.ClaudeTerminalPricingGroupName,
 		service.ClaudeExternalPricingGroupName,
+		service.ClaudeWelfarePricingGroupName,
 	}, groups)
 }
 

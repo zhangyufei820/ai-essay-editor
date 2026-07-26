@@ -65,7 +65,7 @@ func PublicClaudeTokenModels(group string) ([]string, bool) {
 			"claude-sonnet-4-6",
 			"claude-sonnet-5",
 		}, true
-	case ClaudeTerminalPricingGroupName, ClaudeExternalPricingGroupName:
+	case ClaudeTerminalPricingGroupName, ClaudeExternalPricingGroupName, ClaudeWelfarePricingGroupName:
 		return []string{
 			"claude-fable-5",
 			"claude-haiku-4-5-20251001",

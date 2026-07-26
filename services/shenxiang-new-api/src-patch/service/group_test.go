@@ -24,6 +24,7 @@ func TestGetPublicUserUsableGroupsOnlyReturnsStableDiscountAndPlusGroups(t *test
 		"kiro":"Claude 经济通道",
 		"kiro-stable":"Claude 稳定通道",
 		"claude-external":"Claude 标准通道",
+		"welfare":"Claude 福利通道",
 		"ccmax-terminal":"Claude 终端专用",
 		"code":"历史兼容",
 		"internal":"内部兼容",
@@ -40,6 +41,7 @@ func TestGetPublicUserUsableGroupsOnlyReturnsStableDiscountAndPlusGroups(t *test
 		"kiro":            "Claude 经济通道",
 		"kiro-stable":     "Claude 稳定通道",
 		"claude-external": "Claude 标准通道",
+		"welfare":         "Claude 福利通道",
 	}, groups)
 	require.NotContains(t, groups, ClaudeTerminalPricingGroupName)
 }
@@ -52,11 +54,13 @@ func TestIsPublicTokenGroupRejectsLegacyAndAutoGroups(t *testing.T) {
 	require.True(t, IsPublicTokenGroup(ClaudeKiroPricingGroupName))
 	require.True(t, IsPublicTokenGroup(ClaudeKiroStablePricingGroupName))
 	require.True(t, IsPublicTokenGroup(ClaudeExternalPricingGroupName))
+	require.True(t, IsPublicTokenGroup(ClaudeWelfarePricingGroupName))
 	require.False(t, IsPublicTokenGroup(ClaudeTerminalPricingGroupName))
 	require.True(t, IsPublicClaudeTokenGroup(ClaudeKiroPricingGroupName))
 	require.True(t, IsPublicClaudeTokenGroup(ClaudeKiroStablePricingGroupName))
 	require.True(t, IsPublicClaudeTokenGroup(ClaudeTerminalPricingGroupName))
 	require.True(t, IsPublicClaudeTokenGroup(ClaudeExternalPricingGroupName))
+	require.True(t, IsPublicClaudeTokenGroup(ClaudeWelfarePricingGroupName))
 	require.False(t, IsPublicClaudeTokenGroup("default"))
 	require.False(t, IsPublicTokenGroup("internal"))
 	require.False(t, IsPublicTokenGroup("auto"))
@@ -96,7 +100,8 @@ func TestMarketplacePricingGroupsAddsTerminalWithChineseLabelsWithoutMakingItPub
 		"kiro":"legacy kiro",
 		"kiro-stable":"legacy stable",
 		"ccmax-terminal":"legacy terminal",
-		"claude-external":"legacy external"
+		"claude-external":"legacy external",
+		"welfare":"legacy welfare"
 	}`))
 
 	groups := GetMarketplacePricingGroups("default", false)
@@ -105,6 +110,7 @@ func TestMarketplacePricingGroupsAddsTerminalWithChineseLabelsWithoutMakingItPub
 	require.Equal(t, "Kiro 稳定版", groups[ClaudeKiroStablePricingGroupName])
 	require.Equal(t, "ccmax 终端专用", groups[ClaudeTerminalPricingGroupName])
 	require.Equal(t, "Claude 外接", groups[ClaudeExternalPricingGroupName])
+	require.Equal(t, "福利", groups[ClaudeWelfarePricingGroupName])
 	require.NotContains(t, GetPublicPricingGroups("default", false), ClaudeTerminalPricingGroupName)
 	require.False(t, IsPublicTokenGroup(ClaudeTerminalPricingGroupName))
 }
@@ -154,10 +160,11 @@ func TestGetPublicUserAutoGroupHidesLegacyGroups(t *testing.T) {
 		"kiro":"Claude 经济",
 		"kiro-stable":"Claude 稳定",
 		"claude-external":"Claude 标准",
+		"welfare":"Claude 福利",
 		"ccmax-terminal":"Claude 终端专用",
 		"internal":"历史兼容"
 	}`))
-	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["default","internal","discount","plus","kiro","kiro-stable","claude-external","ccmax-terminal"]`))
+	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["default","internal","discount","plus","kiro","kiro-stable","claude-external","ccmax-terminal","welfare"]`))
 
 	require.Equal(t, []string{"default", "internal"}, GetUserAutoGroup("internal"))
 	require.Equal(t, []string{"default"}, GetPublicUserAutoGroup("internal"))
@@ -226,5 +233,7 @@ func TestNormalizeTokenGroupChainRejectsInvalidShapes(t *testing.T) {
 func TestIsPublicClaudeTokenGroupChainRequiresOnlyPublicClaudeGroups(t *testing.T) {
 	require.True(t, IsPublicClaudeTokenGroupChain("kiro,claude-external"))
 	require.True(t, IsPublicClaudeTokenGroupChain("kiro,ccmax-terminal"))
+	require.True(t, IsPublicClaudeTokenGroupChain("welfare"))
+	require.False(t, IsPublicClaudeTokenGroupChain("welfare,claude-external"))
 	require.False(t, IsPublicClaudeTokenGroupChain("kiro,default"))
 }

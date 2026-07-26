@@ -100,10 +100,13 @@ func TestSystemTokenProfilesClaudeModelsMatchExternalChannel(t *testing.T) {
 func TestPublicClaudeTokenModelsSupportsTerminalGroup(t *testing.T) {
 	terminalModels, terminalOK := PublicClaudeTokenModels(ClaudeTerminalPricingGroupName)
 	externalModels, externalOK := PublicClaudeTokenModels(ClaudeExternalPricingGroupName)
+	welfareModels, welfareOK := PublicClaudeTokenModels(ClaudeWelfarePricingGroupName)
 
 	require.True(t, terminalOK)
 	require.True(t, externalOK)
+	require.True(t, welfareOK)
 	require.Equal(t, externalModels, terminalModels)
+	require.Equal(t, externalModels, welfareModels)
 }
 
 func TestMergeModelLimitsCanonicalizesRawGPTImage2(t *testing.T) {

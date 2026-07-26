@@ -18,12 +18,15 @@ func TestSelectUserGroupsForPurposeIncludesTerminalOnlyForTokenConfig(t *testing
 		"kiro":"Kiro",
 		"kiro-stable":"Kiro 稳定版",
 		"ccmax-terminal":"ccmax 终端专用",
-		"claude-external":"Claude 外接"
+		"claude-external":"Claude 外接",
+		"welfare":"福利"
 	}`))
 
 	regularGroups := selectUserGroupsForPurpose("default", "")
 	tokenGroups := selectUserGroupsForPurpose("default", tokenConfigurationGroupsPurpose)
 
 	require.NotContains(t, regularGroups, service.ClaudeTerminalPricingGroupName)
+	require.Equal(t, "福利", regularGroups[service.ClaudeWelfarePricingGroupName])
 	require.Equal(t, "ccmax 终端专用", tokenGroups[service.ClaudeTerminalPricingGroupName])
+	require.Equal(t, "福利", tokenGroups[service.ClaudeWelfarePricingGroupName])
 }

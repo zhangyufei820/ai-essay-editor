@@ -25,6 +25,7 @@ const CLAUDE_DISPLAY_GROUP_ORDER = [
   'kiro-stable',
   'ccmax-terminal',
   'claude-external',
+  'welfare',
 ];
 const CLAUDE_DISPLAY_GROUPS = new Set(CLAUDE_DISPLAY_GROUP_ORDER);
 

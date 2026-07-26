@@ -434,19 +434,35 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         def fake_mysql(query: str) -> list[list[str]]:
             if "FROM channels" in query:
-                return [[
-                    "47",
-                    "claude-opus-4-5-20251101,claude-sonnet-4-6",
-                    "20",
-                    "100",
-                    "xingren-claude-pdhlzy-kiro-stable",
-                    "kiro-stable",
-                ]]
+                return [
+                    [
+                        "47",
+                        "claude-opus-4-5-20251101,claude-sonnet-4-6",
+                        "20",
+                        "100",
+                        "xingren-claude-pdhlzy-kiro-stable",
+                        "kiro-stable",
+                    ],
+                    [
+                        "50",
+                        "claude-haiku-4-5-20251001,claude-sonnet-4-6",
+                        "50",
+                        "100",
+                        "xingren-claude-pdhlzy-welfare",
+                        "welfare",
+                    ],
+                ]
             if "SELECT model_name FROM models" in query:
-                return [["claude-opus-4-5-20251101"], ["claude-sonnet-4-6"]]
+                return [["claude-haiku-4-5-20251001"], ["claude-opus-4-5-20251101"], ["claude-sonnet-4-6"]]
             return []
 
-        self.module.active_groups = lambda: ["default", "kiro", "kiro-stable", "claude-external"]
+        self.module.active_groups = lambda: [
+            "default",
+            "kiro",
+            "kiro-stable",
+            "claude-external",
+            "welfare",
+        ]
         self.module.mysql = fake_mysql
         self.module.mysql_exec = captured.append
 
@@ -458,6 +474,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("SELECT 'default', 'claude-sonnet-4-6', 47", sql)
         self.assertNotIn("SELECT 'kiro', 'claude-sonnet-4-6', 47", sql)
         self.assertIn("WHERE `group` = 'kiro-stable'", sql)
+        self.assertIn("SELECT 'welfare', 'claude-haiku-4-5-20251001', 50", sql)
+        self.assertIn("SELECT 'welfare', 'claude-sonnet-4-6', 50", sql)
+        self.assertNotIn("SELECT 'default', 'claude-sonnet-4-6', 50", sql)
+        self.assertIn("WHERE `group` = 'welfare'", sql)
         pdhlzy_insert = next(
             statement
             for statement in sql.splitlines()

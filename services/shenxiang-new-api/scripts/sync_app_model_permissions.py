@@ -137,6 +137,7 @@ PDHLZY_CLAUDE_CHANNEL_GROUPS = {
     "xingren-claude-pdhlzy-kiro-stable": "kiro-stable",
     "xingren-claude-pdhlzy-ccmax-terminal": "ccmax-terminal",
     "xingren-claude-pdhlzy-claude-external": "claude-external",
+    "xingren-claude-pdhlzy-welfare": "welfare",
 }
 WANGWANG_CLAUDE_CHANNEL_GROUPS = {
     "kiro-primary-20260724": "kiro",
