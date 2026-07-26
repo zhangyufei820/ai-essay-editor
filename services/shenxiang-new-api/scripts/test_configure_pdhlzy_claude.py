@@ -102,6 +102,7 @@ class ConfigurePdhlzyClaudeTest(unittest.TestCase):
         sql = self.module.build_sql({}, keys, {"GroupRatio": "{}"})
 
         self.assertIn("status = 0, weight = 0, priority = 99", sql)
+        self.assertIn("LEFT(COALESCE(remark, ''), 180)", sql)
         self.assertIn("xingren-claude-moonapix-fallback", sql)
         self.assertIn("xingren-claude-geek2api-primary", sql)
         self.assertIn("xingren-claude-pdhlzy-welfare", sql)

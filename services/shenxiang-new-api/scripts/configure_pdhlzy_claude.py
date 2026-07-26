@@ -353,7 +353,7 @@ def build_sql(env: dict[str, str], keys: dict[str, str], updates: dict[str, str]
     old_tags = ",".join(sql_quote(tag) for tag in OLD_CHANNEL_TAGS)
     statements.extend(
         [
-            "UPDATE channels SET status = 0, weight = 0, priority = 99, remark = CONCAT(COALESCE(remark, ''), ' | disabled by Claude channel replacement ', FROM_UNIXTIME(@now)) WHERE tag IN (" + old_tags + ");",
+            "UPDATE channels SET status = 0, weight = 0, priority = 99, remark = CONCAT(LEFT(COALESCE(remark, ''), 180), ' | disabled by Claude channel replacement ', FROM_UNIXTIME(@now)) WHERE tag IN (" + old_tags + ");",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN (SELECT id FROM channels WHERE tag IN (" + old_tags + "));",
             "UPDATE tokens SET `group` = " + sql_quote("kiro-stable") + ", model_limits_enabled = 1, model_limits = " + sql_quote(",".join(CHANNELS[1]["models"])) + ", cross_group_retry = 0 WHERE deleted_at IS NULL AND name = " + sql_quote("星人 Claude 高阶令牌") + ";",
             "UPDATE tokens SET `group` = " + sql_quote("kiro-stable") + ", model_limits_enabled = 1, model_limits = " + sql_quote(",".join(CHANNELS[1]["models"])) + ", cross_group_retry = 0 WHERE deleted_at IS NULL AND LOWER(TRIM(name)) = 'claude';",
