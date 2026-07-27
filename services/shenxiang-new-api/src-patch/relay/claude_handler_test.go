@@ -9,7 +9,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func TestNormalizeKiroClaudeFunctionToolsPreservesWangwangShape(t *testing.T) {
+func TestNormalizeKiroClaudeFunctionToolsPreservesWangwangOpenAIToolShape(t *testing.T) {
 	body := []byte(`{"model":"claude-fable-5","tools":[{"type":"function","function":{"name":"read_file","parameters":{"type":"object"}}},{"type":"custom","name":"bash"}]}`)
 
 	got, err := normalizeKiroClaudeFunctionTools(body, &relaycommon.RelayInfo{
@@ -17,7 +17,7 @@ func TestNormalizeKiroClaudeFunctionToolsPreservesWangwangShape(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.False(t, gjson.GetBytes(got, "tools.0.type").Exists())
+	assert.Equal(t, "function", gjson.GetBytes(got, "tools.0.type").String())
 	assert.Equal(t, "read_file", gjson.GetBytes(got, "tools.0.function.name").String())
 	assert.Equal(t, "object", gjson.GetBytes(got, "tools.0.function.parameters.type").String())
 	assert.Equal(t, "custom", gjson.GetBytes(got, "tools.1.type").String())

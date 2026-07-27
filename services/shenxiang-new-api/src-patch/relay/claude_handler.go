@@ -32,9 +32,8 @@ func normalizeKiroClaudeFunctionTools(jsonData []byte, info *relaycommon.RelayIn
 		return jsonData, nil
 	}
 	hostname := baseURL.Hostname()
-	isWangwang := strings.EqualFold(hostname, "wangwang.sbs")
 	isPdhlzy := strings.EqualFold(hostname, "pdhlzy.com")
-	if !isWangwang && !isPdhlzy {
+	if !isPdhlzy {
 		return jsonData, nil
 	}
 
@@ -44,42 +43,37 @@ func normalizeKiroClaudeFunctionTools(jsonData []byte, info *relaycommon.RelayIn
 		if !strings.EqualFold(gjson.GetBytes(jsonData, typePath).String(), "function") {
 			continue
 		}
-		if isPdhlzy {
-			functionPath := fmt.Sprintf("tools.%d.function", index)
-			function := gjson.GetBytes(jsonData, functionPath)
-			name := function.Get("name")
-			parameters := function.Get("parameters")
-			if !function.IsObject() || !name.Exists() || !parameters.Exists() {
-				continue
-			}
-			jsonData, err = sjson.SetRawBytes(jsonData, fmt.Sprintf("tools.%d.name", index), []byte(name.Raw))
+		functionPath := fmt.Sprintf("tools.%d.function", index)
+		function := gjson.GetBytes(jsonData, functionPath)
+		name := function.Get("name")
+		parameters := function.Get("parameters")
+		if !function.IsObject() || !name.Exists() || !parameters.Exists() {
+			continue
+		}
+		jsonData, err = sjson.SetRawBytes(jsonData, fmt.Sprintf("tools.%d.name", index), []byte(name.Raw))
+		if err != nil {
+			return nil, fmt.Errorf("set Kiro Claude tool name at index %d: %w", index, err)
+		}
+		if description := function.Get("description"); description.Exists() {
+			jsonData, err = sjson.SetRawBytes(jsonData, fmt.Sprintf("tools.%d.description", index), []byte(description.Raw))
 			if err != nil {
-				return nil, fmt.Errorf("set Kiro Claude tool name at index %d: %w", index, err)
+				return nil, fmt.Errorf("set Kiro Claude tool description at index %d: %w", index, err)
 			}
-			if description := function.Get("description"); description.Exists() {
-				jsonData, err = sjson.SetRawBytes(jsonData, fmt.Sprintf("tools.%d.description", index), []byte(description.Raw))
-				if err != nil {
-					return nil, fmt.Errorf("set Kiro Claude tool description at index %d: %w", index, err)
-				}
-			}
-			jsonData, err = sjson.SetRawBytes(jsonData, fmt.Sprintf("tools.%d.input_schema", index), []byte(parameters.Raw))
-			if err != nil {
-				return nil, fmt.Errorf("set Kiro Claude tool input schema at index %d: %w", index, err)
-			}
-			jsonData, err = sjson.DeleteBytes(jsonData, functionPath)
-			if err != nil {
-				return nil, fmt.Errorf("remove Kiro function tool wrapper at index %d: %w", index, err)
-			}
+		}
+		jsonData, err = sjson.SetRawBytes(jsonData, fmt.Sprintf("tools.%d.input_schema", index), []byte(parameters.Raw))
+		if err != nil {
+			return nil, fmt.Errorf("set Kiro Claude tool input schema at index %d: %w", index, err)
+		}
+		jsonData, err = sjson.DeleteBytes(jsonData, functionPath)
+		if err != nil {
+			return nil, fmt.Errorf("remove Kiro function tool wrapper at index %d: %w", index, err)
 		}
 		jsonData, err = sjson.DeleteBytes(jsonData, typePath)
 		if err != nil {
 			return nil, fmt.Errorf("remove Kiro function tool type at index %d: %w", index, err)
 		}
 	}
-	if isPdhlzy {
-		return normalizeKiroClaudeToolMessages(jsonData)
-	}
-	return jsonData, nil
+	return normalizeKiroClaudeToolMessages(jsonData)
 }
 
 type kiroOpenAIToolCall struct {
