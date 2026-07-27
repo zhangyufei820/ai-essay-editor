@@ -76,6 +76,152 @@ func normalizeKiroClaudeFunctionTools(jsonData []byte, info *relaycommon.RelayIn
 			return nil, fmt.Errorf("remove Kiro function tool type at index %d: %w", index, err)
 		}
 	}
+	if isPdhlzy {
+		return normalizeKiroClaudeToolMessages(jsonData)
+	}
+	return jsonData, nil
+}
+
+type kiroOpenAIToolCall struct {
+	ID       string `json:"id"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+type kiroClaudeToolUseBlock struct {
+	Type  string         `json:"type"`
+	ID    string         `json:"id"`
+	Name  string         `json:"name"`
+	Input map[string]any `json:"input"`
+}
+
+type kiroClaudeTextBlock struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type kiroClaudeToolResultBlock struct {
+	Type      string          `json:"type"`
+	ToolUseID string          `json:"tool_use_id"`
+	Content   json.RawMessage `json:"content"`
+}
+
+func normalizeKiroClaudeToolMessages(jsonData []byte) ([]byte, error) {
+	messagesResult := gjson.GetBytes(jsonData, "messages")
+	if !messagesResult.IsArray() {
+		return jsonData, nil
+	}
+
+	var messages []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(messagesResult.Raw), &messages); err != nil {
+		return nil, fmt.Errorf("decode Kiro Claude messages: %w", err)
+	}
+	normalizedMessages := make([]map[string]json.RawMessage, 0, len(messages))
+	lastWasToolResult := false
+
+	for _, message := range messages {
+		var role string
+		if err := json.Unmarshal(message["role"], &role); err != nil {
+			normalizedMessages = append(normalizedMessages, message)
+			lastWasToolResult = false
+			continue
+		}
+
+		if role == "assistant" {
+			if rawToolCalls, ok := message["tool_calls"]; ok {
+				var toolCalls []kiroOpenAIToolCall
+				if err := json.Unmarshal(rawToolCalls, &toolCalls); err != nil {
+					return nil, fmt.Errorf("decode Kiro assistant tool calls: %w", err)
+				}
+				if len(toolCalls) > 0 {
+					blocks := make([]any, 0, len(toolCalls)+1)
+					var textContent string
+					if err := json.Unmarshal(message["content"], &textContent); err == nil && textContent != "" {
+						blocks = append(blocks, kiroClaudeTextBlock{Type: "text", Text: textContent})
+					}
+					for _, toolCall := range toolCalls {
+						input := map[string]any{}
+						if strings.TrimSpace(toolCall.Function.Arguments) != "" {
+							var parsed map[string]any
+							if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &parsed); err == nil && parsed != nil {
+								input = parsed
+							}
+						}
+						blocks = append(blocks, kiroClaudeToolUseBlock{
+							Type:  "tool_use",
+							ID:    toolCall.ID,
+							Name:  toolCall.Function.Name,
+							Input: input,
+						})
+					}
+					rawContent, err := json.Marshal(blocks)
+					if err != nil {
+						return nil, fmt.Errorf("encode Kiro assistant tool blocks: %w", err)
+					}
+					message["content"] = rawContent
+					delete(message, "tool_calls")
+				}
+			}
+		}
+
+		if role == "tool" {
+			var toolCallID string
+			if err := json.Unmarshal(message["tool_call_id"], &toolCallID); err != nil || toolCallID == "" {
+				normalizedMessages = append(normalizedMessages, message)
+				lastWasToolResult = false
+				continue
+			}
+			content := message["content"]
+			if len(content) == 0 || string(content) == "null" {
+				content = json.RawMessage(`""`)
+			}
+			block, err := json.Marshal(kiroClaudeToolResultBlock{
+				Type:      "tool_result",
+				ToolUseID: toolCallID,
+				Content:   content,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("encode Kiro tool result block: %w", err)
+			}
+
+			if lastWasToolResult {
+				lastMessage := normalizedMessages[len(normalizedMessages)-1]
+				var blocks []json.RawMessage
+				if err := json.Unmarshal(lastMessage["content"], &blocks); err != nil {
+					return nil, fmt.Errorf("decode accumulated Kiro tool results: %w", err)
+				}
+				blocks = append(blocks, block)
+				rawContent, err := json.Marshal(blocks)
+				if err != nil {
+					return nil, fmt.Errorf("encode accumulated Kiro tool results: %w", err)
+				}
+				lastMessage["content"] = rawContent
+				continue
+			}
+
+			message["role"] = json.RawMessage(`"user"`)
+			message["content"] = json.RawMessage("[" + string(block) + "]")
+			delete(message, "tool_call_id")
+			delete(message, "name")
+			normalizedMessages = append(normalizedMessages, message)
+			lastWasToolResult = true
+			continue
+		}
+
+		normalizedMessages = append(normalizedMessages, message)
+		lastWasToolResult = false
+	}
+
+	rawMessages, err := json.Marshal(normalizedMessages)
+	if err != nil {
+		return nil, fmt.Errorf("encode Kiro Claude messages: %w", err)
+	}
+	jsonData, err = sjson.SetRawBytes(jsonData, "messages", rawMessages)
+	if err != nil {
+		return nil, fmt.Errorf("set Kiro Claude messages: %w", err)
+	}
 	return jsonData, nil
 }
 
