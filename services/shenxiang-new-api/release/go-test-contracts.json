@@ -25,7 +25,7 @@
   },
   {
     "package": "./relay",
-    "run": "^(TestDiscountImage2V2OutboundBodyPreservesVerifiedFields|TestUseGeminiAdaptorForApprovedOpenAIChatImageModels|TestNormalizeWangwangClaudeFunctionTools.*)$"
+    "run": "^(TestDiscountImage2V2OutboundBodyPreservesVerifiedFields|TestUseGeminiAdaptorForApprovedOpenAIChatImageModels|TestNormalizeKiroClaudeFunctionTools.*)$"
   },
   {
     "package": "./relay",

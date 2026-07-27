@@ -23,24 +23,57 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-func normalizeWangwangClaudeFunctionTools(jsonData []byte, info *relaycommon.RelayInfo) ([]byte, error) {
+func normalizeKiroClaudeFunctionTools(jsonData []byte, info *relaycommon.RelayInfo) ([]byte, error) {
 	if info == nil {
 		return jsonData, nil
 	}
 	baseURL, err := url.Parse(info.ChannelBaseUrl)
-	if err != nil || !strings.EqualFold(baseURL.Hostname(), "wangwang.sbs") {
+	if err != nil {
+		return jsonData, nil
+	}
+	hostname := baseURL.Hostname()
+	isWangwang := strings.EqualFold(hostname, "wangwang.sbs")
+	isPdhlzy := strings.EqualFold(hostname, "pdhlzy.com")
+	if !isWangwang && !isPdhlzy {
 		return jsonData, nil
 	}
 
 	toolCount := int(gjson.GetBytes(jsonData, "tools.#").Int())
 	for index := 0; index < toolCount; index++ {
-		path := fmt.Sprintf("tools.%d.type", index)
-		if !strings.EqualFold(gjson.GetBytes(jsonData, path).String(), "function") {
+		typePath := fmt.Sprintf("tools.%d.type", index)
+		if !strings.EqualFold(gjson.GetBytes(jsonData, typePath).String(), "function") {
 			continue
 		}
-		jsonData, err = sjson.DeleteBytes(jsonData, path)
+		if isPdhlzy {
+			functionPath := fmt.Sprintf("tools.%d.function", index)
+			function := gjson.GetBytes(jsonData, functionPath)
+			name := function.Get("name")
+			parameters := function.Get("parameters")
+			if !function.IsObject() || !name.Exists() || !parameters.Exists() {
+				continue
+			}
+			jsonData, err = sjson.SetRawBytes(jsonData, fmt.Sprintf("tools.%d.name", index), []byte(name.Raw))
+			if err != nil {
+				return nil, fmt.Errorf("set Kiro Claude tool name at index %d: %w", index, err)
+			}
+			if description := function.Get("description"); description.Exists() {
+				jsonData, err = sjson.SetRawBytes(jsonData, fmt.Sprintf("tools.%d.description", index), []byte(description.Raw))
+				if err != nil {
+					return nil, fmt.Errorf("set Kiro Claude tool description at index %d: %w", index, err)
+				}
+			}
+			jsonData, err = sjson.SetRawBytes(jsonData, fmt.Sprintf("tools.%d.input_schema", index), []byte(parameters.Raw))
+			if err != nil {
+				return nil, fmt.Errorf("set Kiro Claude tool input schema at index %d: %w", index, err)
+			}
+			jsonData, err = sjson.DeleteBytes(jsonData, functionPath)
+			if err != nil {
+				return nil, fmt.Errorf("remove Kiro function tool wrapper at index %d: %w", index, err)
+			}
+		}
+		jsonData, err = sjson.DeleteBytes(jsonData, typePath)
 		if err != nil {
-			return nil, fmt.Errorf("remove Wangwang function tool type at index %d: %w", index, err)
+			return nil, fmt.Errorf("remove Kiro function tool type at index %d: %w", index, err)
 		}
 	}
 	return jsonData, nil
@@ -206,7 +239,7 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 				return newAPIErrorFromParamOverride(err)
 			}
 		}
-		jsonData, err = normalizeWangwangClaudeFunctionTools(jsonData, info)
+		jsonData, err = normalizeKiroClaudeFunctionTools(jsonData, info)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 		}

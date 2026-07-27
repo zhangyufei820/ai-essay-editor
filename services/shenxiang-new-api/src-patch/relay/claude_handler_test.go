@@ -9,10 +9,10 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func TestNormalizeWangwangClaudeFunctionTools(t *testing.T) {
+func TestNormalizeKiroClaudeFunctionToolsPreservesWangwangShape(t *testing.T) {
 	body := []byte(`{"model":"claude-fable-5","tools":[{"type":"function","function":{"name":"read_file","parameters":{"type":"object"}}},{"type":"custom","name":"bash"}]}`)
 
-	got, err := normalizeWangwangClaudeFunctionTools(body, &relaycommon.RelayInfo{
+	got, err := normalizeKiroClaudeFunctionTools(body, &relaycommon.RelayInfo{
 		ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://wangwang.sbs"},
 	})
 
@@ -23,11 +23,29 @@ func TestNormalizeWangwangClaudeFunctionTools(t *testing.T) {
 	assert.Equal(t, "custom", gjson.GetBytes(got, "tools.1.type").String())
 }
 
-func TestNormalizeWangwangClaudeFunctionToolsLeavesOtherProvidersUntouched(t *testing.T) {
+func TestNormalizeKiroClaudeFunctionToolsConvertsPdhlzyToClaudeTools(t *testing.T) {
+	body := []byte(`{"tools":[{"type":"function","function":{"name":"read_file","description":"Read a file","parameters":{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}}},{"type":"custom","name":"bash"}]}`)
+
+	got, err := normalizeKiroClaudeFunctionTools(body, &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://pdhlzy.com"},
+	})
+
+	require.NoError(t, err)
+	assert.False(t, gjson.GetBytes(got, "tools.0.type").Exists())
+	assert.False(t, gjson.GetBytes(got, "tools.0.function").Exists())
+	assert.Equal(t, "read_file", gjson.GetBytes(got, "tools.0.name").String())
+	assert.Equal(t, "Read a file", gjson.GetBytes(got, "tools.0.description").String())
+	assert.Equal(t, "object", gjson.GetBytes(got, "tools.0.input_schema.type").String())
+	assert.Equal(t, "string", gjson.GetBytes(got, "tools.0.input_schema.properties.path.type").String())
+	assert.Equal(t, "path", gjson.GetBytes(got, "tools.0.input_schema.required.0").String())
+	assert.Equal(t, "custom", gjson.GetBytes(got, "tools.1.type").String())
+}
+
+func TestNormalizeKiroClaudeFunctionToolsLeavesOtherProvidersUntouched(t *testing.T) {
 	body := []byte(`{"tools":[{"type":"function","function":{"name":"read_file"}}]}`)
 
-	got, err := normalizeWangwangClaudeFunctionTools(body, &relaycommon.RelayInfo{
-		ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://pdhlzy.com"},
+	got, err := normalizeKiroClaudeFunctionTools(body, &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://api.example.com"},
 	})
 
 	require.NoError(t, err)
