@@ -2,6 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 
 function sourceRootFromArgs() {
   const index = process.argv.indexOf('--source-root')
@@ -37,18 +38,28 @@ function arrayBlock(text, name) {
   return end === -1 ? text.slice(start) : text.slice(start, end)
 }
 
-function main() {
+async function main() {
   const sourceRoot = path.resolve(sourceRootFromArgs())
   const root = fs.existsSync(path.join(sourceRoot, 'web'))
     ? path.join(sourceRoot, 'web')
     : sourceRoot
   const classicPath = path.join(root, 'classic/src/pages/MediaPlayground/index.jsx')
+  const imageAspectRatioPath = path.join(
+    root,
+    'classic/src/pages/MediaPlayground/image-aspect-ratio.js',
+  )
 
   if (!fs.existsSync(classicPath)) {
     return fail([`missing required file: ${classicPath}`])
   }
+  if (!fs.existsSync(imageAspectRatioPath)) {
+    return fail([`missing required file: ${imageAspectRatioPath}`])
+  }
 
   const classic = readText(classicPath)
+  const { closestSupportedImageAspectRatio } = await import(
+    `${pathToFileURL(imageAspectRatioPath).href}?mtime=${fs.statSync(imageAspectRatioPath).mtimeMs}`
+  )
   const gptImage2Block = modelBlock(classic, 'gpt-image-2-4K')
   const stableImage2Block = modelBlock(classic, '官转image 2稳定')
   const discountImage2Block = modelBlock(classic, '特价 image-2')
@@ -59,6 +70,29 @@ function main() {
   const grokBlock = modelBlock(classic, 'grok-imagine-image')
   const grokRatioBlock = arrayBlock(classic, 'XAI_GROK_IMAGE_ASPECT_RATIOS')
   const errors = []
+
+  for (const [referenceRatio, supportedRatios, expectedRatio] of [
+    ['3024:4032', ['1:1', '3:4', '4:3'], '3:4'],
+    ['3024:4031', ['1:1', '3:4', '4:3'], '3:4'],
+    ['4032:3023', ['1:1', '3:4', '4:3'], '4:3'],
+    ['', ['1:1', '3:4', '4:3'], ''],
+  ]) {
+    const actualRatio = closestSupportedImageAspectRatio(referenceRatio, supportedRatios)
+    if (actualRatio !== expectedRatio) {
+      errors.push(
+        `automatic edit ratio ${referenceRatio || '<empty>'}: expected ${expectedRatio || '<empty>'}, got ${actualRatio || '<empty>'}`,
+      )
+    }
+  }
+
+  errors.push(
+    ...markerErrors('Automatic image-edit ratio submission', classic, [
+      "import { closestSupportedImageAspectRatio } from './image-aspect-ratio';",
+      "aspectRatio === 'auto' && imageWorkflow === 'edit'",
+      'detectedRatio = await imageAspectRatioFromFile',
+      '无法识别参考图比例，请重新上传图片后再试。',
+    ]),
+  )
 
   errors.push(
     ...markerErrors('Gemini Pro official aspect ratios', classic, [
@@ -245,4 +279,4 @@ function fail(errors) {
   process.exitCode = 1
 }
 
-main()
+main().catch((error) => fail([error instanceof Error ? error.message : String(error)]))

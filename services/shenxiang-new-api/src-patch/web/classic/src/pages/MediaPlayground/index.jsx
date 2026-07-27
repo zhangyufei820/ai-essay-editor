@@ -51,6 +51,7 @@ import {
   ReversePromptPanel,
   ModelSelector,
 } from '../../components/media-workbench';
+import { closestSupportedImageAspectRatio } from './image-aspect-ratio';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -3415,7 +3416,10 @@ const MediaPlayground = () => {
       const effectiveCount = clampCount(count, activeImageModel);
       const effectiveAspectRatio =
         aspectRatio === 'auto' && imageWorkflow === 'edit'
-          ? referenceImageAspectRatio || imageAspectRatioFor(size, aspectRatio)
+          ? closestSupportedImageAspectRatio(
+              referenceImageAspectRatio,
+              imageRatioOptions,
+            ) || imageAspectRatioFor(size, aspectRatio)
           : imageAspectRatioFor(size, aspectRatio);
       const payload = {
         model: imageModel,
@@ -3566,6 +3570,7 @@ const MediaPlayground = () => {
     watermark,
     activeImageModel,
     activeVideoModel,
+    imageRatioOptions,
   ]);
 
   async function cacheMedia(result) {
@@ -3853,10 +3858,59 @@ const MediaPlayground = () => {
       imageEditModelLockRef.current = '';
       throw new Error('原结果模型当前不可用，请先手动选择可用模型。');
     }
-    const effectiveRequestPayload =
-      lockedEditModel && lockedEditModel !== requestPayload.model
-        ? { ...requestPayload, model: lockedEditModel }
-        : requestPayload;
+    let automaticEditAspectRatio = '';
+    if (imageWorkflow === 'edit' && aspectRatio === 'auto') {
+      const imageReference = referenceFiles.find(
+        (item) => fileMediaType(referenceFileOf(item)) === 'image',
+      );
+      let detectedRatio = referenceImageAspectRatio;
+      if (!detectedRatio && imageReference) {
+        try {
+          detectedRatio = await imageAspectRatioFromFile(referenceFileOf(imageReference));
+        } catch {
+          detectedRatio = '';
+        }
+      }
+      const supportedRatios = activeImageModel.aspectRatios?.length
+        ? activeImageModel.aspectRatios
+        : activeImageModel.sizes || [];
+      automaticEditAspectRatio = closestSupportedImageAspectRatio(
+        detectedRatio,
+        supportedRatios,
+      );
+      if (!automaticEditAspectRatio) {
+        throw new Error('无法识别参考图比例，请重新上传图片后再试。');
+      }
+    }
+    const effectiveRequestPayload = (() => {
+      const basePayload =
+        lockedEditModel && lockedEditModel !== requestPayload.model
+          ? { ...requestPayload, model: lockedEditModel }
+          : requestPayload;
+      if (!automaticEditAspectRatio) return basePayload;
+
+      const payload = { ...basePayload };
+      if (isGptImage2Model(payload.model)) {
+        payload.size = gptImage2SizeFor(
+          automaticEditAspectRatio,
+          resolution,
+          customImageSize,
+        );
+      } else if (
+        isGeminiImageModel(payload.model) &&
+        isGoogleImageEditModel(payload.model)
+      ) {
+        payload.aspect_ratio = automaticEditAspectRatio;
+        payload.size = googleImageEditSizeFor(
+          automaticEditAspectRatio,
+          resolution,
+          payload.model,
+        );
+      } else {
+        payload.aspect_ratio = automaticEditAspectRatio;
+      }
+      return payload;
+    })();
     const submittedPrompt = firstPromptText(effectiveRequestPayload.prompt, prompt);
     const submittedModel = effectiveRequestPayload.model || imageModel;
     const submittedModelLabel =
