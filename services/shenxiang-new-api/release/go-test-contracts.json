@@ -40,6 +40,10 @@
     "run": ""
   },
   {
+    "package": "./service/relayconvert/internal/oai_chat",
+    "run": "^TestStreamResponseOpenAI2Claude(ClosesTextThinkingAndToolBlocks|NormalizesAbsoluteToolIndex)$"
+  },
+  {
     "package": "./relay/channel/gemini",
     "run": ""
   },
