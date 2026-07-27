@@ -3863,8 +3863,8 @@ const MediaPlayground = () => {
       const imageReference = referenceFiles.find(
         (item) => fileMediaType(referenceFileOf(item)) === 'image',
       );
-      let detectedRatio = referenceImageAspectRatio;
-      if (!detectedRatio && imageReference) {
+      let detectedRatio = '';
+      if (imageReference) {
         try {
           detectedRatio = await imageAspectRatioFromFile(referenceFileOf(imageReference));
         } catch {

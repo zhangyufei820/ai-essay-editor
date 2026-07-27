@@ -89,10 +89,14 @@ async function main() {
     ...markerErrors('Automatic image-edit ratio submission', classic, [
       "import { closestSupportedImageAspectRatio } from './image-aspect-ratio';",
       "aspectRatio === 'auto' && imageWorkflow === 'edit'",
+      "let detectedRatio = '';",
       'detectedRatio = await imageAspectRatioFromFile',
       '无法识别参考图比例，请重新上传图片后再试。',
     ]),
   )
+  if (classic.includes('let detectedRatio = referenceImageAspectRatio;')) {
+    errors.push('automatic image-edit submission must not reuse stale aspect-ratio state')
+  }
 
   errors.push(
     ...markerErrors('Gemini Pro official aspect ratios', classic, [
