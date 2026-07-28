@@ -33,6 +33,13 @@ type responsesStreamFallbackCollector struct {
 	order []string
 }
 
+type responsesStreamPendingTerminal struct {
+	response dto.ResponsesStreamResponse
+	data     string
+}
+
+const responsesStreamEmptyTerminalSuppressedContextKey = "responses_stream_empty_terminal_suppressed"
+
 func newResponsesStreamFallbackCollector() *responsesStreamFallbackCollector {
 	return &responsesStreamFallbackCollector{
 		parts: make(map[string]*responsesStreamFallbackPartState),
@@ -218,6 +225,23 @@ func isResponsesStreamCompletionEvent(eventType string) bool {
 	return eventType == "response.completed" || eventType == "response.done"
 }
 
+func hasResponsesStreamEffectiveOutput(c *gin.Context, collector *responsesStreamFallbackCollector, streamResponse dto.ResponsesStreamResponse) bool {
+	if c != nil && c.GetBool("response_stream_output_sent") {
+		return true
+	}
+	if collector != nil && collector.String() != "" {
+		return true
+	}
+	return len(responsesStreamFallbackParts(streamResponse)) > 0
+}
+
+func shouldReplaceResponsesStreamPendingTerminal(pending *responsesStreamPendingTerminal, candidate dto.ResponsesStreamResponse) bool {
+	if pending == nil {
+		return true
+	}
+	return len(responsesStreamFallbackParts(pending.response)) == 0 && len(responsesStreamFallbackParts(candidate)) > 0
+}
+
 func markResponsesStreamOutputSent(c *gin.Context, streamResponse dto.ResponsesStreamResponse) {
 	if c == nil {
 		return
@@ -296,7 +320,9 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 
 	var usage = &dto.Usage{}
 	fallbackCollector := newResponsesStreamFallbackCollector()
+	var pendingTerminal *responsesStreamPendingTerminal
 	c.Set("responses_stream_output_tracking", true)
+	c.Set(responsesStreamEmptyTerminalSuppressedContextKey, false)
 	c.Set(helper.ResponsesStreamDrainUsageAfterClientGoneContextKey, true)
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
@@ -308,7 +334,11 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			sr.Error(err)
 			return
 		}
-		if err := helper.ResponseChunkData(c, streamResponse, data); err == nil {
+		if isResponsesStreamCompletionEvent(streamResponse.Type) {
+			if shouldReplaceResponsesStreamPendingTerminal(pendingTerminal, streamResponse) {
+				pendingTerminal = &responsesStreamPendingTerminal{response: streamResponse, data: data}
+			}
+		} else if err := helper.ResponseChunkData(c, streamResponse, data); err == nil {
 			markResponsesStreamOutputSent(c, streamResponse)
 			fallbackCollector.Collect(streamResponse)
 		}
@@ -354,6 +384,16 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			}
 		}
 	})
+	if pendingTerminal != nil {
+		if hasResponsesStreamEffectiveOutput(c, fallbackCollector, pendingTerminal.response) {
+			if err := helper.ResponseChunkData(c, pendingTerminal.response, pendingTerminal.data); err == nil {
+				markResponsesStreamOutputSent(c, pendingTerminal.response)
+				fallbackCollector.Collect(pendingTerminal.response)
+			}
+		} else {
+			c.Set(responsesStreamEmptyTerminalSuppressedContextKey, true)
+		}
+	}
 	service.CopyResponseHeaderCostFields(usage, resp.Header)
 
 	if usage.CompletionTokens == 0 {
@@ -375,6 +415,9 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	}
 
 	usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+	if c.GetBool(responsesStreamEmptyTerminalSuppressedContextKey) {
+		return usage, service.TextEmptyOutputRetryError()
+	}
 
 	return usage, nil
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -450,8 +451,10 @@ func TestOaiResponsesStreamHandlerCopiesUpstreamCostWithoutTokenUsage(t *testing
 				ChannelMeta:     &relaycommon.ChannelMeta{},
 			}, response)
 
-			require.Nil(t, apiErr)
+			require.NotNil(t, apiErr)
+			assert.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
 			testCase.assertCost(t, usage)
+			assert.NotContains(t, recorder.Body.String(), "event: response.done")
 		})
 	}
 }
@@ -564,11 +567,94 @@ func TestOaiResponsesStreamHandlerReadsUsageFromResponseDone(t *testing.T) {
 		ChannelMeta:     &relaycommon.ChannelMeta{},
 	}, response)
 
-	require.Nil(t, apiErr)
+	require.NotNil(t, apiErr)
+	assert.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
 	assert.True(t, context.GetBool("response_completed_seen"))
+	assert.True(t, context.GetBool(responsesStreamEmptyTerminalSuppressedContextKey))
+	assert.NotContains(t, recorder.Body.String(), "response.done")
 	assert.Equal(t, 100, usage.PromptTokens)
 	assert.Equal(t, 20, usage.CompletionTokens)
 	assert.Equal(t, 120, usage.TotalTokens)
+}
+
+func TestOaiResponsesStreamHandlerSuppressesEmptyTerminalUntilFallbackSucceeds(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-4o",
+		ChannelMeta:     &relaycommon.ChannelMeta{},
+	}
+
+	primary := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			`data: {"type":"response.created","response":{"id":"resp_primary","status":"in_progress"}}`,
+			`data: {"type":"response.completed","response":{"id":"resp_primary","status":"completed","output":[],"usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}}`,
+			`data: [DONE]`,
+		}, "\n"))),
+	}
+
+	primaryUsage, primaryErr := OaiResponsesStreamHandler(context, info, primary)
+	require.NotNil(t, primaryErr)
+	assert.Equal(t, types.ErrorCodeEmptyResponse, primaryErr.GetErrorCode())
+	assert.Zero(t, primaryUsage.TotalTokens)
+	assert.True(t, context.GetBool(responsesStreamEmptyTerminalSuppressedContextKey))
+	assert.NotContains(t, recorder.Body.String(), "event: response.completed")
+
+	fallback := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			`data: {"type":"response.created","response":{"id":"resp_fallback","status":"in_progress"}}`,
+			`data: {"type":"response.output_text.delta","item_id":"msg_fallback","output_index":0,"content_index":0,"delta":"fallback output"}`,
+			`data: {"type":"response.completed","response":{"id":"resp_fallback","status":"completed","output":[]}}`,
+			`data: [DONE]`,
+		}, "\n"))),
+	}
+
+	fallbackUsage, fallbackErr := OaiResponsesStreamHandler(context, info, fallback)
+	require.Nil(t, fallbackErr)
+	assert.Greater(t, fallbackUsage.CompletionTokens, 0)
+	assert.False(t, context.GetBool(responsesStreamEmptyTerminalSuppressedContextKey))
+	assert.Contains(t, recorder.Body.String(), "fallback output")
+	assert.Equal(t, 1, strings.Count(recorder.Body.String(), "event: response.completed\n"))
+}
+
+func TestOaiResponsesStreamHandlerKeepsOneEffectiveTerminalWhenAliasesRepeat(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			`data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[{"id":"call_1","type":"function_call","name":"lookup","arguments":"{}"}]}}`,
+			`data: {"type":"response.done","response":{"id":"resp_1","status":"completed","output":[]}}`,
+			`data: [DONE]`,
+		}, "\n"))),
+	}
+
+	usage, apiErr := OaiResponsesStreamHandler(context, &relaycommon.RelayInfo{
+		OriginModelName: "gpt-4o",
+		ChannelMeta:     &relaycommon.ChannelMeta{},
+	}, response)
+
+	require.Nil(t, apiErr)
+	assert.Greater(t, usage.CompletionTokens, 0)
+	assert.Equal(t, 1, strings.Count(recorder.Body.String(), "event: response.completed\n"))
+	assert.NotContains(t, recorder.Body.String(), "event: response.done\n")
 }
 
 func TestOaiResponsesStreamHandlerReadsFinalOutputAndUsageFromResponseIncomplete(t *testing.T) {

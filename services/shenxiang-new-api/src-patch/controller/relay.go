@@ -36,6 +36,39 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const responsesStreamErrorSentContextKey = "responses_stream_error_sent"
+
+type responsesStreamErrorEvent struct {
+	Type    string `json:"type"`
+	Code    any    `json:"code,omitempty"`
+	Message string `json:"message"`
+	Param   string `json:"param,omitempty"`
+}
+
+func writeResponsesStreamError(c *gin.Context, apiErr *types.NewAPIError, requestID string) error {
+	if c == nil || apiErr == nil {
+		return errors.New("responses stream error context is incomplete")
+	}
+	if c.GetBool(responsesStreamErrorSentContextKey) {
+		return nil
+	}
+	publicErr := apiErr.ToPublicOpenAIError(requestID)
+	payload, err := common.Marshal(responsesStreamErrorEvent{
+		Type:    "error",
+		Code:    publicErr.Code,
+		Message: publicErr.Message,
+		Param:   publicErr.Param,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal responses stream error: %w", err)
+	}
+	if err := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: "error"}, string(payload)); err != nil {
+		return err
+	}
+	c.Set(responsesStreamErrorSentContextKey, true)
+	return nil
+}
+
 func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	var err *types.NewAPIError
 	switch info.RelayMode {
@@ -277,6 +310,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 				c.JSON(newAPIError.StatusCode, gin.H{
 					"type":  "error",
 					"error": newAPIError.ToPublicClaudeError(requestId),
+				})
+			case types.RelayFormatOpenAIResponses:
+				if c.GetBool("responses_stream_output_tracking") {
+					if err := writeResponsesStreamError(c, newAPIError, requestId); err != nil {
+						logger.LogError(c, "write responses stream error failed: "+err.Error())
+					}
+					return
+				}
+				c.JSON(newAPIError.StatusCode, gin.H{
+					"error": newAPIError.ToPublicOpenAIError(requestId),
 				})
 			default:
 				c.JSON(newAPIError.StatusCode, gin.H{

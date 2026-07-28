@@ -56,6 +56,14 @@
     "run": "^(TestConvertGrokImageEditStripsRoutingGroup|TestConvertGrokImageGenerationMapsAspectRatioToVerifiedProviderSize|TestConvertGrokImageGenerationRejectsUnsupportedAspectRatio)$"
   },
   {
+    "package": "./relay/channel/openai",
+    "run": "^(TestOaiResponsesStreamHandlerSuppressesEmptyTerminalUntilFallbackSucceeds|TestOaiResponsesStreamHandlerKeepsOneEffectiveTerminalWhenAliasesRepeat|TestOaiResponsesStreamHandlerReadsUsageFromResponseDone|TestOaiResponsesStreamHandlerCopiesCacheWriteTokens|TestOaiResponsesStreamHandlerCopiesUpstreamCostWithoutTokenUsage)$"
+  },
+  {
+    "package": "./controller",
+    "run": "^TestWriteResponsesStreamErrorWritesOneExplicitSSEError$"
+  },
+  {
     "package": "./service",
     "run": "^(TestApplyUpstreamCostBilling.*|TestMergeRealtimeUpstreamCost.*|TestCopyResponsesCostFields.*|TestCopyResponseHeaderCostFields.*|TestShouldRetryTextEmptyOutput.*|TestCachePlaygroundVideoTaskResult.*|TestVideoPolling.*|TestRedactVideoResponseBody.*|TestFinalizeAsyncVideoTaskTimeout.*|TestAsyncVideoTaskExpired.*|TestSystemTokenProfiles.*|TestPublicClaudeTokenModels.*|TestMergeModelLimits.*|TestEnsureSystemTokensForCommonUserCreatesPublicProfilesOnly|TestEnsureSystemTokensPreservesPublicClaudeGroup.*|TestEnsureSystemTokensPreservesManagedCodexGroupChain|TestEnsureSystemTokensRepairsInvalidClaudeGroupToDefault|TestReconcileUserSystemTokensForEnabledUsersBackfillsAndIsIdempotent|TestManagedGrok45.*|TestEnsureManagedGrok45.*|TestMonthlyCard.*|TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers|TestStableImage2PublicAliasRoundTrip|TestDiscountImage2PublicAliasRoundTrip|TestImage2PublicAliasesDoNotCrossAuthorize|TestDiscountImage2PrimaryNameIsAvailable|TestGetPublicUserUsableGroupsOnlyReturnsStableDiscountAndPlusGroups|TestIsPublicTokenGroupRejectsLegacyAndAutoGroups|TestMarketplacePricingGroupsAddsTerminalWithChineseLabelsWithoutMakingItPublic|TestManagedPricingGroupGlobalSwitchOverridesSpecialGroupRules|TestGetPublicUserAutoGroupHidesLegacyGroups|TestResolveRealtimeGroupRatioPinsDiscountMarketplaceRatio|TestPreWssConsumeQuotaReservesCumulativeDiscountQuota|TestGetUserGroupRatioPinsPlusMarketplaceRatio|TestNormalizeTokenGroupChain.*|TestIsPublicClaudeTokenGroupChain.*|TestCacheGetRandomSatisfiedChannel.*|TestModelAbilityCircuit.*)$"
   },

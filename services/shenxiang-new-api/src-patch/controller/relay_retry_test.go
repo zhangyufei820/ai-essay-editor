@@ -251,6 +251,24 @@ func TestShouldRetryExplicitGroupChainStopsAfterResponsesOutput(t *testing.T) {
 	require.False(t, shouldRetry(ctx, upstreamErr, 1))
 }
 
+func TestWriteResponsesStreamErrorWritesOneExplicitSSEError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	apiErr := service.TextEmptyOutputRetryError()
+
+	require.NoError(t, writeResponsesStreamError(ctx, apiErr, "req_test"))
+	require.NoError(t, writeResponsesStreamError(ctx, apiErr, "req_test"))
+
+	body := recorder.Body.String()
+	require.Equal(t, 1, strings.Count(body, "event: error\n"))
+	require.Contains(t, body, `"type":"error"`)
+	require.Contains(t, body, `"code":"empty_response"`)
+	require.Contains(t, body, "req_test")
+	require.NotContains(t, strings.ToLower(body), "upstream")
+}
+
 func TestShouldFallbackPlaygroundDiscountRequiresUnwrittenFirstAttempt(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	withPublicPlaygroundDiscountGroups(t)

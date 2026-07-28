@@ -9,6 +9,7 @@ import (
 
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -60,7 +61,9 @@ func TestOaiResponsesStreamHandlerCopiesCacheWriteTokens(t *testing.T) {
 	}
 
 	usage, apiErr := OaiResponsesStreamHandler(context, &relaycommon.RelayInfo{}, response)
-	require.Nil(t, apiErr)
+	require.NotNil(t, apiErr)
+	require.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
 	require.Equal(t, 70, usage.PromptTokensDetails.CachedTokens)
 	require.Equal(t, 15, usage.PromptTokensDetails.CachedCreationTokens)
+	require.NotContains(t, recorder.Body.String(), "response.completed")
 }
