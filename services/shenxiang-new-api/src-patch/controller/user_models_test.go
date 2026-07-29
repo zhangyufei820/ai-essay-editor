@@ -258,6 +258,15 @@ func TestPublicPricingGroupsExposesPlusOnlyWhenExplicitlyEnabled(t *testing.T) {
 	require.Equal(t, []string{"default", "plus"}, groups)
 }
 
+func TestPublicPricingGroupsExposesSpecialWhenExplicitlyEnabled(t *testing.T) {
+	groups := publicPricingGroups([]string{"special"}, map[string]string{
+		"default":                       "原价",
+		service.SpecialPricingGroupName: "特价 0.06x",
+	})
+
+	require.Equal(t, []string{service.SpecialPricingGroupName}, groups)
+}
+
 func TestPublicPricingGroupsExposesAllClaudeMarketplaceGroups(t *testing.T) {
 	groups := publicPricingGroups([]string{
 		service.ClaudeKiroPricingGroupName,

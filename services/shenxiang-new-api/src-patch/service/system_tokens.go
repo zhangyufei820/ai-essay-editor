@@ -118,7 +118,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "codex",
 			Name:   "星人 Codex 文本令牌",
-			Models: []string{"gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5-openai-compact", "codex-auto-review", codexImage15KModelName},
+			Models: []string{"gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5-openai-compact", "codex-auto-review", codexImage15KModelName},
 		},
 		{
 			Mode:   "claude",
@@ -207,8 +207,9 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 				if !token.ModelLimitsEnabled {
 					updates["model_limits_enabled"] = true
 					updates["model_limits"] = strings.Join(profileModels, ",")
-				} else if profile.Mode == "grok" || profile.Mode == "claude" {
-					nextLimits := systemTokenModelLimits(token.ModelLimits, profile, profileModels)
+				} else if profile.Mode == "grok" || profile.Mode == "claude" ||
+					(profile.Mode == "codex" && tokenGroup == SpecialPricingGroupName) {
+					nextLimits := systemTokenModelLimits(token.ModelLimits, profile, tokenGroup, profileModels)
 					if nextLimits != token.ModelLimits {
 						updates["model_limits"] = nextLimits
 					}
@@ -254,7 +255,7 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 				RemainQuota:        0,
 				UnlimitedQuota:     true,
 				ModelLimitsEnabled: true,
-				ModelLimits:        strings.Join(profile.Models, ","),
+				ModelLimits:        strings.Join(systemTokenModelsForGroup(profile, tokenGroup), ","),
 				Group:              tokenGroup,
 				CrossGroupRetry:    profile.Mode != "grok" && profile.Mode != "codex" && profile.Mode != "claude",
 			}
@@ -324,14 +325,18 @@ func mustPublicClaudeTokenModels(group string) []string {
 }
 
 func systemTokenModelsForGroup(profile SystemTokenProfile, group string) []string {
+	if profile.Mode == "codex" && strings.TrimSpace(group) == SpecialPricingGroupName {
+		return SpecialPricingModels()
+	}
 	if profile.Mode == "claude" {
 		return mustPublicClaudeTokenModels(group)
 	}
 	return profile.Models
 }
 
-func systemTokenModelLimits(existing string, profile SystemTokenProfile, models []string) string {
-	if profile.Mode == "grok" || profile.Mode == "claude" {
+func systemTokenModelLimits(existing string, profile SystemTokenProfile, group string, models []string) string {
+	if profile.Mode == "grok" || profile.Mode == "claude" ||
+		(profile.Mode == "codex" && strings.TrimSpace(group) == SpecialPricingGroupName) {
 		return strings.Join(models, ",")
 	}
 	return mergeModelLimits(existing, models)

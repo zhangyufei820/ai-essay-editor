@@ -5,12 +5,20 @@ const DEFAULT_TEXT_MODEL = 'gpt-5.4-mini';
 const CLAUDE_STABLE_GROUP = 'kiro-stable';
 const HIDDEN_TEXT_MODELS = new Set(['gpt-5.3-spark']);
 const GROK_TEXT_MODELS = new Set(['grok-4.5']);
+const SPECIAL_TEXT_MODELS = new Set([
+  'gpt-5.4-mini',
+  'gpt-5.5',
+  'gpt-5.6',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+]);
 const DISCOUNT_TEXT_MODELS = new Set([
   'gpt-5.4',
   'gpt-5.4-mini',
   'gpt-5.5',
   'gpt-5.5-openai-compact',
   'gpt-5.6-luna',
+  'gpt-5.6',
   'gpt-5.6-terra',
   'gpt-5.6-sol',
   'codex-auto-review',
@@ -92,6 +100,9 @@ export function getTextModelGroupForPreference(modelName, pricingGroup) {
   if (GROK_TEXT_MODELS.has(name)) return 'grok45';
   if (name.startsWith('claude-')) return CLAUDE_STABLE_GROUP;
   const normalizedGroup = String(pricingGroup || '').trim().toLowerCase();
+  if (SPECIAL_TEXT_MODELS.has(name) && normalizedGroup === 'special') {
+    return normalizedGroup;
+  }
   if (
     DISCOUNT_TEXT_MODELS.has(name) &&
     (normalizedGroup === 'discount' || normalizedGroup === 'default')

@@ -66,6 +66,35 @@ func TestEnforcePublicTokenGroupSelectionPreservesBodyForController(t *testing.T
 	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
+func TestEnforcePublicTokenGroupSelectionRestrictsSpecialCodexModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(EnforcePublicTokenGroupSelection())
+	engine.POST("/api/token/", func(c *gin.Context) {
+		request := struct {
+			ModelLimitsEnabled bool   `json:"model_limits_enabled"`
+			ModelLimits        string `json:"model_limits"`
+			Group              string `json:"group"`
+		}{}
+		require.NoError(t, c.ShouldBindJSON(&request))
+		require.True(t, request.ModelLimitsEnabled)
+		require.Equal(t, strings.Join(service.SpecialPricingModels(), ","), request.ModelLimits)
+		require.Equal(t, service.SpecialPricingGroupName, request.Group)
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/token/",
+		strings.NewReader(`{"name":"星人 Codex 文本令牌","group":"special","model_limits":"gpt-5.4"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
 func TestEnforcePublicTokenGroupSelectionDefaultsEmptyGroupToStable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()

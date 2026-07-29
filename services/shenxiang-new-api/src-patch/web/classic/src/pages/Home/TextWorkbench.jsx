@@ -133,10 +133,12 @@ const CHAT_HISTORY_STORAGE_PREFIX = 'aiphui-home-chat-history:v1';
 const DISCOUNT_GROUP = 'discount';
 const PLUS_GROUP = 'plus';
 const DEFAULT_GROUP = 'default';
+const SPECIAL_GROUP = 'special';
 const CLAUDE_STABLE_GROUP = 'kiro-stable';
 const DISCOUNT_PRICING_LABEL = '特价 0.25x';
 const PLUS_PRICING_LABEL = 'Plus 0.5x';
 const DEFAULT_PRICING_LABEL = '原价 1x';
+const SPECIAL_PRICING_LABEL = '特价 0.06x';
 const CLAUDE_STABLE_PRICING_LABEL = 'Claude 稳定 0.22x';
 const DISCOUNT_FALLBACK_HEADER = 'X-Aiphui-Discount-Fallback';
 const PRICING_GROUP_HEADER = 'X-Aiphui-Pricing-Group';
@@ -508,6 +510,7 @@ function getPricingLabel(group) {
   if (group === DISCOUNT_GROUP) return DISCOUNT_PRICING_LABEL;
   if (group === PLUS_GROUP) return PLUS_PRICING_LABEL;
   if (group === DEFAULT_GROUP) return DEFAULT_PRICING_LABEL;
+  if (group === SPECIAL_GROUP) return SPECIAL_PRICING_LABEL;
   if (group === CLAUDE_STABLE_GROUP) return CLAUDE_STABLE_PRICING_LABEL;
   return '';
 }
@@ -853,7 +856,8 @@ const TextWorkbench = ({ isMobile }) => {
         if (
           group === DISCOUNT_GROUP ||
           group === PLUS_GROUP ||
-          group === DEFAULT_GROUP
+          group === DEFAULT_GROUP ||
+          group === SPECIAL_GROUP
         ) {
           setTextPricingGroup(group);
         }
@@ -1087,7 +1091,8 @@ const TextWorkbench = ({ isMobile }) => {
           !preferenceResponse?.data?.success ||
           (preference !== DISCOUNT_GROUP &&
             preference !== PLUS_GROUP &&
-            preference !== DEFAULT_GROUP)
+            preference !== DEFAULT_GROUP &&
+            preference !== SPECIAL_GROUP)
         ) {
           throw new Error('倍率偏好不可用');
         }
@@ -1740,6 +1745,10 @@ const TextWorkbench = ({ isMobile }) => {
           {activeModelGroup === DISCOUNT_GROUP ? (
             <div className='sx-gpt-message-name' role='note'>
               当前跟随“星人 Codex 文本令牌”：特价 0.25x。若特价通道异常，请在接入设置中手动切换原价 1x。
+            </div>
+          ) : activeModelGroup === SPECIAL_GROUP ? (
+            <div className='sx-gpt-message-name' role='note'>
+              当前跟随“星人 Codex 文本令牌”：特价 0.06x；系统会按主链路、备用一、备用二、备用三依次重试。
             </div>
           ) : activeModelGroup === DEFAULT_GROUP ? (
             <div className='sx-gpt-message-name' role='note'>

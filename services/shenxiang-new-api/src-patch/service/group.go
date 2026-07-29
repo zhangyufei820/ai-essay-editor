@@ -73,6 +73,9 @@ func ValidateTokenGroupChain(groups []string, allowed func(string) bool) error {
 			if group == ClaudeWelfarePricingGroupName || group == ClaudeWelfare001PricingGroupName {
 				return fmt.Errorf("welfare token group must be used alone")
 			}
+			if group == SpecialPricingGroupName {
+				return fmt.Errorf("special token group must be used alone")
+			}
 		}
 	}
 	return nil
@@ -100,6 +103,7 @@ var publicTokenGroups = []string{
 	"default",
 	DiscountPricingGroupName,
 	PlusPricingGroupName,
+	SpecialPricingGroupName,
 	ClaudeKiroPricingGroupName,
 	ClaudeKiroStablePricingGroupName,
 	ClaudeExternalPricingGroupName,
@@ -146,6 +150,7 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 	defaultDescription, defaultEnabled := groupsCopy["default"]
 	discountDescription, discountEnabled := groupsCopy[DiscountPricingGroupName]
 	plusDescription, plusEnabled := groupsCopy[PlusPricingGroupName]
+	specialDescription, specialEnabled := groupsCopy[SpecialPricingGroupName]
 	if userGroup != "" {
 		specialSettings, ok := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.Get(userGroup)
 		if ok {
@@ -177,6 +182,11 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 		groupsCopy[PlusPricingGroupName] = plusDescription
 	} else {
 		delete(groupsCopy, PlusPricingGroupName)
+	}
+	if specialEnabled {
+		groupsCopy[SpecialPricingGroupName] = specialDescription
+	} else {
+		delete(groupsCopy, SpecialPricingGroupName)
 	}
 	return groupsCopy
 }
@@ -225,6 +235,7 @@ func GetUserAutoGroup(userGroup string) []string {
 	autoGroups := make([]string, 0)
 	for _, group := range setting.GetAutoGroups() {
 		if group == DiscountPricingGroupName || group == PlusPricingGroupName ||
+			group == SpecialPricingGroupName ||
 			group == ClaudeKiroPricingGroupName || group == ClaudeKiroStablePricingGroupName ||
 			group == ClaudeTerminalPricingGroupName || group == ClaudeExternalPricingGroupName ||
 			group == ClaudeWelfarePricingGroupName || group == ClaudeWelfare001PricingGroupName {
@@ -254,6 +265,9 @@ func GetUserGroupRatio(userGroup, group string) float64 {
 	}
 	if group == PlusPricingGroupName {
 		return PlusPricingGroupRatio
+	}
+	if group == SpecialPricingGroupName {
+		return SpecialPricingGroupRatio
 	}
 	ratio, ok := ratio_setting.GetGroupGroupRatio(userGroup, group)
 	if ok {

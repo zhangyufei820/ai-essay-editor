@@ -18,7 +18,7 @@ var isChannelAbilityEnabledForCircuit = model.IsChannelAbilityEnabled
 type randomSatisfiedChannelSelector func(string, string, int, string) (*model.Channel, error)
 
 func usesModelAbilityCircuit(group string) bool {
-	return group == DiscountPricingGroupName || group == PlusPricingGroupName
+	return group == DiscountPricingGroupName || group == PlusPricingGroupName || group == SpecialPricingGroupName
 }
 
 func getRandomSatisfiedChannelWithCircuit(

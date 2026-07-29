@@ -105,6 +105,25 @@ func TestHandleGroupRatioPinsDiscountMarketplaceRatio(t *testing.T) {
 	require.Equal(t, float64(-1), ratioInfo.GroupSpecialRatio)
 }
 
+func TestHandleGroupRatioPinsSpecialMarketplaceRatio(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	originalGroupRatio := ratio_setting.GroupRatio2JSONString()
+	originalSpecialRatio := ratio_setting.GroupGroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatio))
+		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(originalSpecialRatio))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"special":0.7}`))
+	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"vip":{"special":0.3}}`))
+	ctx, _ := gin.CreateTestContext(nil)
+	relayInfo := &relaycommon.RelayInfo{UserGroup: "vip", UsingGroup: service.SpecialPricingGroupName}
+
+	ratioInfo := HandleGroupRatio(ctx, relayInfo)
+
+	require.Equal(t, service.SpecialPricingGroupRatio, ratioInfo.GroupRatio)
+	require.False(t, ratioInfo.HasSpecialRatio)
+}
+
 func TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	originalModelPrice := ratio_setting.ModelPrice2JSONString()
@@ -116,19 +135,19 @@ func TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice(t *testing.T) 
 		common.QuotaPerUnit = originalQuotaPerUnit
 	})
 	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"gpt-5.5":2}`))
-	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"discount":0.9}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"special":0.9}`))
 	common.QuotaPerUnit = 500_000
 	ctx, _ := gin.CreateTestContext(nil)
 	relayInfo := &relaycommon.RelayInfo{
 		OriginModelName: "gpt-5.5",
-		UsingGroup:      service.DiscountPricingGroupName,
+		UsingGroup:      service.SpecialPricingGroupName,
 	}
 
 	priceData, err := ModelPriceHelper(ctx, relayInfo, 1, &types.TokenCountMeta{})
 
 	require.NoError(t, err)
 	require.True(t, priceData.UsePrice)
-	require.Equal(t, service.DiscountPricingGroupRatio, priceData.GroupRatioInfo.GroupRatio)
+	require.Equal(t, service.SpecialPricingGroupRatio, priceData.GroupRatioInfo.GroupRatio)
 	require.Equal(t, 60_000, priceData.QuotaToPreConsume)
 }
 

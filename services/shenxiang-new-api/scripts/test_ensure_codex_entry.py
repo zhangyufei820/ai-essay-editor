@@ -361,6 +361,25 @@ API.get('/api/user/models');
         self.assertIn("usableGroup[g] || g", pricing_groups)
         self.assertIn("CLAUDE_DISPLAY_GROUP_ORDER", pricing_groups)
 
+    def test_home_special_group_exposes_only_five_models_at_six_percent(self) -> None:
+        source_root = SCRIPT_PATH.parent.parent / "src-patch"
+        home = (source_root / "web/classic/src/pages/Home/TextWorkbench.jsx").read_text(encoding="utf-8")
+        model_filter = (source_root / "web/classic/src/pages/Home/textModelFilter.js").read_text(encoding="utf-8")
+
+        self.assertIn("const SPECIAL_GROUP = 'special';", home)
+        self.assertIn("const SPECIAL_PRICING_LABEL = '特价 0.06x';", home)
+        self.assertIn(
+            """const SPECIAL_TEXT_MODELS = new Set([
+  'gpt-5.4-mini',
+  'gpt-5.5',
+  'gpt-5.6',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+]);""",
+            model_filter,
+        )
+        self.assertIn("normalizedGroup === 'special'", model_filter)
+
 
 if __name__ == "__main__":
     unittest.main()

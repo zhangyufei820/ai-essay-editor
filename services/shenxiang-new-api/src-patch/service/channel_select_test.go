@@ -58,6 +58,41 @@ func TestModelAbilityCircuitSkipsDisabledPrimary(t *testing.T) {
 	require.Equal(t, []int{0, 1}, seenRetries)
 }
 
+func TestSpecialModelAbilityCircuitSkipsDisabledPrimary(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(nil)
+	seenRetries := make([]int, 0, 2)
+	selector := func(group, modelName string, retry int, requestPath string) (*model.Channel, error) {
+		require.Equal(t, SpecialPricingGroupName, group)
+		require.Equal(t, "gpt-5.6-sol", modelName)
+		require.Equal(t, "/v1/responses", requestPath)
+		seenRetries = append(seenRetries, retry)
+		if retry == 0 {
+			return &model.Channel{Id: 40}, nil
+		}
+		return &model.Channel{Id: 30}, nil
+	}
+	withCircuitAbilityChecker(t, func(group, modelName string, channelID int) (bool, error) {
+		require.Equal(t, SpecialPricingGroupName, group)
+		require.Equal(t, "gpt-5.6-sol", modelName)
+		return channelID == 30, nil
+	})
+
+	channel, err := getRandomSatisfiedChannelWithCircuit(
+		ctx,
+		selector,
+		SpecialPricingGroupName,
+		"gpt-5.6-sol",
+		0,
+		"/v1/responses",
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	require.Equal(t, 30, channel.Id)
+	require.Equal(t, []int{0, 1}, seenRetries)
+}
+
 func TestModelAbilityCircuitReturnsNoChannelWhenEveryRouteIsDisabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(nil)

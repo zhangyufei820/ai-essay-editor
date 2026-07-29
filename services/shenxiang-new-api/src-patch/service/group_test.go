@@ -53,6 +53,7 @@ func TestIsPublicTokenGroupRejectsLegacyAndAutoGroups(t *testing.T) {
 	require.True(t, IsPublicTokenGroup("default"))
 	require.True(t, IsPublicTokenGroup(DiscountPricingGroupName))
 	require.True(t, IsPublicTokenGroup(PlusPricingGroupName))
+	require.True(t, IsPublicTokenGroup(SpecialPricingGroupName))
 	require.True(t, IsPublicTokenGroup(ClaudeKiroPricingGroupName))
 	require.True(t, IsPublicTokenGroup(ClaudeKiroStablePricingGroupName))
 	require.True(t, IsPublicTokenGroup(ClaudeExternalPricingGroupName))
@@ -127,6 +128,23 @@ func TestNormalizePublicTokenGroupDefaultsLegacyAndAutoGroups(t *testing.T) {
 	require.Equal(t, "default", NormalizePublicTokenGroup(""))
 	require.Equal(t, DiscountPricingGroupName, NormalizePublicTokenGroup(" discount "))
 	require.Equal(t, PlusPricingGroupName, NormalizePublicTokenGroup(" plus "))
+	require.Equal(t, SpecialPricingGroupName, NormalizePublicTokenGroup(" special "))
+}
+
+func TestSpecialPricingGroupIsPinnedAndCannotBeChained(t *testing.T) {
+	originalGroupRatio := ratio_setting.GroupRatio2JSONString()
+	originalSpecialRatio := ratio_setting.GroupGroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatio))
+		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(originalSpecialRatio))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"special":0.8}`))
+	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"vip":{"special":0.4}}`))
+
+	require.Equal(t, 0.06, SpecialPricingGroupRatio)
+	require.Equal(t, SpecialPricingGroupRatio, GetUserGroupRatio("vip", SpecialPricingGroupName))
+	require.NoError(t, ValidateTokenGroupChain([]string{SpecialPricingGroupName}, IsPublicTokenGroup))
+	require.Error(t, ValidateTokenGroupChain([]string{SpecialPricingGroupName, "default"}, IsPublicTokenGroup))
 }
 
 func TestManagedPricingGroupGlobalSwitchOverridesSpecialGroupRules(t *testing.T) {

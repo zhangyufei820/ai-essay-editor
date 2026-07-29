@@ -424,6 +424,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 	maxRetryTimes := playgroundImageRetryTimes(c)
+	if service.IsSpecialPricingGroup(relayInfo) && maxRetryTimes < 3 {
+		maxRetryTimes = 3
+	}
 	if groupChainLength := len(service.GetTokenGroupChain(c)); groupChainLength > 1 {
 		maxRetryTimes = (maxRetryTimes+1)*groupChainLength - 1
 	}
@@ -1277,7 +1280,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if service.HasExplicitTokenGroupChain(c) && service.HasTextOutputSent(c) {
 		return false
 	}
-	if shouldRetryPlusTextTimeout(c, openaiErr, retryTimes) {
+	if shouldRetryManagedTextTimeout(c, openaiErr, retryTimes) {
 		return true
 	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) &&
@@ -1313,7 +1316,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	return operation_setting.ShouldRetryByStatusCode(code)
 }
 
-func shouldRetryPlusTextTimeout(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
+func shouldRetryManagedTextTimeout(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
 	if c == nil || c.Request == nil || c.Request.URL == nil || openaiErr == nil || retryTimes <= 0 {
 		return false
 	}
@@ -1323,7 +1326,8 @@ func shouldRetryPlusTextTimeout(c *gin.Context, openaiErr *types.NewAPIError, re
 	if _, ok := c.Get("specific_channel_id"); ok {
 		return false
 	}
-	if common.GetContextKeyString(c, constant.ContextKeyUsingGroup) != service.PlusPricingGroupName {
+	group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	if group != service.PlusPricingGroupName && group != service.SpecialPricingGroupName {
 		return false
 	}
 	path := c.Request.URL.Path

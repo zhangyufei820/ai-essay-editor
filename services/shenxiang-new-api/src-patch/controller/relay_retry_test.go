@@ -1065,6 +1065,36 @@ func TestShouldRetryAllowsPlusTextTimeoutFallback(t *testing.T) {
 	}
 }
 
+func TestShouldRetryAllowsSpecialTextTimeoutFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name   string
+		path   string
+		status int
+	}{
+		{name: "responses 504", path: "/v1/responses", status: http.StatusGatewayTimeout},
+		{name: "responses 524", path: "/v1/responses", status: 524},
+		{name: "chat 504", path: "/v1/chat/completions", status: http.StatusGatewayTimeout},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, tc.path, nil)
+			c.Set("channel_affinity_skip_retry_on_failure", true)
+			common.SetContextKey(c, constant.ContextKeyUsingGroup, service.SpecialPricingGroupName)
+
+			err := types.WithOpenAIError(types.OpenAIError{
+				Message: "gateway timeout",
+				Type:    "openai_error",
+				Code:    "upstream_timeout",
+			}, tc.status)
+
+			if !shouldRetry(c, err, 1) {
+				t.Fatal("shouldRetry() = false, want true for special text timeout")
+			}
+		})
+	}
+}
+
 func TestShouldRetryPlusTextTimeoutGuardrails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	newContext := func(path, group string) *gin.Context {

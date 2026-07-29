@@ -13,6 +13,7 @@ const (
 	TextPricingGroupDefault  = "default"
 	TextPricingGroupDiscount = "discount"
 	TextPricingGroupPlus     = "plus"
+	TextPricingGroupSpecial  = "special"
 	maxTextPricingGroupChain = 3
 )
 
@@ -24,7 +25,7 @@ var managedTextPricingTokenNames = []string{
 func NormalizeTextPricingGroup(group string) (string, bool) {
 	normalized := strings.ToLower(strings.TrimSpace(group))
 	switch normalized {
-	case TextPricingGroupDefault, TextPricingGroupDiscount, TextPricingGroupPlus:
+	case TextPricingGroupDefault, TextPricingGroupDiscount, TextPricingGroupPlus, TextPricingGroupSpecial:
 		return normalized, true
 	default:
 		return "", false
@@ -50,6 +51,13 @@ func NormalizeTextPricingGroupChain(rawGroup string) (string, string, bool) {
 	}
 	if len(groups) == 0 {
 		return "", "", false
+	}
+	if len(groups) > 1 {
+		for _, group := range groups {
+			if group == TextPricingGroupSpecial {
+				return "", "", false
+			}
+		}
 	}
 	return strings.Join(groups, ","), groups[0], true
 }
@@ -106,7 +114,7 @@ func UpdateTokenWithTextPricingPreference(token *Token, syncPreference bool) err
 	}
 	groupChain, primaryGroup, ok := NormalizeTextPricingGroupChain(token.Group)
 	if !ok {
-		return errors.New("文本令牌仅支持最多三个 default、discount 或 plus 分组")
+		return errors.New("文本令牌仅支持最多三个 default、discount、plus 或 special 分组")
 	}
 	token.Group = groupChain
 	token.CrossGroupRetry = false

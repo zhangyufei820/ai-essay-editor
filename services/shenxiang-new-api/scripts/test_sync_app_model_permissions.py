@@ -219,7 +219,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -227,7 +227,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_token_cache_key_uses_crypto_secret_hmac(self) -> None:
@@ -428,6 +428,68 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             if "SELECT 'discount', 'gpt-5.5', 31" in statement
         )
         self.assertNotIn("enabled = 1", discount_insert.split("ON DUPLICATE KEY UPDATE", 1)[1])
+
+    def test_sync_abilities_keeps_special_channels_isolated(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                special_models = ",".join(self.module.SPECIAL_TEXT_ALLOWED_MODELS)
+                return [
+                    ["61", special_models, "40", "100", self.module.SPECIAL_TEXT_CHANNEL_TAGS[0], "special"],
+                    ["21", "gpt-5.5", "0", "100", "stable", "default"],
+                ]
+            if "SELECT model_name FROM models" in query:
+                return [[model] for model in self.module.SPECIAL_TEXT_ALLOWED_MODELS]
+            return []
+
+        self.module.active_groups = lambda: ["default", "special"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        for model in self.module.SPECIAL_TEXT_ALLOWED_MODELS:
+            self.assertIn(f"SELECT 'special', '{model}', 61", sql)
+        self.assertNotIn("SELECT 'default', 'gpt-5.5', 61", sql)
+        self.assertNotIn("SELECT 'special', 'gpt-5.5', 21", sql)
+        self.assertIn("SELECT 'default', 'gpt-5.5', 21", sql)
+        special_insert = next(
+            statement
+            for statement in sql.splitlines()
+            if "SELECT 'special', 'gpt-5.5', 61" in statement
+        )
+        self.assertNotIn("enabled = 1", special_insert.split("ON DUPLICATE KEY UPDATE", 1)[1])
+
+    def test_sync_abilities_rejects_special_channel_with_extra_model(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "61",
+                    "gpt-5.5,gpt-5.7-preview",
+                    "40",
+                    "100",
+                    self.module.SPECIAL_TEXT_CHANNEL_TAGS[0],
+                    "special",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["gpt-5.5"], ["gpt-5.7-preview"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "special"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        with self.assertRaisesRegex(RuntimeError, "special group isolation violation"):
+            self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        self.assertIn("UPDATE channels SET status = 2", sql)
+        self.assertNotIn("SELECT 'special', 'gpt-5.5', 61", sql)
+        self.assertNotIn("gpt-5.7-preview', 61", sql)
 
     def test_sync_abilities_keeps_managed_claude_channels_isolated(self) -> None:
         captured: list[str] = []
@@ -835,6 +897,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             ["102", "user-claude-key", "星人 Claude 高阶令牌", "", "0", "claude-external"],
             ["103", "user-image-key", "星人图像生成令牌", "gpt-image-2-4K", "1", "default"],
             ["104", "user-video-key", "星人视频生成令牌", "seedance-2.0-cl-mini", "1", "default"],
+            ["105", "user-special-codex-key", "星人 Codex 文本令牌", "gpt-5.4,codex-auto-review", "1", "special"],
         ]
         self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
 
@@ -855,12 +918,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
 
         sql = "\n".join(captured)
-        self.assertEqual(result, {"tokens_rewritten": 3, "token_caches_deleted": 3})
+        self.assertEqual(result, {"tokens_rewritten": 4, "token_caches_deleted": 4})
         self.assertNotIn("user_id = 1", sql)
         self.assertIn("WHERE id = '101'", sql)
         self.assertIn("WHERE id = '102'", sql)
         self.assertIn("WHERE id = '103'", sql)
         self.assertNotIn("WHERE id = '104'", sql)
+        self.assertIn("WHERE id = '105'", sql)
         self.assertIn("gpt-5.6-luna", sql)
         self.assertIn("gpt-5.6-terra", sql)
         self.assertIn("gpt-5.6-sol", sql)
@@ -873,7 +937,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("claude-opus-5", sql)
         self.assertIn("`group` = 'kiro-stable'", sql)
         self.assertIn("claude-sonnet-4-5-20250929", sql)
-        self.assertIn("CACHE:admin-codex-key,user-claude-key,user-image-key", sql)
+        special_update = next(statement for statement in sql.splitlines() if "WHERE id = '105'" in statement)
+        self.assertIn("model_limits = '" + self.module.SPECIAL_TEXT_MODEL_LIMITS + "'", special_update)
+        self.assertNotIn("codex-auto-review", special_update)
+        self.assertIn("CACHE:admin-codex-key,user-claude-key,user-image-key,user-special-codex-key", sql)
 
     def test_sync_user_codex_tokens_updates_non_admin_codex_tokens(self) -> None:
         captured: list[str] = []
@@ -890,12 +957,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 "gpt-5.5-openai-compact,codex-auto-review,image 2电商商品图快速通道(1.5K)"
             )
             return [
-                ["101", "key-101", "gpt-5.5", "1"],
-                ["102", "key-102", "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,claude-opus-4-8,seedance-2.0-cl-mini", "1"],
-                ["103", "key-103", "gpt-5.5,image 2电商商品图快速通道(1.5K)", "1"],
-                ["104", "key-104", "", "0"],
-                ["105", "key-105", full_limits, "1"],
-                ["106", "key-106", "gpt-image-2-4K,gpt-5.5,gpt-5.4-mini,gpt-5.4,gpt-5.5-openai-compact", "1"],
+                ["101", "key-101", "gpt-5.5", "1", "default"],
+                ["102", "key-102", "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,claude-opus-4-8,seedance-2.0-cl-mini", "1", "default"],
+                ["103", "key-103", "gpt-5.5,image 2电商商品图快速通道(1.5K)", "1", "default"],
+                ["104", "key-104", "", "0", "default"],
+                ["105", "key-105", full_limits, "1", "default"],
+                ["106", "key-106", "gpt-image-2-4K,gpt-5.5,gpt-5.4-mini,gpt-5.4,gpt-5.5-openai-compact", "1", "default"],
             ]
 
         self.module.mysql = fake_mysql
@@ -914,8 +981,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '106'", sql)
         self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105,key-106", sql)
         self.assertIn("model_limits_enabled = 1", sql)
-        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
-        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("gpt-5.3-codex-spark", sql)
         self.assertNotIn("gpt-5.3-spark", sql)
         self.assertNotIn("gpt-5.4-openai-compact", sql)
@@ -928,7 +995,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
     def test_sync_user_codex_tokens_leaves_unchanged_cache_intact(self) -> None:
         captured: list[str] = []
         exact_limits = ",".join(self.module.CODEX_ALLOWED_MODELS)
-        self.module.mysql = lambda query: [["107", "key-107", exact_limits, "1"]]
+        self.module.mysql = lambda query: [["107", "key-107", exact_limits, "1", "default"]]
         self.module.mysql_exec = captured.append
         self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
 
@@ -939,6 +1006,27 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(result, {"tokens_rewritten": 0, "token_caches_deleted": 0})
         self.assertIn("CACHE:", captured)
         self.assertNotIn("key-107", captured[-1])
+
+    def test_sync_user_codex_tokens_scopes_special_group_exactly(self) -> None:
+        captured: list[str] = []
+        self.module.mysql = lambda query: [[
+            "108",
+            "key-108",
+            "gpt-5.4,gpt-5.5,codex-auto-review,image 2电商商品图快速通道(1.5K)",
+            "1",
+            "special",
+        ]]
+        self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
+
+        result = self.module.sync_user_codex_tokens()
+
+        sql = "\n".join(captured)
+        self.assertEqual(result, {"tokens_rewritten": 1, "token_caches_deleted": 1})
+        self.assertIn("model_limits = '" + self.module.SPECIAL_TEXT_MODEL_LIMITS + "'", sql)
+        self.assertNotIn("codex-auto-review", sql)
+        self.assertNotIn("image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("CACHE:key-108", sql)
 
     def test_sync_user_claude_tokens_replaces_unrestricted_limits(self) -> None:
         captured: list[str] = []
@@ -1242,7 +1330,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.ensure_public_openai_text_models()
 
         sql = "\n".join(captured)
-        for model in ["gpt-5.4", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
+        for model in ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
             self.assertIn(model, sql)
         self.assertIn("text,openai,codex", sql)
         self.assertIn('{"openai":"/v1/chat/completions"}', sql)
@@ -1264,6 +1352,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         expected_model_ratios = {
             "gpt-5.4": 0.162739726027,
             "gpt-5.5": 0.369863013699,
+            "gpt-5.6": 0.342465753425,
             "gpt-5.6-luna": 0.068493150685,
             "gpt-5.6-terra": 0.171232876712,
             "gpt-5.6-sol": 0.342465753425,
@@ -1271,6 +1360,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         expected_completion_ratios = {
             "gpt-5.4": 6.136363636364,
             "gpt-5.5": 6.0,
+            "gpt-5.6": 6.0,
             "gpt-5.6-luna": 6.0,
             "gpt-5.6-terra": 6.0,
             "gpt-5.6-sol": 6.0,
@@ -1298,11 +1388,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         gpt54_expr = captured_options["billing_setting.billing_expr"]["gpt-5.4"]
         gpt55_expr = captured_options["billing_setting.billing_expr"]["gpt-5.5"]
+        gpt56_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6"]
         luna_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-luna"]
         terra_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-terra"]
         sol_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-sol"]
 
-        for expr in [gpt54_expr, gpt55_expr, luna_expr, terra_expr, sol_expr]:
+        for expr in [gpt54_expr, gpt55_expr, gpt56_expr, luna_expr, terra_expr, sol_expr]:
             self.assertIn("len <= 272000", expr)
             self.assertIn('tier("base"', expr)
             self.assertIn('tier("longcontext"', expr)
@@ -1322,6 +1413,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("cc * 0.924657534247", gpt55_expr)
         self.assertIn("p * 1.479452054795", gpt55_expr)
         self.assertIn("c * 6.657534246575", gpt55_expr)
+
+        self.assertEqual(gpt56_expr, sol_expr)
         self.assertIn("cr * 0.147945205479", gpt55_expr)
         self.assertIn("cc * 1.849315068493", gpt55_expr)
 

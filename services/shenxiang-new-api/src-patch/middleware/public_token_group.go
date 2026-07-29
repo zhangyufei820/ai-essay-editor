@@ -104,6 +104,15 @@ func EnforcePublicTokenGroupSelection() gin.HandlerFunc {
 						return
 					}
 					request["group"] = json.RawMessage(groupJSON)
+					if group == service.SpecialPricingGroupName {
+						request["model_limits_enabled"] = json.RawMessage(`true`)
+						modelLimitsJSON, marshalErr := common.Marshal(strings.Join(service.SpecialPricingModels(), ","))
+						if marshalErr != nil {
+							c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"success": false, "message": "令牌配置无效"})
+							return
+						}
+						request["model_limits"] = json.RawMessage(modelLimitsJSON)
+					}
 				}
 			}
 			if common.Unmarshal(rawName, &name) == nil && service.IsPublicClaudeTokenName(name) {

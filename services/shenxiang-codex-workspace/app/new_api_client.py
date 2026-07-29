@@ -22,8 +22,16 @@ from app.security import public_error_message, redact
 
 logger = logging.getLogger(__name__)
 
-PUBLIC_TOKEN_GROUPS = frozenset({"default", "discount"})
+PUBLIC_TOKEN_GROUPS = frozenset({"default", "discount", "special"})
 DEFAULT_PUBLIC_TOKEN_GROUP = "default"
+SPECIAL_TOKEN_GROUP = "special"
+SPECIAL_CODEX_MODELS = (
+    "gpt-5.4-mini",
+    "gpt-5.5",
+    "gpt-5.6",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+)
 
 
 class NewApiAuthError(RuntimeError):
@@ -165,7 +173,7 @@ class NewApiClient:
                 "image": (),
                 "video": (),
             }
-            return self._effective_mode_models(mode_models)
+            return self._scope_mode_models_for_user(user, self._effective_mode_models(mode_models))
 
         mode_models = split_visible_models(self.settings, visible_models)
         has_image_benefit = await self._has_image_benefit_access(client, headers, user_id)
@@ -175,7 +183,19 @@ class NewApiClient:
         effective = self._effective_mode_models(mode_models)
         if has_image_benefit and IMAGE_BENEFIT_MODEL not in effective["image"]:
             effective["image"] = dedupe_models((*effective["image"], IMAGE_BENEFIT_MODEL))
-        return effective
+        return self._scope_mode_models_for_user(user, effective)
+
+    def _scope_mode_models_for_user(
+        self,
+        user: dict[str, Any],
+        mode_models: dict[str, tuple[str, ...]],
+    ) -> dict[str, tuple[str, ...]]:
+        if self._token_group_for_profile(user, None) != SPECIAL_TOKEN_GROUP:
+            return mode_models
+        allowed = set(SPECIAL_CODEX_MODELS)
+        scoped = dict(mode_models)
+        scoped["codex"] = tuple(model for model in mode_models.get("codex", ()) if model in allowed)
+        return scoped
 
     async def _load_visible_models(self, client: httpx.AsyncClient, headers: dict[str, str]) -> tuple[str, ...] | None:
         payload = await self._get_json(client, "/api/user/models", headers)

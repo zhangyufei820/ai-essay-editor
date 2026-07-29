@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/stretchr/testify/require"
 )
@@ -60,6 +61,7 @@ func TestSystemTokenProfilesCodexTextIncludesPublicImageModels(t *testing.T) {
 	}
 
 	require.Contains(t, codexModels, "gpt-5.5")
+	require.Contains(t, codexModels, "gpt-5.6")
 	require.Contains(t, codexModels, "gpt-5.6-luna")
 	require.Contains(t, codexModels, "gpt-5.6-terra")
 	require.Contains(t, codexModels, "gpt-5.6-sol")
@@ -145,6 +147,31 @@ func TestEnsureSystemTokensForCommonUserCreatesPublicProfilesOnly(t *testing.T) 
 		require.Equal(t, common.TokenStatusEnabled, token.Status)
 		require.True(t, token.ModelLimitsEnabled)
 	}
+}
+
+func TestEnsureSystemTokensForSpecialUserCreatesExactCodexModels(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	userID := AdminSystemTokenUserID + 206
+	user := model.User{
+		Id:       userID,
+		Username: "system-token-special-user",
+		AffCode:  "system-token-special-user-aff",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+	}
+	user.SetSetting(dto.UserSetting{TextPricingGroup: SpecialPricingGroupName})
+	require.NoError(t, model.DB.Create(&user).Error)
+
+	result, err := EnsureSystemTokensForUserID(context.Background(), userID)
+
+	require.NoError(t, err)
+	require.Equal(t, 4, result.Created)
+	var token model.Token
+	require.NoError(t, model.DB.Where("user_id = ? AND name = ?", userID, "星人 Codex 文本令牌").First(&token).Error)
+	require.Equal(t, SpecialPricingGroupName, token.Group)
+	require.Equal(t, strings.Join(SpecialPricingModels(), ","), token.ModelLimits)
+	require.False(t, token.CrossGroupRetry)
 }
 
 func TestEnsureSystemTokensPreservesPublicClaudeGroupAndRepairsModelLimits(t *testing.T) {
@@ -371,7 +398,16 @@ func TestGrok45SystemTokenLimitsAreReconciledExactly(t *testing.T) {
 		Group:  Grok45PricingGroupName,
 	}
 
-	require.Equal(t, Grok45ModelName, systemTokenModelLimits("gpt-5.5,"+Grok45ModelName, profile, profile.Models))
+	require.Equal(t, Grok45ModelName, systemTokenModelLimits("gpt-5.5,"+Grok45ModelName, profile, Grok45PricingGroupName, profile.Models))
+}
+
+func TestSpecialCodexSystemTokenLimitsAreReconciledExactly(t *testing.T) {
+	profile := SystemTokenProfile{Mode: "codex", Models: []string{"gpt-5.5", "gpt-5.4"}}
+	models := systemTokenModelsForGroup(profile, SpecialPricingGroupName)
+
+	require.Equal(t, SpecialPricingModels(), models)
+	require.Equal(t, strings.Join(SpecialPricingModels(), ","), systemTokenModelLimits("gpt-5.4", profile, SpecialPricingGroupName, models))
+	require.Equal(t, "gpt-5.4,"+strings.Join(models, ","), systemTokenModelLimits("gpt-5.4", profile, "default", models))
 }
 
 func TestSystemTokenProfilesReconcilePreservesExternallyManagedModelLimitsExceptClaude(t *testing.T) {

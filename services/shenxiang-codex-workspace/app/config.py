@@ -64,6 +64,9 @@ class Settings:
         "gpt-5.4-mini",
         "gpt-5.4",
         "gpt-5.5",
+        "gpt-5.6",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
     )
     grok_allowed_models: tuple[str, ...] = (GROK_MODEL,)
     claude_allowed_models: tuple[str, ...] = (
@@ -133,7 +136,7 @@ def get_settings() -> Settings:
         skill_cache_seconds=_env_int("SKILL_CACHE_SECONDS", 300),
         codex_allowed_models=_env_list(
             "CODEX_ALLOWED_MODELS",
-            "gpt-5.4-mini,gpt-5.4,gpt-5.5",
+            "gpt-5.4-mini,gpt-5.4,gpt-5.5,gpt-5.6,gpt-5.6-sol,gpt-5.6-terra",
         ),
         grok_allowed_models=_env_list("GROK_ALLOWED_MODELS", GROK_MODEL),
         claude_allowed_models=_env_list(

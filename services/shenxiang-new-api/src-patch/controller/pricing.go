@@ -111,6 +111,7 @@ func publicPricingGroups(enableGroups []string, usableGroups map[string]string) 
 		service.ClaudeWelfarePricingGroupName,
 		service.ClaudeWelfare001PricingGroupName,
 		service.Grok45PricingGroupName,
+		service.SpecialPricingGroupName,
 	} {
 		if _, ok := usableGroups[group]; !ok {
 			continue
@@ -220,6 +221,9 @@ func GetPricing(c *gin.Context) {
 	}
 	if _, ok := groupRatio[service.Grok45PricingGroupName]; ok {
 		groupRatio[service.Grok45PricingGroupName] = service.Grok45PricingGroupRatio
+	}
+	if _, ok := groupRatio[service.SpecialPricingGroupName]; ok {
+		groupRatio[service.SpecialPricingGroupName] = service.SpecialPricingGroupRatio
 	}
 
 	parent := context.Background()
