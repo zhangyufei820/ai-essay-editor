@@ -237,6 +237,11 @@ func Distribute() func(c *gin.Context) {
 			}
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
+		selectedGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+		if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") &&
+			service.IsTextPricingPreferenceModel(modelRequest.Model) && selectedGroup != "" {
+			c.Header("X-Aiphui-Pricing-Group", selectedGroup)
+		}
 		if setupErr := SetupContextForSelectedChannel(c, channel, modelRequest.Model); setupErr != nil {
 			abortWithOpenAiMessage(c, setupErr.StatusCode, setupErr.Error(), setupErr.GetErrorCode())
 			return
@@ -291,12 +296,12 @@ func applyPlaygroundTextPricingPreference(c *gin.Context, modelRequest *ModelReq
 	if c == nil || modelRequest == nil || !service.IsTextPricingPreferenceModel(modelRequest.Model) {
 		return "", errors.New("text pricing preference context is invalid")
 	}
-	preferredGroup, err := model.ResolveUserTextPricingGroup(c.GetInt("id"))
+	preferredGroup, groups, err := model.ResolveUserTextPricingGroupChain(c.GetInt("id"))
 	if err != nil {
 		return "", err
 	}
 	modelRequest.Group = preferredGroup
-	service.SetTokenGroupChain(c, []string{preferredGroup})
+	service.SetTokenGroupChain(c, groups)
 	c.Header("X-Aiphui-Pricing-Group", preferredGroup)
 	return preferredGroup, nil
 }

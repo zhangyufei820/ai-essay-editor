@@ -172,6 +172,9 @@ func visibleModelsForToken(c *gin.Context) (visibleModelSet, error) {
 	}
 
 	ownerGroups := groups.ownerGroups
+	if service.HasExplicitTokenGroupChain(c) {
+		ownerGroups = service.GetTokenGroupChain(c)
+	}
 	modelNames := enabledModelNamesForGroups(ownerGroups)
 	rawOwnerByModel := getPreferredModelOwners(modelNames, ownerGroups)
 	routableModelNames := make([]string, 0, len(modelNames))

@@ -1179,8 +1179,13 @@ const TextWorkbench = ({ isMobile }) => {
       );
     };
 
-    const markOriginalPriceFallback = () => {
-      effectivePricingLabel = DEFAULT_PRICING_LABEL;
+    const markPricingFallback = (fallbackGroup) => {
+      const fallbackPricingLabel = getPricingLabel(fallbackGroup);
+      if (
+        !fallbackPricingLabel ||
+        fallbackPricingLabel === effectivePricingLabel
+      ) return;
+      effectivePricingLabel = fallbackPricingLabel;
       setMessages((prev) =>
         prev.map((message) =>
           message.id === pendingId
@@ -1194,7 +1199,7 @@ const TextWorkbench = ({ isMobile }) => {
       if (!fallbackWarningShown) {
         fallbackWarningShown = true;
         Toast.warning(
-          '特价通道暂不可用，已切换至原价 1x；成功回复按原价计费。',
+          `当前倍率暂不可用，已切换至${fallbackPricingLabel}；成功回复按该倍率计费。`,
         );
       }
     };
@@ -1245,13 +1250,12 @@ const TextWorkbench = ({ isMobile }) => {
         ? null
         : await readResponseError(response);
       const initialResponseMetadata = getResponsePricingMetadata(response);
-      const backendUsedFallback =
-        initialModelGroup === DISCOUNT_GROUP &&
-        (initialResponseMetadata.fallbackAttempted ||
-          initialResponseMetadata.pricingGroup === DEFAULT_GROUP);
+      const fallbackGroup =
+        initialResponseMetadata.pricingGroup ||
+        (initialResponseMetadata.fallbackAttempted ? DEFAULT_GROUP : '');
 
-      if (backendUsedFallback) {
-        markOriginalPriceFallback();
+      if (fallbackGroup && fallbackGroup !== initialModelGroup) {
+        markPricingFallback(fallbackGroup);
       }
 
       if (responseError) throw responseError;

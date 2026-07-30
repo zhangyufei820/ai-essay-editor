@@ -715,6 +715,7 @@ func prepareTokenGroupFallbackBilling(
 			return types.NewError(reserveErr, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 		}
 	}
+	c.Header(playgroundPricingGroupHeader, selectedGroup)
 	logger.LogWarn(c, fmt.Sprintf("令牌分组链路已切换后备分组重试（model=%s）", info.OriginModelName))
 	return nil
 }

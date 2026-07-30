@@ -172,6 +172,7 @@ func TestMain(m *testing.M) {
 
 func TestApplyPlaygroundTextPricingPreferenceOverridesStaleClientGroup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	require.NoError(t, model.DB.AutoMigrate(&model.Token{}))
 	redisEnabled := common.RedisEnabled
 	common.RedisEnabled = false
 	t.Cleanup(func() { common.RedisEnabled = redisEnabled })
@@ -221,6 +222,85 @@ func TestApplyPlaygroundTextPricingPreferenceOverridesStaleClientGroup(t *testin
 		t.Fatalf("update preference: %v", err)
 	}
 	assertGroup(model.TextPricingGroupDiscount, model.TextPricingGroupDefault)
+}
+
+func TestApplyPlaygroundTextPricingPreferenceUsesManagedGroupChain(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	require.NoError(t, model.DB.AutoMigrate(&model.Token{}))
+	redisEnabled := common.RedisEnabled
+	common.RedisEnabled = false
+	t.Cleanup(func() { common.RedisEnabled = redisEnabled })
+
+	createUser := func(username, preferredGroup, tokenGroup string) model.User {
+		user := model.User{
+			Username: username,
+			Password: "password-for-test",
+			Status:   common.UserStatusEnabled,
+			Group:    model.TextPricingGroupDefault,
+			AffCode:  username,
+		}
+		setting := user.GetSetting()
+		setting.TextPricingGroup = preferredGroup
+		user.SetSetting(setting)
+		require.NoError(t, model.DB.Create(&user).Error)
+		require.NoError(t, model.DB.Create(&model.Token{
+			UserId:         user.Id,
+			Key:            "pricing-chain-" + username,
+			Status:         common.TokenStatusEnabled,
+			Name:           "星人 Codex 文本令牌",
+			ExpiredTime:    -1,
+			UnlimitedQuota: true,
+			Group:          tokenGroup,
+		}).Error)
+		t.Cleanup(func() {
+			model.DB.Where("user_id = ?", user.Id).Delete(&model.Token{})
+			model.DB.Delete(&model.User{}, user.Id)
+		})
+		return user
+	}
+
+	tests := []struct {
+		name       string
+		user       model.User
+		wantGroups []string
+	}{
+		{
+			name: "preserves matching fallback chain",
+			user: createUser(
+				"middleware-pricing-chain",
+				model.TextPricingGroupDiscount,
+				"discount,plus,default",
+			),
+			wantGroups: []string{"discount", "plus", "default"},
+		},
+		{
+			name: "rejects stale chain primary",
+			user: createUser(
+				"middleware-pricing-stale-chain",
+				model.TextPricingGroupDiscount,
+				"plus,default",
+			),
+			wantGroups: []string{"discount"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/chat/completions", nil)
+			ctx.Set("id", test.user.Id)
+			modelRequest := &ModelRequest{Model: "gpt-5.5", Group: model.TextPricingGroupDefault}
+
+			group, err := applyPlaygroundTextPricingPreference(ctx, modelRequest)
+
+			require.NoError(t, err)
+			require.Equal(t, model.TextPricingGroupDiscount, group)
+			require.Equal(t, model.TextPricingGroupDiscount, modelRequest.Group)
+			require.Equal(t, test.wantGroups, service.GetTokenGroupChain(ctx))
+			require.Equal(t, model.TextPricingGroupDiscount, recorder.Header().Get("X-Aiphui-Pricing-Group"))
+		})
+	}
 }
 
 func TestApplyKimiK3PricingRouteOverridesDiscountAndPlusGroups(t *testing.T) {

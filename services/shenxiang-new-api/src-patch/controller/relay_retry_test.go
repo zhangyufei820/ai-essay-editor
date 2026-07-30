@@ -209,6 +209,7 @@ func TestPrepareTokenGroupFallbackBillingRepricesAndReservesActualGroup(t *testi
 	require.Equal(t, 1.0, info.PriceData.GroupRatioInfo.GroupRatio)
 	require.Len(t, billing.reserveTargets, 1)
 	require.Greater(t, billing.reserveTargets[0], 120)
+	require.Equal(t, "default", ctx.Writer.Header().Get(playgroundPricingGroupHeader))
 }
 
 func TestPrepareTokenGroupFallbackBillingRestoresPricingWhenReserveFails(t *testing.T) {
@@ -238,6 +239,7 @@ func TestPrepareTokenGroupFallbackBillingRestoresPricingWhenReserveFails(t *test
 	require.Equal(t, service.DiscountPricingGroupName, info.UsingGroup)
 	require.Equal(t, service.DiscountPricingGroupName, common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup))
 	require.Equal(t, previousPrice, info.PriceData)
+	require.Empty(t, ctx.Writer.Header().Get(playgroundPricingGroupHeader))
 }
 
 func TestShouldRetryExplicitGroupChainStopsAfterResponsesOutput(t *testing.T) {

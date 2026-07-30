@@ -72,35 +72,47 @@ func IsManagedTextPricingTokenName(name string) bool {
 	return false
 }
 
-// ResolveUserTextPricingGroup returns the persisted preference. Existing users
-// without the setting are migrated lazily from their managed text token so a
-// prior manual 0.25x/1x choice is not overwritten during rollout.
-func ResolveUserTextPricingGroup(userID int) (string, error) {
+// ResolveUserTextPricingGroupChain returns the persisted primary preference
+// and its managed fallback chain. A valid user setting remains authoritative
+// when a stale token starts from a different group.
+func ResolveUserTextPricingGroupChain(userID int) (string, []string, error) {
 	if userID <= 0 {
-		return "", errors.New("userId 无效")
+		return "", nil, errors.New("userId 无效")
 	}
 	setting, err := GetUserSetting(userID, false)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	if group, ok := NormalizeTextPricingGroup(setting.TextPricingGroup); ok {
-		return group, nil
-	}
+	preferredGroup, hasPreferredGroup := NormalizeTextPricingGroup(setting.TextPricingGroup)
 
 	for _, tokenName := range managedTextPricingTokenNames {
 		var token Token
 		err = DB.Select("group").Where("user_id = ? AND name = ?", userID, tokenName).Order("id desc").First(&token).Error
 		if err == nil {
-			if _, primaryGroup, ok := NormalizeTextPricingGroupChain(token.Group); ok {
-				return primaryGroup, nil
+			if groupChain, primaryGroup, ok := NormalizeTextPricingGroupChain(token.Group); ok {
+				if hasPreferredGroup && primaryGroup != preferredGroup {
+					continue
+				}
+				return primaryGroup, strings.Split(groupChain, ","), nil
 			}
 			continue
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", err
+			return "", nil, err
 		}
 	}
-	return TextPricingGroupDefault, nil
+	if hasPreferredGroup {
+		return preferredGroup, []string{preferredGroup}, nil
+	}
+	return TextPricingGroupDefault, []string{TextPricingGroupDefault}, nil
+}
+
+// ResolveUserTextPricingGroup returns the persisted preference. Existing users
+// without the setting are migrated lazily from their managed text token so a
+// prior manual 0.25x/1x choice is not overwritten during rollout.
+func ResolveUserTextPricingGroup(userID int) (string, error) {
+	group, _, err := ResolveUserTextPricingGroupChain(userID)
+	return group, err
 }
 
 // UpdateTokenWithTextPricingPreference keeps the managed OpenAI text token,

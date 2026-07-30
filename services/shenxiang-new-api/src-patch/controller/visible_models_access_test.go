@@ -71,6 +71,58 @@ func TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels(t *testing.T) {
 	require.NotContains(t, models, service.InternalDiscountImage2ModelName)
 }
 
+func TestListVisibleModelsUsesExplicitTokenGroupChain(t *testing.T) {
+	withSelfUseModeEnabled(t)
+	db := setupModelListControllerTestDB(t)
+
+	require.NoError(t, db.Create(&[]model.Channel{
+		{
+			Id:     151,
+			Name:   "plus-fallback-channel",
+			Type:   constant.ChannelTypeOpenAI,
+			Status: common.ChannelStatusEnabled,
+			Group:  service.PlusPricingGroupName,
+			Models: "plus-fallback-model,plus-token-blocked-model",
+		},
+		{
+			Id:     152,
+			Name:   "default-fallback-channel",
+			Type:   constant.ChannelTypeOpenAI,
+			Status: common.ChannelStatusEnabled,
+			Group:  "default",
+			Models: "default-fallback-model",
+		},
+	}).Error)
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: service.PlusPricingGroupName, Model: "plus-fallback-model", ChannelId: 151, Enabled: true},
+		{Group: service.PlusPricingGroupName, Model: "plus-token-blocked-model", ChannelId: 151, Enabled: true},
+		{Group: "default", Model: "default-fallback-model", ChannelId: 152, Enabled: true},
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	context.Set("id", 151)
+	common.SetContextKey(context, constant.ContextKeyUserGroup, "default")
+	service.SetTokenGroupChain(context, []string{
+		service.DiscountPricingGroupName,
+		service.PlusPricingGroupName,
+		"default",
+	})
+	common.SetContextKey(context, constant.ContextKeyTokenModelLimitEnabled, true)
+	common.SetContextKey(context, constant.ContextKeyTokenModelLimit, map[string]bool{
+		"plus-fallback-model":    true,
+		"default-fallback-model": true,
+	})
+
+	ListVisibleModels(context, constant.ChannelTypeOpenAI)
+
+	models := decodeListModelsResponse(t, recorder)
+	require.Contains(t, models, "plus-fallback-model")
+	require.Contains(t, models, "default-fallback-model")
+	require.NotContains(t, models, "plus-token-blocked-model")
+}
+
 func TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility(t *testing.T) {
 	withSelfUseModeEnabled(t)
 	db := setupModelListControllerTestDB(t)
