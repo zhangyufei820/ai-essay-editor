@@ -56,14 +56,14 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
             self.options,
         )
 
-    def test_build_discount_plan_requires_exact_four_models(self) -> None:
+    def test_build_discount_plan_requires_exact_five_models(self) -> None:
         upstream = set(self.module.DISCOUNT_TEXT_MODELS) | {"gpt-5.4", "supplier-private-model"}
 
         plan = self.module.build_discount_plan(upstream)
 
         self.assertEqual(plan.matched_models, self.module.DISCOUNT_TEXT_MODELS)
         self.assertEqual(plan.missing_models, ())
-        self.assertEqual(plan.upstream_model_count, 6)
+        self.assertEqual(plan.upstream_model_count, 7)
 
     def test_build_discount_plan_rejects_missing_required_model(self) -> None:
         upstream = set(self.module.DISCOUNT_TEXT_MODELS)
@@ -71,6 +71,19 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
 
         with self.assertRaisesRegex(self.module.ConfigurationError, "gpt-5.6-terra"):
             self.module.build_discount_plan(upstream)
+
+    def test_build_discount_plan_allows_fallback_model_subset(self) -> None:
+        plan = self.module.build_discount_plan(
+            {"gpt-5.5", "gpt-5.6-sol", "supplier-private-model"},
+            require_all=False,
+        )
+
+        self.assertEqual(plan.matched_models, ("gpt-5.5", "gpt-5.6-sol"))
+        self.assertIn("gpt-5.4-mini", plan.missing_models)
+        self.assertIn("gpt-5.6", plan.missing_models)
+
+        with self.assertRaisesRegex(self.module.ConfigurationError, "none"):
+            self.module.build_discount_plan({"supplier-private-model"}, require_all=False)
 
     def test_build_group_option_updates_sets_runtime_ratio_and_hides_auto_group(self) -> None:
         updates = self.module.build_group_option_updates(self.options)
@@ -95,8 +108,8 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
 
     def test_parse_channel_order_accepts_any_exact_permutation(self) -> None:
         self.assertEqual(
-            self.module.parse_channel_order("pdhlzy,reserve,wangwang"),
-            ("pdhlzy", "reserve", "wangwang"),
+            self.module.parse_channel_order("pdhlzy,aihub,wangwang"),
+            ("pdhlzy", "aihub", "wangwang"),
         )
         with self.assertRaises(self.module.ConfigurationError):
             self.module.parse_channel_order("wangwang,pdhlzy,pdhlzy")
@@ -108,7 +121,7 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
 
     def test_probe_output_reports_native_responses_for_every_channel(self) -> None:
         plan = self.module.DiscountPlan(
-            upstream_model_count=4,
+            upstream_model_count=5,
             matched_models=self.module.DISCOUNT_TEXT_MODELS,
             missing_models=(),
         )
@@ -120,14 +133,14 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         ), mock.patch.object(
             self.module, "build_discount_plan", return_value=plan
         ), mock.patch.object(
-            sys, "argv", ["configure_discount_text_channel.py", "--order", "reserve,pdhlzy,wangwang"]
+            sys, "argv", ["configure_discount_text_channel.py", "--order", "aihub,pdhlzy,wangwang"]
         ), mock.patch(
             "sys.stdout", stdout
         ):
             self.assertEqual(self.module.main(), 0)
 
         payload = self.module.json.loads(stdout.getvalue())
-        self.assertEqual(payload["channel_order"], ["reserve", "pdhlzy", "wangwang"])
+        self.assertEqual(payload["channel_order"], ["aihub", "pdhlzy", "wangwang"])
         self.assertEqual(
             {channel["wire_api"] for channel in payload["channels"].values()},
             {"responses"},
@@ -138,7 +151,7 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
 
         self.assertIn("@discount_channel_id_wangwang", sql)
         self.assertIn("@discount_channel_id_pdhlzy", sql)
-        self.assertIn("@discount_channel_id_reserve", sql)
+        self.assertIn("@discount_channel_id_aihub", sql)
         self.assertIn("priority = 30", sql)
         self.assertIn("priority = 20", sql)
         self.assertIn("priority = 10", sql)
@@ -150,8 +163,20 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         for model in self.module.DISCOUNT_TEXT_MODELS:
             self.assertIn("'discount', '" + model + "'", sql)
         self.assertNotIn("'discount', 'gpt-5.4'", sql)
-        self.assertNotIn("'discount', 'gpt-5.4-mini'", sql)
+        self.assertNotIn("'discount', 'gpt-5.6-luna'", sql)
         self.assertNotIn("'discount', 'codex-auto-review'", sql)
+
+    def test_build_apply_sql_uses_each_fallback_model_subset(self) -> None:
+        self.plans["pdhlzy"] = self.module.DiscountPlan(
+            upstream_model_count=4,
+            matched_models=("gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
+            missing_models=("gpt-5.6",),
+        )
+
+        sql = self.build_sql()
+
+        self.assertIn("'discount', 'gpt-5.6', @discount_channel_id_aihub", sql)
+        self.assertNotIn("'discount', 'gpt-5.6', @discount_channel_id_pdhlzy", sql)
 
     def test_build_apply_sql_clears_managed_channel_settings_and_legacy_other(self) -> None:
         sql = self.build_sql()
@@ -168,7 +193,7 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertIn("@discount_options_match <> 4", sql)
         self.assertIn("@discount_duplicate_count", sql)
         self.assertIn(
-            "tag IN ('xingren-discount-text-reserve','xingren-discount-text')) > 1, 1, 0)",
+            "tag IN ('xingren-discount-text-aihub','xingren-discount-text-reserve','xingren-discount-text')) > 1, 1, 0)",
             sql,
         )
         mutations = [

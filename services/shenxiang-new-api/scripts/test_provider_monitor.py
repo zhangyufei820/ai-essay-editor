@@ -95,6 +95,11 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         families = {family.name: family for family in self.module.TEXT_FAMILIES}
 
         self.assertEqual(families["discount_text"].channel_ids, (28, 42, 41))
+        self.assertEqual(
+            families["discount_text"].models,
+            ("gpt-5.4-mini", "gpt-5.5", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra"),
+        )
+        self.assertEqual(families["discount_text"].expected_tags[28], "xingren-discount-text-aihub")
         self.assertEqual(families["discount_text"].ability_group, "discount")
         self.assertEqual(families["plus_text"].channel_ids, (43, 44))
         self.assertEqual(families["plus_text"].ability_group, "plus")

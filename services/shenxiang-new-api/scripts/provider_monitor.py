@@ -79,14 +79,14 @@ TEXT_FAMILIES = (
     ),
     TextFamily(
         name="discount_text",
-        models=("gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"),
+        models=("gpt-5.4-mini", "gpt-5.5", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra"),
         channel_ids=(28, 42, 41),
         baseline_priorities={28: 30, 42: 20, 41: 10},
         allow_disable=False,
         standalone=True,
         request_format="responses",
         expected_tags={
-            28: "xingren-discount-text-reserve",
+            28: "xingren-discount-text-aihub",
             42: "xingren-discount-text-pdhlzy",
             41: "xingren-discount-text-wangwang",
         },
