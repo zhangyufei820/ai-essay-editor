@@ -128,6 +128,7 @@ SPECIAL_TEXT_MODELS_REGEX = (
 )
 PLUS_TEXT_GROUP = "plus"
 PLUS_TEXT_CHANNEL_TAGS = (
+    "xingren-plus-text-aihub",
     "xingren-plus-text-wangwang",
     "xingren-plus-text-pdhlzy",
 )

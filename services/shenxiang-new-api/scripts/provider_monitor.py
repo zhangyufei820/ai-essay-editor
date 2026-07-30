@@ -14,7 +14,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -68,6 +68,7 @@ class TextFamily:
     expected_tags: dict[int, str] | None = None
     ability_group: str | None = None
     manage_model_abilities: bool = False
+    managed_tag_priorities: tuple[tuple[str, int], ...] = ()
 
 
 TEXT_FAMILIES = (
@@ -104,17 +105,18 @@ TEXT_FAMILIES = (
             "gpt-5.6-terra",
             "codex-auto-review",
         ),
-        channel_ids=(43, 44),
-        baseline_priorities={43: 20, 44: 10},
+        channel_ids=(),
+        baseline_priorities={},
         allow_disable=False,
         standalone=True,
         request_format="responses",
-        expected_tags={
-            43: "xingren-plus-text-wangwang",
-            44: "xingren-plus-text-pdhlzy",
-        },
         ability_group="plus",
         manage_model_abilities=True,
+        managed_tag_priorities=(
+            ("xingren-plus-text-aihub", 30),
+            ("xingren-plus-text-wangwang", 20),
+            ("xingren-plus-text-pdhlzy", 10),
+        ),
     ),
     TextFamily(
         name="claude_kiro_text",
@@ -386,6 +388,73 @@ WHERE id IN ({ids})
 """
     rows = mysql_json(select, env)
     return {int(row["id"]): row for row in rows}
+
+
+def resolve_dynamic_text_families(
+    env: dict[str, str],
+    families: tuple[TextFamily, ...],
+) -> tuple[TextFamily, ...]:
+    tags = tuple(
+        tag
+        for family in families
+        for tag, _priority in family.managed_tag_priorities
+    )
+    if not tags:
+        return families
+    rows = mysql_json(
+        "SELECT JSON_OBJECT('id', id, 'tag', tag) FROM channels WHERE tag IN ("
+        + ",".join(shell_quote(tag) for tag in tags)
+        + ") ORDER BY id",
+        env,
+    )
+    channel_ids_by_tag: dict[str, list[int]] = {}
+    for row in rows:
+        tag = str(row.get("tag") or "")
+        if tag in tags:
+            channel_ids_by_tag.setdefault(tag, []).append(int(row["id"]))
+
+    resolved: list[TextFamily] = []
+    for family in families:
+        if not family.managed_tag_priorities:
+            resolved.append(family)
+            continue
+        missing = [
+            tag
+            for tag, _priority in family.managed_tag_priorities
+            if tag not in channel_ids_by_tag
+        ]
+        duplicates = [
+            tag
+            for tag, _priority in family.managed_tag_priorities
+            if len(channel_ids_by_tag.get(tag, ())) > 1
+        ]
+        if missing or duplicates:
+            details = []
+            if missing:
+                details.append("missing tags: " + ",".join(missing))
+            if duplicates:
+                details.append("duplicate tags: " + ",".join(duplicates))
+            raise RuntimeError(f"{family.name} managed channel resolution failed; " + "; ".join(details))
+        tag_ids = {
+            tag: channel_ids_by_tag[tag][0]
+            for tag, _priority in family.managed_tag_priorities
+        }
+        channel_ids = tuple(tag_ids[tag] for tag, _priority in family.managed_tag_priorities)
+        resolved.append(
+            replace(
+                family,
+                channel_ids=channel_ids,
+                baseline_priorities={
+                    tag_ids[tag]: priority
+                    for tag, priority in family.managed_tag_priorities
+                },
+                expected_tags={
+                    tag_ids[tag]: tag
+                    for tag, _priority in family.managed_tag_priorities
+                },
+            )
+        )
+    return tuple(resolved)
 
 
 def redact_channel(channel: dict[str, Any]) -> dict[str, Any]:
@@ -1845,6 +1914,8 @@ def main() -> int:
             missing = [key for key in required if not env.get(key)]
             if missing:
                 raise RuntimeError(f"missing env keys: {','.join(missing)}")
+
+            selected_families = resolve_dynamic_text_families(env, selected_families)
 
             channels = load_channels(
                 env,

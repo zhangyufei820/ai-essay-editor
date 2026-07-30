@@ -568,8 +568,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             if "FROM channels" in query:
                 plus_models = ",".join(self.module.PLUS_TEXT_ALLOWED_MODELS)
                 return [
-                    ["41", plus_models, "20", "100", self.module.PLUS_TEXT_CHANNEL_TAGS[0], "plus"],
-                    ["42", plus_models, "10", "100", self.module.PLUS_TEXT_CHANNEL_TAGS[1], "plus"],
+                    ["45", plus_models, "30", "100", self.module.PLUS_TEXT_CHANNEL_TAGS[0], "plus"],
+                    ["41", plus_models, "20", "100", self.module.PLUS_TEXT_CHANNEL_TAGS[1], "plus"],
+                    ["42", plus_models, "10", "100", self.module.PLUS_TEXT_CHANNEL_TAGS[2], "plus"],
                     ["21", "gpt-5.5,gpt-5.5-openai-compact,claude-sonnet-5", "0", "100", "stable", "default,internal"],
                 ]
             if "SELECT model_name FROM models" in query:
@@ -583,7 +584,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.sync_abilities()
 
         sql = "\n".join(captured)
-        for channel_id, tag in zip(("41", "42"), self.module.PLUS_TEXT_CHANNEL_TAGS):
+        for channel_id, tag in zip(("45", "41", "42"), self.module.PLUS_TEXT_CHANNEL_TAGS):
             for model in self.module.PLUS_TEXT_ALLOWED_MODELS:
                 self.assertIn(f"SELECT 'plus', '{model}', {channel_id}", sql)
             self.assertNotIn(f"'default', 'gpt-5.5', {channel_id}", sql)

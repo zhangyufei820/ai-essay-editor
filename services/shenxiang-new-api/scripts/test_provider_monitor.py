@@ -101,11 +101,55 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         )
         self.assertEqual(families["discount_text"].expected_tags[28], "xingren-discount-text-aihub")
         self.assertEqual(families["discount_text"].ability_group, "discount")
-        self.assertEqual(families["plus_text"].channel_ids, (43, 44))
+        self.assertEqual(families["plus_text"].channel_ids, ())
+        self.assertEqual(
+            families["plus_text"].managed_tag_priorities,
+            (
+                ("xingren-plus-text-aihub", 30),
+                ("xingren-plus-text-wangwang", 20),
+                ("xingren-plus-text-pdhlzy", 10),
+            ),
+        )
         self.assertEqual(families["plus_text"].ability_group, "plus")
         self.assertEqual(families["plus_text"].request_format, "responses")
         self.assertTrue(families["discount_text"].manage_model_abilities)
         self.assertTrue(families["plus_text"].manage_model_abilities)
+
+    def test_plus_family_resolves_channel_ids_by_managed_tags(self) -> None:
+        family = next(family for family in self.module.TEXT_FAMILIES if family.name == "plus_text")
+        rows = [
+            {"id": 44, "tag": "xingren-plus-text-pdhlzy"},
+            {"id": 143, "tag": "xingren-plus-text-aihub"},
+            {"id": 43, "tag": "xingren-plus-text-wangwang"},
+        ]
+
+        with mock.patch.object(self.module, "mysql_json", return_value=rows):
+            resolved = self.module.resolve_dynamic_text_families({}, (family,))[0]
+
+        self.assertEqual(resolved.channel_ids, (143, 43, 44))
+        self.assertEqual(resolved.baseline_priorities, {143: 30, 43: 20, 44: 10})
+        self.assertEqual(resolved.expected_tags[143], "xingren-plus-text-aihub")
+
+    def test_plus_family_resolution_fails_closed_on_missing_or_duplicate_tags(self) -> None:
+        family = next(family for family in self.module.TEXT_FAMILIES if family.name == "plus_text")
+        cases = (
+            ([{"id": 43, "tag": "xingren-plus-text-wangwang"}], "missing tags"),
+            (
+                [
+                    {"id": 143, "tag": "xingren-plus-text-aihub"},
+                    {"id": 144, "tag": "xingren-plus-text-aihub"},
+                    {"id": 43, "tag": "xingren-plus-text-wangwang"},
+                    {"id": 44, "tag": "xingren-plus-text-pdhlzy"},
+                ],
+                "duplicate tags",
+            ),
+        )
+        for rows, message in cases:
+            with self.subTest(message=message), mock.patch.object(
+                self.module, "mysql_json", return_value=rows
+            ):
+                with self.assertRaisesRegex(RuntimeError, message):
+                    self.module.resolve_dynamic_text_families({}, (family,))
 
     def test_responses_probe_uses_native_request(self) -> None:
         with mock.patch.object(self.module.urllib.request, "urlopen", return_value=FakeResponsesStream()) as urlopen:

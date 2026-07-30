@@ -88,6 +88,15 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
         with self.assertRaisesRegex(self.module.ConfigurationError, "gpt-5.6-terra"):
             self.module.build_plus_plan(upstream)
 
+    def test_channel_order_requires_all_three_routes_exactly_once(self) -> None:
+        self.assertEqual(
+            self.module.parse_channel_order("pdhlzy,aihub,wangwang"),
+            ("pdhlzy", "aihub", "wangwang"),
+        )
+        for invalid in ("aihub,wangwang", "aihub,wangwang,wangwang"):
+            with self.subTest(invalid=invalid), self.assertRaises(self.module.ConfigurationError):
+                self.module.parse_channel_order(invalid)
+
     def test_group_options_pin_ratio_and_remove_plus_from_auto_and_overrides(self) -> None:
         updates = self.module.build_group_option_updates(self.options)
 
@@ -110,11 +119,13 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
             {"internal": {"default": 1}},
         )
 
-    def test_build_apply_sql_creates_two_direct_openai_channels_in_fixed_order(self) -> None:
+    def test_build_apply_sql_creates_three_direct_openai_channels_in_fixed_order(self) -> None:
         sql = self.build_sql()
 
+        self.assertIn("@plus_channel_id_aihub", sql)
         self.assertIn("@plus_channel_id_wangwang", sql)
         self.assertIn("@plus_channel_id_pdhlzy", sql)
+        self.assertIn("priority = 30", sql)
         self.assertIn("priority = 20", sql)
         self.assertIn("priority = 10", sql)
         self.assertNotIn("type = 58", sql)
@@ -182,6 +193,22 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
             "https://user:pass@pdhlzy.com",
             "https://example.test",
             "https://pdhlzy.com:444",
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(self.module.ConfigurationError):
+                self.module.normalize_base_url(invalid, spec)
+
+    def test_aihub_base_url_is_pinned_to_approved_https_origin(self) -> None:
+        spec = next(spec for spec in self.module.PLUS_CHANNEL_SPECS if spec.slug == "aihub")
+
+        self.assertEqual(
+            self.module.normalize_base_url("https://aihub.top/", spec),
+            "https://aihub.top",
+        )
+        for invalid in (
+            "http://aihub.top",
+            "https://www.aihub.top",
+            "https://aihub.top/v1",
+            "https://aihub.top:444",
         ):
             with self.subTest(invalid=invalid), self.assertRaises(self.module.ConfigurationError):
                 self.module.normalize_base_url(invalid, spec)

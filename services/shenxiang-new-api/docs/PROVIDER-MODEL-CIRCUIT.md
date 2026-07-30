@@ -5,7 +5,7 @@
 ## 受管链路
 
 - `discount_text`：channel `28/42/41`，固定 `discount` group 和四个 GPT 模型。
-- `plus_text`：channel `43/44`，固定 `plus` group 和七个公开模型。
+- `plus_text`：按三个受管私有 tag 动态解析 channel ID，固定 `plus` group、七个公开模型和 `30/20/10` 主备优先级。
 - `codex-auto-review` 通过 channel 的 `model_mapping` 使用 `gpt-5.5` 做原生 Responses 探测。
 - channel ID、Tag、group、model 任一不匹配时拒绝写入。
 

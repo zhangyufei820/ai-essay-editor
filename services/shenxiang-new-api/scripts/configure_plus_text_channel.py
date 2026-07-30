@@ -22,7 +22,7 @@ PLUS_GROUP_DESCRIPTION = "Plus 0.5x 通道"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
 OPENAI_CHANNEL_TYPE = 1
-DEFAULT_CHANNEL_ORDER = ("wangwang", "pdhlzy")
+DEFAULT_CHANNEL_ORDER = ("aihub", "wangwang", "pdhlzy")
 PLUS_TEXT_MODELS = (
     "gpt-5.4",
     "gpt-5.4-mini",
@@ -81,9 +81,18 @@ class PlusChannelSpec:
 
 PLUS_CHANNEL_SPECS = (
     PlusChannelSpec(
+        slug="aihub",
+        tag="xingren-plus-text-aihub",
+        name="星人 Plus 文本链路 A",
+        key_env="PLUS_AIHUB_API_KEY",
+        base_url_env="PLUS_AIHUB_BASE_URL",
+        default_base_url="https://aihub.top",
+        approved_hosts=("aihub.top",),
+    ),
+    PlusChannelSpec(
         slug="wangwang",
         tag="xingren-plus-text-wangwang",
-        name="星人 Plus 文本链路 A",
+        name="星人 Plus 文本链路 B",
         key_env="PLUS_WANGWANG_API_KEY",
         base_url_env="PLUS_WANGWANG_BASE_URL",
         default_base_url="https://wangwang.sbs",
@@ -92,7 +101,7 @@ PLUS_CHANNEL_SPECS = (
     PlusChannelSpec(
         slug="pdhlzy",
         tag="xingren-plus-text-pdhlzy",
-        name="星人 Plus 文本链路 B",
+        name="星人 Plus 文本链路 C",
         key_env="PLUS_PDHLZY_API_KEY",
         base_url_env="PLUS_PDHLZY_BASE_URL",
         default_base_url="https://pdhlzy.com",
@@ -146,7 +155,9 @@ def parse_channel_order(raw_value: str) -> tuple[str, ...]:
     order = tuple(item.strip() for item in raw_value.split(",") if item.strip())
     expected = {spec.slug for spec in PLUS_CHANNEL_SPECS}
     if len(order) != len(expected) or set(order) != expected:
-        raise ConfigurationError("channel order must contain wangwang,pdhlzy exactly once")
+        raise ConfigurationError(
+            "channel order must contain " + ",".join(DEFAULT_CHANNEL_ORDER) + " exactly once"
+        )
     return order
 
 
