@@ -1275,12 +1275,15 @@ def evaluate_managed_model_family(
                 continue
             if str(channel.get("group") or "").replace(" ", "") != family.ability_group:
                 continue
+            channel_models = set(split_models(channel))
             api_key = first_key(str(channel.get("key") or ""))
             base_url = str(channel.get("base_url") or "").strip()
             if not api_key or not base_url:
                 continue
             model_mapping = parse_model_mapping(channel)
             for model in family.models:
+                if model not in channel_models:
+                    continue
                 ability = abilities.get((channel_id, model))
                 if not ability or str(ability.get("tag") or "") != expected_tag:
                     continue
@@ -1313,6 +1316,7 @@ def evaluate_managed_model_family(
             channel_summaries[channel_id] = {"group_mismatch": True}
             continue
 
+        channel_models = set(split_models(channel))
         current_status = int(channel.get("status") or 0)
         adopted = False
         channel_action = "none"
@@ -1362,6 +1366,35 @@ def evaluate_managed_model_family(
         for model in family.models:
             ability = abilities.get((channel_id, model))
             route_result = route_results.get(f"{model}:{channel_id}")
+            if model not in channel_models:
+                action = "not_published"
+                if (
+                    ability
+                    and str(ability.get("tag") or "") == expected_tag
+                    and bool(int(ability.get("enabled") or 0))
+                ):
+                    updated = set_model_ability_enabled(
+                        env,
+                        family,
+                        channel_id,
+                        model,
+                        True,
+                        False,
+                        f"{family.name}_model_not_published",
+                        dry_run,
+                    )
+                    action = (
+                        "would_disable_not_published"
+                        if dry_run
+                        else "disabled_not_published" if updated else "guard_mismatch"
+                    )
+                model_summaries[model] = {
+                    "enabled": False,
+                    "auto_disabled": False,
+                    "action": action,
+                    "summary": {},
+                }
+                continue
             if not ability:
                 model_summaries[model] = {"missing_ability": True, "action": "none"}
                 continue

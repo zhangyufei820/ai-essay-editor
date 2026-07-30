@@ -180,6 +180,75 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         )
         self.assertEqual(mapping["codex-auto-review"], "gpt-5.5")
 
+    def test_managed_family_does_not_probe_or_recover_unpublished_model(self) -> None:
+        family = self.managed_family()
+        channel = self.managed_channel()
+        channel[43]["models"] = "other-model"
+        state = {
+            "managed_abilities": {
+                "test_managed:gpt-test:43": {
+                    "auto_disabled": True,
+                    "disabled_at": 0,
+                }
+            }
+        }
+        with (
+            mock.patch.object(
+                self.module,
+                "load_abilities",
+                return_value={(43, "gpt-test"): {"enabled": 0, "tag": "test-plus-tag"}},
+            ),
+            mock.patch.object(self.module, "request_responses") as request,
+            mock.patch.object(self.module, "set_model_ability_enabled") as update,
+            mock.patch.object(self.module, "write_event"),
+        ):
+            result = self.module.evaluate_managed_model_family(
+                family, channel, state, {}, False, False
+            )
+
+        request.assert_not_called()
+        update.assert_not_called()
+        self.assertEqual(
+            result["channels"][43]["models"]["gpt-test"]["action"],
+            "not_published",
+        )
+
+    def test_managed_family_disables_enabled_unpublished_model(self) -> None:
+        family = self.managed_family()
+        channel = self.managed_channel()
+        channel[43]["models"] = "other-model"
+        with (
+            mock.patch.object(
+                self.module,
+                "load_abilities",
+                return_value={(43, "gpt-test"): {"enabled": 1, "tag": "test-plus-tag"}},
+            ),
+            mock.patch.object(self.module, "request_responses") as request,
+            mock.patch.object(
+                self.module, "set_model_ability_enabled", return_value=True
+            ) as update,
+            mock.patch.object(self.module, "write_event"),
+        ):
+            result = self.module.evaluate_managed_model_family(
+                family, channel, {}, {}, False, False
+            )
+
+        request.assert_not_called()
+        update.assert_called_once_with(
+            {},
+            family,
+            43,
+            "gpt-test",
+            True,
+            False,
+            "test_managed_model_not_published",
+            False,
+        )
+        self.assertEqual(
+            result["channels"][43]["models"]["gpt-test"]["action"],
+            "disabled_not_published",
+        )
+
     def test_model_ability_update_has_exact_identity_guards(self) -> None:
         captured: list[str] = []
         family = self.managed_family()
