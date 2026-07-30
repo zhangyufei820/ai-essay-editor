@@ -88,6 +88,37 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
         with self.assertRaisesRegex(self.module.ConfigurationError, "gpt-5.6-terra"):
             self.module.build_plus_plan(upstream)
 
+    def test_build_plus_plan_allows_fallback_to_publish_only_real_intersection(self) -> None:
+        upstream = {"gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"}
+
+        plan = self.module.build_plus_plan(upstream, allow_partial=True)
+
+        self.assertEqual(plan.missing_models, ("gpt-5.4", "gpt-5.4-mini"))
+        self.assertEqual(
+            self.module.published_models_for_plan(plan),
+            (
+                "gpt-5.5",
+                "gpt-5.6-luna",
+                "gpt-5.6-sol",
+                "gpt-5.6-terra",
+                "codex-auto-review",
+            ),
+        )
+
+    def test_partial_fallback_sql_does_not_create_missing_model_abilities(self) -> None:
+        self.plans["pdhlzy"] = self.module.PlusPlan(
+            upstream_model_count=4,
+            matched_models=("gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"),
+            missing_models=("gpt-5.4", "gpt-5.4-mini"),
+        )
+
+        sql = self.build_sql()
+
+        self.assertNotIn("'plus', 'gpt-5.4', @plus_channel_id_pdhlzy", sql)
+        self.assertNotIn("'plus', 'gpt-5.4-mini', @plus_channel_id_pdhlzy", sql)
+        self.assertIn("'plus', 'gpt-5.5', @plus_channel_id_pdhlzy", sql)
+        self.assertIn("'plus', 'codex-auto-review', @plus_channel_id_pdhlzy", sql)
+
     def test_channel_order_requires_all_three_routes_exactly_once(self) -> None:
         self.assertEqual(
             self.module.parse_channel_order("pdhlzy,aihub,wangwang"),

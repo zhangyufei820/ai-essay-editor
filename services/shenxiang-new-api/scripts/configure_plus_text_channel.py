@@ -221,15 +221,26 @@ def fetch_upstream_models(base_url: str, api_key: str) -> set[str]:
     return models
 
 
-def build_plus_plan(upstream_models: set[str]) -> PlusPlan:
+def build_plus_plan(upstream_models: set[str], allow_partial: bool = False) -> PlusPlan:
     matched = tuple(model for model in PLUS_UPSTREAM_MODELS if model in upstream_models)
     missing = tuple(model for model in PLUS_UPSTREAM_MODELS if model not in upstream_models)
-    if missing:
+    if not matched:
+        raise ConfigurationError("upstream has no supported Plus models")
+    if missing and not allow_partial:
         raise ConfigurationError("upstream is missing required Plus models: " + ",".join(missing))
     return PlusPlan(
         upstream_model_count=len(upstream_models),
         matched_models=matched,
         missing_models=missing,
+    )
+
+
+def published_models_for_plan(plan: PlusPlan) -> tuple[str, ...]:
+    upstream_models = set(plan.matched_models)
+    return tuple(
+        model
+        for model in PLUS_TEXT_MODELS
+        if model in upstream_models or (model == "codex-auto-review" and "gpt-5.5" in upstream_models)
     )
 
 
@@ -409,10 +420,6 @@ def build_apply_sql(
     if set(plans) != expected_slugs or set(api_keys) != expected_slugs or set(base_urls) != expected_slugs:
         raise ConfigurationError("all Plus upstream plans, keys, and base URLs are required")
     priorities = channel_priorities(order)
-    models = ",".join(PLUS_TEXT_MODELS)
-    model_mapping = {model: model for model in PLUS_UPSTREAM_MODELS}
-    model_mapping["codex-auto-review"] = "gpt-5.5"
-    model_mapping_json = json_option(model_mapping)
     allowed_tags_sql = sql_list(list(PLUS_CHANNEL_TAGS))
     statements = ["START TRANSACTION;"]
     statements.extend(option_guard_statements(options))
@@ -449,6 +456,12 @@ def build_apply_sql(
 
     for spec in PLUS_CHANNEL_SPECS:
         channel_variable = channel_id_variable(spec.slug)
+        published_models = published_models_for_plan(plans[spec.slug])
+        models = ",".join(published_models)
+        model_mapping = {model: model for model in plans[spec.slug].matched_models}
+        if "codex-auto-review" in published_models:
+            model_mapping["codex-auto-review"] = "gpt-5.5"
+        model_mapping_json = json_option(model_mapping)
         statements.append(
             "SET "
             + channel_variable
@@ -533,7 +546,7 @@ def build_apply_sql(
         ]
     )
     for spec in PLUS_CHANNEL_SPECS:
-        for model in PLUS_TEXT_MODELS:
+        for model in published_models_for_plan(plans[spec.slug]):
             statements.append(
                 "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) SELECT "
                 + ", ".join(
@@ -588,7 +601,10 @@ def main() -> int:
     for spec in PLUS_CHANNEL_SPECS:
         api_key = require_upstream_key(spec)
         base_url = resolve_upstream_base_url(spec)
-        plans[spec.slug] = build_plus_plan(fetch_upstream_models(base_url, api_key))
+        plans[spec.slug] = build_plus_plan(
+            fetch_upstream_models(base_url, api_key),
+            allow_partial=spec.slug != order[0],
+        )
         api_keys[spec.slug] = api_key
         base_urls[spec.slug] = base_url
 
@@ -609,6 +625,8 @@ def main() -> int:
                         "priority": priorities[spec.slug],
                         "upstream_model_count": plans[spec.slug].upstream_model_count,
                         "matched_upstream_models": plans[spec.slug].matched_models,
+                        "missing_upstream_models": plans[spec.slug].missing_models,
+                        "published_models": published_models_for_plan(plans[spec.slug]),
                         "wire_api": "responses",
                     }
                     for spec in PLUS_CHANNEL_SPECS
