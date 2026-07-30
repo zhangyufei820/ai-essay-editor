@@ -297,6 +297,10 @@ html.dark .channel-console-table {
 }
 
 @media (max-width: 640px) {
+  body:has(.channel-console) .sx-global-theme-toggle {
+    display: none;
+  }
+
   .channel-console {
     padding: 0 0 16px;
   }
