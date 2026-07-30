@@ -23,10 +23,12 @@ MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
 OPENAI_CHANNEL_TYPE = 1
 LEGACY_DISCOUNT_CHANNEL_TAG = "xingren-discount-text"
-DEFAULT_CHANNEL_ORDER = ("wangwang", "pdhlzy", "reserve")
+LEGACY_RESERVE_CHANNEL_TAG = "xingren-discount-text-reserve"
+DEFAULT_CHANNEL_ORDER = ("aihub", "pdhlzy", "wangwang")
 DISCOUNT_TEXT_MODELS = (
+    "gpt-5.4-mini",
     "gpt-5.5",
-    "gpt-5.6-luna",
+    "gpt-5.6",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
 )
@@ -67,42 +69,49 @@ class DiscountChannelSpec:
     default_base_url: str
     approved_hosts: tuple[str, ...]
     channel_type: int
+    lookup_tags: tuple[str, ...] = ()
+    require_all_models: bool = True
 
 
 DISCOUNT_CHANNEL_SPECS = (
     DiscountChannelSpec(
-        slug="wangwang",
-        tag="xingren-discount-text-wangwang",
-        name="星人特价文本链路 A",
-        key_envs=("DISCOUNT_WANGWANG_API_KEY",),
-        base_url_envs=("DISCOUNT_WANGWANG_BASE_URL",),
-        default_base_url="https://wangwang.sbs",
-        approved_hosts=("wangwang.sbs",),
+        slug="aihub",
+        tag="xingren-discount-text-aihub",
+        name="星人特价文本主链路",
+        key_envs=("DISCOUNT_AIHUB_API_KEY",),
+        base_url_envs=("DISCOUNT_AIHUB_BASE_URL",),
+        default_base_url="https://aihub.top",
+        approved_hosts=("aihub.top",),
         channel_type=OPENAI_CHANNEL_TYPE,
+        lookup_tags=("xingren-discount-text-aihub", LEGACY_RESERVE_CHANNEL_TAG, LEGACY_DISCOUNT_CHANNEL_TAG),
     ),
     DiscountChannelSpec(
         slug="pdhlzy",
         tag="xingren-discount-text-pdhlzy",
-        name="星人特价文本链路 B",
+        name="星人特价文本 fallback B",
         key_envs=("DISCOUNT_PDHLZY_API_KEY",),
         base_url_envs=("DISCOUNT_PDHLZY_BASE_URL",),
         default_base_url="https://pdhlzy.com",
         approved_hosts=("pdhlzy.com",),
         channel_type=OPENAI_CHANNEL_TYPE,
+        require_all_models=False,
     ),
     DiscountChannelSpec(
-        slug="reserve",
-        tag="xingren-discount-text-reserve",
-        name="星人特价文本链路 C",
-        key_envs=("DISCOUNT_RESERVE_API_KEY", "DISCOUNT_UPSTREAM_API_KEY"),
-        base_url_envs=("DISCOUNT_RESERVE_BASE_URL", "DISCOUNT_UPSTREAM_BASE_URL"),
-        default_base_url="https://www.geek2api.com",
-        approved_hosts=("www.geek2api.com", "api.geek2api.com"),
+        slug="wangwang",
+        tag="xingren-discount-text-wangwang",
+        name="星人特价文本 fallback A",
+        key_envs=("DISCOUNT_WANGWANG_API_KEY",),
+        base_url_envs=("DISCOUNT_WANGWANG_BASE_URL",),
+        default_base_url="https://wangwang.sbs",
+        approved_hosts=("wangwang.sbs",),
         channel_type=OPENAI_CHANNEL_TYPE,
+        require_all_models=False,
     ),
 )
 DISCOUNT_CHANNEL_TAGS = tuple(spec.tag for spec in DISCOUNT_CHANNEL_SPECS)
-ALL_DISCOUNT_CHANNEL_TAGS = DISCOUNT_CHANNEL_TAGS + (LEGACY_DISCOUNT_CHANNEL_TAG,)
+ALL_DISCOUNT_CHANNEL_TAGS = tuple(
+    dict.fromkeys(tag for spec in DISCOUNT_CHANNEL_SPECS for tag in (spec.lookup_tags or (spec.tag,)))
+)
 
 
 def sql_quote(value: str) -> str:
@@ -157,7 +166,7 @@ def parse_channel_order(raw_value: str) -> tuple[str, ...]:
     order = tuple(item.strip() for item in raw_value.split(",") if item.strip())
     expected = {spec.slug for spec in DISCOUNT_CHANNEL_SPECS}
     if len(order) != len(expected) or set(order) != expected:
-        raise ConfigurationError("channel order must contain wangwang,pdhlzy,reserve exactly once")
+        raise ConfigurationError("channel order must contain aihub,pdhlzy,wangwang exactly once")
     return order
 
 
@@ -221,11 +230,13 @@ def fetch_upstream_models(base_url: str, api_key: str) -> set[str]:
     return models
 
 
-def build_discount_plan(upstream_models: set[str]) -> DiscountPlan:
+def build_discount_plan(upstream_models: set[str], *, require_all: bool = True) -> DiscountPlan:
     matched = tuple(model for model in DISCOUNT_TEXT_MODELS if model in upstream_models)
     missing = tuple(model for model in DISCOUNT_TEXT_MODELS if model not in upstream_models)
-    if missing:
+    if require_all and missing:
         raise ConfigurationError("upstream is missing required discount models: " + ",".join(missing))
+    if not matched:
+        raise ConfigurationError("upstream exposed none of the allowed discount models")
     return DiscountPlan(
         upstream_model_count=len(upstream_models),
         matched_models=matched,
@@ -402,6 +413,10 @@ def channel_id_variable(slug: str) -> str:
     return "@discount_channel_id_" + slug
 
 
+def channel_lookup_tags(spec: DiscountChannelSpec) -> tuple[str, ...]:
+    return spec.lookup_tags or (spec.tag,)
+
+
 def build_apply_sql(
     plans: dict[str, DiscountPlan],
     api_keys: dict[str, str],
@@ -411,9 +426,9 @@ def build_apply_sql(
 ) -> str:
     if set(plans) != {spec.slug for spec in DISCOUNT_CHANNEL_SPECS}:
         raise ConfigurationError("all discount upstream plans are required")
+    if any(not plans[spec.slug].matched_models for spec in DISCOUNT_CHANNEL_SPECS):
+        raise ConfigurationError("every discount channel requires at least one allowed model")
     priorities = channel_priorities(order)
-    models = ",".join(DISCOUNT_TEXT_MODELS)
-    model_mapping = json_option({model: model for model in DISCOUNT_TEXT_MODELS})
     allowed_tags_sql = sql_list(list(ALL_DISCOUNT_CHANNEL_TAGS))
     statements = ["START TRANSACTION;"]
     statements.extend(option_guard_statements(options))
@@ -431,18 +446,12 @@ def build_apply_sql(
             + "));",
             "SET @discount_duplicate_count := "
             + " + ".join(
-                "IF((SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(spec.tag) + ") > 1, 1, 0)"
+                "IF((SELECT COUNT(*) FROM channels WHERE tag IN ("
+                + sql_list(list(channel_lookup_tags(spec)))
+                + ")) > 1, 1, 0)"
                 for spec in DISCOUNT_CHANNEL_SPECS
-                if spec.slug != "reserve"
             )
-            + " + IF((SELECT COUNT(*) FROM channels WHERE tag IN ("
-            + sql_list(
-                [
-                    next(spec.tag for spec in DISCOUNT_CHANNEL_SPECS if spec.slug == "reserve"),
-                    LEGACY_DISCOUNT_CHANNEL_TAG,
-                ]
-            )
-            + ")) > 1, 1, 0);",
+            + ";",
             "SET @discount_apply_status := CASE "
             + "WHEN @discount_options_match <> "
             + str(len(options))
@@ -461,10 +470,9 @@ def build_apply_sql(
 
     for spec in DISCOUNT_CHANNEL_SPECS:
         channel_variable = channel_id_variable(spec.slug)
-        if spec.slug == "reserve":
-            lookup_condition = "tag IN (" + sql_list([spec.tag, LEGACY_DISCOUNT_CHANNEL_TAG]) + ")"
-        else:
-            lookup_condition = "tag = " + sql_quote(spec.tag)
+        models = ",".join(plans[spec.slug].matched_models)
+        model_mapping = json_option({model: model for model in plans[spec.slug].matched_models})
+        lookup_condition = "tag IN (" + sql_list(list(channel_lookup_tags(spec))) + ")"
         statements.append(
             "SET "
             + channel_variable
@@ -551,7 +559,7 @@ def build_apply_sql(
         ]
     )
     for spec in DISCOUNT_CHANNEL_SPECS:
-        for model in DISCOUNT_TEXT_MODELS:
+        for model in plans[spec.slug].matched_models:
             statements.append(
                 "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) SELECT "
                 + ", ".join(
@@ -689,7 +697,10 @@ def main() -> int:
     for spec in DISCOUNT_CHANNEL_SPECS:
         api_key = require_upstream_key(spec)
         base_url = resolve_upstream_base_url(spec)
-        plans[spec.slug] = build_discount_plan(fetch_upstream_models(base_url, api_key))
+        plans[spec.slug] = build_discount_plan(
+            fetch_upstream_models(base_url, api_key),
+            require_all=spec.require_all_models,
+        )
         api_keys[spec.slug] = api_key
         base_urls[spec.slug] = base_url
 
@@ -709,6 +720,7 @@ def main() -> int:
                         "priority": priorities[spec.slug],
                         "upstream_model_count": plans[spec.slug].upstream_model_count,
                         "matched_public_models": plans[spec.slug].matched_models,
+                        "missing_public_models": plans[spec.slug].missing_models,
                         "wire_api": "responses",
                     }
                     for spec in DISCOUNT_CHANNEL_SPECS

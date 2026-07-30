@@ -1,10 +1,10 @@
 # 特价文本渠道运维
 
-三个独立渠道固定使用 `discount` 分组和 `0.25` 倍率，只暴露 `gpt-5.5`、`gpt-5.6-luna`、`gpt-5.6-sol`、`gpt-5.6-terra`。它们不加入自动分组，用户令牌和外部 API 请求也不会跨组回退。
+三个独立渠道固定使用 `discount` 分组和 `0.25` 倍率，只暴露 `gpt-5.4-mini`、`gpt-5.5`、`gpt-5.6`、`gpt-5.6-sol`、`gpt-5.6-terra`。主渠道必须完整支持五个模型；fallback 只启用各自 `/v1/models` 实际声明的目标模型子集。它们不加入自动分组。
 
-用户编辑“星人 Codex 文本令牌”选择 `discount` 或 `default` 时，系统把该选择保存为用户级文本倍率偏好，并同步旧版令牌别名。Classic 主页会话和云端 Codex 都读取同一偏好；主页在每次发送前重新确认，云端 Codex 的自动令牌校正也以该偏好为准。特价通道异常时不再自动切换原价，用户需要在接入设置中手动切到 `default`；恢复后切回 `discount`，三处会再次统一使用 `0.25x`。
+用户编辑“星人 Codex 文本令牌”选择 `discount` 时，系统把它保存为用户级首选倍率，并同步完整的 `discount → plus → default` 路由链。Classic 主页会话、云端 Codex 和用户令牌读取同一偏好；0.25x 没有可用能力时依次尝试 0.5x 与 1x，最终按实际命中的分组计费。
 
-默认优先级为 `wangwang → pdhlzy → reserve`，对应 `30 → 20 → 10`。三条链路统一使用原生 OpenAI Responses；禁止为 pdhlzy 配置 Responses 到 Chat Completions 的转换，否则真实 Codex 工具续接可能丢失 `function_call` / `function_call_output` 关联。运行脚本时可用 `--order pdhlzy,wangwang,reserve` 等完整排列切换主通道，禁止把三把不同成本或不同供应商密钥合并到同一个随机轮询渠道。
+默认优先级为 `aihub → pdhlzy → wangwang`，对应 `30 → 20 → 10`。三条链路统一使用原生 OpenAI Responses；禁止为 fallback 配置 Responses 到 Chat Completions 的转换，否则真实 Codex 工具续接可能丢失 `function_call` / `function_call_output` 关联。运行脚本时可用 `--order aihub,wangwang,pdhlzy` 等完整排列切换顺序，禁止把三把不同成本或不同供应商密钥合并到同一个随机轮询渠道。
 
 ## 密钥
 
@@ -19,9 +19,9 @@
 内容格式：
 
 ```text
-DISCOUNT_WANGWANG_API_KEY=wangwang 密钥
+DISCOUNT_AIHUB_API_KEY=主渠道密钥
 DISCOUNT_PDHLZY_API_KEY=pdhlzy 密钥
-DISCOUNT_RESERVE_API_KEY=原保留渠道密钥
+DISCOUNT_WANGWANG_API_KEY=wangwang 密钥
 ```
 
 目录权限应为 `700`，文件权限应为 `600`。部署时复制到服务器 root 私密目录，服务器副本同样使用 `600`，不得放入项目目录或镜像。
@@ -30,7 +30,7 @@ DISCOUNT_RESERVE_API_KEY=原保留渠道密钥
 
 1. 先部署更新后的权限同步脚本，并按固定 upstream 基线构建新的不可变应用镜像，但暂不替换运行容器。
 2. 加载 New API MySQL 环境和私密上游环境。
-3. 不带 `--apply` 运行 `scripts/configure_discount_text_channel.py`，确认三家都包含严格的四模型白名单。
+3. 不带 `--apply` 运行 `scripts/configure_discount_text_channel.py`，确认主渠道完整包含五个目标模型，fallback 只包含其声明的目标模型子集。
 4. 带 `--apply` 再运行一次，原子写入 options、渠道和 abilities。
 5. 立即用新镜像仅替换 `shenxiang-new-api` 应用容器，以刷新 60 秒运行时缓存；不得重建 MySQL、Redis、网络或卷。
 6. 验证本机与公网健康、公开分组、模型交集、特价渠道隔离、钱包与月卡计费日志。
