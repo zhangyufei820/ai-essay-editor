@@ -15,6 +15,10 @@ import {
 } from '../../../../helpers/quota';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
+  expiryFormValueToUnixSeconds,
+  normalizeTokenExpiryForForm,
+} from './tokenForm';
+import {
   Button,
   SideSheet,
   Space,
@@ -62,7 +66,7 @@ const EditTokenModal = (props) => {
     name: '',
     remain_quota: 0,
     remain_amount: 0,
-    expired_time: -1,
+    expired_time: null,
     unlimited_quota: true,
     model_limits_enabled: false,
     model_limits: [],
@@ -87,7 +91,7 @@ const EditTokenModal = (props) => {
       timestamp += seconds;
       formApiRef.current.setValue('expired_time', timestamp2string(timestamp));
     } else {
-      formApiRef.current.setValue('expired_time', -1);
+      formApiRef.current.setValue('expired_time', null);
     }
   };
 
@@ -142,9 +146,10 @@ const EditTokenModal = (props) => {
     let res = await API.get(`/api/token/${props.editingToken.id}`);
     const { success, message, data } = res.data;
     if (success) {
-      if (data.expired_time !== -1) {
-        data.expired_time = timestamp2string(data.expired_time);
-      }
+      data.expired_time = normalizeTokenExpiryForForm(
+        data.expired_time,
+        timestamp2string,
+      );
       if (data.model_limits !== '') {
         data.model_limits = data.model_limits.split(',');
       } else {
@@ -222,15 +227,15 @@ const EditTokenModal = (props) => {
         setLoading(false);
         return;
       }
-      if (localInputs.expired_time !== -1) {
-        let time = Date.parse(localInputs.expired_time);
-        if (isNaN(time)) {
-          showError(t('过期时间格式错误！'));
-          setLoading(false);
-          return;
-        }
-        localInputs.expired_time = Math.ceil(time / 1000);
+      const expiredTime = expiryFormValueToUnixSeconds(
+        localInputs.expired_time,
+      );
+      if (expiredTime === null) {
+        showError(t('过期时间格式错误！'));
+        setLoading(false);
+        return;
       }
+      localInputs.expired_time = expiredTime;
       localInputs.group = serializeGroupChain(localInputs.group);
       localInputs.cross_group_retry = false;
       localInputs.model_limits = localInputs.model_limits.join(',');
@@ -268,15 +273,15 @@ const EditTokenModal = (props) => {
           break;
         }
 
-        if (localInputs.expired_time !== -1) {
-          let time = Date.parse(localInputs.expired_time);
-          if (isNaN(time)) {
-            showError(t('过期时间格式错误！'));
-            setLoading(false);
-            break;
-          }
-          localInputs.expired_time = Math.ceil(time / 1000);
+        const expiredTime = expiryFormValueToUnixSeconds(
+          localInputs.expired_time,
+        );
+        if (expiredTime === null) {
+          showError(t('过期时间格式错误！'));
+          setLoading(false);
+          break;
         }
+        localInputs.expired_time = expiredTime;
         localInputs.group = serializeGroupChain(localInputs.group);
         localInputs.cross_group_retry = false;
         localInputs.model_limits = localInputs.model_limits.join(',');
@@ -444,17 +449,17 @@ const EditTokenModal = (props) => {
                       type='dateTime'
                       placeholder={t('请选择过期时间')}
                       rules={[
-                        { required: true, message: t('请选择过期时间') },
                         {
                           validator: (rule, value) => {
-                            // 允许 -1 表示永不过期，也允许空值在必填校验时被拦截
-                            if (value === -1 || !value)
-                              return Promise.resolve();
-                            const time = Date.parse(value);
-                            if (isNaN(time)) {
+                            const expiredTime =
+                              expiryFormValueToUnixSeconds(value);
+                            if (expiredTime === null) {
                               return Promise.reject(t('过期时间格式错误！'));
                             }
-                            if (time <= Date.now()) {
+                            if (
+                              expiredTime !== -1 &&
+                              expiredTime <= Math.ceil(Date.now() / 1000)
+                            ) {
                               return Promise.reject(
                                 t('过期时间不能早于当前时间！'),
                               );
