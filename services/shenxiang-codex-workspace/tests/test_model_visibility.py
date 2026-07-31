@@ -23,7 +23,7 @@ from app.main import (
     user_for_request,
 )
 from app.models import WorkspaceRunRequest
-from app.new_api_client import NewApiAuthError, NewApiClient
+from app.new_api_client import SPECIAL_CODEX_MODELS, NewApiAuthError, NewApiClient
 from app.model_access import IMAGE_BENEFIT_MODEL, split_visible_models
 from app.security import UserContext
 
@@ -424,6 +424,23 @@ def test_general_token_keeps_discount_group() -> None:
     assert client._token_group_for_profile({"group": "discount"}, None) == "discount"
     assert client._token_group_for_profile({"group": "monthly"}, None) == "default"
     assert client._token_group_for_profile({"group": "discount"}, GROK_TOKEN_GROUP) == GROK_TOKEN_GROUP
+
+
+def test_general_token_keeps_special_group_and_scopes_codex_models() -> None:
+    client = NewApiClient(Settings())
+    mode_models = {
+        "codex": ("gpt-5.4", *SPECIAL_CODEX_MODELS, "codex-auto-review"),
+        "grok": (),
+        "claude": ("claude-opus-4-8",),
+        "image": ("gpt-image-2-4K",),
+        "video": ("grok-video-1.5",),
+    }
+
+    assert client._token_group_for_profile({"text_pricing_group": "special"}, None) == "special"
+    scoped = client._scope_mode_models_for_user({"text_pricing_group": "special"}, mode_models)
+    assert scoped["codex"] == SPECIAL_CODEX_MODELS
+    assert scoped["claude"] == mode_models["claude"]
+    assert scoped["image"] == mode_models["image"]
 
 
 def test_general_token_prefers_synced_text_pricing_group() -> None:
