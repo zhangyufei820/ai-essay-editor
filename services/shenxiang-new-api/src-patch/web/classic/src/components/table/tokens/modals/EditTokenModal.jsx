@@ -16,6 +16,8 @@ import {
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
   expiryFormValueToUnixSeconds,
+  getTokenFormErrorMessage,
+  normalizeTokenGroupSelection,
   normalizeTokenExpiryForForm,
 } from './tokenForm';
 import {
@@ -240,10 +242,18 @@ const EditTokenModal = (props) => {
       localInputs.cross_group_retry = false;
       localInputs.model_limits = localInputs.model_limits.join(',');
       localInputs.model_limits_enabled = localInputs.model_limits.length > 0;
-      let res = await API.put(`/api/token/`, {
-        ...localInputs,
-        id: parseInt(props.editingToken.id),
-      });
+      let res;
+      try {
+        res = await API.put(`/api/token/`, {
+          ...localInputs,
+          id: parseInt(props.editingToken.id),
+        });
+      } catch (error) {
+        showError(t(getTokenFormErrorMessage(error)));
+        return;
+      } finally {
+        setLoading(false);
+      }
       const { success, message } = res.data;
       if (success) {
         showSuccess(t('令牌更新成功！'));
@@ -412,6 +422,26 @@ const EditTokenModal = (props) => {
                           multiple
                           max={3}
                           maxTagCount={3}
+                          onChange={(value) => {
+                            const selectedGroups = Array.isArray(value)
+                              ? value
+                              : [value];
+                            const normalizedGroups =
+                              normalizeTokenGroupSelection(selectedGroups);
+                            const selectionChanged =
+                              normalizedGroups.length !==
+                                selectedGroups.length ||
+                              normalizedGroups.some(
+                                (group, index) =>
+                                  group !== selectedGroups[index],
+                              );
+                            if (selectionChanged) {
+                              formApiRef.current?.setValue(
+                                'group',
+                                normalizedGroups,
+                              );
+                            }
+                          }}
                           rules={[
                             {
                               required: true,
