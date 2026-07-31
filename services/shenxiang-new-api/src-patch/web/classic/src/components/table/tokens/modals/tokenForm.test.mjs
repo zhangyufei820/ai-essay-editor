@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   expiryFormValueToUnixSeconds,
+  getTokenGroupDisplayLabel,
   getTokenFormErrorMessage,
   normalizeTokenGroupSelection,
   normalizeTokenExpiryForForm,
@@ -40,6 +41,34 @@ test('valid DatePicker values serialize to Unix seconds', () => {
 
 test('invalid DatePicker values are rejected', () => {
   assert.equal(expiryFormValueToUnixSeconds('not-a-date'), null);
+});
+
+test('token group labels identify their supported model family', () => {
+  assert.equal(
+    getTokenGroupDisplayLabel('default', '原价稳定通道'),
+    '原价稳定通道 · ChatGPT',
+  );
+  assert.equal(
+    getTokenGroupDisplayLabel('discount', '特价通道'),
+    '特价通道 · ChatGPT',
+  );
+  assert.equal(
+    getTokenGroupDisplayLabel('plus', 'Plus 0.5x 通道'),
+    'Plus 0.5x 通道 · ChatGPT',
+  );
+  assert.equal(getTokenGroupDisplayLabel('kiro', 'Kiro'), 'Kiro · Claude');
+  assert.equal(
+    getTokenGroupDisplayLabel('kiro-stable', 'Kiro 稳定版'),
+    'Kiro 稳定版 · Claude',
+  );
+});
+
+test('unmapped and already-noted token groups keep their label', () => {
+  assert.equal(getTokenGroupDisplayLabel('welfare', '福利'), '福利');
+  assert.equal(
+    getTokenGroupDisplayLabel('default', '原价稳定通道 · ChatGPT'),
+    '原价稳定通道 · ChatGPT',
+  );
 });
 
 test('regular token groups keep their fallback order', () => {
