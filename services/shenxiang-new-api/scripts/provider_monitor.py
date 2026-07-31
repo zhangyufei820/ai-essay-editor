@@ -69,6 +69,7 @@ class TextFamily:
     ability_group: str | None = None
     manage_model_abilities: bool = False
     managed_tag_priorities: tuple[tuple[str, int], ...] = ()
+    probe_models_by_tag: dict[str, tuple[str, ...]] | None = None
 
 
 TEXT_FAMILIES = (
@@ -93,6 +94,9 @@ TEXT_FAMILIES = (
         },
         ability_group="discount",
         manage_model_abilities=True,
+        probe_models_by_tag={
+            "xingren-discount-text-aihub": ("gpt-5.6-sol",),
+        },
     ),
     TextFamily(
         name="plus_text",
@@ -117,6 +121,9 @@ TEXT_FAMILIES = (
             ("xingren-plus-text-wangwang", 20),
             ("xingren-plus-text-pdhlzy", 10),
         ),
+        probe_models_by_tag={
+            "xingren-plus-text-aihub": ("gpt-5.6-sol",),
+        },
     ),
     TextFamily(
         name="claude_kiro_text",
@@ -470,6 +477,14 @@ def redact_channel(channel: dict[str, Any]) -> dict[str, Any]:
 
 def split_models(channel: dict[str, Any]) -> set[str]:
     return {part.strip() for part in str(channel.get("models") or "").split(",") if part.strip()}
+
+
+def probe_models_for_channel(family: TextFamily, channel_id: int) -> tuple[str, ...]:
+    expected_tag = (family.expected_tags or {}).get(channel_id)
+    overrides = family.probe_models_by_tag or {}
+    if expected_tag in overrides:
+        return overrides[expected_tag]
+    return family.models
 
 
 def parse_model_mapping(channel: dict[str, Any]) -> dict[str, str]:
@@ -1281,7 +1296,7 @@ def evaluate_managed_model_family(
             if not api_key or not base_url:
                 continue
             model_mapping = parse_model_mapping(channel)
-            for model in family.models:
+            for model in probe_models_for_channel(family, channel_id):
                 if model not in channel_models:
                     continue
                 ability = abilities.get((channel_id, model))
@@ -1510,7 +1525,7 @@ def evaluate_text_family(
             base_url = str(channel.get("base_url") or "").strip()
             if not api_key or not base_url:
                 continue
-            for model in family.models:
+            for model in probe_models_for_channel(family, channel_id):
                 if model not in channel_models:
                     continue
                 futures[pool.submit(requester, base_url, api_key, model)] = (channel_id, model)
