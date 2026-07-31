@@ -238,7 +238,9 @@ const EditTokenModal = (props) => {
         return;
       }
       localInputs.expired_time = expiredTime;
-      localInputs.group = serializeGroupChain(localInputs.group);
+      localInputs.group = serializeGroupChain(
+        normalizeTokenGroupSelection(localInputs.group),
+      );
       localInputs.cross_group_retry = false;
       localInputs.model_limits = localInputs.model_limits.join(',');
       localInputs.model_limits_enabled = localInputs.model_limits.length > 0;
@@ -292,7 +294,9 @@ const EditTokenModal = (props) => {
           break;
         }
         localInputs.expired_time = expiredTime;
-        localInputs.group = serializeGroupChain(localInputs.group);
+        localInputs.group = serializeGroupChain(
+          normalizeTokenGroupSelection(localInputs.group),
+        );
         localInputs.cross_group_retry = false;
         localInputs.model_limits = localInputs.model_limits.join(',');
         localInputs.model_limits_enabled = localInputs.model_limits.length > 0;
@@ -456,9 +460,8 @@ const EditTokenModal = (props) => {
                           </span>
                           <span>
                             {t('已选择 {{count}}/3', {
-                              count: Array.isArray(values.group)
-                                ? values.group.length
-                                : 0,
+                              count: normalizeTokenGroupSelection(values.group)
+                                .length,
                             })}
                           </span>
                         </div>
