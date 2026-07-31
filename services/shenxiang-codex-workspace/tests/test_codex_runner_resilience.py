@@ -1,9 +1,11 @@
 import asyncio
+import json
 import os
 import signal
 
 import pytest
 
+from app.config import Settings
 from app.codex_runner import CodexRunner
 
 
@@ -20,6 +22,33 @@ def test_other_models_keep_the_skill_timeout():
     runner._model_for_task = lambda _task: "gpt-5.5"
 
     assert runner._effective_timeout({"skill": {"timeout": 180}}) == 180
+
+
+def test_stream_disconnect_error_is_retryable_and_never_becomes_answer_text():
+    runner = CodexRunner.__new__(CodexRunner)
+    runner.settings = Settings()
+    internal_url = "http://shenxiang-new-api:3000/v1/responses"
+
+    event = runner._parse_codex_event(
+        json.dumps(
+            {
+                "type": "error",
+                "message": f"stream disconnected before completion: error sending request for url ({internal_url})",
+            }
+        ),
+        "sk-test-secret-value",
+    )
+
+    assert event["type"] == "codex_event"
+    assert event["event"] == "error"
+    assert runner._is_retryable_upstream_error(event)
+    failure = runner._deterministic_upstream_error(event)
+    assert failure == {
+        "type": "error",
+        "code": "SERVICE_TEMPORARILY_UNAVAILABLE",
+        "message": "模型连接短暂中断，正在切换稳定链路。",
+    }
+    assert internal_url not in str(failure)
 
 
 @pytest.mark.asyncio

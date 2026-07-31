@@ -255,7 +255,7 @@ class CodexRunner:
                     if fast_fail:
                         await self._terminate_process_group(process)
                         self._write_output(workspace, "\n".join(stdout_chunks), "\n".join(stderr_chunks), user_api_key)
-                        if self._is_retryable_upstream_error(fast_fail.get("message", "")):
+                        if self._is_retryable_upstream_error(event):
                             async for fallback_event in self._stream_chat_completions_fallback(task, user_api_key):
                                 yield fallback_event
                             return
@@ -456,6 +456,12 @@ class CodexRunner:
         raw = event.get("raw") if isinstance(event.get("raw"), dict) else {}
         message = str(raw.get("message") or event.get("message") or "")
         lower = message.lower()
+        if self._is_retryable_upstream_error(message):
+            return {
+                "type": "error",
+                "code": public_error_code("MODEL_STREAM_INTERRUPTED"),
+                "message": "模型连接短暂中断，正在切换稳定链路。",
+            }
         if "invalid token" in lower or "401 unauthorized" in lower:
             return {
                 "type": "error",
@@ -510,6 +516,8 @@ class CodexRunner:
                 " 524",
                 "timeout occurred",
                 "a timeout occurred",
+                "stream disconnected before completion",
+                "error sending request for url",
             )
         )
 
@@ -592,7 +600,10 @@ class CodexRunner:
             yield {
                 "type": "error",
                 "code": "CODEX_FALLBACK_REQUEST_FAILED",
-                "message": redact(str(exc), secret_values_for_redaction(self.settings, user_api_key)),
+                "message": public_error_message(
+                    redact(str(exc), secret_values_for_redaction(self.settings, user_api_key)),
+                    "稳定链路连接失败，请稍后重试。",
+                ),
                 "task_id": task_id,
             }
             return
