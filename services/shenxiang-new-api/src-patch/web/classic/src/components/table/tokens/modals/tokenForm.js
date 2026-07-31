@@ -20,6 +20,24 @@ export const expiryFormValueToUnixSeconds = (value) => {
 
 const EXCLUSIVE_TOKEN_GROUPS = new Set(['welfare', 'welfare-001']);
 
+const TOKEN_GROUP_MODEL_FAMILIES = {
+  default: 'ChatGPT',
+  discount: 'ChatGPT',
+  plus: 'ChatGPT',
+  kiro: 'Claude',
+  'kiro-stable': 'Claude',
+};
+
+export const getTokenGroupDisplayLabel = (group, description) => {
+  const label = String(description || group || '').trim();
+  const modelFamily = TOKEN_GROUP_MODEL_FAMILIES[group];
+
+  if (!modelFamily || label.toLowerCase().includes(modelFamily.toLowerCase())) {
+    return label;
+  }
+  return `${label} · ${modelFamily}`;
+};
+
 export const normalizeTokenGroupSelection = (value) => {
   const groups = (Array.isArray(value) ? value : [value])
     .map((group) => String(group || '').trim())

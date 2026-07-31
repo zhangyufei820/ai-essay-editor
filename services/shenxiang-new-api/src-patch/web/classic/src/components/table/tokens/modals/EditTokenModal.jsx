@@ -16,6 +16,7 @@ import {
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
   expiryFormValueToUnixSeconds,
+  getTokenGroupDisplayLabel,
   getTokenFormErrorMessage,
   normalizeTokenGroupSelection,
   normalizeTokenExpiryForForm,
@@ -133,7 +134,7 @@ const EditTokenModal = (props) => {
       const localGroupOptions = Object.entries(data)
         .filter(([group]) => group !== 'auto')
         .map(([group, info]) => ({
-          label: info.desc,
+          label: getTokenGroupDisplayLabel(group, info.desc),
           value: group,
           ratio: info.ratio,
         }));
