@@ -1,11 +1,15 @@
 [
   {
+    "package": "./.",
+    "run": "^(TestBuildXingrenCodexTokenResponse.*|TestXingrenCodexTokenNameIncludesAccountID|TestXingrenOnboardingCodexTokenHandler.*|TestXingrenCodexFrontendRejectsInvalidPayloadBeforeConfiguration)$"
+  },
+  {
     "package": "./middleware",
     "run": ""
   },
   {
     "package": "./middleware",
-    "run": "^(TestEnforceClaudeTerminalGroup.*|TestSetupContextForSelectedChannel.*|TestApplyPlaygroundTextPricingPreferenceUsesManagedGroupChain)$"
+    "run": "^(TestUserAuthRequiresMatchingSessionAndHeader|TestEnforceClaudeTerminalGroup.*|TestSetupContextForSelectedChannel.*|TestApplyPlaygroundTextPricingPreferenceUsesManagedGroupChain)$"
   },
   {
     "package": "./controller",

@@ -219,6 +219,30 @@
     return "";
   }
 
+  function validateCodexTokenPayload(payload, userId) {
+    var value = payload && typeof payload === "object" ? payload : {};
+    var expectedUserId = String(userId || "").trim();
+    if (value.success !== true) {
+      throw new Error(value.message || "API Key 创建失败，请稍后重试。");
+    }
+    if (!value.key || !/^sk-[A-Za-z0-9._-]+$/.test(value.key)) {
+      throw new Error("API Key 已创建，但没有拿到可复制的 Key。请到令牌管理页查看或重新生成。");
+    }
+    var accountId = String(value.account_id || "").trim();
+    var tokenOwnerId = String(value.token_owner_id || "").trim();
+    if (!/^\d+$/.test(expectedUserId) || !/^\d+$/.test(accountId) || !/^\d+$/.test(tokenOwnerId) || accountId !== expectedUserId || tokenOwnerId !== expectedUserId) {
+      throw new Error("API Key 归属校验失败，已停止生成配置。请退出账号后重新登录再试。");
+    }
+    var tokenId = String(value.token_id || "").trim();
+    var validBillingMode =
+      (value.token_type === "monthly_card" && value.billing_mode === "subscription_only") ||
+      (value.token_type === "standard" && value.billing_mode === "account_preference");
+    if (!/^\d+$/.test(tokenId) || Number(tokenId) <= 0 || !validBillingMode || !/^sk-[A-Za-z0-9.*_-]+$/.test(value.masked_key || "")) {
+      throw new Error("API Key 归属信息不完整，已停止生成配置。请稍后重试。");
+    }
+    return value;
+  }
+
   function createCodexToken(model) {
     var userId = getCurrentUserId();
     if (!userId) {
@@ -248,10 +272,7 @@
           });
       })
       .then(function (payload) {
-        if (!payload.key || !/^sk-[A-Za-z0-9._-]+$/.test(payload.key)) {
-          throw new Error("API Key 已创建，但没有拿到可复制的 Key。请到令牌管理页查看或重新生成。");
-        }
-        return payload;
+        return validateCodexTokenPayload(payload, userId);
       });
   }
 
@@ -2443,6 +2464,7 @@
     if (state.loading) return;
     state.loading = true;
     state.busyLabel = "正在检查登录状态";
+    state.generatedKey = "";
     var operationId = addMessage("assistant", "正在检查登录状态\n正在准备创建 Codex API Key", {
       tone: "operation",
     });
@@ -2464,7 +2486,7 @@
           content: "API Key 已创建\n正在生成 Codex 配置\n准备把配置交给你复制",
         });
         window.setTimeout(function () {
-          showCodexConfig(state.selectedOS, model, payload.key, payload.token_name || "");
+          showCodexConfig(state.selectedOS, model, payload.key, payload.token_name || "", payload);
         }, 360);
       })
       .catch(function (error) {
@@ -2486,13 +2508,22 @@
       });
   }
 
-  function showCodexConfig(os, model, key, tokenName) {
+  function showCodexConfig(os, model, key, tokenName, tokenMetadata) {
     var isMac = os === "mac";
+    var metadata = tokenMetadata || {};
     var command = isMac ? macAiphuiConfigCommand(model, key, { allowPrint: true }) : windowsCodexCommand(model, key);
     if (state.aiphuiMode === "cli") {
       command += "\n\n# CLI 验证步骤：如果只写配置，可以不执行下面这些。\n" + installCodexCommand();
     }
     var nameLine = tokenName ? "\n\n令牌名称：" + tokenName : "";
+    var billingLabel = metadata.billing_mode === "subscription_only" ? "月卡专用" : "按账户计费偏好";
+    var ownershipLine =
+      "\n账户 ID：" +
+      String(metadata.account_id || "-") +
+      "｜令牌 ID：" +
+      String(metadata.token_id || "-") +
+      "｜计费：" +
+      billingLabel;
     typeAssistant(
       "配置已经生成。\n\n复制完整" +
         (isMac ? "Mac 终端" : "PowerShell") +
@@ -2501,8 +2532,9 @@
         "\n\n" +
         codexNextStepGuide(os, model) +
         nameLine +
+        ownershipLine +
         "\n\n本次命令会打印完整 Key。脱敏预览：" +
-        maskKey(key) +
+        (metadata.masked_key || maskKey(key)) +
         "\n结束会话会清空本窗口历史，请先完成复制和测试。",
       {
         code: command,
@@ -3338,6 +3370,14 @@
       "@media (max-width:640px){#xr-api-assistant-root:not(.xr-api-assistant-docked){right:12px;top:auto!important;bottom:12px}#xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher{width:52px;height:52px;min-width:52px;padding:6px;border-radius:999px}#xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher-copy{display:none}#xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher-icon{width:38px;height:38px}.xr-api-assistant-docked .xr-api-assistant-launcher{min-height:34px;padding:4px 8px 4px 4px}.xr-api-assistant-docked .xr-api-assistant-launcher-copy strong{font-size:12px}.xr-api-assistant-panel,.xr-api-assistant-panel[data-xr-route]{left:0;right:0;top:auto;bottom:0;width:100%;height:min(72vh,620px);border-radius:14px 14px 0 0}.xr-api-assistant-header{padding:12px 14px}.xr-api-assistant-title span:last-child{max-width:190px}.xr-api-assistant-messages{padding:16px 12px}.xr-api-assistant-bubble{max-width:92%;font-size:13px}.xr-api-assistant-form{padding:12px}.xr-api-assistant-row{grid-template-columns:42px 1fr}.xr-api-assistant-submit{grid-column:1 / -1;width:100%}.xr-api-assistant-actions button{flex:1 1 calc(50% - 8px)}}",
     ].join("");
     document.head.appendChild(style);
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { validateCodexTokenPayload: validateCodexTokenPayload };
+  }
+
+  if (typeof document === "undefined" || typeof window === "undefined") {
+    return;
   }
 
   document.addEventListener("keydown", function (event) {

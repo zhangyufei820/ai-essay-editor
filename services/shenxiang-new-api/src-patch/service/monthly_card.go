@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"gorm.io/gorm"
 )
 
 type monthlyCardTextTier struct {
@@ -74,14 +76,40 @@ func UserHasMonthlyCard(userId int) (bool, error) {
 	if model.DB == nil {
 		return false, errors.New("database is not initialized")
 	}
+	return userHasMonthlyCard(context.Background(), model.DB, userId)
+}
+
+func userHasMonthlyCard(ctx context.Context, db *gorm.DB, userId int) (bool, error) {
+	if userId <= 0 {
+		return false, errors.New("invalid userId")
+	}
+	if db == nil {
+		return false, errors.New("database is not initialized")
+	}
 	now := common.GetTimestamp()
-	var count int64
-	err := model.DB.Table("user_subscriptions AS us").
+	var rows []struct {
+		PlanID    int
+		PlanTitle string
+		Currency  string
+	}
+	err := db.WithContext(ctx).Table("user_subscriptions AS us").
+		Select("sp.id AS plan_id, sp.title AS plan_title, sp.currency").
 		Joins("JOIN subscription_plans AS sp ON sp.id = us.plan_id").
 		Where("us.user_id = ? AND us.status = ? AND us.end_time > ?", userId, "active", now).
-		Where("(sp.title LIKE ? OR sp.price_amount >= ?)", "%月卡%", 500).
-		Count(&count).Error
-	return count > 0, err
+		Find(&rows).Error
+	if err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		if !model.IsCurrentMonthlyCardTextDiscountPlanInfo(row.PlanID, row.PlanTitle) {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(row.Currency), "CNY") {
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func MonthlyCardAllowedModels() []string {

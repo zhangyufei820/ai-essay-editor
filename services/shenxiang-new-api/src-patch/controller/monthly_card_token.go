@@ -1,8 +1,8 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -11,76 +11,39 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const monthlyCardTokenName = "月卡专用 Key"
+const monthlyCardTokenName = service.MonthlyCardTokenName
 
 func CreateMonthlyCardToken(c *gin.Context) {
 	userID := c.GetInt("id")
-	ok, err := service.UserHasMonthlyCard(userID)
+	token, created, err := service.EnsureMonthlyCardTokenForUser(c.Request.Context(), userID)
 	if err != nil {
-		common.ApiError(c, err)
+		switch {
+		case errors.Is(err, service.ErrNoActiveMonthlyCard):
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "当前账号没有有效月卡",
+			})
+		case errors.Is(err, service.ErrMonthlyCardTokenUnavailable):
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"message": "月卡专用 Key 已停用，请先在令牌管理页处理",
+			})
+		default:
+			common.ApiError(c, err)
+		}
 		return
 	}
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"message": "当前账号没有有效月卡",
-		})
-		return
-	}
-
-	var existing model.Token
-	err = model.DB.Where("user_id = ? AND name = ?", userID, monthlyCardTokenName).First(&existing).Error
-	if err == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "monthly card token already exists",
-			"data":    buildMaskedTokenResponse(&existing),
-		})
-		return
-	}
-	if exists, recordErr := model.RecordExist(err); recordErr != nil {
-		common.ApiError(c, recordErr)
-		return
-	} else if exists {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "monthly card token already exists",
-			"data":    buildMaskedTokenResponse(&existing),
-		})
-		return
-	}
-
-	key, err := common.GenerateKey()
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	token := buildMonthlyCardToken(userID, key)
-	if err := token.Insert(); err != nil {
-		common.ApiError(c, err)
-		return
+	message := "monthly card token already exists"
+	if created {
+		message = "created"
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "created",
-		"data":    buildMaskedTokenResponse(&token),
+		"message": message,
+		"data":    buildMaskedTokenResponse(token),
 	})
 }
 
 func buildMonthlyCardToken(userID int, key string) model.Token {
-	return model.Token{
-		UserId:             userID,
-		Key:                key,
-		Status:             common.TokenStatusEnabled,
-		Name:               monthlyCardTokenName,
-		CreatedTime:        common.GetTimestamp(),
-		AccessedTime:       common.GetTimestamp(),
-		ExpiredTime:        -1,
-		RemainQuota:        0,
-		UnlimitedQuota:     true,
-		ModelLimitsEnabled: true,
-		ModelLimits:        strings.Join(service.MonthlyCardAllowedModels(), ","),
-		Group:              "default",
-		CrossGroupRetry:    false,
-	}
+	return service.BuildMonthlyCardToken(userID, key)
 }

@@ -171,6 +171,18 @@ overlay_patch() {
   [ -f "${WORKTREE_DIR_ABS}/go.mod" ] || die "prepared worktree is missing go.mod: $WORKTREE_DIR_ABS"
 }
 
+prepare_go_embed_assets() {
+  local theme dist_dir index_file
+  for theme in default classic; do
+    dist_dir="${WORKTREE_DIR_ABS}/web/${theme}/dist"
+    index_file="${dist_dir}/index.html"
+    if [ ! -f "$index_file" ]; then
+      mkdir -p "$dist_dir"
+      printf '<!doctype html><title>New API test embed placeholder</title>\n' > "$index_file"
+    fi
+  done
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --repo)
@@ -247,6 +259,7 @@ printf 'generated cache root for prepare-local-source.sh\n' > "${BUILD_ROOT_ABS}
 
 prepare_upstream_cache
 overlay_patch
+prepare_go_embed_assets
 
 if [ "$PRINT_PATH" -eq 1 ]; then
   printf '%s\n' "$WORKTREE_DIR_ABS"

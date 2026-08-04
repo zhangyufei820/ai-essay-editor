@@ -148,13 +148,18 @@ type xingrenCodexTokenRequest struct {
 }
 
 type xingrenCodexTokenResponse struct {
-	Success   bool   `json:"success"`
-	Message   string `json:"message,omitempty"`
-	Key       string `json:"key,omitempty"`
-	TokenID   int    `json:"token_id,omitempty"`
-	TokenName string `json:"token_name,omitempty"`
-	Model     string `json:"model,omitempty"`
-	BaseURL   string `json:"base_url,omitempty"`
+	Success      bool   `json:"success"`
+	Message      string `json:"message,omitempty"`
+	Key          string `json:"key,omitempty"`
+	MaskedKey    string `json:"masked_key,omitempty"`
+	TokenID      int    `json:"token_id,omitempty"`
+	TokenName    string `json:"token_name,omitempty"`
+	TokenType    string `json:"token_type,omitempty"`
+	TokenOwnerID int    `json:"token_owner_id,omitempty"`
+	AccountID    int    `json:"account_id,omitempty"`
+	BillingMode  string `json:"billing_mode,omitempty"`
+	Model        string `json:"model,omitempty"`
+	BaseURL      string `json:"base_url,omitempty"`
 }
 
 type xingrenOpenAIChatResponse struct {
@@ -490,6 +495,39 @@ func buildXingrenCodexUserToken(userID int, key string, tokenName string, modelL
 	}
 }
 
+func buildXingrenCodexTokenResponse(userID int, token *model.Token, tokenType string, billingMode string, selectedModel string, baseURL string) (xingrenCodexTokenResponse, error) {
+	if userID <= 0 || token == nil || token.Id <= 0 || token.UserId != userID {
+		ownerID := 0
+		if token != nil {
+			ownerID = token.UserId
+		}
+		return xingrenCodexTokenResponse{}, fmt.Errorf("codex token owner mismatch: account=%d owner=%d", userID, ownerID)
+	}
+	validBillingMode := (tokenType == "monthly_card" && billingMode == "subscription_only") ||
+		(tokenType == "standard" && billingMode == "account_preference")
+	if !validBillingMode {
+		return xingrenCodexTokenResponse{}, fmt.Errorf("invalid codex token billing metadata: type=%q mode=%q", tokenType, billingMode)
+	}
+	rawKey := strings.TrimSpace(token.Key)
+	if rawKey == "" {
+		return xingrenCodexTokenResponse{}, errors.New("codex token key is empty")
+	}
+	key := xingrenAssistantBearerKey(rawKey)
+	return xingrenCodexTokenResponse{
+		Success:      true,
+		Key:          key,
+		MaskedKey:    model.MaskTokenKey(key),
+		TokenID:      token.Id,
+		TokenName:    token.Name,
+		TokenType:    tokenType,
+		TokenOwnerID: token.UserId,
+		AccountID:    userID,
+		BillingMode:  billingMode,
+		Model:        selectedModel,
+		BaseURL:      baseURL,
+	}, nil
+}
+
 func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("Pragma", "no-cache")
@@ -510,6 +548,57 @@ func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 			Success: false,
 			Message: "请先登录后再让接入老师创建 API Key。",
 		})
+		return
+	}
+	selectedModel := xingrenCodexModel(req.Model)
+	baseURL := strings.TrimSpace(os.Getenv("XINGREN_API_BASE_URL"))
+	if baseURL == "" {
+		baseURL = "https://api.aiphui.top/v1"
+	}
+
+	monthlyToken, monthlyTokenCreated, monthlyTokenErr := service.EnsureMonthlyCardTokenForUser(c.Request.Context(), userID)
+	if errors.Is(monthlyTokenErr, service.ErrMonthlyCardTokenUnavailable) {
+		c.JSON(http.StatusConflict, xingrenCodexTokenResponse{
+			Success: false,
+			Message: "当前账号的月卡专用 API Key 已停用，请先到令牌管理页处理后再试。",
+		})
+		return
+	}
+	if monthlyTokenErr != nil && !errors.Is(monthlyTokenErr, service.ErrNoActiveMonthlyCard) {
+		c.JSON(http.StatusInternalServerError, xingrenCodexTokenResponse{
+			Success: false,
+			Message: "没有读取到当前账号月卡状态，请稍后重试。",
+		})
+		return
+	}
+	if monthlyTokenErr == nil {
+		if !service.MonthlyCardTextSupportsModel(selectedModel) {
+			selectedModel = xingrenCodexDefaultModel
+		}
+		response, responseErr := buildXingrenCodexTokenResponse(userID, monthlyToken, "monthly_card", "subscription_only", selectedModel, baseURL)
+		if responseErr != nil {
+			common.SysError("xingren onboarding rejected monthly card token ownership: " + responseErr.Error())
+			c.JSON(http.StatusInternalServerError, xingrenCodexTokenResponse{
+				Success: false,
+				Message: "API Key 归属校验失败，请稍后重试。",
+			})
+			return
+		}
+		operation := "reused"
+		if monthlyTokenCreated {
+			operation = "created"
+		}
+		model.RecordOperationAuditLog(userID, "用户获取月卡 Codex API Key", "", "create_codex_token", map[string]interface{}{
+			"account_id":     userID,
+			"token_owner_id": monthlyToken.UserId,
+			"token_name":     monthlyToken.Name,
+			"token_id":       monthlyToken.Id,
+			"token_type":     "monthly_card",
+			"billing_mode":   "subscription_only",
+			"operation":      operation,
+			"model":          selectedModel,
+		}, nil, nil)
+		c.JSON(http.StatusOK, response)
 		return
 	}
 
@@ -551,9 +640,8 @@ func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 		return
 	}
 
-	selectedModel := xingrenCodexModel(req.Model)
 	modelLimits := xingrenCodexTokenModelLimits(selectedModel)
-	tokenName := xingrenCodexTokenName()
+	tokenName := xingrenCodexTokenName(userID)
 	newToken := buildXingrenCodexUserToken(userID, key, tokenName, modelLimits, tokenGroup)
 	if err := newToken.Insert(); err != nil {
 		c.JSON(http.StatusInternalServerError, xingrenCodexTokenResponse{
@@ -563,24 +651,26 @@ func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 		return
 	}
 
-	baseURL := strings.TrimSpace(os.Getenv("XINGREN_API_BASE_URL"))
-	if baseURL == "" {
-		baseURL = "https://api.aiphui.top/v1"
+	response, responseErr := buildXingrenCodexTokenResponse(userID, newToken, "standard", "account_preference", selectedModel, baseURL)
+	if responseErr != nil {
+		common.SysError("xingren onboarding rejected codex token ownership: " + responseErr.Error())
+		c.JSON(http.StatusInternalServerError, xingrenCodexTokenResponse{
+			Success: false,
+			Message: "API Key 归属校验失败，请稍后重试。",
+		})
+		return
 	}
 	model.RecordOperationAuditLog(userID, "用户创建 Codex API Key", "", "create_codex_token", map[string]interface{}{
-		"token_name": tokenName,
-		"token_id":   newToken.Id,
-		"model":      selectedModel,
-		"models":     modelLimits,
+		"account_id":     userID,
+		"token_owner_id": newToken.UserId,
+		"token_name":     tokenName,
+		"token_id":       newToken.Id,
+		"token_type":     "standard",
+		"billing_mode":   "account_preference",
+		"model":          selectedModel,
+		"models":         modelLimits,
 	}, nil, nil)
-	c.JSON(http.StatusOK, xingrenCodexTokenResponse{
-		Success:   true,
-		Key:       xingrenAssistantBearerKey(key),
-		TokenID:   newToken.Id,
-		TokenName: tokenName,
-		Model:     selectedModel,
-		BaseURL:   baseURL,
-	})
+	c.JSON(http.StatusOK, response)
 }
 
 func xingrenAssistantToken(ctx context.Context) (*model.Token, error) {
@@ -930,8 +1020,8 @@ func xingrenAssistantTrimHistory(history []xingrenAssistantMessage) []xingrenAss
 	return result
 }
 
-func xingrenCodexTokenName() string {
-	return "星人Codex " + time.Now().Format("0601021504")
+func xingrenCodexTokenName(userID int) string {
+	return fmt.Sprintf("星人Codex 账户%d %s", userID, time.Now().Format("0601021504"))
 }
 
 func xingrenCodexModel(modelName string) string {
