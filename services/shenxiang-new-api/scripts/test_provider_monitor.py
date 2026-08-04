@@ -109,9 +109,9 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(
             families["plus_text"].managed_tag_priorities,
             (
-                ("xingren-plus-text-aihub", 30),
-                ("xingren-plus-text-wangwang", 20),
-                ("xingren-plus-text-pdhlzy", 10),
+                ("xingren-plus-text-pdhlzy", 30),
+                ("xingren-plus-text-aihub", 20),
+                ("xingren-plus-text-wangwang", 10),
             ),
         )
         self.assertEqual(families["plus_text"].ability_group, "plus")
@@ -206,8 +206,8 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         with mock.patch.object(self.module, "mysql_json", return_value=rows):
             resolved = self.module.resolve_dynamic_text_families({}, (family,))[0]
 
-        self.assertEqual(resolved.channel_ids, (143, 43, 44))
-        self.assertEqual(resolved.baseline_priorities, {143: 30, 43: 20, 44: 10})
+        self.assertEqual(resolved.channel_ids, (44, 143, 43))
+        self.assertEqual(resolved.baseline_priorities, {44: 30, 143: 20, 43: 10})
         self.assertEqual(resolved.expected_tags[143], "xingren-plus-text-aihub")
         self.assertEqual(
             self.module.probe_models_for_channel(resolved, 143),

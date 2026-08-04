@@ -105,7 +105,37 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
             ),
         )
 
-    def test_partial_fallback_sql_does_not_create_missing_model_abilities(self) -> None:
+    def test_default_order_promotes_pdhlzy_then_aihub(self) -> None:
+        self.assertEqual(
+            self.module.DEFAULT_CHANNEL_ORDER,
+            ("pdhlzy", "aihub", "wangwang"),
+        )
+        self.assertEqual(
+            self.module.channel_priorities(self.module.DEFAULT_CHANNEL_ORDER),
+            {"pdhlzy": 30, "aihub": 20, "wangwang": 10},
+        )
+
+    def test_partial_primary_is_valid_when_fallbacks_cover_every_public_model(self) -> None:
+        self.plans["pdhlzy"] = self.module.PlusPlan(
+            upstream_model_count=4,
+            matched_models=("gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"),
+            missing_models=("gpt-5.4", "gpt-5.4-mini"),
+        )
+
+        self.module.validate_public_model_coverage(self.plans)
+
+    def test_partial_routes_fail_closed_when_a_public_model_is_uncovered(self) -> None:
+        for slug in self.plans:
+            self.plans[slug] = self.module.PlusPlan(
+                upstream_model_count=5,
+                matched_models=("gpt-5.4-mini", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"),
+                missing_models=("gpt-5.4",),
+            )
+
+        with self.assertRaisesRegex(self.module.ConfigurationError, "gpt-5.4"):
+            self.module.validate_public_model_coverage(self.plans)
+
+    def test_partial_primary_sql_does_not_create_missing_model_abilities(self) -> None:
         self.plans["pdhlzy"] = self.module.PlusPlan(
             upstream_model_count=4,
             matched_models=("gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"),

@@ -22,7 +22,7 @@ PLUS_GROUP_DESCRIPTION = "Plus 0.5x 通道"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
 OPENAI_CHANNEL_TYPE = 1
-DEFAULT_CHANNEL_ORDER = ("aihub", "wangwang", "pdhlzy")
+DEFAULT_CHANNEL_ORDER = ("pdhlzy", "aihub", "wangwang")
 PLUS_TEXT_MODELS = (
     "gpt-5.4",
     "gpt-5.4-mini",
@@ -244,6 +244,19 @@ def published_models_for_plan(plan: PlusPlan) -> tuple[str, ...]:
     )
 
 
+def validate_public_model_coverage(plans: dict[str, PlusPlan]) -> None:
+    covered_models = {
+        model
+        for plan in plans.values()
+        for model in published_models_for_plan(plan)
+    }
+    missing_models = [model for model in PLUS_TEXT_MODELS if model not in covered_models]
+    if missing_models:
+        raise ConfigurationError(
+            "Plus routes do not cover public models: " + ",".join(missing_models)
+        )
+
+
 def mysql(query: str) -> list[list[str]]:
     password = os.environ.get("MYSQL_ROOT_PASSWORD", "")
     database = os.environ.get("MYSQL_DATABASE", "")
@@ -419,6 +432,7 @@ def build_apply_sql(
     expected_slugs = {spec.slug for spec in PLUS_CHANNEL_SPECS}
     if set(plans) != expected_slugs or set(api_keys) != expected_slugs or set(base_urls) != expected_slugs:
         raise ConfigurationError("all Plus upstream plans, keys, and base URLs are required")
+    validate_public_model_coverage(plans)
     priorities = channel_priorities(order)
     allowed_tags_sql = sql_list(list(PLUS_CHANNEL_TAGS))
     statements = ["START TRANSACTION;"]
@@ -601,12 +615,11 @@ def main() -> int:
     for spec in PLUS_CHANNEL_SPECS:
         api_key = require_upstream_key(spec)
         base_url = resolve_upstream_base_url(spec)
-        plans[spec.slug] = build_plus_plan(
-            fetch_upstream_models(base_url, api_key),
-            allow_partial=spec.slug != order[0],
-        )
+        plans[spec.slug] = build_plus_plan(fetch_upstream_models(base_url, api_key), allow_partial=True)
         api_keys[spec.slug] = api_key
         base_urls[spec.slug] = base_url
+
+    validate_public_model_coverage(plans)
 
     if args.apply:
         with model_sync_lock():
