@@ -640,6 +640,160 @@ func TestPlaygroundImageTaskRetrySettingsAreBounded(t *testing.T) {
 	require.Equal(t, 10*time.Second, playgroundImageTaskRetryDelay(3))
 }
 
+func TestPlaygroundImageTaskResponsesExposeSafeRetryMetadata(t *testing.T) {
+	now := time.Now().Unix()
+	task := &model.Task{
+		TaskID:     "task-retry-metadata",
+		Status:     model.TaskStatusSubmitted,
+		Progress:   "10%",
+		SubmitTime: now - 30,
+	}
+	task.SetData(playgroundImageTaskPayload{
+		RetryCount:  2,
+		MaxRetries:  5,
+		NextRetryAt: now + 30,
+		DeadlineAt:  now + 600,
+	})
+
+	encoded, err := json.Marshal(taskToOpenAIImageTask(task))
+	require.NoError(t, err)
+	var response map[string]interface{}
+	require.NoError(t, json.Unmarshal(encoded, &response))
+
+	require.Equal(t, true, response["retrying"])
+	require.Equal(t, float64(2), response["retry_count"])
+	require.Equal(t, float64(5), response["max_retries"])
+	require.Equal(t, float64(now+30), response["next_retry_at"])
+	require.Equal(t, float64(now+600), response["deadline_at"])
+	require.GreaterOrEqual(t, response["retry_after_seconds"].(float64), float64(28))
+	require.LessOrEqual(t, response["retry_after_seconds"].(float64), float64(30))
+
+	nested := response["data"].(map[string]interface{})
+	require.Equal(t, true, nested["retrying"])
+	require.Equal(t, float64(2), nested["retry_count"])
+	require.Equal(t, float64(5), nested["max_retries"])
+	require.Equal(t, float64(now+30), nested["next_retry_at"])
+	require.Equal(t, float64(now+600), nested["deadline_at"])
+}
+
+func TestPlaygroundImageTaskDeadlineBoundsAttemptAndRetry(t *testing.T) {
+	now := time.Unix(1_000, 0)
+	payload := &playgroundImageTaskPayload{DeadlineAt: now.Add(45 * time.Second).Unix()}
+
+	timeout, ok := playgroundImageTaskAttemptTimeout(payload, now)
+	require.True(t, ok)
+	require.Equal(t, 45*time.Second, timeout)
+	require.True(t, playgroundImageTaskRetryFitsDeadline(payload, now, 44*time.Second))
+	require.False(t, playgroundImageTaskRetryFitsDeadline(payload, now, 45*time.Second))
+
+	_, ok = playgroundImageTaskAttemptTimeout(payload, now.Add(45*time.Second))
+	require.False(t, ok)
+}
+
+func TestPlaygroundImageTaskWatchdogClassifiesOnlyDueSubmittedTasks(t *testing.T) {
+	now := time.Unix(2_000, 0)
+	task := &model.Task{
+		TaskID:     "task-watchdog-due",
+		Platform:   constant.TaskPlatformPlaygroundImage,
+		Action:     constant.TaskActionImageGenerate,
+		Status:     model.TaskStatusSubmitted,
+		SubmitTime: now.Add(-time.Minute).Unix(),
+	}
+	payload := &playgroundImageTaskPayload{
+		RequestFile: "/tmp/task-watchdog-due.body",
+		NextRetryAt: now.Add(-time.Second).Unix(),
+		DeadlineAt:  now.Add(time.Minute).Unix(),
+	}
+
+	require.Equal(t, playgroundImageTaskReconcileResume, playgroundImageTaskReconcileActionAt(task, payload, now))
+	payload.NextRetryAt = now.Add(time.Second).Unix()
+	require.Equal(t, playgroundImageTaskReconcileIgnore, playgroundImageTaskReconcileActionAt(task, payload, now))
+	payload.NextRetryAt = now.Add(-time.Second).Unix()
+	payload.DeadlineAt = now.Unix()
+	require.Equal(t, playgroundImageTaskReconcileExpire, playgroundImageTaskReconcileActionAt(task, payload, now))
+	task.Status = model.TaskStatusInProgress
+	require.Equal(t, playgroundImageTaskReconcileIgnore, playgroundImageTaskReconcileActionAt(task, payload, now))
+}
+
+func TestPlaygroundImageTaskWatchdogReconcilesOnceAndCASClaimsOneWorker(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Task{}))
+	oldDB := model.DB
+	model.DB = db
+	t.Cleanup(func() {
+		model.DB = oldDB
+	})
+
+	now := time.Unix(3_000, 0)
+	requestFile := filepath.Join(t.TempDir(), "task-watchdog.body")
+	require.NoError(t, os.WriteFile(requestFile, []byte(`{"prompt":"test"}`), 0o600))
+	task := &model.Task{
+		TaskID:     "task-watchdog-once",
+		Platform:   constant.TaskPlatformPlaygroundImage,
+		UserId:     1001,
+		Group:      "default",
+		Action:     constant.TaskActionImageGenerate,
+		Status:     model.TaskStatusSubmitted,
+		Progress:   "10%",
+		SubmitTime: now.Add(-time.Minute).Unix(),
+	}
+	task.SetData(playgroundImageTaskPayload{
+		RequestFile: requestFile,
+		NextRetryAt: now.Add(-time.Second).Unix(),
+		DeadlineAt:  now.Add(time.Minute).Unix(),
+	})
+	require.NoError(t, db.Create(task).Error)
+
+	scheduled := make([]string, 0, 1)
+	stats := reconcilePlaygroundImageTasksOnceAt(now, func(task *model.Task) {
+		scheduled = append(scheduled, task.TaskID)
+	})
+	require.Equal(t, 1, stats.Resumed)
+	require.Equal(t, []string{task.TaskID}, scheduled)
+
+	var first model.Task
+	var second model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&first).Error)
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&second).Error)
+	require.True(t, claimPlaygroundImageTaskForRun(&first, now))
+	require.False(t, claimPlaygroundImageTaskForRun(&second, now))
+}
+
+func TestMarkPlaygroundImageTaskFailurePreservesTerminalSuccess(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.Log{}))
+	oldDB := model.DB
+	oldLogDB := model.LOG_DB
+	model.DB = db
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		model.DB = oldDB
+		model.LOG_DB = oldLogDB
+	})
+
+	task := &model.Task{
+		TaskID:     "task-terminal-success",
+		Platform:   constant.TaskPlatformPlaygroundImage,
+		UserId:     1001,
+		Action:     constant.TaskActionImageGenerate,
+		Status:     model.TaskStatusSuccess,
+		Progress:   "100%",
+		SubmitTime: time.Now().Add(-time.Minute).Unix(),
+		FinishTime: time.Now().Unix(),
+	}
+	task.SetData(playgroundImageTaskPayload{})
+	require.NoError(t, db.Create(task).Error)
+
+	markPlaygroundImageTaskFailure(task, "stale watchdog failure")
+
+	var reloaded model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&reloaded).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusSuccess), reloaded.Status)
+	require.Empty(t, reloaded.FailReason)
+}
+
 func TestMarkPlaygroundImageTaskLogFailureKeepsSubmittedChannelWhenTaskChannelMissing(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)

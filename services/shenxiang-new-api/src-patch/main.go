@@ -165,6 +165,7 @@ func main() {
 
 	if common.IsMasterNode {
 		controller.FailInterruptedPlaygroundImageTasksOnStartup()
+		controller.StartPlaygroundImageTaskWatchdog()
 	}
 
 	if common.IsMasterNode && constant.UpdateTask {
