@@ -21,7 +21,7 @@ services:
       args:
         BASE_IMAGE: python:3.11-slim
         CODEX_CLI_VERSION: "0.132.0"
-    image: shenxiang-codex-workspace:stream-recovery-568711c8-20260731
+    image: shenxiang-codex-workspace:media-retry-1dd516dd-20260805
     container_name: shenxiang-codex-workspace
     env_file:
       - .env
@@ -54,7 +54,7 @@ services:
       args:
         BASE_IMAGE: python:3.11-slim
         CODEX_CLI_VERSION: "0.132.0"
-    image: shenxiang-codex-workspace:stream-recovery-568711c8-20260731
+    image: shenxiang-codex-workspace:media-retry-1dd516dd-20260805
     container_name: shenxiang-codex-worker-fast
     command: ["python", "worker.py"]
     env_file:
@@ -73,7 +73,7 @@ services:
       - shenxiang-new-api-net
 
   shenxiang-codex-worker-heavy:
-    image: shenxiang-codex-workspace:stream-recovery-568711c8-20260731
+    image: shenxiang-codex-workspace:media-retry-1dd516dd-20260805
     container_name: shenxiang-codex-worker-heavy
     command: ["python", "worker.py"]
     env_file:
