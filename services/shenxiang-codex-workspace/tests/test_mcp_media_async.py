@@ -5,7 +5,7 @@ import pytest
 
 from app.config import Settings
 from app.agent_mcp import mcp_tools
-from app.mcp_media_async import McpMediaSubmissionUncertain, McpMediaTaskState, fetch_mcp_media_task, submit_mcp_media_task
+from app.mcp_media_async import McpMediaSubmissionUncertain, McpMediaTaskResult, McpMediaTaskState, fetch_mcp_media_task, submit_mcp_media_task
 from app.models import WorkspaceRunRequest
 from app.security import UserContext
 
@@ -203,3 +203,38 @@ def test_mcp_image_task_query_classifies_state_without_exposing_remote_error(mon
     else:
         assert result.media is None
         assert "hidden details" not in result.message
+
+
+def test_mcp_image_task_query_parses_safe_retry_progress(monkeypatch):
+    FakeAsyncClient.calls = []
+    FakeAsyncClient.get_body = {
+        "task_id": "remote_image_123",
+        "status": "submitted",
+        "retrying": True,
+        "retry_count": 2,
+        "max_retries": 5,
+        "next_retry_at": 2_000,
+        "retry_after_seconds": 42,
+        "deadline_at": 2_600,
+        "last_retry_reason": "supplier.example private-token",
+    }
+    monkeypatch.setattr("app.mcp_media_async.httpx.AsyncClient", FakeAsyncClient)
+
+    result = asyncio.run(
+        fetch_mcp_media_task(
+            Settings(new_api_base_url="https://api.example.test/v1"),
+            UserContext(api_key="sk-image", user_id="u-1", key_hint="key"),
+            "image",
+            "remote_image_123",
+        )
+    )
+
+    assert result == McpMediaTaskResult(
+        state=McpMediaTaskState.PENDING,
+        retrying=True,
+        retry_count=2,
+        max_retries=5,
+        retry_after_seconds=42,
+    )
+    assert "supplier.example" not in result.message
+    assert "private-token" not in result.message
