@@ -25,6 +25,10 @@
   },
   {
     "package": "./controller",
+    "run": "^(TestFindOrCreateOAuthUserRejectsLegacyMatchWhenMigrationDisabled|TestFindOrCreateOAuthUserMigratesGitHubLegacyMatchWhenEnabled|TestFindOrCreateOAuthUserFailsClosedWhenLegacyMigrationUpdateFails|TestFindOrCreateOAuthUserDoesNotMigrateNonGitHubProvider|TestFindOrCreateOAuthUserRejectsSoftDeletedLegacyUser|TestFindOrCreateOAuthUserKeepsNumericGitHubLoginUnchanged)$"
+  },
+  {
+    "package": "./controller",
     "run": "^(TestPublicPricingGroupsExposesSpecialWhenExplicitlyEnabled|TestShouldRetryAllowsSpecialTextTimeoutFallback)$"
   },
   {
