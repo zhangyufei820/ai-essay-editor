@@ -68,6 +68,7 @@ class SetupMonthlyCardPlansTest(unittest.TestCase):
             plan.title: plan.concurrency_limit for plan in self.module.PLANS
         }
 
+        self.assertEqual(concurrency_by_title["¥100 月卡"], 3)
         self.assertEqual(concurrency_by_title["¥300 月卡"], 5)
         self.assertEqual(concurrency_by_title["¥500 月卡"], 8)
         self.assertEqual(
