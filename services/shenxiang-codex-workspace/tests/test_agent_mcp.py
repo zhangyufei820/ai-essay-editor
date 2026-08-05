@@ -353,6 +353,52 @@ def test_pending_media_poll_reuses_the_same_remote_task_without_resubmission(mon
     assert "重新提交" not in response["content"][0]["text"]
 
 
+def test_pending_media_poll_reports_server_retry_progress_without_resubmission(monkeypatch, tmp_path):
+    task_id = "mcp_" + "d" * 32
+    task_store = InMemoryMediaTaskStore()
+    settings = replace(Settings(), runs_dir=tmp_path)
+    authorization_store = AgentAuthorizationStore(FakeRedis(), settings)
+    user = UserContext(api_key="sk-text", user_id="user-1", key_hint="agent", api_keys={"image": "secret-image-key"})
+    task_store.create(
+        {
+            "task_id": task_id,
+            "user_id": user.user_id,
+            "task_type": "mcp_media",
+            "media_type": "image",
+            "status": "running",
+            "remote_task_id": "remote-image-123",
+            "credential_ref": "task-secret",
+            "created_at": "2026-07-15T00:00:00+00:00",
+            "updated_at": "2026-07-15T00:00:00+00:00",
+            "expires_at": "2099-07-15T00:00:00+00:00",
+        }
+    )
+    task_store.put_task_secret(task_id, "secret-image-key")
+    fetches = []
+
+    async def fake_fetch(_settings, media_user, media_type, remote_task_id):
+        fetches.append((media_user.api_key, media_type, remote_task_id))
+        return McpMediaTaskResult(
+            McpMediaTaskState.PENDING,
+            retrying=True,
+            retry_count=2,
+            max_retries=5,
+            retry_after_seconds=42,
+        )
+
+    monkeypatch.setattr("app.agent_mcp.media_task_store", lambda _store: task_store)
+    monkeypatch.setattr("app.agent_mcp.fetch_mcp_media_task", fake_fetch)
+
+    response = asyncio.run(call_agent_tool(settings, user, "xingren_get_media_result", {"task_id": task_id}, authorization_store))
+    text = response["content"][0]["text"]
+
+    assert fetches == [("secret-image-key", "image", "remote-image-123")]
+    assert "自动重试中（2/5）" in text
+    assert "约 42 秒后" in text
+    assert "同一任务号" in text
+    assert "重新提交" not in text
+
+
 def test_uncertain_media_submission_keeps_the_same_task_for_confirmation(monkeypatch, tmp_path):
     task_store = InMemoryMediaTaskStore()
     settings = replace(Settings(), runs_dir=tmp_path)

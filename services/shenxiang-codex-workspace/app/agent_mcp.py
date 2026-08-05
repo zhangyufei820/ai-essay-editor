@@ -437,7 +437,7 @@ def mcp_tools() -> list[dict[str, Any]]:
         {"name": "xingren_ask", "description": "向星人助手提问、写作或分析。仅在用户明确需要文字结果时调用；不得用于查询模型列表、图像、视频、价格或媒体能力。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "用户的问题或任务"}}, "required": ["prompt"], "additionalProperties": False}},
         {"name": "xingren_generate_image", "description": "生成一张图片、海报、封面或插画。仅在用户明确要求图片时调用。先用 xingren_list_media_models 查看模型、费用和可选规格；model 只能填写列表中的完整展示名称，留空则自动选择。等待、空结果或普通失败不代表参数不支持、权限未开通或模型不可用；不得猜测原因、自动重试或自行换模型。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "图片描述"}, "model": {"type": "string", "description": "可选的图像模型展示名称"}, "aspect_ratio": {"type": "string", "description": "画面比例，必须使用所选模型列表中标注的值"}, "resolution": {"type": "string", "description": "清晰度，必须使用所选模型列表中标注的值"}, "n": {"type": "integer", "minimum": 1, "maximum": 4, "description": "生成张数，默认 1；最多 4 张"}, "quality": {"type": "string", "description": "可选质量，必须使用所选模型列表中标注的值"}, "output_format": {"type": "string", "description": "可选输出格式"}, "output_compression": {"type": "integer", "minimum": 0, "maximum": 100, "description": "可选输出压缩，范围 0–100；仅在模型列表标注支持时填写"}, "background": {"type": "string", "description": "可选背景模式"}}, "required": ["prompt"], "additionalProperties": False}},
         {"name": "xingren_generate_video", "description": "生成一段视频。仅在用户明确要求视频时调用。先用 xingren_list_media_models 查看模型、费用和可选规格；model 只能填写列表中的完整展示名称，留空则自动选择。等待、空结果或普通失败不代表参数不支持、权限未开通或模型不可用；不得猜测原因、自动重试或自行换模型。", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "视频描述"}, "model": {"type": "string", "description": "可选的视频模型展示名称"}, "duration_seconds": {"type": "integer", "minimum": 4, "maximum": 15, "description": "时长，必须使用所选模型列表中标注的值"}, "aspect_ratio": {"type": "string", "description": "画面比例，必须使用所选模型列表中标注的值"}, "size": {"type": "string", "description": "可选像素尺寸，必须使用所选模型列表中标注的值；不能与画面比例冲突"}, "resolution": {"type": "string", "description": "清晰度，必须使用所选模型列表中标注的值"}, "seed": {"type": "integer", "minimum": 0, "description": "可选随机种子；仅在模型支持时填写"}, "watermark": {"type": "boolean", "description": "可选水印开关；仅在模型支持时填写"}}, "required": ["prompt"], "additionalProperties": False}},
-        {"name": "xingren_get_media_result", "description": "查询已开始的图片或视频生成任务。生成工具返回任务编号后，等待至少 10 秒再调用；任务仍在进行时，只能用同一编号继续查询，不能重新生成、换模型或自动重试。等待、空结果或普通失败不代表参数不支持、权限未开通或模型不可用；不得猜测原因，也不得声称已重试或已换模型。只有工具返回明确的安全提示时才可说明原因。", "inputSchema": {"type": "object", "properties": {"task_id": {"type": "string", "pattern": "^mcp_[a-f0-9]{32}$", "description": "生成工具返回的任务编号"}}, "required": ["task_id"], "additionalProperties": False}},
+        {"name": "xingren_get_media_result", "description": "查询已开始的图片或视频生成任务。生成工具返回任务编号后，等待至少 10 秒再调用；任务仍在进行时，只能用同一编号继续查询，不能重新生成、换模型或由客户端自动重试。若工具返回“自动重试中”，这是原任务的服务端恢复过程，只能按建议继续查询同一编号。等待、空结果或普通失败不代表参数不支持、权限未开通或模型不可用；不得猜测原因，也不得声称已换模型。只有工具返回明确的安全提示时才可说明原因。", "inputSchema": {"type": "object", "properties": {"task_id": {"type": "string", "pattern": "^mcp_[a-f0-9]{32}$", "description": "生成工具返回的任务编号"}}, "required": ["task_id"], "additionalProperties": False}},
     ]
 
 
@@ -629,6 +629,14 @@ def _media_task_has_expired(task: dict[str, Any]) -> bool:
 
 def _media_wait_response(message: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": message}]}
+
+
+def _media_retry_wait_response(result: McpMediaTaskResult) -> dict[str, Any]:
+    retry_after = result.retry_after_seconds or 10
+    return _media_wait_response(
+        f"自动重试中（{result.retry_count}/{result.max_retries}），建议约 {retry_after} 秒后使用同一任务号查询；"
+        "这是原任务的服务端恢复过程，不要更换模型或再次发起生成。"
+    )
 
 
 def _media_started_response(task_id: str) -> dict[str, Any]:
@@ -904,6 +912,8 @@ async def _media_result_response(
         return _media_wait_response(MEDIA_CONFIRMING_MESSAGE)
     if result.state is McpMediaTaskState.PENDING:
         _update_media_task(store, task_id, status="running")
+        if result.retrying:
+            return _media_retry_wait_response(result)
         return _media_wait_response(MEDIA_WAIT_MESSAGE)
     if result.state is McpMediaTaskState.FAILED:
         _finish_media_task(store, task_id, "failed")

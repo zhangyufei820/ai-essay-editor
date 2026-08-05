@@ -56,6 +56,10 @@ class McpMediaTaskResult:
     state: McpMediaTaskState
     media: MediaResult | None = None
     message: str = ""
+    retrying: bool = False
+    retry_count: int = 0
+    max_retries: int = 0
+    retry_after_seconds: int = 0
 
 
 REMOTE_TASK_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,180}$")
@@ -153,7 +157,7 @@ async def fetch_mcp_media_task(
     if task_status in SUCCESS_TASK_STATUSES:
         return McpMediaTaskResult(state=McpMediaTaskState.FAILED, message=MEDIA_ERROR_RESULT_UNAVAILABLE)
     if task_status in PENDING_TASK_STATUSES:
-        return McpMediaTaskResult(state=McpMediaTaskState.PENDING)
+        return McpMediaTaskResult(state=McpMediaTaskState.PENDING, **_safe_retry_progress(body))
     return McpMediaTaskResult(state=McpMediaTaskState.PENDING)
 
 
@@ -205,6 +209,46 @@ def _task_status(body: dict[str, object]) -> str:
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip().casefold()
     return ""
+
+
+def _safe_retry_progress(body: dict[str, object]) -> dict[str, object]:
+    retry_count = _safe_task_int(body, "retry_count", maximum=100)
+    max_retries = _safe_task_int(body, "max_retries", maximum=100)
+    retry_after_seconds = _safe_task_int(body, "retry_after_seconds", maximum=15 * 60)
+    retrying = _safe_task_bool(body, "retrying") and retry_count > 0 and max_retries > 0
+    return {
+        "retrying": retrying,
+        "retry_count": retry_count,
+        "max_retries": max_retries,
+        "retry_after_seconds": retry_after_seconds,
+    }
+
+
+def _task_value(body: dict[str, object], key: str) -> object:
+    value = body.get(key)
+    if value is not None:
+        return value
+    data = body.get("data")
+    if isinstance(data, dict):
+        return data.get(key)
+    return None
+
+
+def _safe_task_int(body: dict[str, object], key: str, *, maximum: int) -> int:
+    value = _task_value(body, key)
+    if isinstance(value, bool):
+        return 0
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    if parsed < 0:
+        return 0
+    return min(parsed, maximum)
+
+
+def _safe_task_bool(body: dict[str, object], key: str) -> bool:
+    return _task_value(body, key) is True
 
 
 def _is_safe_remote_task_id(value: str) -> bool:
