@@ -35,15 +35,33 @@ const (
 	playgroundImageAsyncBillingCaptureKey = "playground_image_billing_capture"
 	playgroundImageTaskResultCaptureKey   = "playground_image_task_result_capture"
 
-	playgroundImageTaskDefaultRetryTimes = 2
-	playgroundImageTaskMaxRetryTimes     = 5
-	playgroundImageTaskRetryBaseSeconds  = 20
-	playgroundImageTaskRetryMaxSeconds   = 120
+	playgroundImageTaskDefaultRetryTimes   = 2
+	playgroundImageTaskMaxRetryTimes       = 5
+	playgroundImageTaskRetryBaseSeconds    = 20
+	playgroundImageTaskRetryMaxSeconds     = 120
+	playgroundImageTaskDeadlineSeconds     = 15 * 60
+	playgroundImageTaskMinDeadlineSeconds  = 60
+	playgroundImageTaskWatchdogSeconds     = 15
+	playgroundImageTaskInitialGraceSeconds = 30
 )
 
 // playgroundImageWorkerSem caps the number of concurrent async image workers
 // to prevent goroutine exhaustion under high load.
 var playgroundImageWorkerSem = make(chan struct{}, 500)
+
+type playgroundImageTaskReconcileAction int
+
+const (
+	playgroundImageTaskReconcileIgnore playgroundImageTaskReconcileAction = iota
+	playgroundImageTaskReconcileResume
+	playgroundImageTaskReconcileExpire
+)
+
+type playgroundImageTaskReconcileStats struct {
+	Scanned int
+	Resumed int
+	Expired int
+}
 
 func FailInterruptedPlaygroundImageTasksOnStartup() {
 	if model.DB == nil {
@@ -77,6 +95,105 @@ func FailInterruptedPlaygroundImageTasksOnStartup() {
 	common.SysLog(fmt.Sprintf("handled %d interrupted playground image tasks on startup (recovered=%d, failed=%d)", len(tasks), recovered, failed))
 }
 
+func StartPlaygroundImageTaskWatchdog() {
+	if model.DB == nil {
+		return
+	}
+	interval := playgroundImageTaskWatchdogInterval()
+	gopool.Go(func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for now := range ticker.C {
+			stats := reconcilePlaygroundImageTasksOnceAt(now, func(task *model.Task) {
+				userID := task.UserId
+				taskID := task.TaskID
+				group := task.Group
+				var payload playgroundImageTaskPayload
+				_ = task.GetData(&payload)
+				gopool.Go(func() {
+					runPlaygroundImageTask(taskID, userID, "", 0, group, group, payload.TokenName)
+				})
+			})
+			if stats.Resumed > 0 || stats.Expired > 0 {
+				common.SysLog(fmt.Sprintf(
+					"reconciled playground image tasks (scanned=%d, resumed=%d, expired=%d)",
+					stats.Scanned,
+					stats.Resumed,
+					stats.Expired,
+				))
+			}
+		}
+	})
+}
+
+func reconcilePlaygroundImageTasksOnceAt(now time.Time, schedule func(task *model.Task)) playgroundImageTaskReconcileStats {
+	stats := playgroundImageTaskReconcileStats{}
+	if model.DB == nil || schedule == nil {
+		return stats
+	}
+	var tasks []*model.Task
+	err := model.DB.
+		Where("platform = ?", constant.TaskPlatformPlaygroundImage).
+		Where("action IN ?", []string{constant.TaskActionImageGenerate, constant.TaskActionImageEdit}).
+		Where("status = ?", string(model.TaskStatusSubmitted)).
+		Order("id").
+		Limit(200).
+		Find(&tasks).Error
+	if err != nil {
+		common.SysError("failed to reconcile playground image tasks: " + err.Error())
+		return stats
+	}
+	stats.Scanned = len(tasks)
+	for _, task := range tasks {
+		var payload playgroundImageTaskPayload
+		_ = task.GetData(&payload)
+		if ensurePlaygroundImageTaskDeadline(&payload, task.SubmitTime, now) {
+			task.SetData(payload)
+			won, updateErr := task.UpdateWithStatus(model.TaskStatusSubmitted)
+			if updateErr != nil {
+				common.SysError(fmt.Sprintf("failed to persist playground image task %s deadline: %s", task.TaskID, updateErr.Error()))
+				continue
+			}
+			if !won {
+				continue
+			}
+		}
+		switch playgroundImageTaskReconcileActionAt(task, &payload, now) {
+		case playgroundImageTaskReconcileExpire:
+			markPlaygroundImageTaskFailure(task, "图像任务等待超时，请重新提交。")
+			stats.Expired++
+		case playgroundImageTaskReconcileResume:
+			if _, statErr := os.Stat(payload.RequestFile); statErr != nil {
+				markPlaygroundImageTaskFailure(task, "image task request payload unavailable")
+				stats.Expired++
+				continue
+			}
+			schedule(task)
+			stats.Resumed++
+		}
+	}
+	return stats
+}
+
+func playgroundImageTaskReconcileActionAt(task *model.Task, payload *playgroundImageTaskPayload, now time.Time) playgroundImageTaskReconcileAction {
+	if task == nil || payload == nil || task.Platform != constant.TaskPlatformPlaygroundImage || !isPlaygroundImageTaskAction(task.Action) || task.Status != model.TaskStatusSubmitted {
+		return playgroundImageTaskReconcileIgnore
+	}
+	if payload.DeadlineAt > 0 && now.Unix() >= payload.DeadlineAt {
+		return playgroundImageTaskReconcileExpire
+	}
+	if strings.TrimSpace(payload.RequestFile) == "" {
+		return playgroundImageTaskReconcileExpire
+	}
+	if payload.NextRetryAt > now.Unix() {
+		return playgroundImageTaskReconcileIgnore
+	}
+	if payload.NextRetryAt <= 0 && task.SubmitTime > 0 && now.Unix()-task.SubmitTime < int64(playgroundImageTaskInitialGracePeriod()/time.Second) {
+		return playgroundImageTaskReconcileIgnore
+	}
+	return playgroundImageTaskReconcileResume
+}
+
 func recoverInterruptedPlaygroundImageTaskOnStartup(task *model.Task) bool {
 	if task == nil {
 		return false
@@ -86,6 +203,11 @@ func recoverInterruptedPlaygroundImageTaskOnStartup(task *model.Task) bool {
 	}
 	var payload playgroundImageTaskPayload
 	_ = task.GetData(&payload)
+	now := time.Now()
+	ensurePlaygroundImageTaskDeadline(&payload, task.SubmitTime, now)
+	if payload.DeadlineAt > 0 && now.Unix() >= payload.DeadlineAt {
+		return false
+	}
 	if payload.ActualQuota > 0 || task.Quota > 0 {
 		return false
 	}
@@ -180,6 +302,7 @@ type playgroundImageTaskPayload struct {
 	RetryCount      int                    `json:"retry_count,omitempty"`
 	MaxRetries      int                    `json:"max_retries,omitempty"`
 	NextRetryAt     int64                  `json:"next_retry_at,omitempty"`
+	DeadlineAt      int64                  `json:"deadline_at,omitempty"`
 	LastRetryReason string                 `json:"last_retry_reason,omitempty"`
 }
 
@@ -319,6 +442,8 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 			"async":    true,
 			"group":    usingGroup,
 		},
+		MaxRetries: playgroundImageTaskRetryTimes(),
+		DeadlineAt: now + int64(playgroundImageTaskDeadlineDuration()/time.Second),
 	}
 	annotatePlaygroundImageRequestMetadata(payload.Metadata, &imageReq)
 	task := &model.Task{
@@ -1016,6 +1141,13 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	}
 	var payload playgroundImageTaskPayload
 	_ = task.GetData(&payload)
+	now := time.Now()
+	ensurePlaygroundImageTaskDeadline(&payload, task.SubmitTime, now)
+	if payload.DeadlineAt > 0 && now.Unix() >= payload.DeadlineAt {
+		task.SetData(payload)
+		markPlaygroundImageTaskFailure(task, "图像任务等待超时，请重新提交。")
+		return
+	}
 	if payload.RequestFile == "" {
 		markPlaygroundImageTaskFailure(task, "image task request payload missing")
 		return
@@ -1026,18 +1158,17 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		return
 	}
 
-	fromStatus := task.Status
-	task.Status = model.TaskStatusInProgress
-	task.Progress = "15%"
-	task.StartTime = time.Now().Unix()
-	if won, err := task.UpdateWithStatus(fromStatus); err != nil {
-		logger.LogError(nil, fmt.Sprintf("failed to mark playground image task %s in progress: %s", task.TaskID, err.Error()))
-		return
-	} else if !won {
+	task.SetData(payload)
+	if !claimPlaygroundImageTaskForRun(task, now) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	attemptTimeout, ok := playgroundImageTaskAttemptTimeout(&payload, time.Now())
+	if !ok {
+		markPlaygroundImageTaskFailure(task, "图像任务等待超时，请重新提交。")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), attemptTimeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, payload.RequestPath, bytes.NewReader(bodyBytes))
 	if err != nil {
@@ -1128,6 +1259,22 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	markPlaygroundImageTaskSuccess(task, item, &payload, recorder.Code, capture.Quota)
 }
 
+func claimPlaygroundImageTaskForRun(task *model.Task, now time.Time) bool {
+	if task == nil || task.Status != model.TaskStatusSubmitted {
+		return false
+	}
+	fromStatus := task.Status
+	task.Status = model.TaskStatusInProgress
+	task.Progress = "15%"
+	task.StartTime = now.Unix()
+	won, err := task.UpdateWithStatus(fromStatus)
+	if err != nil {
+		logger.LogError(nil, fmt.Sprintf("failed to mark playground image task %s in progress: %s", task.TaskID, err.Error()))
+		return false
+	}
+	return won
+}
+
 func retryOrFailPlaygroundImageTask(task *model.Task, reason string, status int, userID int, username string, role int, userGroup string, usingGroup string, tokenName string) {
 	if requeuePlaygroundImageTask(task, reason, status, userID, username, role, userGroup, usingGroup, tokenName) {
 		return
@@ -1153,7 +1300,12 @@ func requeuePlaygroundImageTask(task *model.Task, reason string, status int, use
 	maxRetries := playgroundImageTaskRetryTimes()
 	retryCount := payload.RetryCount + 1
 	delay := playgroundImageTaskRetryDelay(retryCount)
-	now := time.Now().Unix()
+	nowTime := time.Now()
+	ensurePlaygroundImageTaskDeadline(&payload, task.SubmitTime, nowTime)
+	if !playgroundImageTaskRetryFitsDeadline(&payload, nowTime, delay) {
+		return false
+	}
+	now := nowTime.Unix()
 	payload.RetryCount = retryCount
 	payload.MaxRetries = maxRetries
 	payload.NextRetryAt = now + int64(delay/time.Second)
@@ -1237,6 +1389,72 @@ func playgroundImageTaskRetryDelay(retryCount int) time.Duration {
 		}
 	}
 	return time.Duration(delaySeconds) * time.Second
+}
+
+func playgroundImageTaskDeadlineDuration() time.Duration {
+	seconds := common.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_DEADLINE_SECONDS", playgroundImageTaskDeadlineSeconds)
+	if seconds < playgroundImageTaskMinDeadlineSeconds {
+		seconds = playgroundImageTaskMinDeadlineSeconds
+	}
+	if seconds > playgroundImageTaskDeadlineSeconds {
+		seconds = playgroundImageTaskDeadlineSeconds
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func playgroundImageTaskWatchdogInterval() time.Duration {
+	seconds := common.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_WATCHDOG_SECONDS", playgroundImageTaskWatchdogSeconds)
+	if seconds < 5 {
+		seconds = 5
+	}
+	if seconds > 60 {
+		seconds = 60
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func playgroundImageTaskInitialGracePeriod() time.Duration {
+	seconds := common.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_INITIAL_GRACE_SECONDS", playgroundImageTaskInitialGraceSeconds)
+	if seconds < 5 {
+		seconds = 5
+	}
+	if seconds > 5*60 {
+		seconds = 5 * 60
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func ensurePlaygroundImageTaskDeadline(payload *playgroundImageTaskPayload, submitTime int64, now time.Time) bool {
+	if payload == nil || payload.DeadlineAt > 0 {
+		return false
+	}
+	base := now
+	if submitTime > 0 && submitTime <= now.Unix() {
+		base = time.Unix(submitTime, 0)
+	}
+	payload.DeadlineAt = base.Add(playgroundImageTaskDeadlineDuration()).Unix()
+	return true
+}
+
+func playgroundImageTaskAttemptTimeout(payload *playgroundImageTaskPayload, now time.Time) (time.Duration, bool) {
+	if payload == nil || payload.DeadlineAt <= 0 {
+		return 0, false
+	}
+	remaining := time.Unix(payload.DeadlineAt, 0).Sub(now)
+	if remaining <= 0 {
+		return 0, false
+	}
+	if remaining > 10*time.Minute {
+		remaining = 10 * time.Minute
+	}
+	return remaining, true
+}
+
+func playgroundImageTaskRetryFitsDeadline(payload *playgroundImageTaskPayload, now time.Time, delay time.Duration) bool {
+	if payload == nil || payload.DeadlineAt <= 0 || delay < 0 {
+		return false
+	}
+	return now.Add(delay).Before(time.Unix(payload.DeadlineAt, 0))
 }
 
 func shouldRetryPlaygroundImageTaskFailure(reason string, status int) bool {
@@ -1502,6 +1720,7 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	payload.CachedURL = item.URL
 	payload.Item = item
 	payload.OriginalStatus = status
+	payload.NextRetryAt = 0
 	requestFile := payload.RequestFile
 	payload.RequestFile = ""
 	if actualQuota > 0 {
@@ -1585,6 +1804,9 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 		}
 		task = latest
 	}
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		return
+	}
 	reason = truncatePlaygroundText(strings.TrimSpace(sanitizePlaygroundImageTaskFailure(reason)), 1000)
 	if reason == "" {
 		reason = "image task failed"
@@ -1597,6 +1819,7 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	var payload playgroundImageTaskPayload
 	_ = task.GetData(&payload)
 	payload.Error = reason
+	payload.NextRetryAt = 0
 	requestFile := payload.RequestFile
 	payload.RequestFile = ""
 	task.SetData(payload)
@@ -1914,7 +2137,7 @@ func taskToPlaygroundImageTask(task *model.Task) gin.H {
 	if task.Status == model.TaskStatusFailure {
 		publicFailureReason = publicPlaygroundTaskFailureReason(task.FailReason)
 	}
-	return gin.H{
+	response := gin.H{
 		"task_id":        task.TaskID,
 		"request_id":     payload.RequestID,
 		"status":         task.Status,
@@ -1932,6 +2155,10 @@ func taskToPlaygroundImageTask(task *model.Task) gin.H {
 		"data":           payload,
 		"item":           payload.Item,
 	}
+	for key, value := range playgroundImageTaskRetryMetadata(task, &payload, time.Now()) {
+		response[key] = value
+	}
+	return response
 }
 
 func taskToOpenAIImageTask(task *model.Task) map[string]interface{} {
@@ -1973,6 +2200,11 @@ func taskToOpenAIImageTask(task *model.Task) map[string]interface{} {
 			"data":           []map[string]interface{}{},
 		},
 	}
+	retryMetadata := playgroundImageTaskRetryMetadata(task, &payload, time.Now())
+	for key, value := range retryMetadata {
+		response[key] = value
+		response["data"].(map[string]interface{})[key] = value
+	}
 	if resultURL != "" && task.Status == model.TaskStatusSuccess {
 		imageData := []map[string]interface{}{
 			{
@@ -1994,6 +2226,35 @@ func taskToOpenAIImageTask(task *model.Task) map[string]interface{} {
 		response["error"] = gin.H{"message": payload.Error}
 	}
 	return response
+}
+
+func playgroundImageTaskRetryMetadata(task *model.Task, payload *playgroundImageTaskPayload, now time.Time) gin.H {
+	metadata := gin.H{
+		"retrying":            false,
+		"retry_count":         0,
+		"max_retries":         0,
+		"next_retry_at":       int64(0),
+		"retry_after_seconds": int64(0),
+		"deadline_at":         int64(0),
+	}
+	if task == nil || payload == nil {
+		return metadata
+	}
+	retryAfter := int64(0)
+	if payload.NextRetryAt > now.Unix() {
+		retryAfter = payload.NextRetryAt - now.Unix()
+	}
+	retrying := task.Status == model.TaskStatusSubmitted && payload.RetryCount > 0 && payload.MaxRetries > 0 && payload.RetryCount <= payload.MaxRetries
+	if payload.DeadlineAt > 0 && now.Unix() >= payload.DeadlineAt {
+		retrying = false
+	}
+	metadata["retrying"] = retrying
+	metadata["retry_count"] = payload.RetryCount
+	metadata["max_retries"] = payload.MaxRetries
+	metadata["next_retry_at"] = payload.NextRetryAt
+	metadata["retry_after_seconds"] = retryAfter
+	metadata["deadline_at"] = payload.DeadlineAt
+	return metadata
 }
 
 func isPlaygroundImageTaskAction(action string) bool {
