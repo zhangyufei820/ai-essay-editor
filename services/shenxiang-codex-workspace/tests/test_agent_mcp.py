@@ -157,11 +157,6 @@ def test_pkce_and_public_tool_contract_are_strict():
     assert "private.invalid" not in visible
     image_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_generate_image")
     video_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_generate_video")
-    media_list_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_list_media_models")
-    ask_tool = next(tool for tool in mcp_tools() if tool["name"] == "xingren_ask")
-    assert "唯一用于查询当前账户图像和视频能力" in media_list_tool["description"]
-    assert "不得调用 xingren_ask" in media_list_tool["description"]
-    assert "不得用于查询模型列表、图像、视频、价格或媒体能力" in ask_tool["description"]
     assert {"aspect_ratio", "resolution", "quality", "output_format", "output_compression", "background"} <= set(image_tool["inputSchema"]["properties"])
     assert "negative_prompt" not in image_tool["inputSchema"]["properties"]
     assert "size" not in image_tool["inputSchema"]["properties"]
@@ -180,8 +175,10 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
         ("Gemini 3 Pro Image", "¥0.238/张", "image"),
         ("image 2电商商品图快速通道(1.5K)", "¥0.055/张", "image"),
         ("电商特价banana-2", "¥0.085/张", "image"),
-        ("Seedance 2.0 DJ Fast", "¥0.162/秒", "video"),
-        ("Seedance 2.0 CL Mini", "输入含视频 ¥12.852/1M｜输出 ¥21.114/1M Token", "video"),
+        ("Grok Video", "¥6.50/次", "video"),
+        ("Seedance 2.0 LD-17", "¥6.48/次", "video"),
+        ("Seedance SD Fast 720P", "¥0.25/秒", "video"),
+        ("Grok Video 1.5", "¥0.20/次", "video"),
     ]
     message = media_models_message(
         (
@@ -194,7 +191,7 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
             "image 2电商商品图快速通道(1.5K)",
             "ecommerce-banana-2",
         ),
-        ("seedance-2.0-dj-fast", "seedance-2.0-cl-mini"),
+        ("grok-video-super-720p", "seedance-2.0-ld-17", "seedance-sd2-fast-720p", "grok-video-1.5"),
     )
 
     assert "GPT Image 2（¥0.108/张）" in message
@@ -205,53 +202,35 @@ def test_media_model_list_uses_website_names_and_prices_without_internal_names()
     assert "Gemini 3 Pro Image（¥0.238/张）" in message
     assert "image 2电商商品图快速通道(1.5K)（¥0.055/张）；规格：自动；张数：1–4" in message
     assert "电商特价banana-2（¥0.085/张）" in message
-    assert "Seedance 2.0 DJ Fast（¥0.162/秒）" in message
-    assert "Seedance 2.0 CL Mini（输入含视频 ¥12.852/1M｜输出 ¥21.114/1M Token）" in message
+    assert "Grok Video（¥6.50/次）" in message
+    assert "Seedance 2.0 LD-17（¥6.48/次）" in message
+    assert "Seedance SD Fast 720P（¥0.25/秒）" in message
+    assert "Grok Video 1.5（¥0.20/次）" in message
+    assert "支持文生视频和图生视频" in message
+    assert "可上传 1 张图片" in message
+    assert "不支持视频或音频" in message
+    assert "人脸能力未承诺" in message
+    assert "最多 9 张图片、3 个视频、3 个音频；支持人脸" in message
     assert "张数：1–4" in message
     assert "质量：auto、low、medium、high" in message
     assert "输出压缩：0–100" in message
     assert "尺寸：1280x720、720x1280、1024x1024" in message
-    assert "可选：随机种子、水印" in message
     assert "这里只显示已接通的模型" in message
     assert "geek2api" not in message
     assert "grok-imagine-image" not in message
-
-
-def test_text_tool_redirects_media_model_queries_to_the_media_directory(monkeypatch) -> None:
-    async def fake_live_media_models(_settings, api_key, mode):
-        assert api_key == f"sk-{mode}"
-        return {"image": ("gpt-image-2-4K",), "video": ("seedance-2.0-dj-fast",)}[mode]
-
-    monkeypatch.setattr("app.agent_mcp.live_media_models", fake_live_media_models)
-    user = UserContext(
-        api_key="sk-codex",
-        user_id="user-1",
-        key_hint="agent",
-        api_keys={"codex": "sk-codex", "image": "sk-image", "video": "sk-video"},
-    )
-
-    response = asyncio.run(
-        call_agent_tool(
-            Settings(),
-            user,
-            "xingren_ask",
-            {"prompt": "当前 AIPHUI 模型列表有哪些？包括图像和视频。"},
-            AgentAuthorizationStore(FakeRedis(), Settings()),
-        )
-    )
-
-    text = response["content"][0]["text"]
-    assert "可用图像模型" in text
-    assert "GPT Image 2" in text
-    assert "可用视频模型" in text
-    assert "Seedance 2.0 DJ Fast" in text
+    assert "seedance-2.0-dj-fast" not in message
+    assert "seedance-2.0-cl-mini" not in message
+    assert "grok-imagine-1.5-video" not in message
+    assert "sd2-fast-720p" not in message
+    assert "供应商" not in message
+    assert "上游" not in message
 
 
 def test_media_model_selection_accepts_only_public_website_names():
     assert resolved_media_model("特价 image-2", "image") == "geek2api-image-2"
     assert resolved_media_model("官转image 2稳定", "image") == "internal-image2-stable-v1"
     assert resolved_media_model("Grok Image Pro", "image") == "grok-imagine-image"
-    assert resolved_media_model("Seedance 2.0 CL Mini", "video") == "seedance-2.0-cl-mini"
+    assert resolved_media_model("Grok Video 1.5", "video") == "grok-video-1.5"
     assert resolved_media_model("geek2api-image-2", "image") is None
     assert resolved_media_model("grok-imagine-image", "image") is None
 

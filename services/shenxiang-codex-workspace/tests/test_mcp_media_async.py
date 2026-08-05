@@ -58,8 +58,8 @@ def video_request() -> WorkspaceRunRequest:
         user_query="生成一段竖版短片。",
         task_type="agent_video",
         model_role="video_generation",
-        model_config={"video_generation": "seedance-2.0-cl-mini"},
-        params={"duration_seconds": 4, "aspect_ratio": "9:16", "resolution": "720p", "seed": 0},
+        model_config={"video_generation": "seedance-sd2-fast-720p"},
+        params={"duration_seconds": 5, "aspect_ratio": "9:16", "resolution": "720P"},
     )
 
 
@@ -137,12 +137,12 @@ def test_mcp_video_submission_and_query_use_same_remote_task(monkeypatch):
             "kwargs": {
                 "headers": {"Authorization": "Bearer sk-video", "Content-Type": "application/json"},
                 "json": {
-                    "model": "seedance-2.0-cl-mini",
+                    "model": "seedance-sd2-fast-720p",
                     "prompt": "生成一段竖版短片。",
-                    "duration": 4,
+                    "duration": 5,
                     "ratio": "9:16",
-                    "resolution": "720p",
-                    "seed": 0,
+                    "quality": "hd",
+                    "async": True,
                 },
             },
         },

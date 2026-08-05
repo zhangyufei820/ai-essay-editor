@@ -23,8 +23,10 @@ DEFAULT_IMAGE_ALLOWED_MODELS = (
 DEFAULT_IMAGE_ALLOWED_MODELS_ENV = ",".join(DEFAULT_IMAGE_ALLOWED_MODELS)
 
 DEFAULT_VIDEO_ALLOWED_MODELS = (
-    "seedance-2.0-dj-fast",
-    "seedance-2.0-cl-mini",
+    "grok-video-super-720p",
+    "seedance-2.0-ld-17",
+    "seedance-sd2-fast-720p",
+    "grok-video-1.5",
 )
 DEFAULT_VIDEO_ALLOWED_MODELS_ENV = ",".join(DEFAULT_VIDEO_ALLOWED_MODELS)
 
@@ -62,6 +64,9 @@ class Settings:
         "gpt-5.4-mini",
         "gpt-5.4",
         "gpt-5.5",
+        "gpt-5.6",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
     )
     grok_allowed_models: tuple[str, ...] = (GROK_MODEL,)
     claude_allowed_models: tuple[str, ...] = (
@@ -69,6 +74,7 @@ class Settings:
         "claude-opus-4-6",
         "claude-opus-4-7",
         "claude-opus-4-8",
+        "claude-opus-5",
     )
     image_allowed_models: tuple[str, ...] = DEFAULT_IMAGE_ALLOWED_MODELS
     video_allowed_models: tuple[str, ...] = (
@@ -130,12 +136,12 @@ def get_settings() -> Settings:
         skill_cache_seconds=_env_int("SKILL_CACHE_SECONDS", 300),
         codex_allowed_models=_env_list(
             "CODEX_ALLOWED_MODELS",
-            "gpt-5.4-mini,gpt-5.4,gpt-5.5",
+            "gpt-5.4-mini,gpt-5.4,gpt-5.5,gpt-5.6,gpt-5.6-sol,gpt-5.6-terra",
         ),
         grok_allowed_models=_env_list("GROK_ALLOWED_MODELS", GROK_MODEL),
         claude_allowed_models=_env_list(
             "CLAUDE_ALLOWED_MODELS",
-            "claude-fable-5,claude-opus-4-6,claude-opus-4-7,claude-opus-4-8",
+            "claude-fable-5,claude-opus-4-6,claude-opus-4-7,claude-opus-4-8,claude-opus-5",
             normalize_claude_group_suffix=True,
         ),
         image_allowed_models=_env_list("IMAGE_ALLOWED_MODELS", DEFAULT_IMAGE_ALLOWED_MODELS_ENV),

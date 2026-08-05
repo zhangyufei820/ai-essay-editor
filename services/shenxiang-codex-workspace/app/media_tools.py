@@ -70,6 +70,8 @@ NEGATION_HINTS = ("不要生成图片", "不用生成图片", "不要出图", "�
 VIDEO_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:mp4|webm|mov|m4v)(?:\?[^\s\"'<>]+)?", re.IGNORECASE)
 IMAGE_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s\"'<>]+)?", re.IGNORECASE)
 OFFICIAL_SEEDANCE_REFERENCE_MODELS = {"seedance-2.0-dj-fast", "seedance-2.0-ld-17"}
+SD2_FAST_VIDEO_MODEL = "seedance-sd2-fast-720p"
+GROK15_VIDEO_MODEL = "grok-video-1.5"
 MOONAPIX_SEEDANCE_VIDEO_MODELS = {
     "seedance-2.0-kz-fast",
     "seedance-2.0-cl-fast",
@@ -306,6 +308,42 @@ IMAGE_MODEL_CAPABILITIES = {
 GENERATION_ONLY_IMAGE_MODELS = frozenset({"internal-image2-stable-v1"})
 
 VIDEO_MODEL_CAPABILITIES = {
+    "grok-video-super-720p": VideoModelCapability(
+        durations=(5, 10, 15),
+        aspect_ratios=("16:9", "9:16"),
+        resolutions=("720P",),
+        default_duration=15,
+        default_aspect_ratio="16:9",
+        default_resolution="720P",
+        sizes=("1280x720", "720x1280"),
+    ),
+    "seedance-2.0-ld-17": VideoModelCapability(
+        durations=tuple(range(5, 16)),
+        aspect_ratios=("16:9", "9:16", "1:1"),
+        resolutions=("720P",),
+        default_duration=8,
+        default_aspect_ratio="16:9",
+        default_resolution="720P",
+        sizes=("1280x720", "720x1280", "1024x1024"),
+    ),
+    SD2_FAST_VIDEO_MODEL: VideoModelCapability(
+        durations=(5, 10, 15),
+        aspect_ratios=("16:9", "9:16"),
+        resolutions=("720P",),
+        default_duration=10,
+        default_aspect_ratio="16:9",
+        default_resolution="720P",
+        sizes=("1280x720", "720x1280"),
+    ),
+    GROK15_VIDEO_MODEL: VideoModelCapability(
+        durations=(6, 10),
+        aspect_ratios=("16:9", "9:16"),
+        resolutions=("720P",),
+        default_duration=6,
+        default_aspect_ratio="16:9",
+        default_resolution="720P",
+        sizes=("1280x720", "720x1280"),
+    ),
     "seedance-2.0-dj-fast": VideoModelCapability(
         durations=(5, 10, 15),
         aspect_ratios=("16:9", "9:16"),
@@ -575,6 +613,22 @@ def build_mcp_video_payload(request: WorkspaceRunRequest, model: str) -> dict[st
 
     params = _media_params(request)
     duration, aspect_ratio, resolution = _video_options(request, capability)
+    if model == GROK15_VIDEO_MODEL:
+        return {
+            "model": model,
+            "prompt": request.user_query,
+            "seconds": duration,
+            "size": "720x1280" if aspect_ratio == "9:16" else "1280x720",
+        }
+    if model == SD2_FAST_VIDEO_MODEL:
+        return {
+            "model": model,
+            "prompt": request.user_query,
+            "duration": duration,
+            "ratio": aspect_ratio,
+            "quality": "hd",
+            "async": True,
+        }
     payload: dict[str, Any] = {
         "model": model,
         "prompt": request.user_query,
@@ -768,6 +822,8 @@ async def generate_video(
     if request.task_type == "agent_video":
         request = normalize_mcp_media_request(request, "video", model)
         mcp_payload = build_mcp_video_payload(request, model)
+    if model in {SD2_FAST_VIDEO_MODEL, GROK15_VIDEO_MODEL}:
+        return await generate_new_catalog_video(settings, request, user, model)
     if model in OFFICIAL_SEEDANCE_REFERENCE_MODELS:
         return await generate_official_seedance_video(settings, request, user, model)
     if model in MOONAPIX_SEEDANCE_VIDEO_MODELS:
@@ -814,6 +870,106 @@ async def generate_video(
     if not urls:
         raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE)
     return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text)
+
+
+def new_catalog_video_request(
+    request: WorkspaceRunRequest,
+    model: str,
+) -> tuple[dict[str, Any], list[tuple[str, tuple[str, bytes, str]]]]:
+    payload = build_mcp_video_payload(request, model)
+    images: list[tuple[str, bytes]] = []
+    for file in request.files:
+        if workspace_file_media_type(file) != "image":
+            raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
+        decoded = decode_data_url_image(file.content)
+        if decoded is None:
+            raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
+        images.append(decoded)
+    if model == GROK15_VIDEO_MODEL and len(images) > 1:
+        raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
+    if model == SD2_FAST_VIDEO_MODEL and len(images) > 1:
+        raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
+    files: list[tuple[str, tuple[str, bytes, str]]] = []
+    if images:
+        mime, content = images[0]
+        if not content or len(content) > MAX_REMOTE_IMAGE_BYTES:
+            raise MediaGenerationError(MEDIA_ERROR_INPUT_UNSUPPORTED)
+        files.append(
+            (
+                "input_reference",
+                (f"reference{image_suffix_for_mime(mime)}", content, mime),
+            )
+        )
+    return payload, files
+
+
+async def generate_new_catalog_video(
+    settings: Settings,
+    request: WorkspaceRunRequest,
+    user: UserContext,
+    model: str,
+) -> MediaResult:
+    payload, files = new_catalog_video_request(request, model)
+    timeout = httpx.Timeout(480.0, connect=10.0, read=480.0, write=30.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            if model == GROK15_VIDEO_MODEL and not files:
+                multipart_fields = [
+                    (
+                        key,
+                        (
+                            None,
+                            str(value).lower() if isinstance(value, bool) else str(value),
+                        ),
+                    )
+                    for key, value in payload.items()
+                    if value is not None
+                ]
+                response = await client.post(
+                    f"{settings.new_api_base_url}/videos",
+                    headers=auth_headers(user.api_key, None),
+                    files=multipart_fields,
+                )
+            elif files:
+                data = {
+                    key: str(value).lower() if isinstance(value, bool) else str(value)
+                    for key, value in payload.items()
+                    if value is not None
+                }
+                response = await client.post(
+                    f"{settings.new_api_base_url}/videos",
+                    headers=auth_headers(user.api_key, None),
+                    data=data,
+                    files=files,
+                )
+            else:
+                response = await client.post(
+                    f"{settings.new_api_base_url}/videos",
+                    headers=auth_headers(user.api_key),
+                    json=payload,
+                )
+            if response.status_code >= 400:
+                raise MediaGenerationError(MEDIA_ERROR_SERVICE_UNAVAILABLE)
+            try:
+                body = response.json()
+            except ValueError as exc:
+                raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE) from exc
+            urls = extract_media_urls(body, "video")
+            task_id = video_task_id(body)
+            if not urls and task_id:
+                body = await poll_official_seedance_video(client, settings, user, task_id)
+                urls = extract_media_urls(body, "video")
+    except httpx.HTTPError as exc:
+        raise MediaGenerationError(MEDIA_ERROR_SERVICE_UNAVAILABLE) from exc
+    if not urls:
+        raise MediaGenerationError(MEDIA_ERROR_RESULT_UNAVAILABLE)
+    return MediaResult(
+        media_type="video",
+        model=model,
+        prompt=request.user_query,
+        urls=dedupe(urls),
+        task_id=task_id,
+    )
 
 
 async def generate_moonapix_seedance_video(

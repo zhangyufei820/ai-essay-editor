@@ -11,6 +11,7 @@ class PublicMediaModel:
     price: str
     mode: str
     request_name: str = ""
+    details: str = ""
 
 
 PUBLIC_MEDIA_MODELS = (
@@ -22,8 +23,10 @@ PUBLIC_MEDIA_MODELS = (
     PublicMediaModel("Gemini 3 Pro Image", "gemini-3-pro-image-preview", "¥0.238/张", "image"),
     PublicMediaModel("image 2电商商品图快速通道(1.5K)", "image 2电商商品图快速通道(1.5K)", "¥0.055/张", "image"),
     PublicMediaModel("电商特价banana-2", "ecommerce-banana-2", "¥0.085/张", "image"),
-    PublicMediaModel("Seedance 2.0 DJ Fast", "seedance-2.0-dj-fast", "¥0.162/秒", "video"),
-    PublicMediaModel("Seedance 2.0 CL Mini", "seedance-2.0-cl-mini", "输入含视频 ¥12.852/1M｜输出 ¥21.114/1M Token", "video"),
+    PublicMediaModel("Grok Video", "grok-video-super-720p", "¥6.50/次", "video", details="固定 720P；5/10/15 秒；支持图片参考，不支持视频或音频；人脸能力未承诺，不保证"),
+    PublicMediaModel("Seedance 2.0 LD-17", "seedance-2.0-ld-17", "¥6.48/次", "video", details="固定 720P；5–15 秒；最多 9 张图片、3 个视频、3 个音频；支持人脸"),
+    PublicMediaModel("Seedance SD Fast 720P", "seedance-sd2-fast-720p", "¥0.25/秒", "video", details="固定 720P；5/10/15 秒；支持文生视频和图生视频，可上传图片（单个本地文件最大 20MB），不支持视频或音频；人脸能力未承诺，不保证"),
+    PublicMediaModel("Grok Video 1.5", "grok-video-1.5", "¥0.20/次", "video", details="固定 720P；支持 6/10 秒文生视频和图生视频；图生模式可上传 1 张图片（最大 20MB），不支持视频或音频；人脸能力未承诺，不保证"),
 )
 
 

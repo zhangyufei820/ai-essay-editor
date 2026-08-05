@@ -9,8 +9,10 @@ import httpx
 from app.config import Settings
 from app.media_catalog import public_request_model_name
 from app.media_tools import (
+    GROK15_VIDEO_MODEL,
     MOONAPIX_SEEDANCE_VIDEO_MODELS,
     OFFICIAL_SEEDANCE_REFERENCE_MODELS,
+    SD2_FAST_VIDEO_MODEL,
     MEDIA_ERROR_RESULT_UNAVAILABLE,
     MEDIA_ERROR_SERVICE_UNAVAILABLE,
     MediaGenerationError,
@@ -23,6 +25,7 @@ from app.media_tools import (
     moonapix_seedance_duration,
     moonapix_seedance_references,
     moonapix_seedance_resolution,
+    new_catalog_video_request,
     official_seedance_duration,
     official_seedance_references,
     selected_media_model,
@@ -72,6 +75,7 @@ async def submit_mcp_media_task(
     user: UserContext,
     media_type: str,
 ) -> McpMediaSubmission:
+    video_files: list[tuple[str, tuple[str, bytes, str]]] = []
     model = selected_media_model(settings, request, media_type)
     if media_type == "image":
         endpoint = f"{settings.new_api_base_url}/images/generations?async=true"
@@ -79,13 +83,29 @@ async def submit_mcp_media_task(
         payload["model"] = public_request_model_name(model, "image")
     elif media_type == "video":
         endpoint = f"{settings.new_api_base_url}/videos"
-        payload = _mcp_video_submission_payload(request, model)
+        if model in {SD2_FAST_VIDEO_MODEL, GROK15_VIDEO_MODEL}:
+            payload, video_files = new_catalog_video_request(request, model)
+        else:
+            payload = _mcp_video_submission_payload(request, model)
     else:
         raise MediaGenerationError(MEDIA_ERROR_SERVICE_UNAVAILABLE)
 
     try:
         async with httpx.AsyncClient(timeout=SUBMISSION_TIMEOUT) as client:
-            response = await client.post(endpoint, headers=auth_headers(user.api_key), json=payload)
+            if video_files:
+                data = {
+                    key: str(value).lower() if isinstance(value, bool) else str(value)
+                    for key, value in payload.items()
+                    if value is not None
+                }
+                response = await client.post(
+                    endpoint,
+                    headers=auth_headers(user.api_key, None),
+                    data=data,
+                    files=video_files,
+                )
+            else:
+                response = await client.post(endpoint, headers=auth_headers(user.api_key), json=payload)
     except httpx.HTTPError as exc:
         raise McpMediaSubmissionUncertain(MEDIA_ERROR_SERVICE_UNAVAILABLE) from exc
     if response.status_code >= 400:
@@ -159,6 +179,8 @@ async def fetch_mcp_media_task(
 
 def _mcp_video_submission_payload(request: WorkspaceRunRequest, model: str) -> dict[str, object]:
     mcp_payload = build_mcp_video_payload(request, model)
+    if model in {SD2_FAST_VIDEO_MODEL, GROK15_VIDEO_MODEL}:
+        return mcp_payload
     if model in OFFICIAL_SEEDANCE_REFERENCE_MODELS:
         payload: dict[str, object] = {
             "model": model,
