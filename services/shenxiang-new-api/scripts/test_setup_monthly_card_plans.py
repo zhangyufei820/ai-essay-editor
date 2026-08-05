@@ -69,6 +69,7 @@ class SetupMonthlyCardPlansTest(unittest.TestCase):
         }
 
         self.assertEqual(concurrency_by_title["¥100 月卡"], 3)
+        self.assertEqual(concurrency_by_title["¥200 月卡"], 4)
         self.assertEqual(concurrency_by_title["¥300 月卡"], 5)
         self.assertEqual(concurrency_by_title["¥500 月卡"], 8)
         self.assertEqual(
@@ -81,6 +82,7 @@ class SetupMonthlyCardPlansTest(unittest.TestCase):
         )
 
         sql = self.module.build_sql()
+        self.assertIn("并发 4", sql)
         self.assertIn("并发 5", sql)
         self.assertIn("并发 8", sql)
         self.assertIn("sp.title = 'VIP 旧版 ¥500 月卡'", sql)

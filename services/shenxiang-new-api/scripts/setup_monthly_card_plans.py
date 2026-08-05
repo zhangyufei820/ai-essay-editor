@@ -50,7 +50,7 @@ class MonthlyCardPlan:
 
 PLANS = [
     MonthlyCardPlan("¥100 月卡", 100, 3, 100),
-    MonthlyCardPlan("¥200 月卡", 200, 2, 200),
+    MonthlyCardPlan("¥200 月卡", 200, 4, 200),
     MonthlyCardPlan("¥300 月卡", 300, 5, 300),
     MonthlyCardPlan("¥500 月卡", 500, 8, 500),
     MonthlyCardPlan("¥1000 月卡", 1000, 10, 1000),
