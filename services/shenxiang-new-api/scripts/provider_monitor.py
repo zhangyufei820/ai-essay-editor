@@ -117,8 +117,8 @@ TEXT_FAMILIES = (
         ability_group="plus",
         manage_model_abilities=True,
         managed_tag_priorities=(
-            ("xingren-plus-text-pdhlzy", 30),
-            ("xingren-plus-text-aihub", 20),
+            ("xingren-plus-text-aihub", 30),
+            ("xingren-plus-text-pdhlzy", 20),
             ("xingren-plus-text-wangwang", 10),
         ),
         probe_models_by_tag={
