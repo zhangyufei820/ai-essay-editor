@@ -105,14 +105,14 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
             ),
         )
 
-    def test_default_order_promotes_pdhlzy_then_aihub(self) -> None:
+    def test_default_order_promotes_aihub_then_pdhlzy(self) -> None:
         self.assertEqual(
             self.module.DEFAULT_CHANNEL_ORDER,
-            ("pdhlzy", "aihub", "wangwang"),
+            ("aihub", "pdhlzy", "wangwang"),
         )
         self.assertEqual(
             self.module.channel_priorities(self.module.DEFAULT_CHANNEL_ORDER),
-            {"pdhlzy": 30, "aihub": 20, "wangwang": 10},
+            {"aihub": 30, "pdhlzy": 20, "wangwang": 10},
         )
 
     def test_partial_primary_is_valid_when_fallbacks_cover_every_public_model(self) -> None:
@@ -151,8 +151,8 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
 
     def test_channel_order_requires_all_three_routes_exactly_once(self) -> None:
         self.assertEqual(
-            self.module.parse_channel_order("pdhlzy,aihub,wangwang"),
-            ("pdhlzy", "aihub", "wangwang"),
+            self.module.parse_channel_order("aihub,pdhlzy,wangwang"),
+            ("aihub", "pdhlzy", "wangwang"),
         )
         for invalid in ("aihub,wangwang", "aihub,wangwang,wangwang"):
             with self.subTest(invalid=invalid), self.assertRaises(self.module.ConfigurationError):
@@ -216,6 +216,43 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
         for statement in mutations:
             with self.subTest(statement=statement):
                 self.assertIn("@plus_apply_allowed = 1", statement)
+
+    def test_order_only_sql_preserves_availability_and_credentials(self) -> None:
+        sql = self.module.build_order_only_sql()
+
+        self.assertIn("SET channel.priority = CASE channel.tag", sql)
+        self.assertIn("SET ability.priority = CASE channel.tag", sql)
+        self.assertIn("@plus_order_apply_allowed = 1", sql)
+        self.assertNotRegex(sql, r"\b(?:channel|ability)\.(?:status|enabled|weight)\s*=")
+        self.assertNotIn("`key` =", sql)
+        self.assertNotIn("models =", sql)
+
+    def test_apply_channel_order_uses_guarded_transaction(self) -> None:
+        with mock.patch.object(
+            self.module,
+            "mysql_exec",
+            return_value=["plus_order_apply_status=ok"],
+        ) as mysql_exec:
+            self.module.apply_channel_order()
+
+        sql = mysql_exec.call_args.args[0]
+        self.assertTrue(sql.startswith("START TRANSACTION;"))
+        self.assertIn("FOR UPDATE", sql)
+        self.assertIn("COMMIT;", sql)
+
+    def test_apply_channel_order_surfaces_fail_closed_statuses(self) -> None:
+        for status, message in (
+            ("channel_identity_conflict", "identities"),
+            ("channel_group_conflict", "group assignment"),
+            ("ability_tag_conflict", "abilities"),
+        ):
+            with self.subTest(status=status), mock.patch.object(
+                self.module,
+                "mysql_exec",
+                return_value=["plus_order_apply_status=" + status],
+            ):
+                with self.assertRaisesRegex(self.module.ConfigurationError, message):
+                    self.module.apply_channel_order()
 
     def test_apply_plus_plan_uses_single_guarded_transaction(self) -> None:
         with mock.patch.object(self.module, "load_group_options", return_value=self.options), mock.patch.object(

@@ -22,7 +22,7 @@ PLUS_GROUP_DESCRIPTION = "Plus 0.5x 通道"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
 OPENAI_CHANNEL_TYPE = 1
-DEFAULT_CHANNEL_ORDER = ("pdhlzy", "aihub", "wangwang")
+DEFAULT_CHANNEL_ORDER = ("aihub", "pdhlzy", "wangwang")
 PLUS_TEXT_MODELS = (
     "gpt-5.4",
     "gpt-5.4-mini",
@@ -418,6 +418,84 @@ def mysql_status(output: list[str], prefix: str) -> str:
     raise ConfigurationError("production MySQL update returned no completion status")
 
 
+def build_order_only_sql(order: tuple[str, ...] = DEFAULT_CHANNEL_ORDER) -> str:
+    priorities = channel_priorities(order)
+    allowed_tags_sql = sql_list(list(PLUS_CHANNEL_TAGS))
+    priority_case = "CASE channel.tag " + " ".join(
+        "WHEN " + sql_quote(spec.tag) + " THEN " + str(priorities[spec.slug])
+        for spec in PLUS_CHANNEL_SPECS
+    ) + " ELSE channel.priority END"
+    tag_identity_conflicts = " + ".join(
+        "IF((SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(spec.tag) + ") <> 1, 1, 0)"
+        for spec in PLUS_CHANNEL_SPECS
+    )
+    return "\n".join(
+        [
+            "START TRANSACTION;",
+            "SELECT id FROM channels WHERE tag IN ("
+            + allowed_tags_sql
+            + ") OR FIND_IN_SET("
+            + sql_quote(PLUS_GROUP)
+            + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0 ORDER BY id FOR UPDATE;",
+            "SET @plus_order_tag_identity_conflicts := " + tag_identity_conflicts + ";",
+            "SET @plus_order_group_conflicts := (SELECT COUNT(*) FROM channels WHERE "
+            + "(tag IN ("
+            + allowed_tags_sql
+            + ") AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+            + sql_quote(PLUS_GROUP)
+            + ") OR (FIND_IN_SET("
+            + sql_quote(PLUS_GROUP)
+            + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0 AND COALESCE(tag, '') NOT IN ("
+            + allowed_tags_sql
+            + ")));",
+            "SET @plus_order_ability_conflicts := (SELECT COUNT(*) FROM abilities AS ability "
+            + "JOIN channels AS channel ON channel.id = ability.channel_id "
+            + "WHERE channel.tag IN ("
+            + allowed_tags_sql
+            + ") AND ability.`group` = "
+            + sql_quote(PLUS_GROUP)
+            + " AND COALESCE(ability.tag, '') <> channel.tag);",
+            "SET @plus_order_apply_status := CASE "
+            + "WHEN @plus_order_tag_identity_conflicts > 0 THEN 'channel_identity_conflict' "
+            + "WHEN @plus_order_group_conflicts > 0 THEN 'channel_group_conflict' "
+            + "WHEN @plus_order_ability_conflicts > 0 THEN 'ability_tag_conflict' "
+            + "ELSE 'ok' END;",
+            "SET @plus_order_apply_allowed := IF(@plus_order_apply_status = 'ok', 1, 0);",
+            "UPDATE channels AS channel SET channel.priority = "
+            + priority_case
+            + " WHERE channel.tag IN ("
+            + allowed_tags_sql
+            + ") AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = "
+            + sql_quote(PLUS_GROUP)
+            + " AND @plus_order_apply_allowed = 1;",
+            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+            + "SET ability.priority = "
+            + priority_case
+            + " WHERE channel.tag IN ("
+            + allowed_tags_sql
+            + ") AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = "
+            + sql_quote(PLUS_GROUP)
+            + " AND ability.`group` = "
+            + sql_quote(PLUS_GROUP)
+            + " AND ability.tag = channel.tag AND @plus_order_apply_allowed = 1;",
+            "COMMIT;",
+            "SELECT CONCAT('plus_order_apply_status=', @plus_order_apply_status);",
+        ]
+    )
+
+
+def apply_channel_order(order: tuple[str, ...] = DEFAULT_CHANNEL_ORDER) -> None:
+    output = mysql_exec(build_order_only_sql(order))
+    status = mysql_status(output, "plus_order_apply_status=")
+    errors = {
+        "channel_identity_conflict": "Plus route identities are missing or duplicated",
+        "channel_group_conflict": "Plus routes contain an unmanaged group assignment",
+        "ability_tag_conflict": "Plus abilities do not match their managed route identity",
+    }
+    if status != "ok":
+        raise ConfigurationError(errors.get(status, "Plus channel order apply failed closed"))
+
+
 def channel_id_variable(slug: str) -> str:
     return "@plus_channel_id_" + slug
 
@@ -600,7 +678,13 @@ def apply_plus_plan(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Safely configure the isolated Plus text channels")
-    parser.add_argument("--apply", action="store_true", help="write the validated channels and group configuration")
+    apply_mode = parser.add_mutually_exclusive_group()
+    apply_mode.add_argument("--apply", action="store_true", help="write the validated channels and group configuration")
+    apply_mode.add_argument(
+        "--apply-order-only",
+        action="store_true",
+        help="change only managed channel and ability priorities, preserving availability state",
+    )
     parser.add_argument(
         "--order",
         default=",".join(DEFAULT_CHANNEL_ORDER),
@@ -609,6 +693,24 @@ def main() -> int:
     args = parser.parse_args()
 
     order = parse_channel_order(args.order)
+    if args.apply_order_only:
+        with model_sync_lock():
+            apply_channel_order(order)
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "action": "order_applied",
+                    "ratio": PLUS_RATIO,
+                    "channel_order": order,
+                    "runtime_cache_refresh_required": True,
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+        return 0
+
     plans: dict[str, PlusPlan] = {}
     api_keys: dict[str, str] = {}
     base_urls: dict[str, str] = {}
