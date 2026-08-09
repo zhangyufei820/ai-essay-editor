@@ -83,7 +83,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.module.DISCOUNT_TEXT_CHANNEL_TAGS,
             (
                 "xingren-discount-text-aihub",
-                "xingren-discount-text-pdhlzy",
+                "xingren-discount-text-aihub-fallback",
                 "xingren-discount-text-wangwang",
             ),
         )

@@ -89,7 +89,7 @@ TEXT_FAMILIES = (
         request_format="responses",
         expected_tags={
             28: "xingren-discount-text-aihub",
-            42: "xingren-discount-text-pdhlzy",
+            42: "xingren-discount-text-aihub-fallback",
             41: "xingren-discount-text-wangwang",
         },
         ability_group="discount",

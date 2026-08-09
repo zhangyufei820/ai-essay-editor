@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -108,16 +110,19 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
 
     def test_parse_channel_order_accepts_any_exact_permutation(self) -> None:
         self.assertEqual(
-            self.module.parse_channel_order("pdhlzy,aihub,wangwang"),
-            ("pdhlzy", "aihub", "wangwang"),
+            self.module.parse_channel_order("aihub,geek2api,wangwang"),
+            ("aihub", "geek2api", "wangwang"),
         )
         with self.assertRaises(self.module.ConfigurationError):
-            self.module.parse_channel_order("wangwang,pdhlzy,pdhlzy")
+            self.module.parse_channel_order("wangwang,aihub,aihub")
 
-    def test_pdhlzy_uses_native_openai_responses(self) -> None:
-        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "pdhlzy")
+    def test_aihub_fallback_uses_native_openai_responses(self) -> None:
+        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "aihub")
 
         self.assertEqual(spec.channel_type, self.module.OPENAI_CHANNEL_TYPE)
+        self.assertEqual(spec.expected_channel_id, 42)
+        self.assertFalse(spec.require_all_models)
+        self.assertNotIn("gpt-5.6-luna", self.module.DISCOUNT_TEXT_MODELS)
 
     def test_probe_output_reports_native_responses_for_every_channel(self) -> None:
         plan = self.module.DiscountPlan(
@@ -133,14 +138,14 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         ), mock.patch.object(
             self.module, "build_discount_plan", return_value=plan
         ), mock.patch.object(
-            sys, "argv", ["configure_discount_text_channel.py", "--order", "aihub,pdhlzy,wangwang"]
+            sys, "argv", ["configure_discount_text_channel.py", "--order", "geek2api,aihub,wangwang"]
         ), mock.patch(
             "sys.stdout", stdout
         ):
             self.assertEqual(self.module.main(), 0)
 
         payload = self.module.json.loads(stdout.getvalue())
-        self.assertEqual(payload["channel_order"], ["aihub", "pdhlzy", "wangwang"])
+        self.assertEqual(payload["channel_order"], ["geek2api", "aihub", "wangwang"])
         self.assertEqual(
             {channel["wire_api"] for channel in payload["channels"].values()},
             {"responses"},
@@ -150,8 +155,8 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         sql = self.build_sql()
 
         self.assertIn("@discount_channel_id_wangwang", sql)
-        self.assertIn("@discount_channel_id_pdhlzy", sql)
         self.assertIn("@discount_channel_id_aihub", sql)
+        self.assertIn("@discount_channel_id_geek2api", sql)
         self.assertIn("priority = 30", sql)
         self.assertIn("priority = 20", sql)
         self.assertIn("priority = 10", sql)
@@ -167,7 +172,7 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertNotIn("'discount', 'codex-auto-review'", sql)
 
     def test_build_apply_sql_uses_each_fallback_model_subset(self) -> None:
-        self.plans["pdhlzy"] = self.module.DiscountPlan(
+        self.plans["aihub"] = self.module.DiscountPlan(
             upstream_model_count=4,
             matched_models=("gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
             missing_models=("gpt-5.6",),
@@ -175,8 +180,8 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
 
         sql = self.build_sql()
 
-        self.assertIn("'discount', 'gpt-5.6', @discount_channel_id_aihub", sql)
-        self.assertNotIn("'discount', 'gpt-5.6', @discount_channel_id_pdhlzy", sql)
+        self.assertIn("'discount', 'gpt-5.6', @discount_channel_id_geek2api", sql)
+        self.assertNotIn("'discount', 'gpt-5.6', @discount_channel_id_aihub", sql)
 
     def test_build_apply_sql_clears_managed_channel_settings_and_legacy_other(self) -> None:
         sql = self.build_sql()
@@ -252,18 +257,99 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertIn("discount_disable_status=channel_only", sql)
         self.assertNotIn("UPDATE options", sql)
 
+    def test_single_channel_apply_replaces_only_channel_42_and_disables_luna(self) -> None:
+        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "aihub")
+        plan = self.module.DiscountPlan(
+            upstream_model_count=8,
+            matched_models=self.module.DISCOUNT_TEXT_MODELS,
+            missing_models=(),
+        )
+
+        sql = self.module.build_single_channel_apply_sql(
+            spec,
+            plan,
+            "fake-aihub-key-for-test",
+            "https://aihub.top",
+            20,
+        )
+
+        self.assertIn("WHERE id = 42 FOR UPDATE", sql)
+        self.assertIn(self.module.LEGACY_PDHLZY_CHANNEL_TAG, sql)
+        self.assertIn("id <> 42", sql)
+        self.assertIn("WHERE id = 42 AND @discount_channel_apply_allowed = 1", sql)
+        self.assertIn("channel_id = 42 AND @discount_channel_apply_allowed = 1", sql)
+        self.assertNotIn("UPDATE options", sql)
+        self.assertNotIn("WHERE id = 28", sql)
+        self.assertNotIn("WHERE id = 41", sql)
+        self.assertNotIn("'discount', 'gpt-5.6-luna'", sql)
+
+    def test_single_channel_apply_fails_closed_on_identity_drift(self) -> None:
+        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "aihub")
+        plan = self.plans["aihub"]
+        cases = (
+            ("channel_missing", "does not exist"),
+            ("channel_identity_mismatch", "identity changed"),
+            ("duplicate_target_tag", "replacement route identity"),
+        )
+        for status, message in cases:
+            with self.subTest(status=status), mock.patch.object(
+                self.module,
+                "mysql_exec",
+                return_value=["discount_channel_apply_status=" + status],
+            ):
+                with self.assertRaisesRegex(self.module.ConfigurationError, message):
+                    self.module.apply_single_discount_channel(
+                        spec,
+                        plan,
+                        self.keys["aihub"],
+                        self.base_urls["aihub"],
+                        20,
+                    )
+
+    def test_provider_monitor_reset_removes_only_replaced_channel_state(self) -> None:
+        state = {
+            "routes": {
+                "discount_text:gpt-5.5:42": {"samples": [{"ok": False}]},
+                "discount_text:gpt-5.5:41": {"samples": [{"ok": True}]},
+            },
+            "managed_abilities": {
+                "discount_text:gpt-5.5:42": {"auto_disabled": True},
+                "discount_text:gpt-5.5:41": {"auto_disabled": False},
+            },
+            "managed_channels": {
+                "discount_text:42": {"auto_disabled": True},
+                "discount_text:41": {"auto_disabled": False},
+            },
+            "channels": {"42": {"auto_disabled": True}, "41": {"auto_disabled": False}},
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "provider-monitor-state.json"
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            with mock.patch.object(self.module, "PROVIDER_MONITOR_STATE_PATH", state_path):
+                self.assertTrue(self.module.reset_provider_monitor_channel_state(42))
+            updated = json.loads(state_path.read_text(encoding="utf-8"))
+
+        self.assertNotIn("discount_text:gpt-5.5:42", updated["routes"])
+        self.assertNotIn("discount_text:gpt-5.5:42", updated["managed_abilities"])
+        self.assertNotIn("discount_text:42", updated["managed_channels"])
+        self.assertNotIn("42", updated["channels"])
+        self.assertIn("discount_text:gpt-5.5:41", updated["routes"])
+        self.assertIn("discount_text:gpt-5.5:41", updated["managed_abilities"])
+        self.assertIn("discount_text:41", updated["managed_channels"])
+        self.assertIn("41", updated["channels"])
+
     def test_normalize_base_url_rejects_paths_credentials_and_unapproved_hosts(self) -> None:
-        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "pdhlzy")
+        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "aihub")
 
         self.assertEqual(
-            self.module.normalize_base_url("https://pdhlzy.com/", spec),
-            "https://pdhlzy.com",
+            self.module.normalize_base_url("https://aihub.top/", spec),
+            "https://aihub.top",
         )
         for invalid in (
-            "https://pdhlzy.com/v1",
-            "https://user:pass@pdhlzy.com",
+            "https://aihub.top/v1",
+            "https://user:pass@aihub.top",
             "https://example.test",
-            "https://pdhlzy.com:444",
+            "https://aihub.top:444",
         ):
             with self.subTest(invalid=invalid), self.assertRaises(self.module.ConfigurationError):
                 self.module.normalize_base_url(invalid, spec)

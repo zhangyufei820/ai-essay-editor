@@ -84,7 +84,7 @@ PUBLIC_ALIAS_BACKING_MODELS = {
 DISCOUNT_TEXT_GROUP = "discount"
 DISCOUNT_TEXT_CHANNEL_TAGS = (
     "xingren-discount-text-aihub",
-    "xingren-discount-text-pdhlzy",
+    "xingren-discount-text-aihub-fallback",
     "xingren-discount-text-wangwang",
 )
 DISCOUNT_TEXT_ALLOWED_MODELS = (
