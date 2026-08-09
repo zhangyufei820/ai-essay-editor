@@ -4,7 +4,7 @@
 
 ## 受管链路
 
-- `discount_text`：channel `28/42/41`，固定 `discount` group 和四个 GPT 模型。
+- `discount_text`：channel `28/42/41`，固定 `discount` group 和五个 GPT 模型；`gpt-5.6-luna` 不在受管集合中。
 - `plus_text`：按三个受管私有 tag 动态解析 channel ID，固定 `plus` group、七个公开模型和 `30/20/10` 主备优先级。
 - `configure_plus_text_channel.py` 的默认顺序与 `provider_monitor.py` 的监控基线必须一致；只切换主备时使用 order-only 操作，保留现有熔断和手工停用状态。
 - 每个公开模型必须至少有一条真实可用链路；主渠道可以只覆盖真实存在的模型交集，未覆盖模型继续由下一优先级链路承载，不创建伪能力。

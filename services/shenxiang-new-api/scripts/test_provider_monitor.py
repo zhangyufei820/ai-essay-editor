@@ -100,6 +100,7 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
             ("gpt-5.4-mini", "gpt-5.5", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra"),
         )
         self.assertEqual(families["discount_text"].expected_tags[28], "xingren-discount-text-aihub")
+        self.assertEqual(families["discount_text"].expected_tags[42], "xingren-discount-text-aihub-fallback")
         self.assertEqual(
             families["discount_text"].probe_models_by_tag,
             {"xingren-discount-text-aihub": ("gpt-5.6-sol",)},
