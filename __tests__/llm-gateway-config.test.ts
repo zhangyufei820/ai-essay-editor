@@ -268,6 +268,17 @@ describe("llm gateway New API primary policy", () => {
     expect(example).not.toMatch(/TOKENFLUX_LLM|MOONAPIX_LLM/)
   })
 
+  it("keeps the durable image gateway on asynchronous New API task polling", () => {
+    const patchFile = fs.readFileSync(
+      path.join(process.cwd(), "deploy/patches/dify-image-gateway-new-api-async.patch"),
+      "utf8",
+    )
+    expect(patchFile).toContain("PRIMARY_UPSTREAM_ASYNC")
+    expect(patchFile).toContain("/images/generations?async=true")
+    expect(patchFile).toContain("/images/tasks/{task_id}")
+    expect(patchFile).toContain("PRIMARY_UPSTREAM_ASYNC_TIMEOUT")
+  })
+
   it("keeps the production Node runtime and cleanup unit valid", () => {
     const dockerfile = fs.readFileSync(path.join(process.cwd(), "Dockerfile"), "utf8")
     const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {

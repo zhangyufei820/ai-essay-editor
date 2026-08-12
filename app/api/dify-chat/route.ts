@@ -2326,8 +2326,13 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
 
 async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
   const imageInputs = buildGeminiImageGatewayInputs(inputs)
+  const isManagedGateway = process.env.GEMINI_IMAGE_GATEWAY_MANAGED_COMPAT === "true"
   const isOpenAiCompatible = process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
-  const gatewayPath = isOpenAiCompatible ? "/v1/images/generations" : "/api/gemini-image/unified"
+  const gatewayPath = isManagedGateway
+    ? "/api/image/unified"
+    : isOpenAiCompatible
+      ? "/v1/images/generations"
+      : "/api/gemini-image/unified"
   const gatewayCandidates = getGeminiImageGatewayCandidates(imageInputs)
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
@@ -2350,7 +2355,7 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
           "x-gateway-token": gateway.token,
           Authorization: `Bearer ${gateway.token}`,
         },
-        body: JSON.stringify(isOpenAiCompatible
+        body: JSON.stringify(isManagedGateway || isOpenAiCompatible
           ? buildGeminiImageGatewayPayload(query, inputs, gateway.model)
           : buildLegacyGeminiImageGatewayPayload(query, inputs)
         ),
@@ -2382,7 +2387,7 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
       )
     }
 
-    return isOpenAiCompatible
+    return isOpenAiCompatible && !isManagedGateway
       ? createVivaApiImageResponse(selectedPayload)
       : createImageGatewayResponse(selectedPayload)
   } catch (error) {
@@ -2405,12 +2410,15 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
 }
 
 function buildGeminiGatewayTrace(imageInputs: GeminiImageGatewayInputs) {
+  const isManagedGateway = process.env.GEMINI_IMAGE_GATEWAY_MANAGED_COMPAT === "true"
   return {
     source: "gemini_image_gateway",
     provider: "managed_image_gateway",
-    gateway_path: process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
-      ? "/v1/images/generations"
-      : "/api/gemini-image/unified",
+    gateway_path: isManagedGateway
+      ? "/api/image/unified"
+      : process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
+        ? "/v1/images/generations"
+        : "/api/gemini-image/unified",
     mode: imageInputs.mode,
     image_size: imageInputs.image_size,
     requested_aspect_ratio: imageInputs.aspect_ratio,

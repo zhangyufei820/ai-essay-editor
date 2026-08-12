@@ -170,6 +170,8 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).not.toContain("4096x4096")
     expect(routeSource).toContain("NEW_API_IMAGE_BASE_URL")
     expect(routeSource).toContain('const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "https://api.aiphui.top")')
+    expect(routeSource).toContain('process.env.GEMINI_IMAGE_GATEWAY_MANAGED_COMPAT === "true"')
+    expect(routeSource).toContain('"/api/image/unified"')
     expect(routeSource).toContain("/v1/images/generations")
     expect(routeSource).toContain("buildLegacyGeminiImageGatewayPayload")
     expect(routeSource).toContain('model: "gemini-3-pro-image-preview"')
