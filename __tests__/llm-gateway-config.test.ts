@@ -285,6 +285,13 @@ describe("llm gateway New API primary policy", () => {
     )
     expect(fallbackModelPatch).toContain("FALLBACK_MODEL_ALIAS_MAP")
     expect(fallbackModelPatch).toContain("GPT_IMAGE_2_FALLBACK_MODEL")
+
+    const asyncResultPatch = fs.readFileSync(
+      path.join(process.cwd(), "deploy/patches/dify-image-gateway-new-api-async-result.patch"),
+      "utf8",
+    )
+    expect(asyncResultPatch).toContain("normalize_async_image_success")
+    expect(asyncResultPatch).toContain('"data": [{"url": image_url}]')
   })
 
   it("keeps the production Node runtime and cleanup unit valid", () => {

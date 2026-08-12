@@ -1,0 +1,62 @@
+--- main.py
++++ main.py
+@@ -276,8 +276,50 @@
+ 
+ def get_provider_timeout(provider_index: int) -> httpx.Timeout:
+     return PRIMARY_UPSTREAM_TIMEOUT if provider_index == 0 else UPSTREAM_TIMEOUT
++
++
++def normalize_async_image_success(
++    raw: Dict[str, Any],
++    provider: Dict[str, str],
++    request_payload: Dict[str, Any],
++) -> Dict[str, Any]:
++    containers = [raw]
++    data = raw.get("data")
++    if isinstance(data, dict):
++        containers.append(data)
++
++    candidates: List[str] = []
++    for container in containers:
++        item = container.get("item")
++        if isinstance(item, dict):
++            candidates.extend([
++                str(item.get("originalUrl") or "").strip(),
++                str(item.get("url") or "").strip(),
++                str(item.get("displayUrl") or "").strip(),
++                str(item.get("cachedUrl") or "").strip(),
++            ])
++        candidates.extend([
++            str(container.get("result_url") or "").strip(),
++            str(container.get("url") or "").strip(),
++        ])
++        nested_data = container.get("data")
++        if isinstance(nested_data, list) and nested_data and isinstance(nested_data[0], dict):
++            candidates.append(str(nested_data[0].get("url") or "").strip())
+ 
++    image_url = next((candidate for candidate in candidates if candidate), "")
++    if not image_url:
++        return raw
++    if image_url.startswith("/"):
++        image_url = urljoin(f"{provider['base_url']}/", image_url)
+ 
++    return {
++        "created": raw.get("created") or raw.get("created_at") or int(time.time()),
++        "data": [{"url": image_url}],
++        "model": request_payload.get("model", ""),
++        "usage": raw.get("usage", {}),
++    }
++
++
+ async def call_async_image_generation(
+     client: httpx.AsyncClient,
+     provider: Dict[str, str],
+@@ -318,7 +360,7 @@
+             poll_raw.get("status") or poll_raw.get("task_status") or ""
+         ).strip().upper()
+         if status in {"SUCCESS", "SUCCEEDED", "COMPLETED"}:
+-            return 200, poll_raw
++            return 200, normalize_async_image_success(poll_raw, provider, request_payload)
+         if status in {"FAILURE", "FAILED", "CANCELLED", "CANCELED", "TIMEOUT"}:
+             return 502, poll_raw
+ 
