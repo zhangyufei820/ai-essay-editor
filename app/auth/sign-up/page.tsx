@@ -86,7 +86,7 @@ export default function SignUpPage() {
 
       if (error) throw error
 
-      console.log("[v0] Sign up successful, showing email confirmation screen")
+      console.log("[v0] Sign up submitted, waiting for email confirmation")
       setEmailSent(true)
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "注册失败，请重试")
@@ -103,7 +103,7 @@ export default function SignUpPage() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--ink-100)]">
               <IconSealCheck className="h-10 w-10 text-[var(--ink-600)]" />
             </div>
-            <CardTitle className="text-2xl">注册成功！</CardTitle>
+            <CardTitle className="text-2xl">注册申请已提交</CardTitle>
             <CardDescription className="text-base">
               我们已向 <strong className="text-[var(--ink-900)]">{email}</strong> 发送了确认邮件
             </CardDescription>
@@ -155,7 +155,7 @@ export default function SignUpPage() {
             <CardTitle className="text-2xl">注册账户</CardTitle>
             <CardDescription>
               创建您的创意作文批改师账户
-              {referralCode && <span className="block mt-2 text-[var(--ink-600)]">🎉 使用推荐码注册，额外获得200积分！</span>}
+              {referralCode && <span className="block mt-2 text-[var(--ink-600)]">使用推荐码并完成邮箱确认后，双方各获得1000积分。</span>}
             </CardDescription>
           </CardHeader>
           <CardContent>

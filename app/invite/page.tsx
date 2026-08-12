@@ -6,17 +6,11 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft, Check, Lock } from "lucide-react"
 import { IconAllInOne, IconBanzhuren, IconCopy, IconInvite, IconShare } from "@/components/icons/v2"
 import { toast } from "sonner"
-import { createClient } from "@supabase/supabase-js"
 import { BadgeV2 as Badge, ButtonV2 as Button, CardV2 as Card, LoadingStateV2, ProgressV2 } from "@/components/ui/v2"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 const REWARD_LIMIT = 50000
 const REWARD_PER_INVITE = 1000
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 export default function InvitePage() {
   const router = useRouter()
@@ -38,8 +32,6 @@ export default function InvitePage() {
     try {
       const parsedUser = JSON.parse(userStr)
       const userId = parsedUser.id || parsedUser.sub || parsedUser.userId
-      let referralOwnerId = userId
-
       if (userId) {
         try {
           const response = await fetch("/api/user/membership", {
@@ -48,7 +40,6 @@ export default function InvitePage() {
           const result = await response.json()
           if (response.ok && result.isPaidMember === true) {
             setIsPaidMember(true)
-            referralOwnerId = result.userId || result.latestOrder?.user_id || userId
           } else {
             setIsPaidMember(false)
           }
@@ -63,29 +54,21 @@ export default function InvitePage() {
               "Content-Type": "application/json",
               ...(await getVerifiedAuthHeaders()),
             },
-            body: JSON.stringify({ userId: referralOwnerId }),
+            body: JSON.stringify({}),
           })
           const refResult = await refResponse.json()
           if (refResult.code) {
             setReferralCode(refResult.code)
             setInviteCount(refResult.uses || 0)
+            setTotalReward(refResult.totalReward || 0)
           } else {
             setReferralCode("")
+            setInviteCount(0)
+            setTotalReward(0)
           }
         } catch {
           setReferralCode("")
-        }
-
-        try {
-          const { data: referrals } = await supabase
-            .from("referrals")
-            .select("reward_credits")
-            .eq("referrer_id", referralOwnerId)
-            .eq("status", "completed")
-
-          const total = (referrals || []).reduce((sum, row) => sum + (row.reward_credits || 0), 0)
-          setTotalReward(total)
-        } catch {
+          setInviteCount(0)
           setTotalReward(0)
         }
       }

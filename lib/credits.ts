@@ -411,78 +411,48 @@ export async function getReferralRewardTotal(userId: string): Promise<number> {
   return data.reduce((sum, r) => sum + (r.reward_credits || 0), 0)
 }
 
+export async function getReferralStats(userId: string): Promise<{ uses: number; totalReward: number }> {
+  const supabase = getSupabaseAdmin()
+  const { data, error } = await supabase
+    .from("referrals")
+    .select("reward_credits")
+    .eq("referrer_id", userId)
+    .eq("status", "completed")
+
+  if (error) {
+    console.error("[积分系统] 获取邀请统计失败:", error)
+    throw error
+  }
+
+  return {
+    uses: data?.length || 0,
+    totalReward: (data || []).reduce((sum, row) => sum + Number(row.reward_credits || 0), 0),
+  }
+}
+
 // 处理推荐注册
 export async function handleReferralSignup(newUserId: string, referralCode: string): Promise<boolean> {
   const supabase = getSupabaseAdmin()
+  const normalizedCode = referralCode.trim()
+  if (!newUserId.trim() || !normalizedCode || normalizedCode.length > 100) return false
 
-  const { data: existingReferral, error: existingReferralError } = await supabase
-    .from("referrals")
-    .select("referrer_id, referee_id, referral_code, reward_credits, status, completed_at")
-    .eq("referee_id", newUserId)
-    .eq("status", "completed")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (existingReferralError) {
-    console.error("[积分系统] 查询现有推荐记录失败:", existingReferralError)
-    return false
-  }
-
-  if (existingReferral) {
-    console.log(`[积分系统] 推荐关系已存在，跳过重复发放 | referee=${newUserId}, referrer=${existingReferral.referrer_id}`)
-    return true
-  }
-
-  // 查找推荐码对应的用户
-  const { data: codeData, error: codeError } = await supabase
-    .from("referral_codes")
-    .select("user_id")
-    .eq("code", referralCode)
-    .single()
-
-  if (codeError || !codeData) {
-    return false
-  }
-
-  const referrerId = codeData.user_id
-  if (referrerId === newUserId) {
-    console.warn(`[积分系统] 拒绝自邀请 | userId=${newUserId}, referralCode=${referralCode}`)
-    return false
-  }
-  
-  // 🔥 检查邀请者是否已达到奖励上限
-  const currentRewardTotal = await getReferralRewardTotal(referrerId)
-  const canReceiveReward = currentRewardTotal < REFERRAL_CONFIG.MAX_REFERRER_REWARD
-  
-  // 计算实际奖励（如果接近上限，只给剩余额度）
-  const remainingQuota = REFERRAL_CONFIG.MAX_REFERRER_REWARD - currentRewardTotal
-  const actualReferrerReward = canReceiveReward
-    ? Math.min(REFERRAL_CONFIG.REWARD_PER_INVITE, remainingQuota)
-    : 0
-
-  const { error: referralError } = await supabase.from("referrals").insert({
-    referrer_id: referrerId,
-    referee_id: newUserId,
-    referral_code: referralCode,
-    reward_credits: actualReferrerReward,
-    status: "completed",
-    completed_at: new Date().toISOString(),
+  const { data, error } = await supabase.rpc("grant_referral_credits_once", {
+    p_referee_id: newUserId,
+    p_referral_code: normalizedCode,
   })
 
-  if (referralError) {
-    console.error("[积分系统] 创建推荐记录失败:", referralError)
+  if (error) {
+    console.error("[积分系统] 推荐注册原子结算失败:", error)
     return false
   }
 
-  // 🎁 给推荐人增加积分（如果未达上限）
-  if (actualReferrerReward > 0) {
-    await addCredits(referrerId, actualReferrerReward, "referral", `🎉 成功邀请好友，获得 ${actualReferrerReward} 积分奖励`, newUserId)
+  const result = (Array.isArray(data) ? data[0] : data) as { applied?: boolean; referrer_id?: string } | null
+  if (!result) {
+    console.error("[积分系统] 推荐注册原子结算返回无效")
+    return false
   }
 
-  // 🎁 给新用户增加积分（被邀请者始终获得奖励）
-  await addCredits(newUserId, REFERRAL_CONFIG.REWARD_PER_INVITE, "referral", `🎊 通过好友邀请注册，获得 ${REFERRAL_CONFIG.REWARD_PER_INVITE} 积分奖励`, newUserId)
-
+  console.log(`[积分系统] 推荐注册结算完成 | referee=${newUserId}, referrer=${result.referrer_id || "unknown"}, applied=${result.applied === true}`)
   return true
 }
 

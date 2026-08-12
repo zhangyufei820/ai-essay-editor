@@ -316,9 +316,10 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('requires a verified user before syncing Authing profile data', () => {
     const source = read('app/api/auth/sync/route.ts')
 
-    expect(source).toContain('requireUser(request)')
-    expect(source).toContain('const verifiedUserId = auth.user!.id')
-    expect(source).toContain('user_id && user_id !== verifiedUserId')
+    expect(source).toContain('requireLearningUserId(request)')
+    expect(source).toContain('const rawVerifiedUserId = auth.auth.user!.id')
+    expect(source).toContain('const verifiedUserId = auth.userId!')
+    expect(source).toContain('user_id !== rawVerifiedUserId && user_id !== verifiedUserId')
     expect(source).not.toContain('const { user_id, email, nickname, avatar, phone } = body\\n\\n    if (!user_id)')
   })
 

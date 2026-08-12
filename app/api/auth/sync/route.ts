@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from '@/lib/rate-limit'
-import { requireUser } from '@/lib/auth/verified-user'
 import { handleReferralSignup } from '@/lib/credits'
+import { requireLearningUserId } from '@/lib/learning-user'
 import { rejectUntrustedOrigin } from '@/lib/security/request'
 
 function isTransientSyncError(error: unknown) {
@@ -24,6 +24,9 @@ function createSyncDegradedResponse(reason: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const originRejected = rejectUntrustedOrigin(request)
+  if (originRejected) return originRejected
+
   // IP 限流：30次/分钟
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 30)
@@ -32,20 +35,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
 
     // 1. 获取前端传来的用户信息
     const body = await request.json()
     const { user_id, email, nickname, avatar, phone, referralCode } = body
 
-    const verifiedUserId = auth.user!.id
-    if (user_id && user_id !== verifiedUserId) {
+    const rawVerifiedUserId = auth.auth.user!.id
+    const verifiedUserId = auth.userId!
+    if (user_id && user_id !== rawVerifiedUserId && user_id !== verifiedUserId) {
       return NextResponse.json({ error: 'User mismatch' }, { status: 403 })
     }
-
-    const originRejected = rejectUntrustedOrigin(request)
-    if (originRejected) return originRejected
 
     // 方式2: 基本的 user_id 格式验证（防止注入攻击）
     // Authing 的 user_id 通常是 24 位十六进制字符串
@@ -63,27 +64,28 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // 3. 检查用户是否已存在
-    const { data: existingUser } = await supabaseAdmin
-      .from('user_profiles')
+    // 3. 以 canonical 积分账户判断是否已完成权益初始化。
+    // Authing 身份桥接会先写入 user_profiles，不能再用 profile 是否存在判断新用户。
+    const { data: existingCreditAccount } = await supabaseAdmin
+      .from('user_credits')
       .select('user_id')
       .eq('user_id', verifiedUserId)
       .single()
 
     // 4. 如果是新用户，执行初始化
-    if (!existingUser) {
+    if (!existingCreditAccount) {
       console.log("[Sync] 新用户初始化中", {
-        authProvider: auth.user!.provider,
-        hasEmail: Boolean(auth.user!.email || email),
+        authProvider: auth.auth.user!.provider,
+        hasEmail: Boolean(auth.auth.user!.email || email),
         hasPhone: Boolean(phone),
       })
 
-      // A. 插入个人资料
+      // A. 写入或更新个人资料
       const { error: profileError } = await supabaseAdmin
         .from('user_profiles')
-        .insert({
+        .upsert({
           user_id: verifiedUserId,
-          email: auth.user!.email || email || null, // 确保如果是手机注册，email 存为 null 而不是 undefined
+          email: auth.auth.user!.email || email || null, // 确保如果是手机注册，email 存为 null 而不是 undefined
           phone: phone || null, // 【修改点 2】: 将手机号写入数据库
           
           // 【修改点 3】: 智能昵称逻辑
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest) {
           nickname: nickname || email?.split('@')[0] || phone || '新用户',
           
           avatar_url: avatar
-        })
+        }, { onConflict: 'user_id' })
       
       if (profileError) {
         console.error('创建 Profile 失败:', profileError)
@@ -110,30 +112,17 @@ export async function POST(request: NextRequest) {
 
       if (creditError) {
         console.error('赠送积分失败:', creditError)
-        // 如果插入失败，尝试 upsert
-        const { error: upsertError } = await supabaseAdmin
-          .from('user_credits')
-          .upsert({
-            user_id: verifiedUserId,
-            credits: 1000, 
-            is_pro: false
-          })
-        if (upsertError) {
-          console.error('Upsert 积分也失败:', upsertError)
-        } else {
-          console.log("✅ [Sync] 用户积分 Upsert 成功")
-        }
       } else {
         console.log("✅ [Sync] 用户赠送 1000 积分成功")
       }
 
       const resolvedReferralCode =
         referralCode ||
-        (auth.user?.metadata && typeof auth.user.metadata.referral_code === "string"
-          ? auth.user.metadata.referral_code
+        (auth.auth.user?.metadata && typeof auth.auth.user.metadata.referral_code === "string"
+          ? auth.auth.user.metadata.referral_code
           : null)
 
-      if (resolvedReferralCode) {
+      if (!creditError && resolvedReferralCode) {
         try {
           const referralSuccess = await handleReferralSignup(verifiedUserId, resolvedReferralCode)
           if (referralSuccess) {

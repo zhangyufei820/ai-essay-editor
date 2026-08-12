@@ -17,18 +17,16 @@ export default function SignUpSuccessPage() {
       <div className="w-full max-w-sm">
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">注册成功！</CardTitle>
-            <CardDescription>欢迎加入创意作文批改师</CardDescription>
+            <CardTitle className="text-2xl">注册申请已提交</CardTitle>
+            <CardDescription>完成邮箱确认后即可登录使用</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Alert>
               <InfoIcon className="h-4 w-4" />
               <AlertDescription>
-                <strong>公测期间特别说明：</strong>
+                <strong>请完成邮箱确认：</strong>
                 <br />
-                如果您在Supabase后台关闭了邮箱验证，可以直接登录使用。
-                <br />
-                如果开启了邮箱验证，请查收邮件并点击确认链接。
+                请查收确认邮件并点击其中的确认链接。完成确认后，邀请关系和积分奖励会自动结算。
               </AlertDescription>
             </Alert>
 

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
 import path from 'path'
-import { createBillingAuditMetadata, createUserReferralCode, getUserCredits, spendCredits, summarizeCreditTransactions } from '@/lib/credits'
+import { createBillingAuditMetadata, createUserReferralCode, getReferralStats, getUserCredits, handleReferralSignup, spendCredits, summarizeCreditTransactions } from '@/lib/credits'
 import { hasActiveMembership, resolveMembershipStatus } from '@/lib/products'
 import { canUseImage2, isImage2CoCreationActive, parseAllowlistEnv } from '@/lib/permissions'
 
@@ -130,9 +130,10 @@ describe('credits helpers', () => {
     const oldCoCreationEndsAt = process.env.IMAGE2_CO_CREATION_ENDS_AT
     process.env.IMAGE2_CO_CREATION_ENDS_AT = '2026-07-19T15:59:59.000Z'
 
-    expect(isImage2CoCreationActive(Date.parse('2026-05-20T00:00:00.000Z'))).toBe(true)
-    expect(canUseImage2({ user_id: 'non-member-user' })).toBe(true)
-    expect(canUseImage2(null)).toBe(false)
+    const duringCoCreation = Date.parse('2026-05-20T00:00:00.000Z')
+    expect(isImage2CoCreationActive(duringCoCreation)).toBe(true)
+    expect(canUseImage2({ user_id: 'non-member-user' }, duringCoCreation)).toBe(true)
+    expect(canUseImage2(null, duringCoCreation)).toBe(false)
 
     if (oldCoCreationEndsAt === undefined) delete process.env.IMAGE2_CO_CREATION_ENDS_AT
     else process.env.IMAGE2_CO_CREATION_ENDS_AT = oldCoCreationEndsAt
@@ -181,6 +182,7 @@ describe('credits helpers', () => {
   it('threads referral processing through all first-login auth entry points', () => {
     const syncSource = readFileSync(path.join(process.cwd(), 'app/api/auth/sync/route.ts'), 'utf8')
     const callbackSource = readFileSync(path.join(process.cwd(), 'app/auth/callback/route.ts'), 'utf8')
+    const confirmSource = readFileSync(path.join(process.cwd(), 'app/auth/confirm/route.ts'), 'utf8')
     const emailOtpSource = readFileSync(
       path.join(process.cwd(), 'app/api/auth/verify-email-otp/route.ts'),
       'utf8',
@@ -190,6 +192,8 @@ describe('credits helpers', () => {
     expect(syncSource).toContain('referralCode')
     expect(callbackSource).toContain('handleReferralSignup')
     expect(callbackSource).toContain('referral_code')
+    expect(confirmSource).toContain('handleReferralSignup')
+    expect(confirmSource).toContain('referral_code')
     expect(emailOtpSource).toContain('handleReferralSignup')
     expect(emailOtpSource).toContain('referralCode')
   })
@@ -325,5 +329,45 @@ describe('credits helpers', () => {
 
     expect(referralCodeQuery.maybeSingle).toHaveBeenCalled()
     expect(referralCodeQuery.upsert).not.toHaveBeenCalled()
+  })
+
+  it('settles referral rewards through the atomic database function', async () => {
+    const rpc = jest.fn(async () => ({
+      data: [{ applied: true, referrer_id: 'referrer-1', referrer_reward: 1000, referee_reward: 1000 }],
+      error: null,
+    }))
+    ;(createClient as jest.Mock).mockReturnValue({ rpc })
+
+    await expect(handleReferralSignup('referee-1', ' SXCODE ')).resolves.toBe(true)
+    expect(rpc).toHaveBeenCalledWith('grant_referral_credits_once', {
+      p_referee_id: 'referee-1',
+      p_referral_code: 'SXCODE',
+    })
+  })
+
+  it('derives invite count and rewards from completed referral rows', async () => {
+    const referralQuery = makeChain({
+      data: [{ reward_credits: 1000 }, { reward_credits: 500 }],
+      error: null,
+    })
+    ;(createClient as jest.Mock).mockReturnValue({
+      from: jest.fn((table: string) => {
+        expect(table).toBe('referrals')
+        return referralQuery
+      }),
+    })
+
+    await expect(getReferralStats('referrer-1')).resolves.toEqual({ uses: 2, totalReward: 1500 })
+  })
+
+  it('keeps invite registration copy aligned with confirmation and reward rules', () => {
+    const source = readFileSync(path.join(process.cwd(), 'app/auth/sign-up/page.tsx'), 'utf8')
+    const successSource = readFileSync(path.join(process.cwd(), 'app/auth/sign-up-success/page.tsx'), 'utf8')
+    expect(source).toContain('注册申请已提交')
+    expect(source).toContain('完成邮箱确认后，双方各获得1000积分')
+    expect(source).not.toContain('额外获得200积分')
+    expect(successSource).toContain('注册申请已提交')
+    expect(successSource).toContain('邀请关系和积分奖励会自动结算')
+    expect(successSource).not.toContain('注册成功！')
   })
 })

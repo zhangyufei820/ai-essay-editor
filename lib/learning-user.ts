@@ -63,6 +63,17 @@ async function saveBridge(supabase: SupabaseClient, providerUserId: string, supa
   throw error
 }
 
+async function mergeLegacyCredits(supabase: SupabaseClient, providerUserId: string, supabaseUserId: string) {
+  const { error } = await supabase.rpc("merge_bridged_user_credits", {
+    p_source_user_id: providerUserId,
+    p_target_user_id: supabaseUserId,
+  })
+
+  if (error) {
+    throw new Error(`合并桥接账号积分失败: ${error.message}`)
+  }
+}
+
 export async function resolveLearningUserId(user: VerifiedUser): Promise<string> {
   if (isSupabaseUuid(user.id)) return user.id
 
@@ -70,6 +81,7 @@ export async function resolveLearningUserId(user: VerifiedUser): Promise<string>
   const existingUserId = await findBridgedUserId(supabase, user.id)
   if (existingUserId) {
     await saveAuthingProfile(supabase, existingUserId, user)
+    await mergeLegacyCredits(supabase, user.id, existingUserId)
     return existingUserId
   }
 
@@ -96,6 +108,7 @@ export async function resolveLearningUserId(user: VerifiedUser): Promise<string>
 
   const bridgedUserId = await saveBridge(supabase, user.id, data.user.id)
   await saveAuthingProfile(supabase, bridgedUserId, user)
+  await mergeLegacyCredits(supabase, user.id, bridgedUserId)
   return bridgedUserId
 }
 
