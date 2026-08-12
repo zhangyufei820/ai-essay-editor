@@ -8,7 +8,6 @@ import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { runDifyWorkflow } from "@/lib/dify-workflow-client"
 import { sanitizePublicAiErrorCode } from "@/lib/chat-error-sanitizer"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
-import { canUseTrialCredits } from "@/lib/trial-credits"
 import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 import { signWorksheetPosterToken } from "@/lib/worksheet-poster-token"
 import {
@@ -167,7 +166,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const trialPrecheck = await canUseTrialCredits(auth.user!.id, chargedCredits)
     const wasCharged = await chargeCreditsSafely(
       auth.user!.id,
       chargedCredits,
@@ -179,23 +177,6 @@ export async function POST(request: NextRequest) {
     )
 
     if (!wasCharged) {
-      if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
-        return NextResponse.json(
-          {
-            error: "请先完成今日问卷，解锁免费体验额度",
-            code: "SURVEY_REQUIRED",
-            surveyRequired: true,
-            billing: {
-              trialUsed: 0,
-              realCreditsUsed: 0,
-              remainingToday: trialPrecheck.data.remainingToday,
-              surveyRequired: true,
-            },
-          },
-          { status: 402, headers: { "X-Request-Id": requestId } },
-        )
-      }
-
       return NextResponse.json(
         {
           error: `当前积分不足，本次诊断需要 ${chargedCredits} 积分。`,

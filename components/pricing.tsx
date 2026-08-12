@@ -287,7 +287,7 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
           <div className="mt-6 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5 text-sm text-[var(--ink-700)] leading-relaxed">
             <p className="font-bold text-[var(--ink-900)] mb-3">图片和音乐如何扣费？</p>
             <ul className="space-y-2">
-              <li>• 高质量图像：60 天共创体验期内登录用户可用，体验期后恢复订阅 / 白名单规则，支持 1K / 2K / 4K，按生成规格扣费。</li>
+              <li>• 高质量图像：订阅用户或白名单账号可用，支持 1K / 2K / 4K，按生成规格扣费。</li>
               <li>• 音乐创作：约 100 积分起，实际可能按生成内容补充扣费。</li>
             </ul>
           </div>

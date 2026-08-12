@@ -46,7 +46,6 @@ export interface BillingAuditMetadata {
   requestId?: string | null
   createdAt?: string
   description?: string
-  skipTrialBilling?: boolean
 }
 
 export type BillingAuditInput = BillingAuditMetadata & {

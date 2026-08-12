@@ -7,13 +7,6 @@ const InstallPrompt = dynamic(
   () => import("@/components/pwa/InstallPrompt").then((mod) => ({ default: mod.InstallPrompt })),
   { ssr: false }
 )
-const DailySurveyAutoPrompt = dynamic(
-  () => import("@/components/trial/DailySurveyAutoPrompt").then((mod) => ({ default: mod.DailySurveyAutoPrompt })),
-  { ssr: false }
-)
-
-const freeTrialCampaignEnabled = process.env.NEXT_PUBLIC_FREE_TRIAL_CAMPAIGN_ENABLED !== "false"
-
 function DialogPointerEventsRecovery() {
   useEffect(() => {
     if (typeof document === "undefined") return
@@ -47,7 +40,6 @@ export function ClientBoot() {
     <>
       <DialogPointerEventsRecovery />
       <InstallPrompt />
-      {freeTrialCampaignEnabled ? <DailySurveyAutoPrompt /> : null}
     </>
   )
 }

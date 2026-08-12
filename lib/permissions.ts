@@ -28,18 +28,6 @@ export function isSubscribedUser(membershipStatus: string | null): membershipSta
     membershipStatus === "campus"
 }
 
-function parseTimestampMs(value?: string): number | null {
-  if (!value) return null
-  const timestamp = Date.parse(value)
-  return Number.isFinite(timestamp) ? timestamp : null
-}
-
-export function isImage2CoCreationActive(now = Date.now()): boolean {
-  const endsAtMs = parseTimestampMs(process.env.IMAGE2_CO_CREATION_ENDS_AT)
-  if (endsAtMs !== null) return now <= endsAtMs
-  return process.env.IMAGE2_TEST_OPEN_ACCESS === "true"
-}
-
 export function resolveMembershipStatus(source?: MembershipSource): MembershipTier | null {
   if (!source) return null
 
@@ -72,11 +60,10 @@ function isAllowlistedEmail(email?: string | null): boolean {
     .includes(normalizedEmail)
 }
 
-export function canUseImage2(user?: Image2PermissionUser, now = Date.now()): boolean {
+export function canUseImage2(user?: Image2PermissionUser): boolean {
   if (!user) return false
   const userId = user.id || user.user_id || null
   if (!userId) return false
-  if (isImage2CoCreationActive(now)) return true
   if (isSubscribedUser(user.membership_status || null)) return true
   if (isAllowlistedUserId(userId)) return true
   if (isAllowlistedEmail(user.email)) return true

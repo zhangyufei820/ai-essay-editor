@@ -155,7 +155,7 @@ describe("tools workbench route mappings", () => {
     expect(route).toContain("application/x-ndjson")
     expect(route).toContain("STREAM_HEARTBEAT_MS")
     expect(route).toContain("runDifyWorkflow")
-    expect(route).toContain("consumeWithTrialCredits")
+    expect(route).toContain("chargeCreditsSafely")
     expect(route).toContain("parseDifyUsage")
     expect(route).toContain("calculateTextCredits")
     expect(route).toContain("isHtmlErrorContent")

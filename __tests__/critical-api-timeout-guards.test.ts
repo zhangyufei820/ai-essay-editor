@@ -21,7 +21,6 @@ describe("critical API timeout guards", () => {
     expect(source).toContain("withTimeout(requireUser(request), AUTH_TIMEOUT_MS")
     expect(source).toContain("BASE_CREDITS_TIMEOUT_MS")
     expect(source).toContain("OPTIONAL_STATUS_TIMEOUT_MS")
-    expect(source).toContain("const trialStatusPromise = withTimeout")
     expect(source).toContain("const entitlementPromise = withTimeout")
     expect(source).toContain("const baseCreditsPromise = withTimeout")
     expect(source).toContain("权益合并降级")
@@ -29,33 +28,7 @@ describe("critical API timeout guards", () => {
     expect(source).toContain("creditStatus: \"unavailable\"")
     expect(source).toContain("CREDITS_TIMEOUT")
     expect(source).not.toContain("{ status: isOperationTimeoutError(baseCredits.error) ? 503 : 500 }")
-    expect(source).not.toMatch(/const trialStatusResult = await getUserTrialStatus/)
     expect(source).not.toMatch(/const entitlement = await getUserEntitlementSummary/)
-  })
-
-  it("lets /api/surveys/today degrade to an empty prompt instead of returning 504-class failures", () => {
-    const source = read("app/api/surveys/today/route.ts")
-
-    expect(source).toContain("withTimeout(requireUser(request), AUTH_TIMEOUT_MS")
-    expect(source).toContain("SURVEY_READ_TIMEOUT_MS")
-    expect(source).toContain("TRIAL_STATUS_TIMEOUT_MS")
-    expect(source).toContain("submittedResult.data")
-    expect(source).toContain("degraded:")
-    expect(source).toContain("createSafeSurveyDegradedResponse")
-    expect(source).not.toContain("status: 503")
-    expect(source).not.toContain("status: 500")
-    expect(source).not.toContain("getTodaySurveyTemplate(userId),\n      hasSubmittedSurveyToday(userId),")
-    expect(source).not.toContain("{ status: 500 },\n      )\n    }\n\n    return NextResponse.json")
-  })
-
-  it("bounds /api/free-trial/runtime-flags so runtime config reads cannot hang the app shell", () => {
-    const source = read("app/api/free-trial/runtime-flags/route.ts")
-
-    expect(source).toContain("RUNTIME_FLAGS_TIMEOUT_MS")
-    expect(source).toContain("withTimeout(")
-    expect(source).toContain("free-trial.runtime-flags")
-    expect(source).toContain("getSafeRuntimeFlagDefaults")
-    expect(source).toContain("degraded: true")
   })
 
   it("lets /api/chat-session degrade persistence and list reads without blocking chat", () => {
@@ -93,7 +66,6 @@ describe("critical API timeout guards", () => {
   it("bounds remaining server-side HTTP calls without changing their business flow", () => {
     const cases = [
       ["lib/image-task-refunds.ts", "IMAGE_TASK_QUERY_TIMEOUT_MS"],
-      ["lib/free-trial-monitor.ts", "MONITOR_HTTP_TIMEOUT_MS"],
       ["app/api/web-search/route.ts", "TAVILY_TIMEOUT_MS"],
       ["lib/xunhupay.ts", "XUNHUPAY_QUERY_TIMEOUT_MS"],
       ["app/api/voice/stt/route.ts", "VOICE_STT_TIMEOUT_MS"],

@@ -14,7 +14,6 @@ import {
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { extractImageUrlsFromDifyResult, proxifyGeneratedImageUrl } from "@/components/chat/image-generation/gpt-image-v11"
 import { clearStoredAuthState, getVerifiedAuthHeaders } from "@/lib/client-auth"
-import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey-client"
 import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -176,7 +175,7 @@ async function readReversePromptStream(
       finalPayload = event
       return
     }
-    if (event.surveyRequired || event.error) {
+    if (event.error) {
       finalPayload = event
     }
   }
@@ -235,19 +234,6 @@ function mapToolImageError(error: unknown) {
     return "图片服务请求失败，可能是余额不足、尺寸不支持或参数不兼容。"
   }
   return raw.replace(/\b[A-Za-z][A-Za-z0-9_.-]*(?:\s+[A-Za-z0-9_.-]+){0,3}\b/g, "服务").replace(/(?:服务通道|连接层)/g, "服务") || "处理失败，请稍后重试。"
-}
-
-function buildSurveyRequiredError() {
-  const error = new Error("SURVEY_REQUIRED")
-  error.name = "SurveyRequiredError"
-  return error
-}
-
-function handleSurveyRequired(featureName: string) {
-  openTrialSurveyGate({
-    featureName,
-    message: `请先完成今日问卷，解锁体验额度后继续使用${featureName}。`,
-  })
 }
 
 function buildToolsLoginRedirect() {
@@ -531,7 +517,6 @@ export default function ToolsPage() {
       const prompt = typeof payload?.prompt === "string" ? payload.prompt.trim() : ""
 
       if (!response.ok || payload?.type === "error" || !prompt || isHtmlErrorContent(prompt)) {
-        if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
         throw new Error(typeof payload?.error === "string" ? payload.error : "反推提示词失败")
       }
 
@@ -546,13 +531,6 @@ export default function ToolsPage() {
       setReverseStage("提示词已生成，可以继续生成图像")
     } catch (error) {
       if (pollingCancelledRef.current || (error instanceof Error && error.name === "AbortError")) return
-      if (error instanceof Error && error.name === "SurveyRequiredError") {
-        handleSurveyRequired("图像提示词反推")
-        setResult({ title: "图像提示词反推", content: "请先完成今日问卷，完成后可继续反推提示词。" })
-        setReverseProgress(0)
-        setReverseStage("")
-        return
-      }
       if (error instanceof Error && error.message === "AUTH_REQUIRED") return
       const message = mapToolImageError(error)
       setResult({ title: "图像提示词反推", content: message })
@@ -605,7 +583,6 @@ export default function ToolsPage() {
         return
       }
       if (!response.ok) {
-        if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
         throw new Error(typeof payload?.error === "string" ? payload.error : `service_error:${response.status}`)
       }
 
@@ -642,13 +619,6 @@ export default function ToolsPage() {
       setReverseProgress(100)
       setReverseStage("图片生成完成")
     } catch (error) {
-      if (error instanceof Error && error.name === "SurveyRequiredError") {
-        handleSurveyRequired("图像生成")
-        setResult({ title: "图像生成", content: "请先完成今日问卷，完成后可继续生成图片。" })
-        setReverseProgress(0)
-        setReverseStage("")
-        return
-      }
       if (error instanceof Error && error.message === "AUTH_REQUIRED") return
       const message = mapToolImageError(error)
       setResult({ title: "图像生成", content: message })

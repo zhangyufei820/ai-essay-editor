@@ -31,7 +31,7 @@ import { clearStoredAuthState } from "@/lib/client-auth"
 
 export interface WorkspaceTopBarProps {
   pageTitle?: React.ReactNode
-  user?: { name?: string; avatar?: string; credits?: number; trialRemaining?: number; trialUnlocked?: boolean } | null
+  user?: { name?: string; avatar?: string; credits?: number } | null
   onMenuClick?: () => void
   sidebarOpen?: boolean
   className?: string
@@ -104,19 +104,6 @@ export function WorkspaceTopBar({
 
       {/* 右侧 */}
       <div className="flex items-center gap-2">
-        {user?.trialUnlocked && typeof user.trialRemaining === "number" && user.trialRemaining > 0 ? (
-          <Link
-            href="/campaign/free-trial"
-            prefetch={false}
-            className="hidden sm:inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--seal-200)] bg-[var(--seal-50)] px-3 text-[var(--seal-700)] transition-colors duration-200 hover:bg-[var(--seal-100)]"
-            aria-label={`今日体验额度剩余 ${user.trialRemaining}`}
-          >
-            <span className="text-[11px] font-semibold">体验</span>
-            <span className="font-[var(--font-mono-v2)] text-[13px] font-bold tabular-nums">
-              {user.trialRemaining.toLocaleString()}
-            </span>
-          </Link>
-        ) : null}
         {typeof user?.credits === "number" ? (
           <Link
             href="/credits"
@@ -155,11 +142,6 @@ export function WorkspaceTopBar({
                 {typeof user.credits === "number" ? (
                   <span className="mt-1 block font-[var(--font-mono-v2)] text-[11px] text-[var(--ink-500)]">
                     {user.credits.toLocaleString()} 积分
-                  </span>
-                ) : null}
-                {user.trialUnlocked && typeof user.trialRemaining === "number" ? (
-                  <span className="mt-1 block font-[var(--font-mono-v2)] text-[11px] text-[var(--seal-600)]">
-                    今日体验剩余 {user.trialRemaining.toLocaleString()} trial 积分
                   </span>
                 ) : null}
               </DropdownMenuV2Label>

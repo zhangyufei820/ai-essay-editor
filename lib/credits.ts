@@ -192,7 +192,7 @@ async function recordTransaction(
   }
 }
 
-// 仅扣真实积分。trial-credits 内部会调用它处理超额部分，避免 spendCredits 递归。
+// 原子扣除真实积分并记录账单审计信息。
 export async function spendRealCredits(
   userId: string,
   amount: number,
@@ -204,7 +204,7 @@ export async function spendRealCredits(
   return spendRealCreditsDirect(userId, amount, type, description, referenceId, billingMetadata)
 }
 
-// 消费积分：默认先使用共创体验 trial 额度，额度不足时再扣真实积分。
+// 消费真实积分。体验计划已下线，所有业务统一走真实积分扣费。
 export async function spendCredits(
   userId: string,
   amount: number,
@@ -214,39 +214,7 @@ export async function spendCredits(
   billingMetadata?: BillingAuditMetadata,
   options: { realCreditUserId?: string } = {},
 ): Promise<boolean> {
-  if (billingMetadata?.skipTrialBilling) {
-    return spendRealCredits(options.realCreditUserId || userId, amount, type, description, referenceId, billingMetadata)
-  }
-
-  try {
-    const { consumeWithTrialCredits } = await import("@/lib/trial-credits")
-    const result = await consumeWithTrialCredits({
-      userId,
-      realCreditUserId: options.realCreditUserId,
-      amount,
-      actionType: type,
-      description,
-      referenceId,
-      billingMetadata,
-    })
-
-    if (result.blocked && result.reason === "survey_required") {
-      console.warn(`[积分系统] trial 扣费被问卷门禁阻断 userId=${userId}, amount=${amount}, type=${type}`)
-      return false
-    }
-
-    return result.success
-  } catch (error) {
-    console.error("[积分系统] trial-first 扣费失败，回退真实积分扣费:", error)
-    return spendRealCredits(options.realCreditUserId || userId, amount, type, description, referenceId, {
-      ...(billingMetadata || {}),
-      rawProviderMetadata: {
-        ...(billingMetadata?.rawProviderMetadata || {}),
-        trialFirstFallback: true,
-      },
-      skipTrialBilling: true,
-    })
-  }
+  return spendRealCredits(options.realCreditUserId || userId, amount, type, description, referenceId, billingMetadata)
 }
 
 export async function recordBillingIssue(

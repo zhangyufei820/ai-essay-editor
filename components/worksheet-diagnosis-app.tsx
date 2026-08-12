@@ -42,7 +42,6 @@ import {
   proxifyGeneratedImageUrl,
 } from "@/components/chat/image-generation/gpt-image-v11"
 import { IconAllInOne, IconCopy, IconDiagnosis, IconExportPdf } from "@/components/icons/v2"
-import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey-client"
 
 type UploadedWorksheet = {
   name: string
@@ -131,19 +130,6 @@ async function readResponseJson(response: Response) {
 }
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
-
-function buildSurveyRequiredError() {
-  const error = new Error("SURVEY_REQUIRED")
-  error.name = "SurveyRequiredError"
-  return error
-}
-
-function handleSurveyRequired(featureName: string) {
-  openTrialSurveyGate({
-    featureName,
-    message: `请先完成今日问卷，解锁体验额度后继续使用${featureName}。`,
-  })
-}
 
 function formatElapsed(seconds: number) {
   if (seconds < 60) return `${seconds}s`
@@ -414,7 +400,6 @@ export function WorksheetDiagnosisApp() {
             } else if (event.type === "result") {
               finalPayload = event
             } else if (event.type === "error") {
-              if (isSurveyRequiredPayload(event)) throw buildSurveyRequiredError()
               const refundHint = event.billing?.refunded ? "，本次积分已自动退回" : ""
               throw new Error(`${event.error || `诊断失败：${event.status || event.code || "服务异常"}`}${refundHint}`)
             }
@@ -429,17 +414,11 @@ export function WorksheetDiagnosisApp() {
 
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
-        if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
         throw new Error(payload.error || `诊断失败：${response.status}`)
       }
       setResult(payload)
       toast.success(`错题诊断已完成，已消耗 ${payload.billing?.chargedCredits || diagnosisCredits} 积分`)
     } catch (error) {
-      if (error instanceof Error && error.name === "SurveyRequiredError") {
-        handleSurveyRequired("错题诊断")
-        setErrorMessage("请先完成今日问卷，完成后可继续生成诊断报告。")
-        return
-      }
       const message = error instanceof Error ? error.message : "诊断失败"
       setErrorMessage(message)
       toast.error(message)
@@ -542,7 +521,6 @@ export function WorksheetDiagnosisApp() {
       let payload = await readResponseJson(response)
 
       if (!response.ok) {
-        if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
         throw new Error(payload.error || payload.message || `海报生成失败：${response.status}`)
       }
 
@@ -562,11 +540,6 @@ export function WorksheetDiagnosisApp() {
       })
       toast.success("诊断海报已生成")
     } catch (error) {
-      if (error instanceof Error && error.name === "SurveyRequiredError") {
-        handleSurveyRequired("诊断海报生成")
-        setPosterError("请先完成今日问卷，完成后可继续生成诊断海报。")
-        return
-      }
       const message = error instanceof Error ? error.message : "海报生成失败"
       setPosterError(message)
       toast.error(message)

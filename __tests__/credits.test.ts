@@ -3,14 +3,14 @@ import { readFileSync } from 'fs'
 import path from 'path'
 import { createBillingAuditMetadata, createUserReferralCode, getReferralStats, getUserCredits, handleReferralSignup, spendCredits, summarizeCreditTransactions } from '@/lib/credits'
 import { hasActiveMembership, resolveMembershipStatus } from '@/lib/products'
-import { canUseImage2, isImage2CoCreationActive, parseAllowlistEnv } from '@/lib/permissions'
+import { canUseImage2, parseAllowlistEnv } from '@/lib/permissions'
 
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(),
 }))
 
-jest.mock('@/lib/trial-credits', () => ({
-  consumeWithTrialCredits: jest.fn(),
+jest.mock('@/lib/real-credit-spending', () => ({
+  spendRealCredits: jest.fn(),
 }))
 
 function makeChain(response: any) {
@@ -96,13 +96,9 @@ describe('credits helpers', () => {
     const oldUserIds = process.env.IMAGE2_WHITELIST_USER_IDS
     const oldEmails = process.env.IMAGE2_WHITELIST_EMAILS
     const oldLegacy = process.env.GPT_IMAGE_2_ALLOWLIST
-    const oldOpenAccess = process.env.IMAGE2_TEST_OPEN_ACCESS
-    const oldCoCreationEndsAt = process.env.IMAGE2_CO_CREATION_ENDS_AT
     process.env.IMAGE2_WHITELIST_USER_IDS = 'admin-user, test-user '
     process.env.IMAGE2_WHITELIST_EMAILS = 'admin@example.com, TEST@example.com '
     process.env.GPT_IMAGE_2_ALLOWLIST = 'legacy-user'
-    delete process.env.IMAGE2_TEST_OPEN_ACCESS
-    delete process.env.IMAGE2_CO_CREATION_ENDS_AT
 
     expect(parseAllowlistEnv(' admin@example.com, , test@example.com ')).toEqual(['admin@example.com', 'test@example.com'])
     expect(canUseImage2(null)).toBe(false)
@@ -120,40 +116,6 @@ describe('credits helpers', () => {
     else process.env.IMAGE2_WHITELIST_EMAILS = oldEmails
     if (oldLegacy === undefined) delete process.env.GPT_IMAGE_2_ALLOWLIST
     else process.env.GPT_IMAGE_2_ALLOWLIST = oldLegacy
-    if (oldOpenAccess === undefined) delete process.env.IMAGE2_TEST_OPEN_ACCESS
-    else process.env.IMAGE2_TEST_OPEN_ACCESS = oldOpenAccess
-    if (oldCoCreationEndsAt === undefined) delete process.env.IMAGE2_CO_CREATION_ENDS_AT
-    else process.env.IMAGE2_CO_CREATION_ENDS_AT = oldCoCreationEndsAt
-  })
-
-  it('opens GPT Image 2 to logged-in users during the 60-day co-creation period', () => {
-    const oldCoCreationEndsAt = process.env.IMAGE2_CO_CREATION_ENDS_AT
-    process.env.IMAGE2_CO_CREATION_ENDS_AT = '2026-07-19T15:59:59.000Z'
-
-    const duringCoCreation = Date.parse('2026-05-20T00:00:00.000Z')
-    expect(isImage2CoCreationActive(duringCoCreation)).toBe(true)
-    expect(canUseImage2({ user_id: 'non-member-user' }, duringCoCreation)).toBe(true)
-    expect(canUseImage2(null, duringCoCreation)).toBe(false)
-
-    if (oldCoCreationEndsAt === undefined) delete process.env.IMAGE2_CO_CREATION_ENDS_AT
-    else process.env.IMAGE2_CO_CREATION_ENDS_AT = oldCoCreationEndsAt
-  })
-
-  it('restores GPT Image 2 subscriber or whitelist rules after co-creation ends', () => {
-    const oldCoCreationEndsAt = process.env.IMAGE2_CO_CREATION_ENDS_AT
-    const oldOpenAccess = process.env.IMAGE2_TEST_OPEN_ACCESS
-    process.env.IMAGE2_CO_CREATION_ENDS_AT = '2026-07-19T15:59:59.000Z'
-    delete process.env.IMAGE2_TEST_OPEN_ACCESS
-
-    expect(isImage2CoCreationActive(Date.parse('2026-07-20T00:00:00.000Z'))).toBe(false)
-    const afterCoCreation = Date.parse('2026-07-20T00:00:00.000Z')
-    expect(canUseImage2({ user_id: 'non-member-user' }, afterCoCreation)).toBe(false)
-    expect(canUseImage2({ user_id: 'member-user', membership_status: 'basic' }, afterCoCreation)).toBe(true)
-
-    if (oldCoCreationEndsAt === undefined) delete process.env.IMAGE2_CO_CREATION_ENDS_AT
-    else process.env.IMAGE2_CO_CREATION_ENDS_AT = oldCoCreationEndsAt
-    if (oldOpenAccess === undefined) delete process.env.IMAGE2_TEST_OPEN_ACCESS
-    else process.env.IMAGE2_TEST_OPEN_ACCESS = oldOpenAccess
   })
 
   it('lets Image 2 server permissions fall back to persisted subscription flags', () => {
@@ -289,26 +251,22 @@ describe('credits helpers', () => {
     expect(migration).toContain('REVOKE ALL ON FUNCTION public.spend_real_credits_atomic')
   })
 
-  it('routes public spendCredits through trial-first consumption', async () => {
-    const { consumeWithTrialCredits } = await import('@/lib/trial-credits')
-    ;(consumeWithTrialCredits as jest.Mock).mockResolvedValueOnce({
-      success: true,
-      blocked: false,
-      reason: null,
-    })
+  it('routes public spendCredits through atomic real-credit spending', async () => {
+    const { spendRealCredits } = await import('@/lib/real-credit-spending')
+    ;(spendRealCredits as jest.Mock).mockResolvedValueOnce(true)
 
     await expect(
       spendCredits('user-1', 10, 'consume', '测试消费', 'ref-1', { feature: 'test' }),
     ).resolves.toBe(true)
 
-    expect(consumeWithTrialCredits).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'user-1',
-      amount: 10,
-      actionType: 'consume',
-      description: '测试消费',
-      referenceId: 'ref-1',
-      billingMetadata: expect.objectContaining({ feature: 'test' }),
-    }))
+    expect(spendRealCredits).toHaveBeenCalledWith(
+      'user-1',
+      10,
+      'consume',
+      '测试消费',
+      'ref-1',
+      expect.objectContaining({ feature: 'test' }),
+    )
   })
 
   it('reuses an existing referral code instead of rotating shared invite links', async () => {

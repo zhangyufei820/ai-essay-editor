@@ -132,30 +132,12 @@ function parseArgs(argv) {
   return args
 }
 
-async function dismissTrialDialog(page) {
-  const dialog = page.getByRole("dialog", { name: "沈翔智学 60 天共创体验计划" })
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const visible = await dialog.isVisible({ timeout: 2000 }).catch(() => false)
-    if (!visible) return
-    const laterButton = dialog.getByRole("button", { name: "稍后再说" })
-    if (await laterButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await laterButton.click({ force: true })
-    } else {
-      await page.keyboard.press("Escape")
-    }
-    const hidden = await dialog.isHidden({ timeout: 3000 }).catch(() => false)
-    if (hidden) return
-  }
-}
-
 async function login(page, baseUrl, phone, password) {
   await page.goto(`${baseUrl}/login?redirect=%2Fchat`, { waitUntil: "domcontentloaded" })
-  await dismissTrialDialog(page)
   await page.locator("#passworLogin_account").fill(phone)
   await page.locator("#passworLogin_password").fill(password)
   await page.locator("button[type='submit']").filter({ hasText: "Sign In" }).click()
   await page.waitForURL(/\/chat(?:$|\?)/, { timeout: 45000 })
-  await dismissTrialDialog(page)
   await page.getByPlaceholder("输入内容开始对话...").waitFor({ timeout: 30000 })
 }
 
@@ -186,7 +168,6 @@ async function runTarget(page, baseUrl, target, timeoutMs) {
   const sendButton = page.getByRole("button", { name: "发送消息" })
 
   await page.goto(`${baseUrl}${target.route}`, { waitUntil: "domcontentloaded" })
-  await dismissTrialDialog(page)
 
   const input = page.getByPlaceholder(target.placeholder)
   await input.waitFor({ timeout: 30000 })
@@ -211,7 +192,6 @@ async function runTarget(page, baseUrl, target, timeoutMs) {
   const response = await responsePromise
   const responseHeadersMs = Date.now() - requestStartedAt
   const perfEntries = await waitForPerfStage(page, "stream_end", timeoutMs)
-  await dismissTrialDialog(page)
   await sendButton.waitFor({ state: "visible", timeout: 10000 })
 
   const assistantPreview = await page.evaluate(() => {

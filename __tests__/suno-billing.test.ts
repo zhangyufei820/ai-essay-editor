@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server"
 
-const canUseTrialCredits = jest.fn()
 const getUserCredits = jest.fn()
 const chargeCreditsSafely = jest.fn()
 const recordBillingIssue = jest.fn()
-
-jest.mock("@/lib/trial-credits", () => ({
-  canUseTrialCredits,
-}))
 
 jest.mock("@/lib/credits", () => ({
   getUserCredits,
@@ -23,15 +18,11 @@ jest.mock("@/lib/billing", () => ({
 describe("suno billing", () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    canUseTrialCredits.mockResolvedValue({ data: { trialUsedAvailable: 0 } })
     getUserCredits.mockResolvedValue({ credits: 1000 })
     chargeCreditsSafely.mockResolvedValue(true)
   })
 
-  it("lets real credits pass the survey-gated trial guard", async () => {
-    canUseTrialCredits.mockResolvedValueOnce({
-      data: { blocked: true, reason: "survey_required", remainingToday: 2000 },
-    })
+  it("lets sufficient real credits pass the balance guard", async () => {
     const { ensureSunoCredits } = await import("@/lib/suno-billing")
 
     const response = await ensureSunoCredits("user-1")
@@ -39,10 +30,7 @@ describe("suno billing", () => {
     expect(response).toBeNull()
   })
 
-  it("returns survey-required credit guard response when real credits are insufficient", async () => {
-    canUseTrialCredits.mockResolvedValueOnce({
-      data: { blocked: true, reason: "survey_required", remainingToday: 2000 },
-    })
+  it("returns insufficient-credit response when real credits are insufficient", async () => {
     getUserCredits.mockResolvedValueOnce({ credits: 0 })
     const { ensureSunoCredits } = await import("@/lib/suno-billing")
 
@@ -50,7 +38,7 @@ describe("suno billing", () => {
     const json = await (response as NextResponse).json()
 
     expect(response?.status).toBe(402)
-    expect(json.code).toBe("SURVEY_REQUIRED")
+    expect(json.code).toBe("INSUFFICIENT_CREDITS")
   })
 
   it("charges base credits with old Suno audit semantics", async () => {

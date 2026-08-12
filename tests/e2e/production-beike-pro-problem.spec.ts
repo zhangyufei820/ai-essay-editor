@@ -3,49 +3,29 @@ import { readE2eCredentials } from "./e2e-secrets"
 
 test.use({ screenshot: "off", trace: "off", video: "off" })
 
-async function dismissTrialDialog(page: Page) {
-  const trialDialog = page.getByRole("dialog", { name: "沈翔智学 60 天共创体验计划" })
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (!(await trialDialog.isVisible({ timeout: 2_000 }).catch(() => false))) return
-    const laterButton = trialDialog.getByRole("button", { name: "稍后再说" })
-    if (await laterButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
-      await laterButton.click({ force: true })
-    } else {
-      await page.keyboard.press("Escape")
-    }
-    if (await trialDialog.isHidden({ timeout: 3_000 }).catch(() => false)) return
-  }
-  throw new Error("trial_dialog_still_visible")
-}
-
 async function login(page: Page) {
   const { phone, password } = readE2eCredentials()
   test.skip(!password, "SHENXIANG_E2E_TEST_PASSWORD is not configured")
 
   await page.goto("/login?redirect=/chat", { waitUntil: "domcontentloaded" })
-  await dismissTrialDialog(page)
   await page.locator("#passworLogin_account").fill(phone)
   await page.locator("#passworLogin_password").fill(password)
   await page.locator("button[type='submit']").filter({ hasText: "Sign In" }).click()
   await page.waitForURL(/\/chat(?:$|\?)/, { timeout: 45_000 })
   await page.locator("#passworLogin_password").fill("").catch(() => {})
-  await dismissTrialDialog(page)
   await expect(page.getByPlaceholder("输入内容开始对话...")).toBeVisible({ timeout: 30_000 })
 }
 
 async function openChatModel(page: Page, modelPath: "/chat/beike-pro" | "/chat/problem") {
   await page.goto(modelPath, { waitUntil: "domcontentloaded" })
-  await dismissTrialDialog(page)
   await expect(page.getByPlaceholder("输入内容开始对话...")).toBeVisible({ timeout: 30_000 })
 }
 
 async function sendChatMessage(page: Page, message: string) {
-  await dismissTrialDialog(page)
   const input = page.getByPlaceholder("输入内容开始对话...")
   await input.fill(message)
   await expect(page.getByRole("button", { name: "发送消息" })).toBeEnabled()
   await page.getByRole("button", { name: "发送消息" }).click()
-  await dismissTrialDialog(page)
 }
 
 async function waitForAssistantDone(page: Page, marker: RegExp | string) {

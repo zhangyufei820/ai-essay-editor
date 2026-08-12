@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { createBillingAuditMetadata } from "@/lib/credits"
+import { chargeCreditsSafely } from "@/lib/billing"
 import { getMaxOutputTokensForModel, getMinimumRequiredCredits, type ModelType } from "@/lib/pricing"
 import { requireUser } from "@/lib/auth/verified-user"
-import { consumeWithTrialCredits } from "@/lib/trial-credits"
 import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 
 export const maxDuration = 300
@@ -14,21 +14,6 @@ const ESSAY_CORRECTION_BASE_URL = process.env.ESSAY_CORRECTION_BASE_URL
 const ESSAY_MODEL: ModelType = "standard"
 const ESSAY_MAX_OUTPUT_TOKENS = getMaxOutputTokensForModel(ESSAY_MODEL)
 const ESSAY_GRADING_COST = getMinimumRequiredCredits(ESSAY_MODEL)
-
-function createBillingPayload(result: {
-  trialUsed?: number
-  realCreditsUsed?: number
-  remainingToday?: number
-  blocked?: boolean
-  reason?: string | null
-} | null) {
-  return {
-    trialUsed: result?.trialUsed || 0,
-    realCreditsUsed: result?.realCreditsUsed || 0,
-    remainingToday: result?.remainingToday || 0,
-    surveyRequired: Boolean(result?.blocked && result.reason === "survey_required"),
-  }
-}
 
 export async function POST(req: NextRequest) {
   console.log("[作文批改] ===== API 调用开始 =====")
@@ -100,37 +85,19 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    let billing = createBillingPayload(null)
-    const billingResult = await consumeWithTrialCredits({
+    const charged = await chargeCreditsSafely(
       userId,
-      realCreditUserId,
-      amount: ESSAY_GRADING_COST,
-      actionType: "consume",
-      description: "AI 作文批改",
-      referenceId: billingReferenceId,
-      metadata: {
-        feature: "essay_grade",
-        gradeLevel: gradeLevel || "初中",
-        topic: topic || "作文",
-        wordLimit: wordLimit || "800字",
-      },
+      ESSAY_GRADING_COST,
+      "consume",
+      "AI 作文批改",
+      billingReferenceId,
       billingMetadata,
-    })
-    billing = createBillingPayload(billingResult)
-    const charged = billingResult.success
-
-    if (billingResult?.blocked && billingResult.reason === "survey_required") {
-      return NextResponse.json({
-        error: "请先完成今日问卷，解锁免费体验额度",
-        surveyRequired: true,
-        billing,
-      }, { status: 402 })
-    }
+      { realCreditUserId },
+    )
 
     if (!charged) {
       return NextResponse.json({
         error: "积分不足，无法批改作文",
-        billing,
       }, { status: 402 })
     }
 
@@ -183,7 +150,6 @@ export async function POST(req: NextRequest) {
       // 🔥 创建 TransformStream 处理思考过程
       const encoder = new TextEncoder()
       const decoder = new TextDecoder()
-      let billingSent = false
       let heartbeatId: ReturnType<typeof setInterval> | null = null
       const stopHeartbeat = () => {
         if (heartbeatId) {
@@ -193,11 +159,6 @@ export async function POST(req: NextRequest) {
       }
       const transformStream = new TransformStream({
         start(controller) {
-          if (!billingSent) {
-            billingSent = true
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: "billing", billing })}\n\n`))
-          }
-
           heartbeatId = setInterval(() => {
             try {
               controller.enqueue(encoder.encode(`: essay-grade-keepalive ${Date.now()}\n\n`))
@@ -249,9 +210,6 @@ export async function POST(req: NextRequest) {
           "Connection": "keep-alive",
           "X-Accel-Buffering": "no",
           "Content-Encoding": "none",
-          "X-Trial-Used": String(billing.trialUsed),
-          "X-Real-Credits-Used": String(billing.realCreditsUsed),
-          "X-Trial-Remaining-Today": String(billing.remainingToday),
         }
       })
     } catch (apiError) {

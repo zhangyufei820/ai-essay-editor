@@ -108,6 +108,6 @@ describe("worksheet diagnosis Dify contract", () => {
     expect(app).toContain('quality: "low"')
     expect(chatRoute).toContain("verifyWorksheetPosterToken")
     expect(chatRoute).toContain("hasVerifiedWorksheetPosterToken")
-    expect(chatRoute).toContain("!hasActiveTrialForRequest && !hasVerifiedWorksheetPosterToken && !canUseImage2")
+    expect(chatRoute).toContain("!hasVerifiedWorksheetPosterToken && !canUseImage2")
   })
 })

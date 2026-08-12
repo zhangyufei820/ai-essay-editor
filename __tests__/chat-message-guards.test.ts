@@ -226,7 +226,6 @@ describe("chat message guards", () => {
     expect(route).toContain('failure_phase: "preflight"')
     expect(route).toContain('errorCode: "INSUFFICIENT_CREDITS"')
     expect(route).toContain('stage: "积分不足"')
-    expect(route).toContain('errorCode: "SURVEY_REQUIRED"')
     expect(route).toContain('errorCode: "DIFY_CREDENTIAL_MISSING"')
   })
 

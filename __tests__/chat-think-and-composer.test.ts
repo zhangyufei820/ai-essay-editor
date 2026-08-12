@@ -129,23 +129,11 @@ describe("chat think rendering and composer layout", () => {
     expect(chatInput).toContain('? "正在恢复登录状态..."')
   })
 
-  it("counts available trial credits before showing the client-side insufficient-credit toast", () => {
+  it("shows the client-side insufficient-credit toast from real credits", () => {
     const source = read("components/chat/enhanced-chat-interface.tsx")
 
-    expect(source).toContain("getAvailableTrialCreditsForSubmit")
-    expect(source).toContain("availableTrialCreditsForSubmit = getAvailableTrialCreditsForSubmit(surveyState.status)")
-    expect(source).toContain("const availableCreditsForSubmit = userCredits + (trialEligibleForSubmit ? availableTrialCreditsForSubmit : 0)")
-    expect(source).toContain("if (availableCreditsForSubmit < cost)")
-    expect(source).not.toContain("if (userCredits < cost && !trialEligibleForSubmit)")
-  })
-
-  it("keeps free-trial prompts off login and auth pages", () => {
-    const source = read("components/trial/DailySurveyAutoPrompt.tsx")
-
-    expect(source).toContain('pathname === "/login"')
-    expect(source).toContain('pathname.startsWith("/auth/")')
-    expect(source).toContain("!suppressPassivePrompts && runtimeFlags.loaded")
-    expect(source).toContain("enabled={surveyGateEnabled}")
+    expect(source).toContain("if (userCredits < cost)")
+    expect(source).toContain("description: `需要 ${cost} 积分，当前 ${userCredits}`")
   })
 
   it("keeps local history sessions separate from Dify memory conversations", () => {

@@ -32,9 +32,6 @@ import { MessageBubble } from "./MessageBubble"
 import { ChatInput } from "./ChatInput"
 import { CodexSkillPicker } from "./CodexSkillPicker"
 import { OpenClawSkillPicker } from "./OpenClawSkillPicker"
-import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
-import { trackCampaignEvent } from "@/lib/campaign-events-client"
-import { openTrialSurveyGate } from "@/lib/trial-survey-client"
 import { EmptyState } from "./EmptyState"
 import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
 import { ModelSelector, type Model } from "./ModelSelector"
@@ -536,9 +533,6 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
   }
   if (status === 402 || /402|积分不足|余额不足|credit|balance/.test(raw)) {
     return "积分不足，当前任务没有扣费。请充值或升级会员后继续使用。"
-  }
-  if (raw.includes("当前共创体验期内登录用户可用")) {
-    return "当前图像能力需要登录后使用，请先登录后再提交。"
   }
   if (raw.includes("当前仅订阅用户可用") || raw.includes("仅订阅用户可用")) {
     return "当前账号暂时无法使用该图像能力，请刷新页面或重新登录后再试。"
@@ -1366,15 +1360,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [authResolved, setAuthResolved] = useState(false)
   const [userAvatar, setUserAvatar] = useState<string>("")
   const [userCredits, setUserCredits] = useState<number>(0)
-  const [isPaidUser, setIsPaidUser] = useState(false)
-  const [trialStatus, setTrialStatus] = useState<TrialSurveyStatus | null>(null)
-
-  const getAvailableTrialCreditsForSubmit = useCallback((status: TrialSurveyStatus | null) => {
-    if (!status?.active_grant_id) return 0
-    const remaining = Number(status.today_trial_remaining || 0)
-    return Number.isFinite(remaining) && remaining > 0 ? Math.floor(remaining) : 0
-  }, [])
-  const [surveyGateOpen, setSurveyGateOpen] = useState(false)
   // 🔥 新增：用户显示名称（手机号/邮箱）
   const [userDisplayName, setUserDisplayName] = useState<string>("")
   const sessionIdRef = useRef<string | null>(null)
@@ -1636,7 +1621,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           }
         }
         setUserCredits(data.credits || 0)
-        setIsPaidUser(Boolean(data.is_pro))
       } else {
         console.error("❌ [积分查询] API 失败:", res.status)
       }
@@ -1656,7 +1640,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       if (!verifiedUserId) return false
       setUserId(verifiedUserId)
       setUserCredits(typeof data.credits === "number" ? data.credits : 0)
-      setIsPaidUser(Boolean(data.is_pro))
       fetchChatSessions(verifiedUserId)
       recoverPendingTasks(verifiedUserId)
       return true
@@ -1669,58 +1652,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   fetchCreditsRef.current = fetchCredits
   hydrateVerifiedUserRef.current = hydrateVerifiedUserFromApi
   recoverPendingTasksRef.current = recoverPendingTasks
-
-  const shouldRequireEssaySurvey = useCallback((status: TrialSurveyStatus | null) => {
-    return Boolean(
-      status?.active_grant_id &&
-      status.requires_daily_survey !== false &&
-      !status.today_survey_completed &&
-      !isPaidUser
-    )
-  }, [isPaidUser])
-
-  const refreshTrialSurveyState = useCallback(async () => {
-    if (!userId) {
-      return { status: null as TrialSurveyStatus | null, trialEligible: false, gateRequired: false }
-    }
-
-    try {
-      const headers = await getVerifiedAuthHeaders()
-      const [surveyResponse, creditsResponse] = await Promise.all([
-        fetch("/api/surveys/today", { cache: "no-store", headers }),
-        fetch("/api/user/credits", { cache: "no-store", headers }),
-      ])
-
-      const creditsData = await creditsResponse.json().catch(() => null)
-      const nextIsPaidUser = Boolean(creditsData?.is_pro || isPaidUser)
-      setIsPaidUser(nextIsPaidUser)
-      if (typeof creditsData?.credits === "number") {
-        setUserCredits(creditsData.credits)
-      }
-
-      const data = await surveyResponse.json().catch(() => null)
-      if (!surveyResponse.ok || !data?.ok) {
-        console.warn("[TrialSurveyGate] today survey precheck failed", surveyResponse.status, data?.error)
-        return { status: null as TrialSurveyStatus | null, trialEligible: false, gateRequired: false }
-      }
-
-      const status = (data.trialStatus || null) as TrialSurveyStatus | null
-      setTrialStatus(status)
-      return {
-        status,
-        trialEligible: Boolean(status?.active_grant_id),
-        gateRequired: Boolean(
-          status?.active_grant_id &&
-          status.requires_daily_survey !== false &&
-          !status.today_survey_completed &&
-          !nextIsPaidUser
-        ),
-      }
-    } catch (error) {
-      console.warn("[TrialSurveyGate] today survey precheck error", error)
-      return { status: null as TrialSurveyStatus | null, trialEligible: false, gateRequired: false }
-    }
-  }, [isPaidUser, userId])
 
   const isAuthenticated = Boolean(userId)
   const isAuthPending = !authResolved
@@ -2510,34 +2441,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       hasDifyConversation: Boolean(difyConversationIdRef.current)
     })
 
-    let trialEligibleForSubmit = Boolean(trialStatus?.active_grant_id)
-    let availableTrialCreditsForSubmit = getAvailableTrialCreditsForSubmit(trialStatus)
-    if (!isPaidUser) {
-      const surveyState = await refreshTrialSurveyState()
-      trialEligibleForSubmit = surveyState.trialEligible
-      availableTrialCreditsForSubmit = getAvailableTrialCreditsForSubmit(surveyState.status)
-      const cost = calculateCost()
-      if (surveyState.gateRequired && userCredits < cost) {
-        const openedSurveyGate = await openTrialSurveyGate({
-          featureName: getModelUiConfig(selectedModel).name || "当前功能",
-          message: "请先完成今日问卷，解锁体验额度后继续使用当前功能。",
-        })
-        setSurveyGateOpen(openedSurveyGate)
-        if (!openedSurveyGate) {
-          trialEligibleForSubmit = false
-        } else {
-          return
-        }
-      }
-    }
-
     const cost = calculateCost()
-    const availableCreditsForSubmit = userCredits + (trialEligibleForSubmit ? availableTrialCreditsForSubmit : 0)
-    if (availableCreditsForSubmit < cost) {
+    if (userCredits < cost) {
       toast.error("积分不足", {
-        description: availableTrialCreditsForSubmit > 0
-          ? `需要 ${cost} 积分，当前真实积分 ${userCredits}，体验额度 ${availableTrialCreditsForSubmit}`
-          : `需要 ${cost} 积分，当前 ${userCredits}`,
+        description: `需要 ${cost} 积分，当前 ${userCredits}`,
         duration: 2000
       })
       return
@@ -2802,25 +2709,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           const errorPayload = contentType.includes("application/json")
             ? await res.json().catch(() => null)
             : null
-
-          if (errorPayload?.surveyRequired) {
-            void trackCampaignEvent("survey_required_block", {
-              featureName: "chat_essay_review",
-              status: res.status,
-              model: selectedModel,
-            })
-            void openTrialSurveyGate({
-              featureName: getModelUiConfig(selectedModel).name || "当前功能",
-              message: "请先完成今日问卷，解锁体验额度后继续使用当前功能。",
-            })
-            setTrialStatus((previous) => ({
-              ...(previous || {}),
-              ...(errorPayload.trialStatus || {}),
-              requires_daily_survey: true,
-              today_survey_completed: false,
-            }))
-            throw new Error("请先完成今日共创反馈问卷，解锁免费体验额度")
-          }
 
           if (res.status === 402) throw new Error(getChatErrorMessage("积分不足", res.status, selectedModel))
           throw new Error(getChatErrorMessage(errorPayload?.error || "没有权限使用该功能", res.status, selectedModel))
@@ -3732,16 +3620,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             )}
 	            {/* 🔥 输入框 - 使用 ChatInput 组件 - 移动端固定在底部 */}
             <div className="relative z-20 mx-auto w-full max-w-3xl px-0">
-              <DailySurveyGate
-                featureName={getModelUiConfig(selectedModel).name || "当前功能"}
-                enabled
-                open={surveyGateOpen}
-                onOpenChange={setSurveyGateOpen}
-                onCompleted={(nextTrialStatus) => {
-                  setTrialStatus((nextTrialStatus || null) as TrialSurveyStatus | null)
-                  toast.success("今日体验额度已解锁")
-                }}
-              />
               <ChatInput
                 showModelSelector={true}
                 selectedModel={selectedAgentKey}

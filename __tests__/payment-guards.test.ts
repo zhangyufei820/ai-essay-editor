@@ -116,10 +116,9 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('hasGptImageModelInput(inputs) && !isDirectImageGatewayRequest')
     expect(source).toContain('function isGptImageGatewayModel(model: unknown)')
     expect(source).toContain('const userId = auth.user!.id')
-    expect(source).toContain('const hasActiveTrialForRequest = Boolean(trialPrecheck.data?.grantId)')
     expect(source).toContain('verifyWorksheetPosterToken')
     expect(source).toContain('const hasVerifiedWorksheetPosterToken')
-    expect(source).toContain('!hasActiveTrialForRequest && !hasVerifiedWorksheetPosterToken && !canUseImage2')
+    expect(source).toContain('!hasVerifiedWorksheetPosterToken && !canUseImage2')
     expect(source).toContain('.eq("user_id", userId)')
     expect(source).toContain('calculateGptImageGatewayCredits(imageInputsForBilling)')
     expect(source).toContain('createBillingAuditMetadata')
@@ -133,12 +132,9 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
 
     expect(route).toContain('当前账号暂时无法使用该图像能力，请重新登录后再试。')
-    expect(route).not.toContain('GPT Image 2 当前共创体验期内登录用户可用')
     expect(route).not.toContain('GPT Image 2 当前仅订阅用户可用，请升级会员后使用。')
     expect(chat).not.toContain('return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"')
     expect(image2).not.toContain('return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"')
-    expect(chat).not.toContain('return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。"')
-    expect(image2).not.toContain('return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后生成图片。"')
   })
 
   it('routes GPT Image 2 through the direct image gateway after server-side billing guards', () => {
@@ -427,44 +423,6 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).not.toContain('/api/analyze')
   })
 
-  it('keeps daily survey gate actions reachable on mobile viewports', () => {
-    const source = read('components/trial/DailySurveyGate.tsx')
-    const chat = read('components/chat/enhanced-chat-interface.tsx')
-    const essay = read('components/essay-grader.tsx')
-
-    expect(source).toContain('SURVEY_FETCH_TIMEOUT_MS')
-    expect(source).toContain('const [loadError, setLoadError]')
-    expect(source).toContain('signal: controller.signal')
-    expect(source).toContain('重新加载')
-    expect(source).toContain('今日问卷加载失败，请稍后重试；你也可以先点“稍后再说”退出。')
-    expect(source).toContain('h-[calc(100svh-1rem)]')
-    expect(source).toContain('flex-1 touch-pan-y')
-    expect(source).toContain('overflow-y-auto')
-    expect(source).toContain('pb-[max(0.75rem,env(safe-area-inset-bottom))]')
-    expect(source).toContain('grid shrink-0 grid-cols-2')
-    expect(chat).toContain('const openedSurveyGate = await openTrialSurveyGate')
-    expect(chat).toContain('setSurveyGateOpen(openedSurveyGate)')
-    expect(essay).toContain('const openedSurveyGate = await openTrialSurveyGate')
-    expect(essay).toContain('setSurveyGateOpen(openedSurveyGate)')
-  })
-
-  it('keeps the global daily survey prompt behind runtime stop-loss flags', () => {
-    const source = read('components/trial/DailySurveyAutoPrompt.tsx')
-
-    expect(source).toContain('loaded: false')
-    expect(source).toContain('SESSION_REFRESH_TIMEOUT_MS')
-    expect(source).toContain('fetchWithTimeout')
-    expect(source).toContain('consumptionEnabled: false')
-    expect(source).toContain('autoPromptEnabled: false')
-    expect(source).toContain('today_survey_refresh_failed')
-    expect(source).toContain('setSurveyOpen(false)')
-    expect(source).toContain('const surveyGateEnabled = runtimeFlags.loaded')
-    expect(source).toContain('&& runtimeFlags.consumptionEnabled')
-    expect(source).toContain('&& runtimeFlags.autoPromptEnabled')
-    expect(source).toContain('open={!suppressPassivePrompts && runtimeFlags.loaded')
-    expect(source).toContain('enabled={surveyGateEnabled}')
-    expect(source).toContain('runtimeFlags.loaded && runtimeFlags.campaignEnabled && runtimeFlags.consumptionEnabled && announcementOpen')
-  })
 
   it('lets Bearer requests reach route-level verified auth instead of Supabase-only middleware', () => {
     const middleware = read('lib/supabase/middleware.ts')

@@ -19,7 +19,6 @@ import {
 import { canUseImage2, isSubscribedUser, resolveMembershipStatus } from "@/lib/permissions"
 import { recordBillingIssue } from "@/lib/credits"
 import { refundImageTaskCredits } from "@/lib/image-task-refunds"
-import { canUseTrialCredits } from "@/lib/trial-credits"
 import {
   chargeCreditsSafely as spendCredits,
   createBillingLog as createBillingAuditMetadata,
@@ -3717,39 +3716,6 @@ export async function POST(request: NextRequest) {
       : getMinimumRequiredCredits(modelType)
     logPerf(requestId, "credit_check_done", apiStartedAt, { requiredCredits: estimatedMinCost })
     
-    const trialPrecheck = await canUseTrialCredits(userId, estimatedMinCost)
-    if (
-      trialPrecheck.data?.blocked &&
-      trialPrecheck.data.reason === "survey_required" &&
-      currentCredits < estimatedMinCost
-    ) {
-      console.warn(`🚫 [计费] 共创体验问卷未完成: user=${userId.slice(0, 8)}, required=${estimatedMinCost}`)
-      await settlePreflightFailure({
-        stage: "请先完成今日问卷",
-        errorMessage: "请先完成今日问卷，解锁免费体验额度",
-        errorCode: "SURVEY_REQUIRED",
-        metadata: {
-          current_credits: currentCredits,
-          required_credits: estimatedMinCost,
-          trial_remaining: trialPrecheck.data.remainingToday,
-        },
-      })
-      return new Response(
-        JSON.stringify({
-          error: "请先完成今日问卷，解锁免费体验额度",
-          surveyRequired: true,
-          billing: {
-            trialUsed: 0,
-            realCreditsUsed: 0,
-            remainingToday: trialPrecheck.data.remainingToday,
-            surveyRequired: true,
-          },
-        }),
-        { status: 402, headers: { "Content-Type": "application/json" } },
-      )
-    }
-
-    const hasActiveTrialForRequest = Boolean(trialPrecheck.data?.grantId)
     const worksheetPosterToken = typeof body.worksheetPosterToken === "string" ? body.worksheetPosterToken : null
     const worksheetDiagnosisRequestId = typeof body.worksheetDiagnosisRequestId === "string" ? body.worksheetDiagnosisRequestId : null
     const hasVerifiedWorksheetPosterToken =
@@ -3772,19 +3738,18 @@ export async function POST(request: NextRequest) {
         phone: auth.user!.phone,
       })
 
-      if (!hasActiveTrialForRequest && !hasVerifiedWorksheetPosterToken && !canUseImage2({
+      if (!hasVerifiedWorksheetPosterToken && !canUseImage2({
         user_id: userId,
         email: typeof userProfile?.email === "string" ? userProfile.email : auth.user!.email,
         membership_status: membershipStatus,
       })) {
-        console.warn(`🚫 [媒体权限] 用户无共创体验或订阅/白名单权限，不能使用 ${billingModelType || "gpt-image-2"}`)
+        console.warn(`🚫 [媒体权限] 用户无订阅/白名单权限，不能使用 ${billingModelType || "gpt-image-2"}`)
         await settlePreflightFailure({
           stage: "图像权限校验失败",
           errorMessage: "当前账号暂时无法使用该图像能力，请重新登录后再试。",
           errorCode: "IMAGE2_ACCESS_DENIED",
           metadata: {
             billing_model: billingModelType || "gpt-image-2",
-            has_trial_grant: hasActiveTrialForRequest,
             has_worksheet_poster_token: hasVerifiedWorksheetPosterToken,
           },
         })
@@ -3801,10 +3766,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const availableTrialForMinimum = trialPrecheck.data?.trialUsedAvailable || 0
-    if (currentCredits + availableTrialForMinimum < estimatedMinCost) {
+    if (currentCredits < estimatedMinCost) {
       console.warn(`🚫 [计费] 用户积分不足: 当前 ${currentCredits}`)
-      const insufficientCreditsMessage = `当前功能至少需要 ${estimatedMinCost} 积分，当前剩余 ${currentCredits} 积分。请充值、升级会员或完成体验额度解锁后继续使用。`
+      const insufficientCreditsMessage = `当前功能至少需要 ${estimatedMinCost} 积分，当前剩余 ${currentCredits} 积分。请充值或升级会员后继续使用。`
       await settlePreflightFailure({
         stage: "积分不足",
         errorMessage: insufficientCreditsMessage,
@@ -3812,7 +3776,6 @@ export async function POST(request: NextRequest) {
         metadata: {
           current_credits: currentCredits,
           required_credits: estimatedMinCost,
-          trial_remaining: availableTrialForMinimum,
         },
       })
       return new Response(
@@ -3821,7 +3784,6 @@ export async function POST(request: NextRequest) {
           message: insufficientCreditsMessage,
           required: estimatedMinCost,
           current: currentCredits,
-          trialRemaining: availableTrialForMinimum,
           action: "请充值或升级会员",
         }),
         { status: 402, headers: { "Content-Type": "application/json" } }

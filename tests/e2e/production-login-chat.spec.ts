@@ -19,25 +19,13 @@ test.describe("production authenticated chat", () => {
     })
 
     await page.goto("/login?redirect=/chat", { waitUntil: "domcontentloaded" })
-    const trialDialog = page.getByRole("dialog", { name: "沈翔智学 60 天共创体验计划" })
-    if (await trialDialog.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await trialDialog.getByRole("button", { name: "稍后再说" }).click()
-      await expect(trialDialog).toBeHidden()
-    }
-
     await page.locator("#passworLogin_account").fill(phone)
     await page.locator("#passworLogin_password").fill(password)
     await page.locator("button[type='submit']").filter({ hasText: "Sign In" }).click()
 
     await page.waitForURL(/\/chat(?:$|\?)/, { timeout: 45_000 })
     await expect(page.getByPlaceholder("输入内容开始对话...")).toBeVisible({ timeout: 30_000 })
-    const chatTrialDialog = page.getByRole("dialog", { name: "沈翔智学 60 天共创体验计划" })
-    if (await chatTrialDialog.isVisible({ timeout: 8_000 }).catch(() => false)) {
-      await chatTrialDialog.getByRole("button", { name: "稍后再说" }).click()
-      await expect(chatTrialDialog).toBeHidden()
-    }
-
-    await page.getByPlaceholder("输入内容开始对话...").fill("请用一句话回复：共创体验验证")
+    await page.getByPlaceholder("输入内容开始对话...").fill("请用一句话回复：登录验证成功")
     await expect(page.getByRole("button", { name: "发送消息" })).toBeEnabled()
     await page.getByRole("button", { name: "发送消息" }).click()
 

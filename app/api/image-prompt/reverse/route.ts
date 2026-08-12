@@ -4,8 +4,8 @@ import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { applyRateLimit } from "@/lib/rate-limit"
 import { extractDifyWorkflowOutputs, runDifyWorkflow } from "@/lib/dify-workflow-client"
 import { createBillingAuditMetadata, recordBillingIssue } from "@/lib/credits"
+import { chargeCreditsSafely } from "@/lib/billing"
 import { calculateTextCredits, parseDifyUsage, PRICING_VERSION } from "@/lib/pricing"
-import { consumeWithTrialCredits } from "@/lib/trial-credits"
 import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 
 export const runtime = "nodejs"
@@ -24,7 +24,6 @@ const STREAM_HEARTBEAT_MS = 8_000
 type ReverseSuccessPayload = {
   ok: true
   prompt: string
-  billing: ReturnType<typeof createBillingPayload>
 }
 
 function readString(value: unknown) {
@@ -185,21 +184,6 @@ function extractPromptFromPayload(payload: unknown) {
     .slice(0, MAX_PROMPT_CHARS)
 }
 
-function createBillingPayload(result: {
-  trialUsed?: number
-  realCreditsUsed?: number
-  remainingToday?: number
-  blocked?: boolean
-  reason?: string | null
-} | null) {
-  return {
-    trialUsed: result?.trialUsed || 0,
-    realCreditsUsed: result?.realCreditsUsed || 0,
-    remainingToday: result?.remainingToday || 0,
-    surveyRequired: Boolean(result?.blocked && result.reason === "survey_required"),
-  }
-}
-
 function buildReverseInputs(uploadFileId: string, targetModel: string) {
   const imageFile = {
     type: "image",
@@ -316,30 +300,17 @@ async function processReverseRequest(
     },
     description: "图像提示词反推",
   })
-  const billingResult = await consumeWithTrialCredits({
+  const charged = await chargeCreditsSafely(
     userId,
-    realCreditUserId,
-    amount: tokenCredits,
-    actionType: "consume",
-    description: "图像提示词反推",
-    referenceId: billingReferenceId,
-    metadata: {
-      feature: "image_prompt_reverse",
-      targetModel,
-    },
+    tokenCredits,
+    "consume",
+    "图像提示词反推",
+    billingReferenceId,
     billingMetadata,
-  })
-  const billing = createBillingPayload(billingResult)
+    { realCreditUserId },
+  )
 
-  if (billingResult.blocked && billingResult.reason === "survey_required") {
-    return NextResponse.json({
-      error: "请先完成今日问卷，解锁免费体验额度",
-      surveyRequired: true,
-      billing,
-    }, { status: 402 })
-  }
-
-  if (!billingResult.success) {
+  if (!charged) {
     await recordBillingIssue(
       userId,
       tokenCredits,
@@ -348,13 +319,12 @@ async function processReverseRequest(
       billingReferenceId,
       billingMetadata,
     )
-    return NextResponse.json({ error: "积分不足，无法反推提示词", billing }, { status: 402 })
+    return NextResponse.json({ error: "积分不足，无法反推提示词" }, { status: 402 })
   }
 
   return {
     ok: true,
     prompt,
-    billing,
   }
 }
 
