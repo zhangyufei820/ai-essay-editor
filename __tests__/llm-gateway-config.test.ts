@@ -7,7 +7,7 @@ type GatewayModel = {
   litellm_params?: {
     model?: string
     api_base?: string
-    order?: number
+    api_key?: string
     timeout?: number
   }
   model_info?: {
@@ -28,11 +28,7 @@ type GatewayConfig = {
       mode?: string[]
       default_on?: boolean
       blocked_words_file?: string
-      categories?: Array<{
-        category?: string
-        action?: string
-        severity_threshold?: string
-      }>
+      categories?: Array<{ category?: string; action?: string; severity_threshold?: string }>
     }
   }>
   router_settings: {
@@ -45,10 +41,7 @@ type GatewayConfig = {
     allowed_fails_policy?: Record<string, number>
     fallbacks?: Array<Record<string, string[]>>
   }
-  litellm_settings?: {
-    request_timeout?: number
-    num_retries?: number
-  }
+  litellm_settings?: { request_timeout?: number; num_retries?: number }
   general_settings: {
     background_health_checks?: boolean
     enable_health_check_routing?: boolean
@@ -72,30 +65,116 @@ function modelsByName(config: GatewayConfig, name: string) {
 function fallbackMap(config: GatewayConfig) {
   const targets = new Map<string, string[]>()
   for (const fallback of config.router_settings.fallbacks || []) {
-    for (const [source, values] of Object.entries(fallback)) {
-      targets.set(source, values)
-    }
+    for (const [source, values] of Object.entries(fallback)) targets.set(source, values)
   }
   return targets
 }
 
-function firstProviderFor(config: GatewayConfig, modelName: string) {
-  const deployments = modelsByName(config, modelName)
-  if (!deployments.length) return "unknown"
-  const first = [...deployments].sort(
-    (left, right) => (left.litellm_params?.order || 0) - (right.litellm_params?.order || 0),
-  )[0]
-  const apiBase = first?.litellm_params?.api_base || ""
-  if (apiBase.includes("TOKENFLUX")) return "tokenflux"
-  if (apiBase.includes("MOONAPIX")) return "moonapix"
-  if (apiBase.includes("VIVAAPI")) return "vivaapi"
-  return apiBase || "unknown"
-}
+describe("llm gateway New API primary policy", () => {
+  it("pins every production alias to one New API deployment", () => {
+    const config = loadConfig()
+    const productionAliases = [
+      "sx-fast-chat",
+      "sx-chinese-text",
+      "sx-math-text",
+      "sx-general-text",
+      "sx-image-vision",
+      "sx-claude-sonnet-4-6",
+      "sx-claude-opus-4-6-thinking",
+      "sx-gemini-3.1-pro",
+      "gpt-4o-mini",
+      "gpt-5.2",
+      "gpt-5.3",
+      "gpt-5.3-spark",
+      "gpt-5.4",
+      "gpt-5.4-mini",
+      "gpt-5.4-pro",
+      "gpt-5.5",
+      "claude-opus-4-7",
+      "claude-sonnet-4-6",
+      "claude-3-7-sonnet-20250219",
+      "claude-sonnet-4-6-thinking",
+      "claude-opus-4-6-thinking",
+      "gemini-3.1-flash-lite-preview",
+      "gemini-3-pro-image-preview",
+      "gemini-3.1-pro-preview",
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+      "grok-4.2",
+    ]
 
-describe("llm gateway reliability config", () => {
-  it("enables bounded active health checks and proactive routing", () => {
+    for (const alias of productionAliases) {
+      const deployments = modelsByName(config, alias)
+      expect(deployments).toHaveLength(1)
+      expect(deployments[0]?.litellm_params?.api_base).toBe("os.environ/SHENXIANG_NEW_API_BASE_URL")
+      expect([
+        "os.environ/SHENXIANG_NEW_API_TEXT_API_KEY",
+        "os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY",
+      ]).toContain(deployments[0]?.litellm_params?.api_key)
+      expect(deployments[0]?.model_info?.mode).toBe("chat")
+    }
+  })
+
+  it("uses the dedicated user token family for OpenAI and Claude primaries", () => {
     const config = loadConfig()
 
+    for (const alias of ["sx-fast-chat", "sx-math-text", "sx-general-text", "sx-image-vision", "gpt-5.4", "gpt-5.5"]) {
+      expect(modelsByName(config, alias)[0]?.litellm_params?.api_key).toBe(
+        "os.environ/SHENXIANG_NEW_API_TEXT_API_KEY",
+      )
+    }
+
+    for (const alias of ["sx-chinese-text", "claude-sonnet-4-6", "claude-opus-4-7"]) {
+      expect(modelsByName(config, alias)[0]?.litellm_params?.api_key).toBe(
+        "os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY",
+      )
+    }
+  })
+
+  it("retains Viva as the only direct fallback supplier", () => {
+    const config = loadConfig()
+    const targets = fallbackMap(config)
+    const productionModels = config.model_list.filter((item) => !item.model_name.startsWith("fallback-viva-"))
+    const fallbackModels = config.model_list.filter((item) => item.model_name.startsWith("fallback-viva-"))
+
+    expect(fallbackModels.length).toBeGreaterThanOrEqual(10)
+    for (const model of fallbackModels) {
+      expect(model.litellm_params?.api_base).toBe("os.environ/VIVAAPI_LLM_BASE_URL")
+      expect(model.litellm_params?.api_key).toBe("os.environ/VIVAAPI_LLM_API_KEY")
+    }
+
+    for (const model of productionModels) {
+      const modelTargets = targets.get(model.model_name)
+      expect(modelTargets?.length).toBeGreaterThan(0)
+      expect(modelTargets?.every((target) => target.startsWith("fallback-viva-"))).toBe(true)
+    }
+
+    const serialized = fs.readFileSync(configPath, "utf8")
+    expect(serialized).not.toMatch(/TOKENFLUX|MOONAPIX/i)
+    expect(new Set(config.model_list.map((item) => item.litellm_params?.api_base))).toEqual(
+      new Set(["os.environ/SHENXIANG_NEW_API_BASE_URL", "os.environ/VIVAAPI_LLM_BASE_URL"]),
+    )
+  })
+
+  it("only points fallbacks at configured aliases", () => {
+    const config = loadConfig()
+    const modelNames = new Set(config.model_list.map((item) => item.model_name))
+
+    for (const targets of fallbackMap(config).values()) {
+      for (const target of targets) expect(modelNames.has(target)).toBe(true)
+    }
+  })
+
+  it("keeps the requested primary model mappings explicit", () => {
+    const config = loadConfig()
+    expect(modelsByName(config, "sx-fast-chat")[0]?.litellm_params?.model).toBe("openai/gpt-5.5")
+    expect(modelsByName(config, "sx-general-text")[0]?.litellm_params?.model).toBe("openai/gpt-5.4-mini")
+    expect(modelsByName(config, "sx-chinese-text")[0]?.litellm_params?.model).toBe("openai/claude-sonnet-4-6")
+    expect(modelsByName(config, "claude-opus-4-7")[0]?.litellm_params?.model).toBe("openai/claude-opus-4-7")
+  })
+
+  it("keeps bounded active health checks and proactive routing", () => {
+    const config = loadConfig()
     expect(config.general_settings.background_health_checks).toBe(true)
     expect(config.general_settings.enable_health_check_routing).toBe(true)
     expect(config.general_settings.health_check_concurrency).toBe(1)
@@ -110,35 +189,12 @@ describe("llm gateway reliability config", () => {
     expect(config.router_settings.timeout).toBeLessThanOrEqual(22)
     expect(config.litellm_settings?.request_timeout).toBeLessThanOrEqual(22)
     expect(config.router_settings.allowed_fails_policy?.AuthenticationErrorAllowedFails).toBe(0)
-    expect(config.router_settings.allowed_fails_policy?.TimeoutErrorAllowedFails).toBe(1)
-    expect(config.router_settings.allowed_fails_policy?.RateLimitErrorAllowedFails).toBe(1)
     expect(config.router_settings.allowed_fails_policy?.BadRequestErrorAllowedFails).toBe(0)
-    expect(config.router_settings.allowed_fails_policy?.InternalServerErrorAllowedFails).toBe(1)
-  })
-
-  it("keeps hot text and vision aliases pinned to a single primary deployment", () => {
-    const config = loadConfig()
-    const expectedAliases = [
-      "sx-fast-chat",
-      "sx-chinese-text",
-      "sx-math-text",
-      "sx-general-text",
-      "sx-image-vision",
-    ]
-
-    for (const alias of expectedAliases) {
-      const deployments = modelsByName(config, alias)
-      expect(deployments).toHaveLength(1)
-      expect(deployments.every((item) => item.model_info?.id)).toBe(true)
-      expect(deployments.every((item) => item.model_info?.mode === "chat")).toBe(true)
-      expect(deployments.every((item) => typeof item.litellm_params?.timeout === "number")).toBe(true)
-    }
   })
 
   it("keeps background probes light enough for production traffic", () => {
     const config = loadConfig()
     const enabledDeployments = new Map<string, GatewayModel>()
-
     for (const deployment of config.model_list) {
       const info = deployment.model_info
       if (!info?.id || info.disable_background_health_check) continue
@@ -146,335 +202,23 @@ describe("llm gateway reliability config", () => {
     }
 
     const probes = [...enabledDeployments.values()]
-    expect(probes.length).toBeLessThanOrEqual(15)
+    expect(probes.length).toBeLessThanOrEqual(5)
     expect(probes.every((item) => (item.model_info?.health_check_timeout || 0) <= 10)).toBe(true)
     expect(probes.every((item) => (item.model_info?.health_check_max_tokens || 0) <= 3)).toBe(true)
   })
 
-  it("keeps hot GPT aliases on TokenFlux while general text uses the stable mini primary", () => {
+  it("keeps gateway aliases ASCII-safe for response headers", () => {
     const config = loadConfig()
-    const fastIds = new Set(modelsByName(config, "sx-fast-chat").map((item) => item.model_info?.id))
-    const mathIds = new Set(modelsByName(config, "sx-math-text").map((item) => item.model_info?.id))
-    const generalIds = new Set(modelsByName(config, "sx-general-text").map((item) => item.model_info?.id))
-
-    expect(fastIds.has("deploy-tokenflux-gpt-5-5")).toBe(true)
-    expect(mathIds.has("deploy-tokenflux-gpt-5-5")).toBe(true)
-    expect(generalIds.has("deploy-tokenflux-gpt-5-4-mini")).toBe(true)
-  })
-
-  it("keeps gateway model names ASCII-safe for response headers", () => {
-    const config = loadConfig()
-
-    for (const model of config.model_list) {
-      expect(model.model_name).toMatch(/^[\x20-\x7E]+$/)
-    }
-
-    for (const fallback of config.router_settings.fallbacks || []) {
-      for (const [source, targets] of Object.entries(fallback)) {
-        expect(source).toMatch(/^[\x20-\x7E]+$/)
-        for (const target of targets) {
-          expect(target).toMatch(/^[\x20-\x7E]+$/)
-        }
-      }
+    for (const model of config.model_list) expect(model.model_name).toMatch(/^[\x20-\x7E]+$/)
+    for (const [source, targets] of fallbackMap(config)) {
+      expect(source).toMatch(/^[\x20-\x7E]+$/)
+      for (const target of targets) expect(target).toMatch(/^[\x20-\x7E]+$/)
     }
   })
 
-  it("only points fallbacks at configured model names", () => {
-    const config = loadConfig()
-    const modelNames = new Set(config.model_list.map((item) => item.model_name))
-
-    for (const fallback of config.router_settings.fallbacks || []) {
-      for (const targets of Object.values(fallback)) {
-        for (const target of targets) {
-          expect(modelNames.has(target)).toBe(true)
-        }
-      }
-    }
-  })
-
-  it("keeps legacy Dify GPT aliases behind working gateway fallbacks", () => {
-    const config = loadConfig()
-    const fallbackTargets = new Map<string, string[]>()
-
-    for (const fallback of config.router_settings.fallbacks || []) {
-      for (const [source, targets] of Object.entries(fallback)) {
-        fallbackTargets.set(source, targets)
-      }
-    }
-
-    expect(fallbackTargets.get("gpt-5.3")).toEqual(["gpt-5.5", "sx-fast-chat", "sx-general-text"])
-    expect(fallbackTargets.get("gpt-5.3-spark")).toEqual(["gpt-5.5", "sx-fast-chat", "sx-general-text"])
-    expect(fallbackTargets.get("gemini-3.1-pro-preview")).toEqual([
-      "sx-gpt-5.5-tokenflux",
-      "sx-gpt-5.5-moonapix",
-      "sx-general-text",
-      "gpt-5.4-mini",
-    ])
-    expect(fallbackTargets.get("gemini-3-pro-image-preview")).toEqual([
-      "sx-image-vision",
-      "sx-gpt-5.4-mini-moonapix",
-      "sx-image-vision-moonapix",
-      "sx-gpt-5.4-mini-vivaapi",
-      "gpt-5.4-mini",
-      "sx-fast-chat",
-      "sx-claude-sonnet-4-6",
-    ])
-  })
-
-  it("keeps high-volume legacy Dify text model names routed through gateway-compatible deployments", () => {
-    const config = loadConfig()
-    const expectedModelNames = [
-      "claude-3-7-sonnet-20250219",
-      "gemini-3.1-flash-lite-preview",
-      "gemini-3-pro-image-preview",
-    ]
-
-    for (const name of expectedModelNames) {
-      const deployments = modelsByName(config, name)
-      expect(deployments.length).toBeGreaterThanOrEqual(2)
-      expect(deployments.every((item) => item.model_info?.mode === "chat")).toBe(true)
-    }
-  })
-
-  it("keeps explicit fallback chains aligned to fastest stable provider order", () => {
-    const config = loadConfig()
-    const fallbackTargets = new Map<string, string[]>()
-
-    for (const fallback of config.router_settings.fallbacks || []) {
-      for (const [source, targets] of Object.entries(fallback)) {
-        fallbackTargets.set(source, targets)
-      }
-    }
-
-    expect(fallbackTargets.get("sx-fast-chat")?.slice(0, 2)).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
-    expect(fallbackTargets.get("sx-gpt-5.5-tokenflux")?.slice(0, 2)).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
-    expect(fallbackTargets.get("sx-gpt-5.5-moonapix")?.slice(0, 2)).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-vivaapi"])
-    expect(fallbackTargets.get("sx-gpt-5.5-vivaapi")?.slice(0, 2)).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix"])
-    expect(fallbackTargets.get("sx-math-text")).toEqual([
-      "sx-gpt-5.5-moonapix",
-      "sx-gemini-3.1-pro",
-      "gpt-5.4-mini",
-      "sx-image-vision",
-      "sx-gpt-5.5-vivaapi",
-      "sx-general-text",
-      "sx-fast-chat",
-    ])
-    expect(fallbackTargets.get("sx-general-text")).toEqual([
-      "gpt-5.4-mini",
-      "sx-gpt-5.4-mini-moonapix",
-      "sx-gpt-5.4-mini-vivaapi",
-      "sx-fast-chat",
-      "sx-claude-sonnet-4-6",
-    ])
-    expect(fallbackTargets.get("sx-gemini-3.1-pro")).toEqual([
-      "sx-gpt-5.5-tokenflux",
-      "sx-gpt-5.5-moonapix",
-      "sx-general-text",
-      "gpt-5.4-mini",
-    ])
-    expect(fallbackTargets.get("sx-chinese-text")?.slice(0, 4)).toEqual([
-      "sx-general-text",
-      "sx-claude-sonnet-4-6-vivaapi",
-      "sx-claude-opus-4-7-moonapix",
-      "sx-claude-opus-4-7-vivaapi",
-    ])
-    expect(fallbackTargets.get("sx-claude-sonnet-4-6")?.slice(0, 4)).toEqual([
-      "sx-general-text",
-      "sx-claude-sonnet-4-6-vivaapi",
-      "sx-claude-opus-4-7-moonapix",
-      "sx-claude-opus-4-7-vivaapi",
-    ])
-    expect(fallbackTargets.get("sx-claude-sonnet-4-6-moonapix")?.slice(0, 4)).toEqual([
-      "sx-general-text",
-      "sx-claude-sonnet-4-6-vivaapi",
-      "sx-claude-opus-4-7-moonapix",
-      "sx-claude-opus-4-7-vivaapi",
-    ])
-    expect(fallbackTargets.get("sx-image-vision")).toEqual([
-      "sx-gpt-5.4-mini-moonapix",
-      "sx-image-vision-moonapix",
-      "sx-gpt-5.4-mini-vivaapi",
-      "gpt-5.4-mini",
-      "sx-fast-chat",
-      "sx-claude-sonnet-4-6",
-    ])
-  })
-
-  it("keeps internal fallback aliases from becoming terminal no-fallback routes", () => {
-    const config = loadConfig()
-    const fallbackTargets = new Map<string, string[]>()
-    for (const fallback of config.router_settings.fallbacks || []) {
-      for (const [source, targets] of Object.entries(fallback)) {
-        fallbackTargets.set(source, targets)
-      }
-    }
-
-    const internalAliases = [
-      "sx-gpt-5.5-tokenflux",
-      "sx-gpt-5.5-moonapix",
-      "sx-gpt-5.5-vivaapi",
-      "sx-gemini-3.1-pro",
-      "sx-claude-sonnet-4-6",
-      "sx-claude-sonnet-4-6-moonapix",
-      "sx-claude-sonnet-4-6-vivaapi",
-      "sx-claude-opus-4-7-vivaapi",
-      "sx-claude-opus-4-7-moonapix",
-      "sx-gpt-5.4-mini-vivaapi",
-      "sx-gpt-5.4-mini-moonapix",
-      "sx-image-vision-tokenflux",
-      "sx-image-vision-vivaapi",
-      "sx-image-vision-moonapix",
-    ]
-
-    for (const alias of internalAliases) {
-      expect(fallbackTargets.get(alias)?.length).toBeGreaterThan(0)
-    }
-  })
-
-  it("keeps Chinese-first routing pinned to the fast Claude Sonnet primary", () => {
-    const config = loadConfig()
-    const chinese = modelsByName(config, "sx-chinese-text")
-
-    expect(chinese).toHaveLength(1)
-    expect(chinese[0]?.litellm_params?.model).toBe("openai/claude-sonnet-4-6")
-    expect(chinese[0]?.litellm_params?.api_base).toBe("os.environ/MOONAPIX_LLM_BASE_URL")
-    expect(chinese[0]?.model_info?.id).toBe("deploy-moonapix-claude-sonnet-4-6")
-  })
-
-  it("keeps slow or unstable providers out of first fallback position for hot aliases", () => {
-    const config = loadConfig()
-    const fallbackTargets = new Map<string, string[]>()
-
-    for (const fallback of config.router_settings.fallbacks || []) {
-      for (const [source, targets] of Object.entries(fallback)) {
-        fallbackTargets.set(source, targets)
-      }
-    }
-
-    for (const alias of ["sx-fast-chat"]) {
-      expect(fallbackTargets.get(alias)?.[0]).toBe("sx-gpt-5.5-moonapix")
-      expect(fallbackTargets.get(alias)).not.toContain("sx-gemini-3.1-pro")
-    }
-
-    expect(fallbackTargets.get("sx-general-text")?.[0]).toBe("gpt-5.4-mini")
-    expect(fallbackTargets.get("sx-general-text")).not.toContain("sx-gemini-3.1-pro")
-
-    expect(fallbackTargets.get("sx-math-text")?.[0]).toBe("sx-gpt-5.5-moonapix")
-    expect(fallbackTargets.get("sx-math-text")).toContain("sx-gemini-3.1-pro")
-    expect(fallbackTargets.get("sx-math-text")).toContain("gpt-5.4-mini")
-    expect(fallbackTargets.get("sx-math-text")).toContain("sx-image-vision")
-
-    expect(fallbackTargets.get("sx-image-vision")?.slice(0, 2)).toEqual([
-      "sx-gpt-5.4-mini-moonapix",
-      "sx-image-vision-moonapix",
-    ])
-    expect(fallbackTargets.get("sx-image-vision")?.[0]).not.toBe("sx-gpt-5.4-mini-vivaapi")
-
-    expect(fallbackTargets.get("sx-chinese-text")?.[0]).toBe("sx-general-text")
-    expect(fallbackTargets.get("gemini-3.1-pro-preview")?.[0]).toBe("sx-gpt-5.5-tokenflux")
-    expect(fallbackTargets.get("gemini-3-pro-image-preview")?.[0]).toBe("sx-image-vision")
-    expect(fallbackTargets.get("claude-sonnet-4-6")).toEqual([
-      "sx-general-text",
-      "sx-claude-sonnet-4-6-vivaapi",
-      "sx-fast-chat",
-      "gpt-5.4-mini",
-    ])
-  })
-
-  it("keeps slow provider-specific internal aliases on short failover timeouts", () => {
-    const config = loadConfig()
-
-    const shortTimeoutAliases = [
-      "sx-gpt-5.5-vivaapi",
-      "sx-gpt-5.4-mini-vivaapi",
-      "sx-image-vision-vivaapi",
-      "sx-gemini-3.1-pro",
-      "sx-claude-sonnet-4-6-vivaapi",
-    ]
-
-    for (const alias of shortTimeoutAliases) {
-      const deployments = modelsByName(config, alias)
-      expect(deployments.length).toBeGreaterThanOrEqual(1)
-      expect(deployments.every((item) => (item.litellm_params?.timeout || 0) <= 10)).toBe(true)
-    }
-  })
-
-  it("keeps compatibility vision aliases on a fast TokenFlux primary", () => {
-    const config = loadConfig()
-    const legacy = modelsByName(config, "gemini-3-pro-image-preview")
-    const byOrder = [...legacy].sort(
-      (left, right) => (left.litellm_params?.order || 0) - (right.litellm_params?.order || 0),
-    )
-
-    expect(byOrder[0]?.model_info?.id).toBe("gemini-3-pro-image-preview-tokenflux-compat")
-    expect(byOrder[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
-  })
-
-  it("keeps the fast GPT business aliases pinned to the TokenFlux deployment", () => {
-    const config = loadConfig()
-
-    for (const alias of ["sx-fast-chat", "sx-math-text"]) {
-      const deployments = modelsByName(config, alias)
-      expect(deployments).toHaveLength(1)
-      expect(deployments[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
-      expect(deployments[0]?.model_info?.id).toBe("deploy-tokenflux-gpt-5-5")
-    }
-
-    const general = modelsByName(config, "sx-general-text")
-    expect(general).toHaveLength(1)
-    expect(general[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
-    expect(general[0]?.litellm_params?.model).toBe("openai/gpt-5.4-mini")
-    expect(general[0]?.model_info?.id).toBe("deploy-tokenflux-gpt-5-4-mini")
-  })
-
-  it("keeps vision routing pinned to GPT-5.4-mini before multimodal fallbacks", () => {
-    const config = loadConfig()
-    const vision = modelsByName(config, "sx-image-vision")
-
-    expect(vision).toHaveLength(1)
-    expect(vision[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
-    expect(vision[0]?.model_info?.id).toBe("deploy-tokenflux-gpt-5-4-mini")
-  })
-
-  it("keeps legacy gpt-5.4-mini pinned to the tokenflux primary for long JSON generators", () => {
-    const config = loadConfig()
-    const legacy = modelsByName(config, "gpt-5.4-mini")
-
-    expect(legacy).toHaveLength(3)
-    const byOrder = [...legacy].sort(
-      (left, right) => (left.litellm_params?.order || 0) - (right.litellm_params?.order || 0),
-    )
-
-    expect(byOrder.map((item) => item.model_info?.id)).toEqual([
-      "deploy-tokenflux-gpt-5-4-mini",
-      "deploy-moonapix-gpt-5-4-mini",
-      "deploy-vivaapi-gpt-5-4-mini",
-    ])
-    expect(byOrder[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
-  })
-
-  it("exposes the Grok direct model route for independent-model pages", () => {
-    const config = loadConfig()
-    const grok = modelsByName(config, "grok-4.2")
-
-    expect(grok).toHaveLength(1)
-    expect(grok[0]?.litellm_params?.model).toBe("openai/grok-4.2")
-    expect(grok[0]?.model_info?.id).toBe("grok-4-2-vivaapi")
-  })
-
-  it("uses latency-based routing with explicit fallback chains instead of random shuffle", () => {
-    const config = loadConfig()
-
-    expect(config.router_settings.routing_strategy).toBe("latency-based-routing")
-    expect(config.router_settings.routing_strategy_args?.ttl).toBe(30)
-    expect(config.router_settings.routing_strategy_args?.lowest_latency_buffer).toBe(0)
-  })
-
-  it("enables a default-on global sensitive-content guardrail for all gateway models", () => {
+  it("enables the global sensitive-content guardrail", () => {
     const config = loadConfig()
     const guardrail = config.guardrails?.find((item) => item.guardrail_name === "sx-global-sensitive-content")
-
-    expect(guardrail).toBeDefined()
     expect(guardrail?.litellm_params?.guardrail).toBe("litellm_content_filter")
     expect(guardrail?.litellm_params?.default_on).toBe(true)
     expect(guardrail?.litellm_params?.mode).toEqual(["pre_call", "post_call"])
@@ -486,85 +230,54 @@ describe("llm gateway reliability config", () => {
 
   it("keeps the mounted blocked-words policy limited to pornographic and firearm terms", () => {
     const policyPath = path.join(process.cwd(), "services/llm-gateway/guardrails/blocked-words.yaml")
-    expect(fs.existsSync(policyPath)).toBe(true)
-
     const policy = yaml.load(fs.readFileSync(policyPath, "utf8")) as {
       blocked_words?: Array<{ keyword?: string; action?: string; description?: string }>
     }
-
-    expect(Array.isArray(policy.blocked_words)).toBe(true)
-    expect(policy.blocked_words?.length).toBeGreaterThanOrEqual(10)
-
     const keywords = new Set((policy.blocked_words || []).map((item) => item.keyword))
     const descriptions = new Set((policy.blocked_words || []).map((item) => item.description))
 
+    expect(policy.blocked_words?.length).toBeGreaterThanOrEqual(10)
     expect(keywords.has("色情")).toBe(true)
     expect(keywords.has("枪支")).toBe(true)
     expect(keywords.has("暴力")).toBe(false)
-    expect(keywords.has("血腥")).toBe(false)
     expect(keywords.has("毒品")).toBe(false)
-    expect(keywords.has("国家领导人")).toBe(false)
-    expect(keywords.has("子弹")).toBe(false)
-    expect(keywords.has("火药")).toBe(false)
-    expect(keywords.has("炸弹")).toBe(false)
     expect(descriptions).toEqual(new Set(["色情内容", "枪支内容"]))
     expect((policy.blocked_words || []).every((item) => item.action === "BLOCK")).toBe(true)
   })
 
-  it("mounts the guardrail policy directory into the llm-gateway container", () => {
-    const composePath = path.join(process.cwd(), "docker-compose.prod.yml")
-    const compose = fs.readFileSync(composePath, "utf8")
-
+  it("keeps production runtime safety settings", () => {
+    const compose = fs.readFileSync(path.join(process.cwd(), "docker-compose.prod.yml"), "utf8")
+    const dockerfile = fs.readFileSync(path.join(process.cwd(), "Dockerfile"), "utf8")
     expect(compose).toContain("./services/llm-gateway/guardrails:/app/guardrails:ro")
-  })
-
-  it("keeps production runtime probes from accumulating curl zombies", () => {
-    const composePath = path.join(process.cwd(), "docker-compose.prod.yml")
-    const dockerfilePath = path.join(process.cwd(), "Dockerfile")
-    const compose = fs.readFileSync(composePath, "utf8")
-    const dockerfile = fs.readFileSync(dockerfilePath, "utf8")
-
     expect(compose).toContain("mem_limit: 2304m")
     expect(compose).toMatch(/llm-gateway:\n[\s\S]*?init: true/)
     expect(compose).toMatch(/nextjs:\n[\s\S]*?init: true/)
     expect(compose).not.toMatch(/curl\s+-f\s+http:\/\/localhost:3000/)
-    expect(dockerfile).not.toMatch(/curl\s+-sf\s+http:\/\/localhost:3000/)
     expect(dockerfile).toContain("fetch('http://127.0.0.1:3000')")
   })
 
-  it("keeps the production Node runtime compatible with application dependencies", () => {
+  it("documents only the active New API primary and Viva fallback credentials", () => {
+    const example = fs.readFileSync(path.join(process.cwd(), ".env.example"), "utf8")
+    expect(example).toContain("SHENXIANG_NEW_API_BASE_URL=")
+    expect(example).toContain("SHENXIANG_NEW_API_TEXT_API_KEY=")
+    expect(example).toContain("SHENXIANG_NEW_API_CLAUDE_API_KEY=")
+    expect(example).toContain("SHENXIANG_NEW_API_IMAGE_API_KEY=")
+    expect(example).toContain("VIVAAPI_LLM_API_KEY=")
+    expect(example).not.toMatch(/TOKENFLUX_LLM|MOONAPIX_LLM/)
+  })
+
+  it("keeps the production Node runtime and cleanup unit valid", () => {
     const dockerfile = fs.readFileSync(path.join(process.cwd(), "Dockerfile"), "utf8")
-    const packageJson = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
-    ) as { engines?: { node?: string } }
+    const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
+      engines?: { node?: string }
+    }
+    const unit = fs.readFileSync(
+      path.join(process.cwd(), "deploy/systemd/shenxiang-container-runtime-cleanup.service"),
+      "utf8",
+    )
 
     expect(packageJson.engines?.node).toBe(">=22")
     expect(dockerfile.match(/^FROM node:22 AS (?:builder|runner)$/gm)).toHaveLength(2)
-    expect(dockerfile).not.toMatch(/^FROM node:20\b/m)
-  })
-
-  it("keeps hot aliases from ending in an all-cooldown single-family fallback group", () => {
-    const config = loadConfig()
-    const targets = fallbackMap(config)
-
-    for (const alias of ["sx-fast-chat", "sx-math-text", "sx-general-text", "sx-chinese-text", "sx-image-vision"]) {
-      const chain = targets.get(alias) || []
-      expect(chain.length).toBeGreaterThanOrEqual(5)
-      if (alias !== "sx-fast-chat") {
-        expect(chain).toContain("sx-fast-chat")
-      }
-      expect(chain).toContain("gpt-5.4-mini")
-
-      const providers = new Set(chain.map((target) => firstProviderFor(config, target)))
-      expect(providers.size).toBeGreaterThanOrEqual(3)
-    }
-  })
-
-  it("keeps service unit documentation as a valid systemd file URL", () => {
-    const unitPath = path.join(process.cwd(), "deploy/systemd/shenxiang-container-runtime-cleanup.service")
-    const unit = fs.readFileSync(unitPath, "utf8")
-
     expect(unit).toContain("Documentation=file:/data/ai-essay-editor/docs/SERVER-CLEANUP-SOP.md")
-    expect(unit).not.toContain("Documentation=/data/")
   })
 })

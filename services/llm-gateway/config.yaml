@@ -1,20 +1,15 @@
 model_list:
-  # Business aliases. Keep clients on these names so provider/model changes can
-  # happen inside the gateway without touching Dify or frontend config.
-  #
-  # The hot aliases below are single-primary routes. Fast failover happens
-  # through explicit router fallbacks so the request path stays deterministic:
-  # primary first, then the next healthy fallback deployment.
+  # Production policy (2026-08-12): every shenxiang.school text/vision alias
+  # has one New API primary deployment. Explicit fallback aliases are Viva-only.
+  # Provider credentials are injected from .env.production and never committed.
   - model_name: sx-fast-chat
     litellm_params:
       model: openai/gpt-5.5
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 18
     model_info:
-      id: deploy-tokenflux-gpt-5-5
+      id: deploy-new-api-gpt-5-5
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
@@ -22,11 +17,11 @@ model_list:
   - model_name: sx-chinese-text
     litellm_params:
       model: openai/claude-sonnet-4-6
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY
       timeout: 30
     model_info:
-      id: deploy-moonapix-claude-sonnet-4-6
+      id: deploy-new-api-claude-sonnet-4-6
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
@@ -34,13 +29,11 @@ model_list:
   - model_name: sx-math-text
     litellm_params:
       model: openai/gpt-5.5
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 18
     model_info:
-      id: deploy-tokenflux-gpt-5-5
+      id: deploy-new-api-gpt-5-5
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
@@ -48,658 +41,396 @@ model_list:
   - model_name: sx-general-text
     litellm_params:
       model: openai/gpt-5.4-mini
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
     model_info:
-      id: deploy-tokenflux-gpt-5-4-mini
+      id: deploy-new-api-gpt-5-4-mini
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
 
-  # Image recognition / visual understanding. This is multimodal chat with
-  # image_url inputs, not image generation.
+  # Multimodal chat/recognition; long-running image generation stays on the
+  # durable image task gateways and follows the same New API -> Viva policy.
   - model_name: sx-image-vision
     litellm_params:
       model: openai/gpt-5.4-mini
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
     model_info:
-      id: deploy-tokenflux-gpt-5-4-mini
+      id: deploy-new-api-gpt-5-4-mini
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
 
-  # Internal same-model fallback aliases used by router_settings.fallbacks and
-  # manual smoke tests. Background checks are disabled here because the hot
-  # business aliases above already probe the production routing pools.
-  - model_name: sx-gpt-5.2-vivaapi
-    litellm_params:
-      model: openai/gpt-5.2
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info:
-      id: sx-gpt-5-2-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-gpt-5.4-vivaapi
-    litellm_params:
-      model: openai/gpt-5.4
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info:
-      id: sx-gpt-5-4-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-gpt-5.4-moonapix
-    litellm_params:
-      model: openai/gpt-5.4
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 30
-    model_info:
-      id: sx-gpt-5-4-moonapix
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-gpt-5.4-mini-vivaapi
-    litellm_params:
-      model: openai/gpt-5.4-mini
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
-    model_info:
-      id: sx-gpt-5-4-mini-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-image-vision-vivaapi
-    litellm_params:
-      model: openai/gpt-5.4-mini
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
-    model_info:
-      id: sx-image-vision-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-image-vision-moonapix
-    litellm_params:
-      model: openai/claude-sonnet-4-6
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 30
-    model_info:
-      id: sx-image-vision-moonapix
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-gpt-5.4-mini-moonapix
-    litellm_params:
-      model: openai/gpt-5.4-mini
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 30
-    model_info:
-      id: sx-gpt-5-4-mini-moonapix
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-gpt-5.4-pro-vivaapi
-    litellm_params:
-      model: openai/gpt-5.4-pro
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 12
-    model_info:
-      id: sx-gpt-5-4-pro-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-gpt-5.5-vivaapi
-    litellm_params:
-      model: openai/gpt-5.5
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
-    model_info:
-      id: sx-gpt-5-5-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-gpt-5.5-moonapix
-    litellm_params:
-      model: openai/gpt-5.5
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 30
-    model_info:
-      id: sx-gpt-5-5-moonapix
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-gpt-5.5-tokenflux
-    litellm_params:
-      model: openai/gpt-5.5
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
-      timeout: 20
-    model_info:
-      id: sx-gpt-5-5-tokenflux
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-claude-opus-4-7-vivaapi
-    litellm_params:
-      model: openai/claude-opus-4-7
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 12
-    model_info:
-      id: sx-claude-opus-4-7-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-claude-opus-4-7-moonapix
-    litellm_params:
-      model: openai/claude-opus-4-7
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 40
-    model_info:
-      id: sx-claude-opus-4-7-moonapix
-      mode: chat
-      disable_background_health_check: true
-
+  # Stable internal aliases retained for existing Dify workflow references.
   - model_name: sx-claude-sonnet-4-6
     litellm_params:
       model: openai/claude-sonnet-4-6
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 20
-    model_info:
-      id: sx-claude-sonnet-4-6-moonapix-primary
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-claude-sonnet-4-6-vivaapi
-    litellm_params:
-      model: openai/claude-sonnet-4-6
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 10
-    model_info:
-      id: sx-claude-sonnet-4-6-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-claude-sonnet-4-6-moonapix
-    litellm_params:
-      model: openai/claude-sonnet-4-6
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY
       timeout: 30
     model_info:
-      id: sx-claude-sonnet-4-6-moonapix
+      id: deploy-new-api-claude-sonnet-4-6
       mode: chat
       disable_background_health_check: true
 
   - model_name: sx-claude-opus-4-6-thinking
     litellm_params:
-      model: openai/claude-opus-4-6-thinking
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      model: openai/claude-opus-4-6
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY
       timeout: 40
     model_info:
-      id: sx-claude-opus-4-6-thinking-vivaapi
+      id: deploy-new-api-claude-opus-4-6
       mode: chat
       disable_background_health_check: true
 
   - model_name: sx-gemini-3.1-pro
     litellm_params:
-      model: openai/gemini-3.1-pro-preview
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
-    model_info:
-      id: sx-gemini-3-1-pro-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: sx-image-vision-tokenflux
-    litellm_params:
-      model: openai/gpt-5.4-mini
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      model: openai/gpt-5.5
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
     model_info:
-      id: sx-image-vision-tokenflux
+      id: deploy-new-api-gpt-5-5
       mode: chat
       disable_background_health_check: true
 
-  # Public OpenAI/GPT model names. Core public names also have same-name
-  # deployment pools so direct Dify/OpenAI-compatible configs keep fallback.
+  # Public OpenAI/GPT compatibility names.
   - model_name: gpt-4o-mini
     litellm_params:
-      model: openai/gpt-4o-mini
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      model: openai/gpt-5.4-mini
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
     model_info:
-      id: gpt-4o-mini-vivaapi
+      id: deploy-new-api-gpt-5-4-mini
       mode: chat
       disable_background_health_check: true
 
   - model_name: gpt-5.2
     litellm_params:
-      model: openai/gpt-5.2
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      model: openai/gpt-5.4
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
-      order: 2
     model_info:
-      id: gpt-5-2-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: gpt-5.2
-    litellm_params:
-      model: openai/gpt-5.2
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
-      timeout: 20
-      order: 1
-    model_info:
-      id: gpt-5-2-tokenflux
+      id: deploy-new-api-gpt-5-4
       mode: chat
       disable_background_health_check: true
 
   - model_name: gpt-5.3
     litellm_params:
-      model: openai/gpt-5.3
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      model: openai/gpt-5.5
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
     model_info:
-      id: gpt-5-3-tokenflux
+      id: deploy-new-api-gpt-5-5
       mode: chat
       disable_background_health_check: true
 
   - model_name: gpt-5.3-spark
     litellm_params:
-      model: openai/gpt-5.3-spark
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      model: openai/gpt-5.5
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
     model_info:
-      id: gpt-5-3-spark-tokenflux
+      id: deploy-new-api-gpt-5-5
       mode: chat
       disable_background_health_check: true
 
   - model_name: gpt-5.4
     litellm_params:
       model: openai/gpt-5.4
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 12
-      order: 3
-    model_info:
-      id: gpt-5-4-vivaapi
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: gpt-5.4
-    litellm_params:
-      model: openai/gpt-5.4
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 30
-      order: 2
-    model_info:
-      id: gpt-5-4-moonapix
-      mode: chat
-      disable_background_health_check: true
-
-  - model_name: gpt-5.4
-    litellm_params:
-      model: openai/gpt-5.4
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
-      order: 1
     model_info:
-      id: gpt-5-4-tokenflux
+      id: deploy-new-api-gpt-5-4
       mode: chat
       disable_background_health_check: true
 
   - model_name: gpt-5.4-mini
     litellm_params:
       model: openai/gpt-5.4-mini
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
-      order: 1
     model_info:
-      id: deploy-tokenflux-gpt-5-4-mini
+      id: deploy-new-api-gpt-5-4-mini
       mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
-
-  - model_name: gpt-5.4-mini
-    litellm_params:
-      model: openai/gpt-5.4-mini
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 30
-      order: 2
-    model_info:
-      id: deploy-moonapix-gpt-5-4-mini
-      mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
-
-  - model_name: gpt-5.4-mini
-    litellm_params:
-      model: openai/gpt-5.4-mini
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-      order: 3
-    model_info:
-      id: deploy-vivaapi-gpt-5-4-mini
-      mode: chat
-      health_check_timeout: 6
-      health_check_max_tokens: 3
+      disable_background_health_check: true
 
   - model_name: gpt-5.4-pro
     litellm_params:
-      model: openai/gpt-5.4-pro
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      model: openai/gpt-5.4
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 30
     model_info:
-      id: gpt-5-4-pro-tokenflux
+      id: deploy-new-api-gpt-5-4
       mode: chat
       disable_background_health_check: true
 
   - model_name: gpt-5.5
     litellm_params:
       model: openai/gpt-5.5
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
-      order: 3
-    model_info:
-      id: deploy-vivaapi-gpt-5-5
-      mode: chat
-      health_check_timeout: 6
-      health_check_max_tokens: 3
-
-  - model_name: gpt-5.5
-    litellm_params:
-      model: openai/gpt-5.5
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 25
-      order: 2
-    model_info:
-      id: deploy-moonapix-gpt-5-5
-      mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
-
-  - model_name: gpt-5.5
-    litellm_params:
-      model: openai/gpt-5.5
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
-      order: 1
     model_info:
-      id: deploy-tokenflux-gpt-5-5
+      id: deploy-new-api-gpt-5-5
       mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
+      disable_background_health_check: true
 
-  # Public Claude text model names.
+  # Public Claude compatibility names.
   - model_name: claude-opus-4-7
     litellm_params:
       model: openai/claude-opus-4-7
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 12
-      order: 2
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY
+      timeout: 40
     model_info:
-      id: deploy-vivaapi-claude-opus-4-7
-      mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
-
-  - model_name: claude-opus-4-7
-    litellm_params:
-      model: openai/claude-opus-4-7
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 35
-      order: 1
-    model_info:
-      id: deploy-moonapix-claude-opus-4-7
-      mode: chat
-      health_check_timeout: 10
-      health_check_max_tokens: 3
-
-  - model_name: claude-sonnet-4-6
-    litellm_params:
-      model: openai/claude-sonnet-4-6
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 10
-      order: 1
-    model_info:
-      id: deploy-moonapix-claude-sonnet-4-6
+      id: deploy-new-api-claude-opus-4-7
       mode: chat
       disable_background_health_check: true
 
   - model_name: claude-sonnet-4-6
     litellm_params:
       model: openai/claude-sonnet-4-6
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY
       timeout: 30
-      order: 2
     model_info:
-      id: deploy-vivaapi-claude-sonnet-4-6
-      mode: chat
-      disable_background_health_check: true
-
-  # Compatibility aliases for older Dify workflow model names whose exact
-  # upstream channels are no longer reliably available.
-  - model_name: claude-3-7-sonnet-20250219
-    litellm_params:
-      model: openai/claude-sonnet-4-6
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
-      timeout: 10
-      order: 1
-    model_info:
-      id: deploy-moonapix-claude-sonnet-4-6
+      id: deploy-new-api-claude-sonnet-4-6
       mode: chat
       disable_background_health_check: true
 
   - model_name: claude-3-7-sonnet-20250219
     litellm_params:
       model: openai/claude-sonnet-4-6
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY
       timeout: 30
-      order: 2
     model_info:
-      id: deploy-vivaapi-claude-sonnet-4-6
+      id: deploy-new-api-claude-sonnet-4-6
       mode: chat
       disable_background_health_check: true
 
   - model_name: claude-sonnet-4-6-thinking
     litellm_params:
-      model: openai/claude-sonnet-4-6-thinking
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      model: openai/claude-sonnet-4-6
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY
       timeout: 40
     model_info:
-      id: claude-sonnet-4-6-thinking-vivaapi
+      id: deploy-new-api-claude-sonnet-4-6
       mode: chat
       disable_background_health_check: true
 
   - model_name: claude-opus-4-6-thinking
     litellm_params:
-      model: openai/claude-opus-4-6-thinking
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      model: openai/claude-opus-4-6
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY
       timeout: 40
     model_info:
-      id: claude-opus-4-6-thinking-vivaapi
+      id: deploy-new-api-claude-opus-4-6
       mode: chat
       disable_background_health_check: true
 
-  # Public Gemini text model names.
+  # Older text/vision aliases remain compatible, but their primary is the
+  # requested New API user rather than a direct legacy supplier.
   - model_name: gemini-3.1-flash-lite-preview
     litellm_params:
-      model: openai/gemini-2.5-flash
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
-      order: 1
+      model: openai/gpt-5.4-mini
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
+      timeout: 20
     model_info:
-      id: gemini-2-5-flash-vivaapi
+      id: deploy-new-api-gpt-5-4-mini
       mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
-
-  - model_name: gemini-3.1-flash-lite-preview
-    litellm_params:
-      model: openai/gemini-3.1-pro-preview
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
-      order: 2
-    model_info:
-      id: deploy-vivaapi-gemini-3-1-pro-preview
-      mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
+      disable_background_health_check: true
 
   - model_name: gemini-3-pro-image-preview
     litellm_params:
       model: openai/gpt-5.4-mini
-      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
-      api_key: os.environ/TOKENFLUX_LLM_API_KEY
-      extra_headers:
-        User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
       timeout: 20
-      order: 1
     model_info:
-      id: gemini-3-pro-image-preview-tokenflux-compat
-      mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
-
-  - model_name: gemini-3-pro-image-preview
-    litellm_params:
-      model: openai/gemini-3-pro-image-preview
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
-      order: 3
-    model_info:
-      id: gemini-3-pro-image-preview-vivaapi
+      id: deploy-new-api-gpt-5-4-mini
       mode: chat
       disable_background_health_check: true
 
-  - model_name: gemini-3-pro-image-preview
-    litellm_params:
-      model: openai/gemini-3.1-pro-preview
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
-      order: 4
-    model_info:
-      id: deploy-vivaapi-gemini-3-1-pro-preview
-      mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
-
   - model_name: gemini-3.1-pro-preview
     litellm_params:
-      model: openai/gemini-3.1-pro-preview
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
+      model: openai/gpt-5.5
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
+      timeout: 20
     model_info:
-      id: deploy-vivaapi-gemini-3-1-pro-preview
+      id: deploy-new-api-gpt-5-5
       mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
+      disable_background_health_check: true
 
   - model_name: gemini-2.5-flash
     litellm_params:
-      model: openai/gemini-2.5-flash
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
+      model: openai/gpt-5.4-mini
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
+      timeout: 20
     model_info:
-      id: gemini-2-5-flash-vivaapi
+      id: deploy-new-api-gpt-5-4-mini
       mode: chat
-      health_check_timeout: 8
-      health_check_max_tokens: 3
+      disable_background_health_check: true
 
   - model_name: gemini-2.5-pro
     litellm_params:
-      model: openai/gemini-2.5-pro
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 8
+      model: openai/gpt-5.5
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
+      timeout: 20
     model_info:
-      id: gemini-2-5-pro-vivaapi
+      id: deploy-new-api-gpt-5-5
       mode: chat
       disable_background_health_check: true
 
   - model_name: grok-4.2
     litellm_params:
+      model: openai/gpt-5.5
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
+      timeout: 20
+    model_info:
+      id: deploy-new-api-gpt-5-5
+      mode: chat
+      disable_background_health_check: true
+
+  # Viva is the sole direct supplier retained as fallback.
+  - model_name: fallback-viva-gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-viva-gpt-4o-mini, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-gpt-5.2
+    litellm_params:
+      model: openai/gpt-5.2
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-viva-gpt-5-2, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-gpt-5.4
+    litellm_params:
+      model: openai/gpt-5.4
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-viva-gpt-5-4, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-gpt-5.4-mini
+    litellm_params:
+      model: openai/gpt-5.4-mini
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-viva-gpt-5-4-mini, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-gpt-5.4-pro
+    litellm_params:
+      model: openai/gpt-5.4-pro
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+    model_info: { id: fallback-viva-gpt-5-4-pro, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-gpt-5.5
+    litellm_params:
+      model: openai/gpt-5.5
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-viva-gpt-5-5, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-claude-sonnet-4-6
+    litellm_params:
+      model: openai/claude-sonnet-4-6
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+    model_info: { id: fallback-viva-claude-sonnet-4-6, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-claude-sonnet-4-6-thinking
+    litellm_params:
+      model: openai/claude-sonnet-4-6-thinking
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 40
+    model_info: { id: fallback-viva-claude-sonnet-4-6-thinking, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-claude-opus-4-6-thinking
+    litellm_params:
+      model: openai/claude-opus-4-6-thinking
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 40
+    model_info: { id: fallback-viva-claude-opus-4-6-thinking, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-claude-opus-4-7
+    litellm_params:
+      model: openai/claude-opus-4-7
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 40
+    model_info: { id: fallback-viva-claude-opus-4-7, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-gemini-2.5-flash
+    litellm_params:
+      model: openai/gemini-2.5-flash
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-viva-gemini-2-5-flash, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-gemini-2.5-pro
+    litellm_params:
+      model: openai/gemini-2.5-pro
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-viva-gemini-2-5-pro, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-gemini-3.1-pro-preview
+    litellm_params:
+      model: openai/gemini-3.1-pro-preview
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-viva-gemini-3-1-pro-preview, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-gemini-3-pro-image-preview
+    litellm_params:
+      model: openai/gemini-3-pro-image-preview
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-viva-gemini-3-pro-image-preview, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-viva-grok-4.2
+    litellm_params:
       model: openai/grok-4.2
       api_base: os.environ/VIVAAPI_LLM_BASE_URL
       api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 20
-    model_info:
-      id: grok-4-2-vivaapi
-      mode: chat
-      disable_background_health_check: true
+    model_info: { id: fallback-viva-grok-4-2, mode: chat, disable_background_health_check: true }
 
 guardrails:
   - guardrail_name: sx-global-sensitive-content
@@ -715,44 +446,37 @@ guardrails:
 
 router_settings:
   fallbacks:
-    - sx-fast-chat: ["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-general-text", "gpt-5.4-mini", "sx-claude-sonnet-4-6"]
-    - sx-gpt-5.5-tokenflux: ["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-general-text", "gpt-5.4-mini", "sx-claude-sonnet-4-6"]
-    - sx-gpt-5.5-moonapix: ["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-vivaapi", "sx-general-text", "gpt-5.4-mini", "sx-claude-sonnet-4-6"]
-    - sx-gpt-5.5-vivaapi: ["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix", "sx-general-text", "gpt-5.4-mini", "sx-claude-sonnet-4-6"]
-    - sx-chinese-text: ["sx-general-text", "sx-claude-sonnet-4-6-vivaapi", "sx-claude-opus-4-7-moonapix", "sx-claude-opus-4-7-vivaapi", "sx-fast-chat", "gpt-5.4-mini"]
-    - sx-claude-sonnet-4-6: ["sx-general-text", "sx-claude-sonnet-4-6-vivaapi", "sx-claude-opus-4-7-moonapix", "sx-claude-opus-4-7-vivaapi", "sx-fast-chat", "gpt-5.4-mini"]
-    - sx-claude-sonnet-4-6-moonapix: ["sx-general-text", "sx-claude-sonnet-4-6-vivaapi", "sx-claude-opus-4-7-moonapix", "sx-claude-opus-4-7-vivaapi", "sx-fast-chat", "gpt-5.4-mini"]
-    - sx-claude-sonnet-4-6-vivaapi: ["sx-claude-sonnet-4-6-moonapix", "sx-general-text", "sx-fast-chat", "gpt-5.4-mini"]
-    - sx-claude-opus-4-7-vivaapi: ["sx-claude-opus-4-7-moonapix", "sx-general-text", "sx-claude-sonnet-4-6", "sx-fast-chat", "gpt-5.4-mini"]
-    - sx-claude-opus-4-7-moonapix: ["sx-claude-sonnet-4-6", "sx-general-text", "sx-claude-opus-4-7-vivaapi", "sx-fast-chat", "gpt-5.4-mini"]
-    - sx-math-text: ["sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro", "gpt-5.4-mini", "sx-image-vision", "sx-gpt-5.5-vivaapi", "sx-general-text", "sx-fast-chat"]
-    - sx-general-text: ["gpt-5.4-mini", "sx-gpt-5.4-mini-moonapix", "sx-gpt-5.4-mini-vivaapi", "sx-fast-chat", "sx-claude-sonnet-4-6"]
-    - sx-gemini-3.1-pro: ["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix", "sx-general-text", "gpt-5.4-mini"]
-    - sx-image-vision: ["sx-gpt-5.4-mini-moonapix", "sx-image-vision-moonapix", "sx-gpt-5.4-mini-vivaapi", "gpt-5.4-mini", "sx-fast-chat", "sx-claude-sonnet-4-6"]
-    - sx-gpt-5.4-mini-vivaapi: ["sx-image-vision-tokenflux", "sx-gpt-5.4-mini-moonapix", "gpt-5.4-mini", "sx-fast-chat", "sx-claude-sonnet-4-6"]
-    - sx-gpt-5.4-mini-moonapix: ["sx-image-vision-tokenflux", "sx-gpt-5.4-mini-vivaapi", "gpt-5.4-mini", "sx-fast-chat", "sx-claude-sonnet-4-6"]
-    - sx-image-vision-tokenflux: ["sx-gpt-5.4-mini-moonapix", "sx-image-vision-moonapix", "sx-gpt-5.4-mini-vivaapi", "gpt-5.4-mini", "sx-fast-chat", "sx-claude-sonnet-4-6"]
-    - sx-image-vision-vivaapi: ["sx-image-vision-tokenflux", "sx-gpt-5.4-mini-moonapix", "gpt-5.4-mini", "sx-fast-chat", "sx-claude-sonnet-4-6"]
-    - sx-image-vision-moonapix: ["sx-image-vision-tokenflux", "sx-gpt-5.4-mini-moonapix", "sx-gpt-5.4-mini-vivaapi", "gpt-5.4-mini", "sx-fast-chat", "sx-claude-sonnet-4-6"]
-    - gpt-5.2: ["sx-gpt-5.2-vivaapi", "sx-fast-chat", "sx-general-text"]
-    - gpt-5.3: ["gpt-5.5", "sx-fast-chat", "sx-general-text"]
-    - gpt-5.3-spark: ["gpt-5.5", "sx-fast-chat", "sx-general-text"]
-    - gpt-5.4: ["sx-gpt-5.4-moonapix", "sx-gpt-5.4-vivaapi", "sx-fast-chat", "sx-general-text"]
-    - gpt-5.4-mini: ["sx-gpt-5.4-mini-moonapix", "sx-gpt-5.4-mini-vivaapi", "sx-fast-chat", "sx-claude-sonnet-4-6"]
-    - gpt-5.4-pro: ["sx-gpt-5.4-pro-vivaapi", "gpt-5.4", "sx-fast-chat", "sx-general-text"]
-    - gpt-5.5: ["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-general-text", "gpt-5.4-mini", "sx-claude-sonnet-4-6"]
-    - gemini-3.1-pro-preview: ["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix", "sx-general-text", "gpt-5.4-mini"]
-    - gemini-3-pro-image-preview: ["sx-image-vision", "sx-gpt-5.4-mini-moonapix", "sx-image-vision-moonapix", "sx-gpt-5.4-mini-vivaapi", "gpt-5.4-mini", "sx-fast-chat", "sx-claude-sonnet-4-6"]
-    - claude-opus-4-7: ["sx-claude-opus-4-7-moonapix", "sx-claude-sonnet-4-6", "sx-general-text", "sx-fast-chat", "gpt-5.4-mini"]
-    - claude-sonnet-4-6: ["sx-general-text", "sx-claude-sonnet-4-6-vivaapi", "sx-fast-chat", "gpt-5.4-mini"]
+    - sx-fast-chat: ["fallback-viva-gpt-5.5"]
+    - sx-chinese-text: ["fallback-viva-claude-sonnet-4-6"]
+    - sx-math-text: ["fallback-viva-gpt-5.5"]
+    - sx-general-text: ["fallback-viva-gpt-5.4-mini"]
+    - sx-image-vision: ["fallback-viva-gpt-5.4-mini"]
+    - sx-claude-sonnet-4-6: ["fallback-viva-claude-sonnet-4-6"]
+    - sx-claude-opus-4-6-thinking: ["fallback-viva-claude-opus-4-6-thinking"]
+    - sx-gemini-3.1-pro: ["fallback-viva-gemini-3.1-pro-preview"]
+    - gpt-4o-mini: ["fallback-viva-gpt-4o-mini"]
+    - gpt-5.2: ["fallback-viva-gpt-5.2"]
+    - gpt-5.3: ["fallback-viva-gpt-5.5"]
+    - gpt-5.3-spark: ["fallback-viva-gpt-5.5"]
+    - gpt-5.4: ["fallback-viva-gpt-5.4"]
+    - gpt-5.4-mini: ["fallback-viva-gpt-5.4-mini"]
+    - gpt-5.4-pro: ["fallback-viva-gpt-5.4-pro"]
+    - gpt-5.5: ["fallback-viva-gpt-5.5"]
+    - claude-opus-4-7: ["fallback-viva-claude-opus-4-7"]
+    - claude-sonnet-4-6: ["fallback-viva-claude-sonnet-4-6"]
+    - claude-3-7-sonnet-20250219: ["fallback-viva-claude-sonnet-4-6"]
+    - claude-sonnet-4-6-thinking: ["fallback-viva-claude-sonnet-4-6-thinking"]
+    - claude-opus-4-6-thinking: ["fallback-viva-claude-opus-4-6-thinking"]
+    - gemini-3.1-flash-lite-preview: ["fallback-viva-gemini-2.5-flash"]
+    - gemini-3-pro-image-preview: ["fallback-viva-gemini-3-pro-image-preview"]
+    - gemini-3.1-pro-preview: ["fallback-viva-gemini-3.1-pro-preview"]
+    - gemini-2.5-flash: ["fallback-viva-gemini-2.5-flash"]
+    - gemini-2.5-pro: ["fallback-viva-gemini-2.5-pro"]
+    - grok-4.2: ["fallback-viva-grok-4.2"]
   routing_strategy: latency-based-routing
   routing_strategy_args:
     ttl: 30
     lowest_latency_buffer: 0
-  # Enterprise fallback policy:
-  # - keep per-deployment timeouts short so the router can move to the next lane
-  # - tolerate one transient transport failure before cooling a deployment
-  # - keep cooldown short so a fast primary can recover without minutes of outage
   allowed_fails: 1
   cooldown_time: 45
   num_retries: 0

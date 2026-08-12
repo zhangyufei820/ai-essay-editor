@@ -1,6 +1,6 @@
 # LLM Gateway
 
-Self-hosted OpenAI-compatible routing layer for realtime text and image-recognition calls. It keeps provider keys server-side and exposes stable business aliases backed by ordered provider pools.
+Self-hosted OpenAI-compatible routing layer for realtime text and image-recognition calls. It keeps upstream keys server-side and exposes stable business aliases with one managed New API primary and one Viva fallback family.
 
 - `sx-fast-chat`
 - `sx-chinese-text`
@@ -13,16 +13,16 @@ Self-hosted OpenAI-compatible routing layer for realtime text and image-recognit
 - `gpt-5.4-mini`
 - `gpt-5.4-pro`
 - `gpt-5.5`
-- `claude-sonnet-4-5-20250929`
-- `claude-opus-4-5-20251101`
+- `claude-sonnet-4-6`
+- `claude-opus-4-7`
 - `gemini-2.5-flash`
 - `gemini-2.5-pro`
 
 Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps the primary healthy with background checks, and failover happens through explicit `router_settings.fallbacks` chains:
 
-- primary alias: fastest measured deployment
-- fallback alias chain: deterministic provider order after a primary failure
-- cross-alias fallback: last-resort escape hatch when the primary family is unhealthy
+- primary alias: the managed New API account requested for shenxiang.school
+- fallback alias chain: the matching Viva model only
+- no other direct supplier is present in the active gateway configuration
 - provider retry count is `0`: a failed primary immediately moves to the fallback chain instead of spending another request on the same unhealthy route
 
 Deployment `model_info.id` values are shared across equivalent text aliases where the same provider/model pair is reused. This makes cooldown and circuit state follow the real upstream deployment instead of one alias only.
@@ -96,7 +96,7 @@ Active health checks are intentionally bounded for production safety:
 - `health_check_timeout: 6-10` seconds per deployment
 - `health_check_skip_disabled_background_models: true`
 - `health_check_ignore_transient_errors: false`, so 429/408 probes can move traffic away before users hit provider pressure
-- `allowed_fails: 0` with timeout, rate-limit, bad-request, and internal-server policies set to `0`, so user-facing failures trip cooldown on the first observed failure
+- `allowed_fails: 1`, with authentication and bad-request failures set to `0`, so invalid credentials or payloads do not churn through retries
 
 Most long-tail/direct aliases set `disable_background_health_check: true`. The active probe set stays small so health checks do not compete with user traffic.
 
@@ -114,14 +114,13 @@ Configure real values only in `.env.production` on the server:
 
 ```env
 LITELLM_MASTER_KEY=replace-with-internal-gateway-key
+SHENXIANG_NEW_API_BASE_URL=https://api.aiphui.top/v1
+SHENXIANG_NEW_API_TEXT_API_KEY=replace-with-user-text-key
+SHENXIANG_NEW_API_CLAUDE_API_KEY=replace-with-user-claude-key
 VIVAAPI_LLM_BASE_URL=https://www.vivaapi.cn/v1
 VIVAAPI_LLM_API_KEY=replace-with-vivaapi-key
-TOKENFLUX_LLM_BASE_URL=https://tokenflux.dev/v1
-TOKENFLUX_LLM_API_KEY=replace-with-tokenflux-key
-MOONAPIX_LLM_BASE_URL=https://moonapix.com/v1
-MOONAPIX_LLM_API_KEY=replace-with-moonapix-key
 ```
 
-`config.yaml` only includes deployments that have been verified for realtime text chat. A provider can be present in server env before it is added to a model route.
+`config.yaml` contains only those two upstream families. Remove retired supplier credentials from the production env after a recoverable, access-restricted snapshot is created.
 
-Keep media generation on the media task stack. This gateway is for low-latency realtime text routing and lightweight visual understanding; image, music, and video generation should stay on durable task queues.
+Keep media generation on the media task stack. GPT Image uses the durable image gateway and Gemini image uses its OpenAI-compatible task route; both follow New API primary -> Viva fallback. This LiteLLM service remains for low-latency text and lightweight visual understanding.

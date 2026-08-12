@@ -7,9 +7,6 @@ const rounds = Math.max(
   ),
 )
 
-const TOKENFLUX_USER_AGENT =
-  "Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)"
-
 const RED_PIXEL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0uoAAAAASUVORK5CYII="
 
@@ -30,30 +27,12 @@ const CASES = [
     },
   },
   {
-    name: "gpt-5.5 / Moonapix",
+    name: "gpt-5.5 / managed New API",
     family: "fast-text",
-    provider: "moonapix",
+    provider: "new-api",
     model: "gpt-5.5",
-    baseUrlEnv: "MOONAPIX_LLM_BASE_URL",
-    apiKeyEnv: "MOONAPIX_LLM_API_KEY",
-    body: {
-      model: "gpt-5.5",
-      messages: [{ role: "user", content: "Reply with only: ok." }],
-      temperature: 0,
-      stream: false,
-      max_completion_tokens: 8,
-    },
-  },
-  {
-    name: "gpt-5.5 / TokenFlux",
-    family: "fast-text",
-    provider: "tokenflux",
-    model: "gpt-5.5",
-    baseUrlEnv: "TOKENFLUX_LLM_BASE_URL",
-    apiKeyEnv: "TOKENFLUX_LLM_API_KEY",
-    headers: {
-      "User-Agent": TOKENFLUX_USER_AGENT,
-    },
+    baseUrlEnv: "SHENXIANG_NEW_API_BASE_URL",
+    apiKeyEnv: "SHENXIANG_NEW_API_TEXT_API_KEY",
     body: {
       model: "gpt-5.5",
       messages: [{ role: "user", content: "Reply with only: ok." }],
@@ -78,12 +57,12 @@ const CASES = [
     },
   },
   {
-    name: "claude-sonnet-4-6 / Moonapix",
+    name: "claude-sonnet-4-6 / managed New API",
     family: "chinese-text",
-    provider: "moonapix",
+    provider: "new-api",
     model: "claude-sonnet-4-6",
-    baseUrlEnv: "MOONAPIX_LLM_BASE_URL",
-    apiKeyEnv: "MOONAPIX_LLM_API_KEY",
+    baseUrlEnv: "SHENXIANG_NEW_API_BASE_URL",
+    apiKeyEnv: "SHENXIANG_NEW_API_CLAUDE_API_KEY",
     body: {
       model: "claude-sonnet-4-6",
       messages: [{ role: "user", content: "请只回复：收到。" }],
@@ -116,38 +95,12 @@ const CASES = [
     },
   },
   {
-    name: "gpt-5.4-mini vision / Moonapix",
+    name: "gpt-5.4-mini vision / managed New API",
     family: "vision",
-    provider: "moonapix",
+    provider: "new-api",
     model: "gpt-5.4-mini",
-    baseUrlEnv: "MOONAPIX_LLM_BASE_URL",
-    apiKeyEnv: "MOONAPIX_LLM_API_KEY",
-    body: {
-      model: "gpt-5.4-mini",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "What color is this image? Reply with one word." },
-            { type: "image_url", image_url: { url: RED_PIXEL } },
-          ],
-        },
-      ],
-      temperature: 0,
-      stream: false,
-      max_completion_tokens: 8,
-    },
-  },
-  {
-    name: "gpt-5.4-mini vision / TokenFlux",
-    family: "vision",
-    provider: "tokenflux",
-    model: "gpt-5.4-mini",
-    baseUrlEnv: "TOKENFLUX_LLM_BASE_URL",
-    apiKeyEnv: "TOKENFLUX_LLM_API_KEY",
-    headers: {
-      "User-Agent": TOKENFLUX_USER_AGENT,
-    },
+    baseUrlEnv: "SHENXIANG_NEW_API_BASE_URL",
+    apiKeyEnv: "SHENXIANG_NEW_API_TEXT_API_KEY",
     body: {
       model: "gpt-5.4-mini",
       messages: [

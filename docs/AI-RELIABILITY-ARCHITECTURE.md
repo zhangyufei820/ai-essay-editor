@@ -70,12 +70,9 @@ The LLM gateway uses LiteLLM's background health checks and health-check-driven 
 
 This is true dynamic failover on the request path, not random load spreading. The product objective is fastest stable responses: hold the fastest healthy primary, then switch away quickly when it is unhealthy.
 
-As of 2026-06-05 production verification, the hot GPT text aliases (`sx-fast-chat`, `sx-math-text`, `sx-general-text`) use TokenFlux as the primary because same-model smoke tests from the production environment measured it fastest after adding the required Codex-style `User-Agent` header for TokenFlux's TLS router checks.
+As of 2026-08-12, all shenxiang.school GPT, Claude, and lightweight vision aliases use the designated managed New API account as the single primary. Each alias has one explicit Viva fallback; no other direct supplier participates in the production LiteLLM route.
 
-The business-specialized primaries were also tightened from the same environment:
-
-- `sx-chinese-text`: `Moonapix claude-sonnet-4-6` primary, because it was materially faster than the Viva Claude route while staying stable.
-- `sx-image-vision`: `TokenFlux gpt-5.4-mini` primary, with `Viva gpt-5.4-mini` then Moonapix as fallbacks, because it was the fastest stable path for both URL-based vision requests and the base64 OCR shape used by `essay-ai-suite`.
+Long-running image generation stays on durable task gateways rather than the realtime LiteLLM process. Those gateways follow the same ownership rule: the designated New API image token is primary and Viva is the only fallback.
 
 ## Voice
 

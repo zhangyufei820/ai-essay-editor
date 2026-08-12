@@ -700,16 +700,15 @@ const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
 const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000
 const GPT_IMAGE_POLL_TOKEN_TTL_MS = GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS + 5 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
-const VIVAAPI_IMAGE_BASE_URL = (process.env.VIVAAPI_IMAGE_BASE_URL || "https://moonapix.com").replace(/\/+$/, "")
-function normalizeVivaApiImageModel(model: string | undefined) {
+const NEW_API_IMAGE_BASE_URL = (process.env.SHENXIANG_NEW_API_IMAGE_BASE_URL || "https://api.aiphui.top").replace(/\/+$/, "")
+function normalizeNewApiImageModel(model: string | undefined) {
   const trimmed = model?.trim()
-  if (!trimmed || trimmed === "gpt-image-2-vip") return "gpt-image-2"
+  if (!trimmed || trimmed === "gpt-image-2" || trimmed === "gpt-image-2-vip") return "gpt-image-2-4K"
   return trimmed
 }
-const VIVAAPI_IMAGE_MODEL = normalizeVivaApiImageModel(process.env.VIVAAPI_IMAGE_MODEL)
-const MOONAPIX_LLM_IMAGE_BASE_URL = (process.env.MOONAPIX_LLM_BASE_URL || "https://moonapix.com/v1").replace(/\/v1\/?$/, "").replace(/\/+$/, "")
+const NEW_API_IMAGE_MODEL = normalizeNewApiImageModel(process.env.SHENXIANG_NEW_API_IMAGE_MODEL)
 const VIVAAPI_LLM_IMAGE_BASE_URL = (process.env.VIVAAPI_LLM_BASE_URL || "https://www.vivaapi.cn/v1").replace(/\/v1\/?$/, "").replace(/\/+$/, "")
-const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "https://moonapix.com").replace(/\/+$/, "")
+const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "https://api.aiphui.top").replace(/\/+$/, "")
 const VIVAAPI_EDIT_MAX_SOURCE_DIMENSION = 2048
 const VIVAAPI_EDIT_RETRY_SOURCE_DIMENSION = 1536
 const VIVAAPI_EDIT_MAX_SOURCE_BYTES = 4 * 1024 * 1024
@@ -1426,7 +1425,7 @@ function buildImageGatewayPayload(query: string, inputs: unknown) {
   }
 }
 
-function buildVivaApiImagePayload(query: string, inputs: unknown, model = VIVAAPI_IMAGE_MODEL) {
+function buildVivaApiImagePayload(query: string, inputs: unknown, model = NEW_API_IMAGE_MODEL) {
   const imageInputs = buildGptImageV11Inputs(inputs)
   const referenceImages = imageInputs.reference_image_urls.length > 0
     ? imageInputs.reference_image_urls
@@ -1465,26 +1464,27 @@ type VivaApiImageEditFormDataResult = {
   gatewaySize: string
 }
 
-type VivaApiImageGatewayCandidate = {
+type ImageGatewayCandidate = {
   name: string
   baseUrl: string
   token: string
   model: string
 }
 
-function getVivaApiImageGatewayCandidates(): VivaApiImageGatewayCandidate[] {
+type GeminiImageGatewayCandidate = {
+  name: string
+  baseUrl: string
+  token: string
+  model: string
+}
+
+function getImageGatewayCandidates(): ImageGatewayCandidate[] {
   return [
     {
-      name: "vivaapi-image",
-      baseUrl: VIVAAPI_IMAGE_BASE_URL,
-      token: process.env.VIVAAPI_IMAGE_API_KEY || "",
-      model: VIVAAPI_IMAGE_MODEL,
-    },
-    {
-      name: "moonapix-llm-image-fallback",
-      baseUrl: MOONAPIX_LLM_IMAGE_BASE_URL,
-      token: process.env.MOONAPIX_LLM_API_KEY || "",
-      model: "gpt-image-2",
+      name: "new-api-image-primary",
+      baseUrl: NEW_API_IMAGE_BASE_URL,
+      token: process.env.SHENXIANG_NEW_API_IMAGE_API_KEY || "",
+      model: NEW_API_IMAGE_MODEL,
     },
     {
       name: "vivaapi-llm-image-fallback",
@@ -1493,6 +1493,30 @@ function getVivaApiImageGatewayCandidates(): VivaApiImageGatewayCandidate[] {
       model: "gpt-image-2",
     },
   ].filter((candidate) => candidate.token)
+}
+
+function getGeminiImageGatewayCandidates(imageInputs: GeminiImageGatewayInputs): GeminiImageGatewayCandidate[] {
+  const isOpenAiCompatible = process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
+  const candidates = [
+    {
+      name: "new-api-image-primary",
+      baseUrl: GEMINI_IMAGE_GATEWAY_URL,
+      token: process.env.GEMINI_IMAGE_GATEWAY_TOKEN || "",
+      model: imageInputs.model,
+    },
+    ...(isOpenAiCompatible
+      ? [{
+          name: "vivaapi-image-fallback",
+          baseUrl: VIVAAPI_LLM_IMAGE_BASE_URL,
+          token: process.env.VIVAAPI_LLM_API_KEY || "",
+          model: "gemini-3-pro-image-preview",
+        }]
+      : []),
+  ].filter((candidate) => candidate.token)
+
+  return candidates.filter((candidate, index) => (
+    candidates.findIndex((item) => item.baseUrl === candidate.baseUrl && item.token === candidate.token) === index
+  ))
 }
 
 function shouldFailoverVivaApiImageResponse(response: Response, storedResult: unknown) {
@@ -1597,7 +1621,7 @@ async function normalizeVivaApiEditSourceImage(inputBuffer: Buffer, contentType:
 async function buildVivaApiImageEditFormData(
   query: string,
   inputs: unknown,
-  model = VIVAAPI_IMAGE_MODEL,
+  model = NEW_API_IMAGE_MODEL,
   maxDimension = VIVAAPI_EDIT_MAX_SOURCE_DIMENSION,
 ): Promise<VivaApiImageEditFormDataResult> {
   const imageInputs = buildGptImageV11Inputs(inputs)
@@ -1645,7 +1669,7 @@ async function submitVivaApiImageRequest(params: {
   query: string
   inputs: unknown
   isEditMode: boolean
-  gateway: VivaApiImageGatewayCandidate
+  gateway: ImageGatewayCandidate
   gatewayPath: string
   signal: AbortSignal
   attempt: number
@@ -1701,13 +1725,13 @@ async function submitVivaApiImageRequest(params: {
   }
 }
 
-function buildGeminiImageGatewayPayload(query: string, inputs: unknown) {
+function buildGeminiImageGatewayPayload(query: string, inputs: unknown, modelOverride?: string) {
   const imageInputs = buildGeminiImageGatewayInputs(inputs)
   const aspectRatio = resolveGeminiGatewayAspectRatio(imageInputs)
 
   return {
     prompt: query || "生成图片",
-    model: imageInputs.model,
+    model: modelOverride || imageInputs.model,
     size: imageInputs.image_size,
     n: imageInputs.n,
     response_format: "url",
@@ -2188,7 +2212,7 @@ async function chargeImageGatewayCredits(params: {
     imageSize: params.inputs.size,
     modelId: params.billingModel,
     keySource: params.keySource,
-    gatewayName: process.env.VIVAAPI_IMAGE_API_KEY ? "vivaapi-image" : "dify-image-gateway",
+    gatewayName: process.env.SHENXIANG_NEW_API_IMAGE_API_KEY ? "managed-image-gateway" : "dify-image-gateway",
     feature: params.billingModel === "gpt-image-2" ? "image2" : "image",
     requestId: params.requestId,
     conversationId: params.conversationId || null,
@@ -2196,23 +2220,23 @@ async function chargeImageGatewayCredits(params: {
     rawProviderMetadata: {
       imageQuality: params.inputs.quality,
       inputs: params.inputs,
-      provider: process.env.VIVAAPI_IMAGE_API_KEY ? "vivaapi" : "dify-image-gateway",
+      provider: process.env.SHENXIANG_NEW_API_IMAGE_API_KEY ? "managed_image_gateway" : "dify-image-gateway",
     },
   })
 }
 
 async function callImageGatewayDirect(query: string, inputs: unknown) {
-  const gatewayToken = process.env.VIVAAPI_IMAGE_API_KEY || process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
-  const gatewayBaseUrl = process.env.VIVAAPI_IMAGE_API_KEY ? VIVAAPI_IMAGE_BASE_URL : IMAGE_GATEWAY_URL
-  const gatewayPath = process.env.VIVAAPI_IMAGE_API_KEY ? "/v1/images/generations" : "/api/image/unified"
+  const gatewayToken = process.env.SHENXIANG_NEW_API_IMAGE_API_KEY || process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
+  const gatewayBaseUrl = process.env.SHENXIANG_NEW_API_IMAGE_API_KEY ? NEW_API_IMAGE_BASE_URL : IMAGE_GATEWAY_URL
+  const gatewayPath = process.env.SHENXIANG_NEW_API_IMAGE_API_KEY ? "/v1/images/generations" : "/api/image/unified"
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
   try {
     let response: Response
     let text = ""
 
-    if (process.env.VIVAAPI_IMAGE_API_KEY) {
-      const gatewayCandidates = getVivaApiImageGatewayCandidates()
+    if (process.env.SHENXIANG_NEW_API_IMAGE_API_KEY) {
+      const gatewayCandidates = getImageGatewayCandidates()
       if (gatewayCandidates.length === 0) {
         return Response.json({ error: "图片服务未配置可用通道", code: sanitizePublicAiErrorCode("IMAGE_GATEWAY_MISSING") }, { status: 503 })
       }
@@ -2277,7 +2301,7 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
       return Response.json({ error: message, code: extractGatewayErrorCode(record, "IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
     }
 
-    return process.env.VIVAAPI_IMAGE_API_KEY
+    return process.env.SHENXIANG_NEW_API_IMAGE_API_KEY
       ? createVivaApiImageResponse(payload)
       : createImageGatewayResponse(payload)
   } catch (error) {
@@ -2300,45 +2324,65 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
 }
 
 async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
-  const gatewayToken = process.env.GEMINI_IMAGE_GATEWAY_TOKEN || ""
-  const isMoonapixGateway = GEMINI_IMAGE_GATEWAY_URL === "https://moonapix.com" || process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
-  const gatewayPath = isMoonapixGateway ? "/v1/images/generations" : "/api/gemini-image/unified"
+  const imageInputs = buildGeminiImageGatewayInputs(inputs)
+  const isOpenAiCompatible = process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
+  const gatewayPath = isOpenAiCompatible ? "/v1/images/generations" : "/api/gemini-image/unified"
+  const gatewayCandidates = getGeminiImageGatewayCandidates(imageInputs)
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
   try {
-    const response = await internalDifyFetch(`${GEMINI_IMAGE_GATEWAY_URL}${gatewayPath}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(gatewayToken
-          ? {
-              "x-gateway-token": gatewayToken,
-            Authorization: `Bearer ${gatewayToken}`,
-          }
-        : {}),
-      },
-      body: JSON.stringify(isMoonapixGateway
-        ? buildGeminiImageGatewayPayload(query, inputs)
-        : buildLegacyGeminiImageGatewayPayload(query, inputs)
-      ),
-      signal: timeout.signal,
-    })
-
-    const text = await response.text()
-    let payload: unknown = {}
-    try {
-      payload = JSON.parse(text)
-    } catch {
-      payload = { success: false, message: sanitizeUpstreamErrorText(text), status_code: response.status }
+    if (gatewayCandidates.length === 0) {
+      return Response.json(
+        { error: "图像服务未配置可用通道", code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_MISSING") },
+        { status: 503 },
+      )
     }
 
-    if (!response.ok) {
-      const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+    let selectedResponse: Response | null = null
+    let selectedPayload: unknown = {}
+    for (const [candidateIndex, gateway] of gatewayCandidates.entries()) {
+      const response = await internalDifyFetch(`${gateway.baseUrl}${gatewayPath}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-gateway-token": gateway.token,
+          Authorization: `Bearer ${gateway.token}`,
+        },
+        body: JSON.stringify(isOpenAiCompatible
+          ? buildGeminiImageGatewayPayload(query, inputs, gateway.model)
+          : buildLegacyGeminiImageGatewayPayload(query, inputs)
+        ),
+        signal: timeout.signal,
+      })
+      const text = await response.text()
+      const payload = safeJsonFromText(text, response.status)
+      selectedResponse = response
+      selectedPayload = payload
+
+      if (
+        candidateIndex < gatewayCandidates.length - 1 &&
+        shouldFailoverVivaApiImageResponse(response, payload)
+      ) {
+        continue
+      }
+      break
+    }
+
+    if (!selectedResponse) throw new Error("GEMINI_IMAGE_GATEWAY_UNAVAILABLE")
+    if (!selectedResponse.ok) {
+      const record = selectedPayload && typeof selectedPayload === "object"
+        ? selectedPayload as Record<string, unknown>
+        : {}
       const message = extractGatewayErrorMessage(record, "图像服务请求失败，请稍后重试。")
-      return Response.json({ error: message, code: extractGatewayErrorCode(record, "GEMINI_IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
+      return Response.json(
+        { error: message, code: extractGatewayErrorCode(record, "GEMINI_IMAGE_GATEWAY_HTTP_ERROR") },
+        { status: selectedResponse.status },
+      )
     }
 
-    return isMoonapixGateway ? createVivaApiImageResponse(payload) : createImageGatewayResponse(payload)
+    return isOpenAiCompatible
+      ? createVivaApiImageResponse(selectedPayload)
+      : createImageGatewayResponse(selectedPayload)
   } catch (error) {
     const err = error instanceof Error ? error : null
     if (err?.name === "AbortError") {
@@ -2361,8 +2405,8 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
 function buildGeminiGatewayTrace(imageInputs: GeminiImageGatewayInputs) {
   return {
     source: "gemini_image_gateway",
-    provider: "moonapix",
-    gateway_path: GEMINI_IMAGE_GATEWAY_URL === "https://moonapix.com" || process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
+    provider: "managed_image_gateway",
+    gateway_path: process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
       ? "/v1/images/generations"
       : "/api/gemini-image/unified",
     mode: imageInputs.mode,
@@ -2764,7 +2808,7 @@ async function startImageGatewayTask(params: {
   return taskId
 }
 
-async function startVivaApiImageTask(params: {
+async function startManagedImageTask(params: {
   query: string
   inputs: unknown
   requestId: string
@@ -2776,7 +2820,7 @@ async function startVivaApiImageTask(params: {
   let gatewaySize = normalizeVivaApiImageSize(imageInputs)
   let editSourceMetadata: VivaApiEditSourceMetadata[] = []
   let vivaApiAttempt = 1
-  let activeGateway: VivaApiImageGatewayCandidate | null = null
+  let activeGateway: ImageGatewayCandidate | null = null
 
   await updateTaskRun(params.requestId, {
     status: "running",
@@ -2784,7 +2828,7 @@ async function startVivaApiImageTask(params: {
     progress: 15,
     upstreamTaskId: params.requestId,
     metadata: {
-      provider: "moonapix",
+      provider: "managed_image_gateway",
       gateway_status: "submitted",
       gateway_path: gatewayPath,
       gateway_size: gatewaySize,
@@ -2795,9 +2839,9 @@ async function startVivaApiImageTask(params: {
     },
   })
 
-  fireAndForget("Moonapix Image Task", (async () => {
+  fireAndForget("Managed Image Task", (async () => {
     const startedAt = Date.now()
-    const gatewayCandidates = getVivaApiImageGatewayCandidates()
+    const gatewayCandidates = getImageGatewayCandidates()
     const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
     try {
@@ -2826,7 +2870,7 @@ async function startVivaApiImageTask(params: {
             progress: 35,
             upstreamTaskId: params.requestId,
             metadata: {
-              provider: "moonapix",
+              provider: "managed_image_gateway",
               elapsed_ms: Date.now() - startedAt,
               gateway_status: "failover",
               gateway_path: gatewayPath,
@@ -2858,7 +2902,7 @@ async function startVivaApiImageTask(params: {
           progress: 45,
           upstreamTaskId: params.requestId,
           metadata: {
-            provider: "moonapix",
+            provider: "managed_image_gateway",
             elapsed_ms: Date.now() - startedAt,
             gateway_status: "retrying",
             gateway_path: gatewayPath,
@@ -2898,7 +2942,7 @@ async function startVivaApiImageTask(params: {
           errorCode: typeof wrappedPayload?.code === "string" ? wrappedPayload.code : `VIVAAPI_IMAGE_${response.status || wrappedResponse.status}`,
           sanitizedError: sanitizeForTrace(storedResult) as Record<string, unknown>,
           metadata: {
-            provider: "moonapix",
+            provider: "managed_image_gateway",
             elapsed_ms: Date.now() - startedAt,
             gateway_status: "failed",
             gateway_path: gatewayPath,
@@ -2924,7 +2968,7 @@ async function startVivaApiImageTask(params: {
         upstreamTaskId: params.requestId,
         artifacts: extractArtifactsFromUnknown(wrappedPayload),
         metadata: {
-          provider: "moonapix",
+          provider: "managed_image_gateway",
           elapsed_ms: Date.now() - startedAt,
           gateway_status: "succeeded",
           gateway_path: gatewayPath,
@@ -2950,7 +2994,7 @@ async function startVivaApiImageTask(params: {
         errorCode: err?.name === "AbortError" ? "IMAGE_GATEWAY_TIMEOUT" : "IMAGE_GATEWAY_UNAVAILABLE",
         sanitizedError: sanitizeForTrace({ message: err?.message || String(error) }) as Record<string, unknown>,
         metadata: {
-          provider: "moonapix",
+          provider: "managed_image_gateway",
           elapsed_ms: Date.now() - startedAt,
           gateway_status: err?.name === "AbortError" ? "timeout" : "failed",
           gateway_path: gatewayPath,
@@ -2967,7 +3011,7 @@ async function startVivaApiImageTask(params: {
     }
   })())
 
-  console.log("[Moonapix Image Task] persisted", {
+  console.log("[Managed Image Task] persisted", {
     taskId: params.requestId,
     promptLength: params.query.length,
     requestId: params.requestId,
@@ -3127,7 +3171,7 @@ export async function GET(request: NextRequest) {
     const gatewayStatus = typeof metadata.gateway_status === "string" ? metadata.gateway_status : ""
     const taskCreatedBeforeThisProcess = Number.isFinite(createdAtMs) && createdAtMs < SERVER_STARTED_AT_MS
     if (
-      provider === "moonapix" &&
+      (provider === "managed_image_gateway" || provider === "moonapix") &&
       gatewayStatus === "submitted" &&
       taskCreatedBeforeThisProcess &&
       recoverGeminiImageGatewayTask({
@@ -3864,7 +3908,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (isGptImageGatewayRequest) {
-      console.log("🎨 [GPT Image] 使用 Moonapix 图片通道，绕过 Dify chatflow")
+      console.log("🎨 [GPT Image] 使用统一图片任务网关，绕过 Dify chatflow")
       const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
       const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
 
@@ -3899,8 +3943,8 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          const taskId = process.env.VIVAAPI_IMAGE_API_KEY
-            ? await startVivaApiImageTask({
+          const taskId = process.env.SHENXIANG_NEW_API_IMAGE_API_KEY
+            ? await startManagedImageTask({
                 query: effectiveQuery,
                 inputs,
                 requestId: taskRun.requestId,

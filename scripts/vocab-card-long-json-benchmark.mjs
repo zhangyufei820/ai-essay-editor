@@ -195,24 +195,20 @@ const CASES = [
   { name: "gateway-gpt-5.4-mini", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "gpt-5.4-mini" },
   { name: "gateway-sx-general-text", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "sx-general-text" },
   { name: "gateway-sx-fast-chat", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "sx-fast-chat" },
-  { name: "gateway-sx-gpt-5.4-mini-vivaapi", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "sx-gpt-5.4-mini-vivaapi" },
-  { name: "gateway-sx-gpt-5.4-mini-moonapix", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "sx-gpt-5.4-mini-moonapix" },
+  { name: "gateway-fallback-viva-gpt-5.4-mini", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "fallback-viva-gpt-5.4-mini" },
   {
-    name: "direct-tokenflux-gpt-5.4-mini",
-    baseUrl: process.env.TOKENFLUX_LLM_BASE_URL || "",
-    apiKey: process.env.TOKENFLUX_LLM_API_KEY || "",
+    name: "direct-new-api-gpt-5.4-mini",
+    baseUrl: process.env.SHENXIANG_NEW_API_BASE_URL || "",
+    apiKey: process.env.SHENXIANG_NEW_API_TEXT_API_KEY || "",
     model: "gpt-5.4-mini",
-    headers: { "User-Agent": "Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)" },
   },
   {
-    name: "direct-tokenflux-gpt-5.5",
-    baseUrl: process.env.TOKENFLUX_LLM_BASE_URL || "",
-    apiKey: process.env.TOKENFLUX_LLM_API_KEY || "",
+    name: "direct-new-api-gpt-5.5",
+    baseUrl: process.env.SHENXIANG_NEW_API_BASE_URL || "",
+    apiKey: process.env.SHENXIANG_NEW_API_TEXT_API_KEY || "",
     model: "gpt-5.5",
-    headers: { "User-Agent": "Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)" },
   },
   { name: "direct-vivaapi-gpt-5.4-mini", baseUrl: process.env.VIVAAPI_LLM_BASE_URL || "", apiKey: process.env.VIVAAPI_LLM_API_KEY || "", model: "gpt-5.4-mini" },
-  { name: "direct-moonapix-gpt-5.4-mini", baseUrl: process.env.MOONAPIX_LLM_BASE_URL || "", apiKey: process.env.MOONAPIX_LLM_API_KEY || "", model: "gpt-5.4-mini" },
 ]
 
 const ACTIVE_CASES = ONLY_CASES.length
