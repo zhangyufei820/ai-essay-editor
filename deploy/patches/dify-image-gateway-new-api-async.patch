@@ -1,19 +1,10 @@
 --- main.py
 +++ main.py
-@@ -34,6 +34,9 @@
- DEFAULT_IMAGE_MODEL = os.getenv("DEFAULT_IMAGE_MODEL", "gpt-image-2")
- GATEWAY_API_TOKEN = os.getenv("GATEWAY_API_TOKEN", "")
- UPSTREAM_USER_AGENT = os.getenv("UPSTREAM_USER_AGENT", "shenxiang-image-gateway/1.0")
+@@ -36,0 +37,3 @@
 +PRIMARY_UPSTREAM_ASYNC = os.getenv("PRIMARY_UPSTREAM_ASYNC", "false").lower() in {"1", "true", "yes", "on"}
 +PRIMARY_UPSTREAM_ASYNC_TIMEOUT = float(os.getenv("PRIMARY_UPSTREAM_ASYNC_TIMEOUT", "480"))
 +PRIMARY_UPSTREAM_ASYNC_POLL_INTERVAL = float(os.getenv("PRIMARY_UPSTREAM_ASYNC_POLL_INTERVAL", "3"))
- MODEL_ALIAS_MAP = {
-     "gpt-image-2": os.getenv("GPT_IMAGE_2_UPSTREAM_MODEL", "gpt-image-2-4K"),
- }
-@@ -270,6 +273,53 @@
- 
- def get_provider_timeout(provider_index: int) -> httpx.Timeout:
-     return PRIMARY_UPSTREAM_TIMEOUT if provider_index == 0 else UPSTREAM_TIMEOUT
+@@ -272,0 +276,47 @@
 +
 +
 +async def call_async_image_generation(
@@ -61,13 +52,7 @@
 +            return 502, poll_raw
 +
 +    return 504, {"error": {"type": "AsyncImageTimeout", "message": "async image task timeout"}}
- 
- 
- def should_retry_upstream(status_code: int, raw: Dict[str, Any]) -> bool:
-@@ -754,16 +804,24 @@
-         for provider_index, provider in enumerate(providers):
-             try:
-                 async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT, limits=UPSTREAM_LIMITS) as client:
+@@ -757,8 +807,16 @@
 -                    response = await client.post(
 -                        f"{provider['base_url']}/images/generations",
 -                        headers=upstream_headers(provider['api_key']),
@@ -92,59 +77,31 @@
 +                        response_status = response.status_code
 +                        raw = parse_upstream_json(response)
 +
-                 last_raw = raw
+@@ -766 +824 @@
 -                last_status = response.status_code
 +                last_status = response_status
-             except httpx.HTTPError as exc:
-                 raw = {"error": {"message": str(exc), "type": exc.__class__.__name__}}
-                 last_raw = raw
-@@ -785,11 +843,11 @@
-                     },
-                 )
- 
+@@ -788 +846 @@
 -            if 200 <= response.status_code < 300:
 +            if 200 <= response_status < 300:
-                 image_urls = extract_and_save_images(raw, request_payload.get("output_format", "png"))
- 
-                 if not image_urls:
+@@ -792 +850 @@
 -                    return no_image_data_response(request_payload, raw, response.status_code)
 +                    return no_image_data_response(request_payload, raw, response_status)
- 
-                 return build_success_response(
-                     req=req,
-@@ -797,19 +855,19 @@
-                     raw=raw,
-                     image_urls=image_urls,
-                     message="图片生成成功",
+@@ -800 +858 @@
 -                    upstream_status_code=response.status_code,
 +                    upstream_status_code=response_status,
-                 )
- 
+@@ -803,2 +861,2 @@
 -            if provider_index < len(providers) - 1 and should_try_next_api_key(response.status_code, raw):
 -                print(f"[Image Gateway] upstream key failed on generations status={response.status_code}, trying fallback key")
 +            if provider_index < len(providers) - 1 and should_try_next_api_key(response_status, raw):
 +                print(f"[Image Gateway] upstream key failed on generations status={response_status}, trying fallback key")
-                 continue
- 
+@@ -807 +865 @@
 -            if should_retry_upstream(response.status_code, raw) and attempt < UPSTREAM_MAX_RETRIES:
 +            if should_retry_upstream(response_status, raw) and attempt < UPSTREAM_MAX_RETRIES:
-                 delay = get_retry_delay(raw, attempt)
-                 await asyncio.sleep(delay)
-                 break
- 
+@@ -812 +870 @@
 -            if response.status_code == 429:
 +            if response_status == 429:
-                 return error_response(
-                     "upstream_rate_limited",
-                     f"上游图片接口限流，已用尽 {UPSTREAM_MAX_RETRIES} 次重试次数",
-@@ -823,8 +881,8 @@
- 
-             return error_response(
-                 "upstream_error",
+@@ -826,2 +884,2 @@
 -                f"上游图片生成接口请求失败，HTTP {response.status_code}",
 -                response.status_code,
 +                f"上游图片生成接口请求失败，HTTP {response_status}",
 +                response_status,
-                 {
-                     "request_payload": request_payload,
-                     "upstream_response": sanitize_upstream_response(raw),
