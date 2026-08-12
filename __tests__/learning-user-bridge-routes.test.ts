@@ -90,7 +90,7 @@ describe("learning API user bridge", () => {
     expect(syncRoute).toContain(".from('user_credits')")
     expect(syncRoute).not.toContain("Upsert 积分也失败")
     expect(migration).toContain("source_account_exists := found")
-    expect(migration).toContain("coalesce(bridge.supabase_user_id, rc.user_id)")
+    expect(migration).toContain("coalesce(bridge.supabase_user_id::text, rc.user_id)")
     expect(migration).toContain("bridge.provider_user_id = rc.user_id")
     expect(migration.match(/set uses = coalesce\(uses, 0\) \+ 1/g)).toHaveLength(1)
   })

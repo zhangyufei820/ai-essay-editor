@@ -152,7 +152,7 @@ begin
     raise exception 'invalid referral code';
   end if;
 
-  select coalesce(bridge.supabase_user_id, rc.user_id)
+  select coalesce(bridge.supabase_user_id::text, rc.user_id)
     into resolved_referrer_id
     from public.referral_codes as rc
     left join public.auth_user_bridges as bridge
