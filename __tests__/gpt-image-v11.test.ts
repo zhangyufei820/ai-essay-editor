@@ -164,6 +164,7 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).toContain("function getGeminiImageGatewayCandidates")
     expect(routeSource).toContain('name: "new-api-image-primary"')
     expect(routeSource).toContain('name: "vivaapi-image-fallback"')
+    expect(routeSource).toContain("isOpenAiCompatible && !isManagedGateway")
     expect(routeSource).toContain('"User-Agent": "shenxiang-image-gateway/1.0"')
     expect(routeSource).toContain("function shouldFailoverVivaApiImageResponse")
     expect(routeSource).not.toContain("3840x3840")

@@ -277,6 +277,14 @@ describe("llm gateway New API primary policy", () => {
     expect(patchFile).toContain("/images/generations?async=true")
     expect(patchFile).toContain("/images/tasks/{task_id}")
     expect(patchFile).toContain("PRIMARY_UPSTREAM_ASYNC_TIMEOUT")
+    expect(patchFile).toContain('"120"')
+
+    const fallbackModelPatch = fs.readFileSync(
+      path.join(process.cwd(), "deploy/patches/dify-image-gateway-viva-fallback-model.patch"),
+      "utf8",
+    )
+    expect(fallbackModelPatch).toContain("FALLBACK_MODEL_ALIAS_MAP")
+    expect(fallbackModelPatch).toContain("GPT_IMAGE_2_FALLBACK_MODEL")
   })
 
   it("keeps the production Node runtime and cleanup unit valid", () => {

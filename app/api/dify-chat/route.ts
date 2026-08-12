@@ -1496,6 +1496,7 @@ function getImageGatewayCandidates(): ImageGatewayCandidate[] {
 }
 
 function getGeminiImageGatewayCandidates(imageInputs: GeminiImageGatewayInputs): GeminiImageGatewayCandidate[] {
+  const isManagedGateway = process.env.GEMINI_IMAGE_GATEWAY_MANAGED_COMPAT === "true"
   const isOpenAiCompatible = process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
   const candidates = [
     {
@@ -1504,7 +1505,7 @@ function getGeminiImageGatewayCandidates(imageInputs: GeminiImageGatewayInputs):
       token: process.env.GEMINI_IMAGE_GATEWAY_TOKEN || "",
       model: imageInputs.model,
     },
-    ...(isOpenAiCompatible
+    ...(isOpenAiCompatible && !isManagedGateway
       ? [{
           name: "vivaapi-image-fallback",
           baseUrl: VIVAAPI_LLM_IMAGE_BASE_URL,
