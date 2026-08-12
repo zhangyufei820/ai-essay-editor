@@ -123,4 +123,6 @@ VIVAAPI_LLM_API_KEY=replace-with-vivaapi-key
 
 `config.yaml` contains only those two upstream families. Remove retired supplier credentials from the production env after a recoverable, access-restricted snapshot is created.
 
+The managed public endpoint requires a descriptive service `User-Agent`; the text gateway sets `shenxiang-llm-gateway/1.0`, while direct image calls set `shenxiang-image-gateway/1.0`. The external durable image gateway applies the versioned patch in `deploy/patches/dify-image-gateway-user-agent.patch` for the same reason.
+
 Keep media generation on the media task stack. GPT Image uses the durable image gateway and Gemini image uses its OpenAI-compatible task route; both follow New API primary -> Viva fallback. This LiteLLM service remains for low-latency text and lightweight visual understanding.

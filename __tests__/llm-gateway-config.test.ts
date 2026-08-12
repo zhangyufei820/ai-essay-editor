@@ -8,6 +8,7 @@ type GatewayModel = {
     model?: string
     api_base?: string
     api_key?: string
+    extra_headers?: Record<string, string>
     timeout?: number
   }
   model_info?: {
@@ -111,6 +112,7 @@ describe("llm gateway New API primary policy", () => {
         "os.environ/SHENXIANG_NEW_API_TEXT_API_KEY",
         "os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY",
       ]).toContain(deployments[0]?.litellm_params?.api_key)
+      expect(deployments[0]?.litellm_params?.extra_headers?.["User-Agent"]).toBe("shenxiang-llm-gateway/1.0")
       expect(deployments[0]?.model_info?.mode).toBe("chat")
     }
   })

@@ -2249,6 +2249,7 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "User-Agent": "shenxiang-image-gateway/1.0",
             "x-gateway-token": gateway.token,
             Authorization: `Bearer ${gateway.token}`,
           },
@@ -2345,6 +2346,7 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "User-Agent": "shenxiang-image-gateway/1.0",
           "x-gateway-token": gateway.token,
           Authorization: `Bearer ${gateway.token}`,
         },
