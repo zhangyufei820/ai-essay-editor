@@ -6,5 +6,6 @@ imageTaskTerminal
 mp-video-preview-modal
 点击播放后放大
 无法识别参考图比例，请重新上传图片后再试。
+模型服务响应超时，请稍后重试。
 xingren-grok-video-15-6s
 xingren-grok-video-15-10s
