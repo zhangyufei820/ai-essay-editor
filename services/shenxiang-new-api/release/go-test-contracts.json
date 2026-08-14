@@ -1,7 +1,7 @@
 [
   {
     "package": "./.",
-    "run": "^(TestBuildXingrenCodexTokenResponse.*|TestXingrenCodexTokenNameIncludesAccountID|TestXingrenOnboardingCodexTokenHandler.*|TestXingrenCodexFrontendRejectsInvalidPayloadBeforeConfiguration)$"
+    "run": "^(TestBuildXingrenCodexTokenResponse.*|TestXingrenCodexTokenNameIncludesAccountID|TestXingrenOnboardingCodexTokenHandler.*|TestXingrenCodexFrontendRejectsInvalidPayloadBeforeConfiguration|TestXingrenHomeChatResponseSafetyContract)$"
   },
   {
     "package": "./middleware",

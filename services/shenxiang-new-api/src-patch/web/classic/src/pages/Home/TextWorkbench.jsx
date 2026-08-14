@@ -64,6 +64,16 @@ import {
   isTextPricingModel,
   toTextModelOptions,
 } from './textModelFilter';
+import {
+  HOME_CHAT_RESPONSE_HEADER_TIMEOUT_MS,
+  HOME_CHAT_TIMEOUT_MESSAGE,
+  getPublicChatStatusMessage,
+  isEventStreamChatContentType,
+  isJsonChatContentType,
+  isSupportedChatSuccessContentType,
+  resolveChatErrorBody,
+  sanitizePublicChatMessage,
+} from './chatResponseSafety';
 import { useThemePreference } from '../../context/Theme';
 
 const MAX_ATTACHMENTS = 6;
@@ -517,23 +527,17 @@ function getPricingLabel(group) {
 
 async function readResponseError(response) {
   const text = await response.text();
-  let payload = null;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch {
-    payload = null;
-  }
-  const message =
-    payload?.error?.message ||
-    payload?.message ||
-    text ||
-    `请求失败：${response.status}`;
-  const data = payload || { message };
+  const contentType = response.headers.get('content-type') || '';
+  const { message, data } = resolveChatErrorBody({
+    status: response.status,
+    contentType,
+    text,
+  });
   const metadata = getResponsePricingMetadata(response);
   const error = new Error(message);
   error.name = 'ChatResponseError';
   error.status = response.status;
-  error.code = payload?.error?.code ?? payload?.code ?? '';
+  error.code = data?.error?.code ?? data?.code ?? '';
   error.data = data;
   error.fallbackAttempted = metadata.fallbackAttempted;
   error.pricingGroup = metadata.pricingGroup;
@@ -547,12 +551,25 @@ async function readResponseError(response) {
 
 async function readStreamingResponse(response, onText) {
   const contentType = response.headers.get('content-type') || '';
-  if (!response.body || contentType.includes('application/json')) {
-    const payload = await response.json();
-    if (payload?.error?.message) throw new Error(payload.error.message);
+  if (isJsonChatContentType(contentType)) {
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error(getPublicChatStatusMessage(502));
+    }
+    if (payload?.error?.message) {
+      throw new Error(sanitizePublicChatMessage(payload.error.message, response.status));
+    }
     const answer = extractAssistantText(payload);
     if (answer) onText(answer);
     return answer;
+  }
+  if (!response.body || !isSupportedChatSuccessContentType(contentType)) {
+    throw new Error(getPublicChatStatusMessage(502));
+  }
+  if (contentType && !isEventStreamChatContentType(contentType)) {
+    throw new Error(getPublicChatStatusMessage(502));
   }
 
   const reader = response.body.getReader();
@@ -565,7 +582,9 @@ async function readStreamingResponse(response, onText) {
     if (!data || data === '[DONE]') return data === '[DONE]';
     try {
       const payload = JSON.parse(data);
-      if (payload?.error?.message) throw new Error(payload.error.message);
+      if (payload?.error?.message) {
+        throw new Error(sanitizePublicChatMessage(payload.error.message, 502));
+      }
       const delta = extractAssistantDelta(payload);
       if (delta) {
         answer += delta;
@@ -603,13 +622,7 @@ function getChatFailureMessage(error) {
     data?.message ||
     error?.message ||
     '这次回复没有完成，请稍后再试。';
-  return String(message)
-    .replace(/\u4e0a\u6e38|\u4f9b\u5e94\u5546|\u63a5\u53e3\u5730\u5740/g, '模型服务')
-    .replace(/upstream/gi, '模型服务')
-    .replace(/supplier/gi, '模型服务')
-    .replace(/provider/gi, '模型服务')
-    .replace(/\bapi\b/gi, '服务')
-    .trim();
+  return sanitizePublicChatMessage(message, error?.status || error?.response?.status);
 }
 
 function InlineMarkdown({ text }) {
@@ -1206,7 +1219,11 @@ const TextWorkbench = ({ isMobile }) => {
 
     const controller = new AbortController();
     requestControllerRef.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), 180000);
+    let responseHeaderTimedOut = false;
+    const responseHeaderTimeout = window.setTimeout(() => {
+      responseHeaderTimedOut = true;
+      controller.abort();
+    }, HOME_CHAT_RESPONSE_HEADER_TIMEOUT_MS);
 
     try {
       const userId = getCurrentUserId(user);
@@ -1246,6 +1263,7 @@ const TextWorkbench = ({ isMobile }) => {
         });
 
       let response = await requestChatResponse(initialModelGroup);
+      window.clearTimeout(responseHeaderTimeout);
       let responseError = response.ok
         ? null
         : await readResponseError(response);
@@ -1268,6 +1286,11 @@ const TextWorkbench = ({ isMobile }) => {
       updateAssistantMessage(answer.trim(), false);
     } catch (error) {
       if (controller.signal.aborted || error?.name === 'AbortError') {
+        if (responseHeaderTimedOut) {
+          Toast.error(HOME_CHAT_TIMEOUT_MESSAGE);
+          updateAssistantMessage(`这次没有完成：${HOME_CHAT_TIMEOUT_MESSAGE}`, false);
+          return;
+        }
         setMessages((prev) =>
           prev.map((message) =>
             message.id === pendingId
@@ -1302,7 +1325,7 @@ const TextWorkbench = ({ isMobile }) => {
         ),
       );
     } finally {
-      window.clearTimeout(timeout);
+      window.clearTimeout(responseHeaderTimeout);
       if (requestControllerRef.current === controller) {
         requestControllerRef.current = null;
       }
