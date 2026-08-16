@@ -69,6 +69,8 @@ async function main() {
   const geminiProDDPAPIBlock = modelBlock(classic, 'gemini-3-pro-image')
   const grokBlock = modelBlock(classic, 'grok-imagine-image')
   const grokRatioBlock = arrayBlock(classic, 'XAI_GROK_IMAGE_ASPECT_RATIOS')
+  const grok46Block = modelBlock(classic, 'grok 4.6图片')
+  const grok46RatioBlock = arrayBlock(classic, 'XAI_GROK_46_IMAGE_ASPECT_RATIOS')
   const errors = []
 
   for (const [referenceRatio, supportedRatios, expectedRatio] of [
@@ -164,6 +166,38 @@ async function main() {
 
   if (!grokBlock.includes("priceLabel: '¥0.055/张'")) {
     errors.push('Grok Image Pro must show ¥0.055 fixed price')
+  }
+
+  if (!grok46Block) {
+    errors.push('classic media playground must expose public model grok 4.6图片')
+  } else {
+    for (const marker of [
+      "resolutions: ['1k', '2k']",
+      "qualities: ['low', 'medium']",
+      'maxCount: 10',
+      "sizeParam: 'aspect_ratio'",
+      'edit: false',
+      "priceLabel: '¥0.10/张'",
+      '仅支持文生图',
+    ]) {
+      if (!grok46Block.includes(marker)) {
+        errors.push(`grok 4.6图片 missing official contract marker: ${marker}`)
+      }
+    }
+  }
+  for (const ratio of ["'2:1'", "'1:2'", "'20:9'", "'9:20'"]) {
+    if (!grok46RatioBlock.includes(ratio)) {
+      errors.push(`grok 4.6图片 missing official ratio ${ratio}`)
+    }
+  }
+  for (const marker of [
+    "function isGrok46ImageModel(model)",
+    "if (!isGrok46ImageModel(imageModel))",
+    "if (isGrok46ImageModel(imageModel) && quality) payload.quality = quality",
+  ]) {
+    if (!classic.includes(marker)) {
+      errors.push(`grok 4.6图片 payload guard missing marker: ${marker}`)
+    }
   }
 
   errors.push(

@@ -23,6 +23,8 @@ const requiredBundleMarkers = [
   'grok-video-super-720p',
   'grok-video-1.5',
   'grok-video-1.5-1080p',
+  'grok 4.6图片',
+  'grok4.6视频',
   'seedance-2.0-ld-17',
   'seedance-nsfw',
   'public_reference',
@@ -48,6 +50,10 @@ const requiredBundlePatterns = [
   {
     label: 'Grok Video 1.5 1080P official image workflow',
     pattern: /value:\s*["']grok-video-1\.5-1080p["'][\s\S]{0,1800}?resolutions:\s*\[["']1080p["']\][\s\S]{0,600}?workflows:\s*\[["']image["']\]/,
+  },
+  {
+    label: 'Grok 4.6 video fixed 720P duration tiers',
+    pattern: /value:\s*["']grok4\.6视频["'][\s\S]{0,1400}?durations:\s*\[6,10,15\][\s\S]{0,500}?resolutions:\s*\[["']720p["']\][\s\S]{0,500}?workflows:\s*\[["']text["']\]/,
   },
   {
     label: 'Seedance LD-17 WC-B media constraints',

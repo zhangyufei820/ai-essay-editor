@@ -39,6 +39,8 @@ const (
 	grok15Video10sUpstreamModel  = "grok-imagine-1.5-video-10s"
 	grok15Video1080PublicModel   = "grok-video-1.5-1080p"
 	grok15Video1080UpstreamModel = "grok-imagine-video-1.5"
+	grok46VideoPublicModel       = "grok4.6视频"
+	grok46VideoUpstreamModel     = "grok-imagine-video"
 	videoReferenceMaxBytes       = 20 << 20
 )
 
@@ -68,6 +70,7 @@ type ImageURL struct {
 type responseTask struct {
 	ID                 string `json:"id"`
 	TaskID             string `json:"task_id,omitempty"` //兼容旧接口
+	RequestID          string `json:"request_id,omitempty"`
 	Object             string `json:"object"`
 	Model              string `json:"model"`
 	Status             string `json:"status"`
@@ -257,6 +260,9 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	if info.Action == constant.TaskActionRemix {
 		return validateRemixRequest(c)
 	}
+	if isGrok46VideoModel(info.OriginModelName) || isGrok46VideoModel(info.UpstreamModelName) {
+		return validateGrok46VideoRequest(c, info)
+	}
 	if isGrok15Video1080Model(info.OriginModelName) || isGrok15Video1080Model(info.UpstreamModelName) {
 		return validateGrok15Video1080Request(c, info)
 	}
@@ -270,6 +276,46 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 		return validateSeedanceLD17VideoRequest(c, info)
 	}
 	return relaycommon.ValidateMultipartDirect(c, info)
+}
+
+func validateGrok46VideoRequest(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
+	if !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "application/json") {
+		return localVideoValidationError("grok4.6视频必须使用 application/json。")
+	}
+	var bodyMap map[string]interface{}
+	if err := common.UnmarshalBodyReusable(c, &bodyMap); err != nil {
+		return localVideoValidationError("视频请求格式无效，请重新提交。")
+	}
+	prompt := strings.TrimSpace(trimmedString(bodyMap["prompt"]))
+	if prompt == "" {
+		return localVideoValidationError("prompt 不能为空。")
+	}
+	duration, ok := integerFromAny(bodyMap["duration"])
+	if !ok || (duration != 6 && duration != 10 && duration != 15) {
+		return localVideoValidationError("grok4.6视频的 duration 仅支持 6、10 或 15 秒。")
+	}
+	if !strings.EqualFold(strings.TrimSpace(trimmedString(bodyMap["resolution"])), "720p") {
+		return localVideoValidationError("grok4.6视频的 resolution 仅支持 720p。")
+	}
+	aspectRatio := grok46VideoAspectRatio(bodyMap)
+	if aspectRatio != "16:9" && aspectRatio != "9:16" {
+		return localVideoValidationError("grok4.6视频的画面比例仅支持 16:9 或 9:16。")
+	}
+	size := "1280x720"
+	if aspectRatio == "9:16" {
+		size = "720x1280"
+	}
+	req := relaycommon.TaskSubmitReq{
+		Prompt:   prompt,
+		Model:    strings.TrimSpace(trimmedString(bodyMap["model"])),
+		Duration: duration,
+		Seconds:  strconv.Itoa(duration),
+		Size:     size,
+		Metadata: map[string]interface{}{"resolution": "720p", "aspect_ratio": aspectRatio},
+	}
+	info.Action = constant.TaskActionGenerate
+	c.Set("task_request", req)
+	return nil
 }
 
 func localVideoValidationError(message string) *dto.TaskError {
@@ -519,6 +565,9 @@ func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, erro
 	if info.Action == constant.TaskActionRemix {
 		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
 	}
+	if isGrok46VideoModel(info.UpstreamModelName) {
+		return fmt.Sprintf("%s/v1/videos/generations", a.baseURL), nil
+	}
 	if isMoonApiXSeedanceVideoModel(info.UpstreamModelName) {
 		return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
 	}
@@ -561,7 +610,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		var bodyMap map[string]interface{}
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
 			bodyMap["model"] = info.UpstreamModelName
-			if isGrok15Video1080Model(info.UpstreamModelName) {
+			if isGrok46VideoModel(info.UpstreamModelName) {
+				bodyMap = normalizeGrok46VideoRequestBody(bodyMap)
+			} else if isGrok15Video1080Model(info.UpstreamModelName) {
 				bodyMap = normalizeGrok15Video1080RequestBody(bodyMap)
 			} else if isGrok15VideoModel(info.UpstreamModelName) {
 				return nil, errors.New("Grok Video 1.5 requires multipart/form-data")
@@ -782,6 +833,15 @@ func isGrok15Video1080Model(modelName string) bool {
 	}
 }
 
+func isGrok46VideoModel(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case strings.ToLower(grok46VideoPublicModel), grok46VideoUpstreamModel:
+		return true
+	default:
+		return false
+	}
+}
+
 func isGrokVideoModel(modelName string) bool {
 	modelName = strings.ToLower(strings.TrimSpace(modelName))
 	return strings.Contains(modelName, "grok") && strings.Contains(modelName, "video")
@@ -798,7 +858,7 @@ func usesVideosEndpoint(modelName string) bool {
 }
 
 func isFixedPriceVideoModel(modelName string) bool {
-	return isSeedanceLD17Model(modelName) || isGrokVideoModel(modelName)
+	return isSeedanceLD17Model(modelName) || (isGrokVideoModel(modelName) && !isGrok46VideoModel(modelName))
 }
 
 func seedanceUpstreamModel(modelName string) string {
@@ -876,6 +936,37 @@ func normalizeGrokVideoRequestBody(bodyMap map[string]interface{}) map[string]in
 		cleaned["callback_url"] = callbackURL
 	}
 	return cleaned
+}
+
+func normalizeGrok46VideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
+	duration, _ := integerFromAny(bodyMap["duration"])
+	return map[string]interface{}{
+		"model":        grok46VideoUpstreamModel,
+		"prompt":       strings.TrimSpace(trimmedString(bodyMap["prompt"])),
+		"duration":     duration,
+		"aspect_ratio": grok46VideoAspectRatio(bodyMap),
+		"resolution":   "720p",
+	}
+}
+
+func grok46VideoAspectRatio(bodyMap map[string]interface{}) string {
+	for _, value := range []string{
+		trimmedString(bodyMap["aspect_ratio"]),
+		trimmedString(bodyMap["ratio"]),
+	} {
+		value = strings.TrimSpace(value)
+		if value == "16:9" || value == "9:16" {
+			return value
+		}
+	}
+	switch strings.TrimSpace(trimmedString(bodyMap["size"])) {
+	case "1280x720":
+		return "16:9"
+	case "720x1280":
+		return "9:16"
+	default:
+		return ""
+	}
 }
 
 func normalizeGrok15Video1080RequestBody(bodyMap map[string]interface{}) map[string]interface{} {
@@ -1855,6 +1946,9 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		upstreamID = dResp.TaskID
 	}
 	if upstreamID == "" {
+		upstreamID = dResp.RequestID
+	}
+	if upstreamID == "" {
 		upstreamID = responseTaskNestedString(dResp.Data, "task_id")
 	}
 	if upstreamID == "" {
@@ -1869,6 +1963,7 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	hasDirectVideoURL := videoResultURLFromTask(dResp) != ""
 	dResp.ID = info.PublicTaskID
 	dResp.TaskID = info.PublicTaskID
+	dResp.RequestID = ""
 	dResp.Model = strings.TrimSpace(info.OriginModelName)
 	if dResp.Model == "" {
 		dResp.Model = "video"

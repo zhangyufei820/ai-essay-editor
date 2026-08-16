@@ -113,6 +113,23 @@ const XAI_GROK_IMAGE_ASPECT_RATIOS = [
   '2:3',
 ];
 
+const XAI_GROK_46_IMAGE_ASPECT_RATIOS = [
+  'auto',
+  '1:1',
+  '16:9',
+  '9:16',
+  '4:3',
+  '3:4',
+  '3:2',
+  '2:3',
+  '2:1',
+  '1:2',
+  '19.5:9',
+  '9:19.5',
+  '20:9',
+  '9:20',
+];
+
 const XAI_GROK_IMAGE_REQUEST_SIZE_BY_ASPECT_RATIO = {
   '1:1': '1024x1024',
   '9:16': '720x1280',
@@ -363,6 +380,28 @@ const IMAGE_MODELS = [
     billingLabel: '按张计费',
     hint: '仅支持文生图，当前供应商实际仅返回约 1K；已验证 1:1、9:16、16:9、2:3，人民币 ¥0.055/张。',
   },
+  {
+    value: 'grok 4.6图片',
+    label: 'grok 4.6图片',
+    badge: '2K',
+    vendor: '星人图像',
+    sizes: XAI_GROK_46_IMAGE_ASPECT_RATIOS,
+    aspectRatios: XAI_GROK_46_IMAGE_ASPECT_RATIOS,
+    resolutions: ['1k', '2k'],
+    qualities: ['low', 'medium'],
+    formats: ['url', 'b64_json'],
+    defaultSize: '1:1',
+    defaultAspectRatio: '1:1',
+    defaultResolution: '1k',
+    defaultQuality: 'medium',
+    maxCount: 10,
+    countParam: 'n',
+    sizeParam: 'aspect_ratio',
+    edit: false,
+    priceLabel: '¥0.10/张',
+    billingLabel: '按张计费',
+    hint: '仅支持文生图；支持官方 1K / 2K、low / medium 质量与多种画面比例，人民币 ¥0.10/张。',
+  },
 ];
 
 function modelOptionDisplayLabel(model) {
@@ -526,6 +565,7 @@ const GROK_VIDEO_PRICE_PER_CALL = 6.5;
 const SEEDANCE_SD2_FAST_PRICE_PER_SECOND = 0.25;
 const GROK_VIDEO_15_PRICE_PER_CALL = 0.2;
 const GROK_VIDEO_15_1080_PRICE_PER_CALL = 0.4;
+const GROK_46_VIDEO_PRICE_PER_SECOND = 0.1;
 const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1';
 const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -536,7 +576,11 @@ const VIDEO_POLL_INTERVAL_MS = 5000;
 const VIDEO_BACKGROUND_POLL_INTERVAL_MS = 15000;
 
 function isGrokImageModel(model) {
-  return model === 'grok-imagine-image';
+  return model === 'grok-imagine-image' || model === 'grok 4.6图片';
+}
+
+function isGrok46ImageModel(model) {
+  return model === 'grok 4.6图片';
 }
 
 function isGeminiImageModel(model) {
@@ -801,6 +845,9 @@ function imagePixelSizeForModel(modelValue, aspectRatio, imageSize, customSize =
     return geminiProImageSizeFor(aspectRatio, imageSize);
   }
   if (isGrokImageModel(modelValue)) {
+    if (isGrok46ImageModel(modelValue)) {
+      return imageSize ? String(imageSize).toUpperCase() : '';
+    }
     return grokImageOutputSizeFor(aspectRatio);
   }
   return '';
@@ -894,6 +941,24 @@ const VIDEO_MODELS = [
     billingLabel: '按次计费',
     priceLabel: `¥${GROK_VIDEO_15_1080_PRICE_PER_CALL.toFixed(2)}/次`,
     hint: '固定 ¥0.40/次；仅支持图生视频，固定 1080P；官网 duration 开放 1–15 秒整数；必须上传 1 张图片，不支持视频/音频参考。',
+  },
+  {
+    value: 'grok4.6视频',
+    label: 'grok4.6视频',
+    badge: '720P',
+    sizes: ['1280x720', '720x1280'],
+    durations: [6, 10, 15],
+    defaultSize: '1280x720',
+    defaultDuration: 6,
+    defaultFps: 24,
+    fpsOptions: [24],
+    resolutions: ['720p'],
+    defaultResolution: '720p',
+    workflows: ['text'],
+    supportsAdvancedVideoParams: false,
+    billingLabel: '按秒计费',
+    priceLabel: `¥${GROK_46_VIDEO_PRICE_PER_SECOND.toFixed(2)}/秒`,
+    hint: '固定 720P，仅支持 6 / 10 / 15 秒文生视频，人民币 ¥0.10/秒。',
   },
   {
     value: 'seedance-2.0-ld-17',
@@ -3429,8 +3494,11 @@ const MediaPlayground = () => {
       if (isGrokImageModel(imageModel)) {
         payload.n = effectiveCount;
         if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio;
-        payload.size = grokImageRequestSizeFor(effectiveAspectRatio);
+        if (!isGrok46ImageModel(imageModel)) {
+          payload.size = grokImageRequestSizeFor(effectiveAspectRatio);
+        }
         if (resolution && resolution !== 'auto') payload.resolution = resolution;
+        if (isGrok46ImageModel(imageModel) && quality) payload.quality = quality;
         if (format && format !== 'url') payload.response_format = format;
         return payload;
       }

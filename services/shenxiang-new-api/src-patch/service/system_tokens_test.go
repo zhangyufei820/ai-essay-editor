@@ -26,6 +26,7 @@ func TestSystemTokenProfilesIncludesCallablePublicVideoModels(t *testing.T) {
 		"seedance-sd2-fast-720p",
 		"grok-video-1.5",
 		"grok-video-1.5-1080p",
+		"grok4.6视频",
 	}, videoModels)
 	require.NotContains(t, videoModels, "seedance-2.0")
 	require.NotContains(t, videoModels, "seedance-nsfw")
@@ -46,6 +47,7 @@ func TestSystemTokenProfilesImageModelsDoNotExposeSupplierModel(t *testing.T) {
 	require.Contains(t, imageModels, "gpt-image-2-4K")
 	require.Contains(t, imageModels, "特价 image-2")
 	require.Contains(t, imageModels, "官转image 2稳定")
+	require.Contains(t, imageModels, "grok 4.6图片")
 	require.Contains(t, imageModels, "image 2电商商品图快速通道(1.5K)")
 	require.NotContains(t, imageModels, "geek2api-image-2")
 	require.NotContains(t, imageModels, InternalDiscountImage2ModelName)

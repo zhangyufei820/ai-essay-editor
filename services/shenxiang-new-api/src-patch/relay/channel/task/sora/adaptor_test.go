@@ -3,6 +3,7 @@ package sora
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -72,6 +74,59 @@ func TestValidateGrok15RejectsJSONRequest(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(taskErr.Message), "provider") || strings.Contains(taskErr.Message, "上游") {
 		t.Fatalf("public validation error leaks provider details: %q", taskErr.Message)
+	}
+}
+
+func TestValidateGrok46VideoAllowsOnlyPublishedDurationsAt720P(t *testing.T) {
+	for _, duration := range []int{6, 10, 15} {
+		context, _ := gin.CreateTestContext(httptest.NewRecorder())
+		context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(fmt.Sprintf(`{
+			"model":"grok4.6视频",
+			"prompt":"A paper plane crosses the sky.",
+			"duration":%d,
+			"resolution":"720p",
+			"ratio":"16:9",
+			"size":"1280x720"
+		}`, duration)))
+		context.Request.Header.Set("Content-Type", "application/json")
+		info := &relaycommon.RelayInfo{
+			OriginModelName: grok46VideoPublicModel,
+			ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: grok46VideoUpstreamModel},
+			TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+		}
+		taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, info)
+		if taskErr != nil {
+			t.Fatalf("duration=%d validation failed: %#v", duration, taskErr)
+		}
+		req, err := relaycommon.GetTaskRequest(context)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if req.Duration != duration || req.Seconds != strconv.Itoa(duration) || req.Size != "1280x720" {
+			t.Fatalf("duration=%d task request = %#v", duration, req)
+		}
+		common.CleanupBodyStorage(context)
+	}
+}
+
+func TestValidateGrok46VideoRejectsUnsupportedDurationResolutionAndRatio(t *testing.T) {
+	for _, body := range []string{
+		`{"model":"grok4.6视频","prompt":"test","duration":7,"resolution":"720p","ratio":"16:9"}`,
+		`{"model":"grok4.6视频","prompt":"test","duration":10,"resolution":"1080p","ratio":"16:9"}`,
+		`{"model":"grok4.6视频","prompt":"test","duration":10,"resolution":"720p","ratio":"1:1"}`,
+	} {
+		context, _ := gin.CreateTestContext(httptest.NewRecorder())
+		context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(body))
+		context.Request.Header.Set("Content-Type", "application/json")
+		taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(context, &relaycommon.RelayInfo{
+			OriginModelName: grok46VideoPublicModel,
+			ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: grok46VideoUpstreamModel},
+			TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+		})
+		common.CleanupBodyStorage(context)
+		if taskErr == nil || taskErr.Code != "invalid_request" {
+			t.Fatalf("body=%s taskErr=%#v, want local invalid_request", body, taskErr)
+		}
 	}
 }
 
@@ -335,6 +390,60 @@ func TestNewVideoModelsUseVideosEndpoint(t *testing.T) {
 	}
 }
 
+func TestGrok46VideoUsesGenerationsEndpointAndOfficialPayload(t *testing.T) {
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(`{
+		"model":"grok4.6视频",
+		"prompt":"A paper plane crosses the sky.",
+		"duration":10,
+		"seconds":"10",
+		"resolution":"720p",
+		"ratio":"9:16",
+		"size":"720x1280",
+		"width":720,
+		"height":1280,
+		"fps":24,
+		"metadata":{}
+	}`))
+	context.Request.Header.Set("Content-Type", "application/json")
+	defer common.CleanupBodyStorage(context)
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: grok46VideoPublicModel,
+		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: grok46VideoUpstreamModel},
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+	}
+	adaptor := &TaskAdaptor{baseURL: "https://provider.test"}
+	if taskErr := adaptor.ValidateRequestAndSetAction(context, info); taskErr != nil {
+		t.Fatal(taskErr)
+	}
+	requestURL, err := adaptor.BuildRequestURL(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requestURL != "https://provider.test/v1/videos/generations" {
+		t.Fatalf("BuildRequestURL() = %q", requestURL)
+	}
+	reader, err := adaptor.BuildRequestBody(context, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]interface{}
+	if err := json.NewDecoder(reader).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]interface{}{
+		"model":        grok46VideoUpstreamModel,
+		"prompt":       "A paper plane crosses the sky.",
+		"duration":     float64(10),
+		"aspect_ratio": "9:16",
+		"resolution":   "720p",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("payload = %#v, want %#v", got, want)
+	}
+}
+
 func TestFetchTaskFallsBackToCompletedContent(t *testing.T) {
 	var contentRequests int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
@@ -452,6 +561,36 @@ func TestDoResponseUsesPublicModelAndProxyURL(t *testing.T) {
 	}
 }
 
+func TestDoResponseAcceptsGrok46RequestIDWithoutExposingIt(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(`{
+			"request_id":"upstream-request-id",
+			"status":"queued"
+		}`)),
+	}
+	upstreamID, taskData, taskErr := (&TaskAdaptor{}).DoResponse(context, response, &relaycommon.RelayInfo{
+		OriginModelName: grok46VideoPublicModel,
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{PublicTaskID: "task_public_456"},
+	})
+	if taskErr != nil {
+		t.Fatal(taskErr)
+	}
+	if upstreamID != "upstream-request-id" {
+		t.Fatalf("upstreamID = %q", upstreamID)
+	}
+	for _, body := range []string{string(taskData), recorder.Body.String()} {
+		if strings.Contains(body, "upstream-request-id") || strings.Contains(body, "request_id") {
+			t.Fatalf("public response leaks upstream request ID: %s", body)
+		}
+		if !strings.Contains(body, "task_public_456") || !strings.Contains(body, grok46VideoPublicModel) {
+			t.Fatalf("public response is missing task alias or model: %s", body)
+		}
+	}
+}
+
 func TestNewVideoModelsUseConfiguredBillingUnits(t *testing.T) {
 	adaptor := TaskAdaptor{}
 	for _, modelName := range []string{"grok-video-super-720p", grok15VideoPublicModel, grok15VideoUpstreamModel} {
@@ -474,6 +613,17 @@ func TestNewVideoModelsUseConfiguredBillingUnits(t *testing.T) {
 	})
 	if ratios["seconds"] != 5 {
 		t.Fatalf("seconds ratio = %#v, want 5", ratios["seconds"])
+	}
+
+	grok46Context := &gin.Context{}
+	grok46Context.Set("task_request", relaycommon.TaskSubmitReq{Seconds: "15", Size: "1280x720"})
+	grok46Ratios := adaptor.EstimateBilling(grok46Context, &relaycommon.RelayInfo{
+		OriginModelName: grok46VideoPublicModel,
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: grok46VideoUpstreamModel},
+	})
+	if grok46Ratios["seconds"] != 15 || grok46Ratios["size"] != 1 {
+		t.Fatalf("grok46 ratios = %#v, want seconds=15 size=1", grok46Ratios)
 	}
 }
 
