@@ -52,6 +52,13 @@ GROK_IMAGE_MODEL = "grok-imagine-image"
 GROK_IMAGE_DESCRIPTION = "Grok Image Pro：当前供应商实际仅返回约 1K，仅支持文生图，人民币 ¥0.055/张。"
 GROK_IMAGE_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
 GROK_IMAGE_PRICE_CNY = Decimal("0.055")
+GROK46_IMAGE_PUBLIC_MODEL = "grok 4.6图片"
+GROK46_IMAGE_UPSTREAM_MODEL = "grok-imagine-image"
+GROK46_IMAGE_CHANNEL_TAG = "xingren-grok46-image"
+GROK46_IMAGE_DESCRIPTION = "grok 4.6图片：仅支持文生图，支持 1K/2K、low/medium 质量与多种画面比例，人民币 ¥0.10/张。"
+GROK46_IMAGE_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
+GROK46_IMAGE_PRICE_CNY = Decimal("0.10")
+GROK46_MEDIA_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
 GEMINI_DDPAPI_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
 GEMINI_DDPAPI_ENDPOINTS = '{"image-generation":"/v1/images/generations","image-edit":"/v1/images/edits"}'
 GEMINI_DDPAPI_MODEL_CONFIGS = {
@@ -272,6 +279,9 @@ PUBLIC_GROK15_1080_VIDEO_MODEL = "grok-video-1.5-1080p"
 UPSTREAM_GROK15_1080_VIDEO_MODEL = "grok-imagine-video-1.5"
 PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG = "xingren-grok15-video-1080p"
 PUBLIC_GROK15_1080_VIDEO_CHANNEL_GROUPS = "default,standard,pro,code,internal"
+PUBLIC_GROK46_VIDEO_MODEL = "grok4.6视频"
+UPSTREAM_GROK46_VIDEO_MODEL = "grok-imagine-video"
+PUBLIC_GROK46_VIDEO_CHANNEL_TAG = "xingren-grok46-video"
 PUBLIC_VIDEO_MODEL_CONFIGS = {
     "grok-video-super-720p": {
         "description": "星人 Grok 视频生成｜人民币 ¥6.50/次｜固定按次计费，支持 5/10/15 秒，生成后请及时下载",
@@ -303,8 +313,18 @@ PUBLIC_VIDEO_MODEL_CONFIGS = {
         "tags": "video,grok",
         "vendor_id": 3,
     },
+    PUBLIC_GROK46_VIDEO_MODEL: {
+        "description": "grok4.6视频｜人民币 ¥0.10/秒｜固定 720P，仅支持 6/10/15 秒文生视频，生成后请及时下载",
+        "icon": "Grok",
+        "tags": "video,grok",
+        "vendor_id": 3,
+    },
 }
 PUBLIC_VIDEO_MODELS = tuple(PUBLIC_VIDEO_MODEL_CONFIGS)
+GROK46_MEDIA_CHANNEL_MODEL_BY_TAG = {
+    GROK46_IMAGE_CHANNEL_TAG: GROK46_IMAGE_PUBLIC_MODEL,
+    PUBLIC_GROK46_VIDEO_CHANNEL_TAG: PUBLIC_GROK46_VIDEO_MODEL,
+}
 PRIVATE_VIDEO_MODELS = {"seedance-nsfw"}
 DISABLED_PUBLIC_VIDEO_MODELS = [
     "seedance-2.0",
@@ -357,6 +377,16 @@ PUBLIC_VIDEO_CHANNEL_CONFIGS = (
             separators=(",", ":"),
         ),
     ),
+    (
+        "tag",
+        PUBLIC_GROK46_VIDEO_CHANNEL_TAG,
+        [PUBLIC_GROK46_VIDEO_MODEL],
+        json.dumps(
+            {PUBLIC_GROK46_VIDEO_MODEL: UPSTREAM_GROK46_VIDEO_MODEL},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+    ),
 )
 CODEX_TEXT_CHANNEL_ID = "21"
 CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
@@ -375,6 +405,7 @@ PUBLIC_VIDEO_FIXED_PRICES_CNY = {
     PUBLIC_SD2_FAST_MODEL: Decimal("0.25"),
     PUBLIC_GROK15_VIDEO_MODEL: Decimal("0.20"),
     PUBLIC_GROK15_1080_VIDEO_MODEL: Decimal("0.40"),
+    PUBLIC_GROK46_VIDEO_MODEL: Decimal("0.10"),
 }
 OPENAI_TEXT_LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
 PUBLIC_OPENAI_TEXT_MODELS = {
@@ -1337,6 +1368,8 @@ def sync_supplier_safe_public_metadata() -> dict[str, int]:
 
 def model_lists() -> dict[str, list[str]]:
     grok1080_state = grok15_1080_video_release_state()
+    grok46_image_state = grok46_media_release_state("image")
+    grok46_video_state = grok46_media_release_state("video")
     gemini_ddpapi_state = gemini_ddpapi_release_state()
     rows = mysql(
         """
@@ -1369,12 +1402,16 @@ def model_lists() -> dict[str, list[str]]:
                 continue
             if model == PUBLIC_GROK15_1080_VIDEO_MODEL and grok1080_state != "published":
                 continue
+            if model == PUBLIC_GROK46_VIDEO_MODEL and grok46_video_state != "published":
+                continue
             append_model("video", model)
             continue
         if "image" in tags:
             if is_supplier_exposed_model(model):
                 continue
             if model in GEMINI_DDPAPI_MODELS and gemini_ddpapi_state != "published":
+                continue
+            if model == GROK46_IMAGE_PUBLIC_MODEL and grok46_image_state != "published":
                 continue
             append_model("image", model)
             continue
@@ -1388,11 +1425,15 @@ def model_lists() -> dict[str, list[str]]:
     public_image_models = [STABLE_IMAGE2_PUBLIC_MODEL]
     if discount_image2_release_state() == "published":
         public_image_models.append(DISCOUNT_IMAGE2_PUBLIC_MODEL)
+    if grok46_image_state == "published":
+        public_image_models.append(GROK46_IMAGE_PUBLIC_MODEL)
     for public_image_model in public_image_models:
         if public_image_model not in profiles["image"]:
             profiles["image"].append(public_image_model)
     for model in PUBLIC_VIDEO_MODELS:
         if model == PUBLIC_GROK15_1080_VIDEO_MODEL and grok1080_state != "published":
+            continue
+        if model == PUBLIC_GROK46_VIDEO_MODEL and grok46_video_state != "published":
             continue
         if model not in profiles["video"]:
             profiles["video"].append(model)
@@ -1413,6 +1454,48 @@ def grok15_1080_video_release_state() -> str:
     if groups == PUBLIC_GROK15_1080_VIDEO_CHANNEL_GROUPS:
         return "published"
     return "invalid"
+
+
+def grok46_media_release_state(kind: str) -> str:
+    if kind == "image":
+        tag = GROK46_IMAGE_CHANNEL_TAG
+        channel_type = "1"
+        public_model = GROK46_IMAGE_PUBLIC_MODEL
+        upstream_model = GROK46_IMAGE_UPSTREAM_MODEL
+    elif kind == "video":
+        tag = PUBLIC_GROK46_VIDEO_CHANNEL_TAG
+        channel_type = "55"
+        public_model = PUBLIC_GROK46_VIDEO_MODEL
+        upstream_model = UPSTREAM_GROK46_VIDEO_MODEL
+    else:
+        raise ValueError("unsupported Grok 4.6 media kind")
+    rows = mysql(
+        "SELECT type, status, REPLACE(COALESCE(`group`, ''), ' ', ''), "
+        "REPLACE(COALESCE(models, ''), ' ', ''), COALESCE(model_mapping, ''), "
+        "CHAR_LENGTH(COALESCE(`key`, '')), COALESCE(base_url, '') FROM channels WHERE tag = "
+        + sql_quote(tag)
+        + " ORDER BY id"
+    )
+    if len(rows) != 1:
+        return "unavailable"
+    raw_type, status, groups, models, raw_mapping, key_length, base_url = rows[0]
+    expected_mapping = json.dumps(
+        {public_model: upstream_model},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    if (
+        raw_type != channel_type
+        or status != "1"
+        or groups != GROK46_MEDIA_PUBLIC_CHANNEL_GROUPS
+        or models != public_model
+        or raw_mapping != expected_mapping
+        or int(key_length or "0") < 20
+        or not base_url.lower().startswith("https://")
+    ):
+        return "invalid"
+    return "published"
 
 
 def discount_image2_release_state() -> str:
@@ -1480,6 +1563,162 @@ def active_groups() -> list[str]:
         if row and row[0]:
             groups.add(row[0])
     return sorted(groups)
+
+
+def require_grok46_source_channel_id() -> int:
+    rows = mysql(
+        "SELECT id, status, CHAR_LENGTH(COALESCE(`key`, '')), COALESCE(base_url, '') "
+        "FROM channels WHERE tag = "
+        + sql_quote(GROK46_CHANNEL_TAG)
+        + " ORDER BY id"
+    )
+    if len(rows) != 1:
+        raise RuntimeError("the managed Grok 4.6 text channel is missing or ambiguous")
+    channel_id, _status, key_length, base_url = rows[0]
+    if int(key_length or "0") < 20 or not base_url.lower().startswith("https://"):
+        raise RuntimeError("the managed Grok 4.6 text channel is incomplete")
+    return int(channel_id)
+
+
+def validate_grok46_media_channel_isolation() -> None:
+    for tag, model in GROK46_MEDIA_CHANNEL_MODEL_BY_TAG.items():
+        rows = mysql("SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(tag))
+        if (int(rows[0][0]) if rows else 0) > 1:
+            raise RuntimeError("multiple channels use a managed Grok 4.6 media tag")
+        rows = mysql(
+            "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') <> "
+            + sql_quote(tag)
+            + " AND FIND_IN_SET("
+            + sql_quote(model)
+            + ", REPLACE(COALESCE(models, ''), ' ', '')) > 0"
+        )
+        if (int(rows[0][0]) if rows else 0) > 0:
+            raise RuntimeError("a Grok 4.6 public media model is assigned to an unmanaged channel")
+
+
+def ensure_grok46_media_channels() -> None:
+    source_channel_id = require_grok46_source_channel_id()
+    validate_grok46_media_channel_isolation()
+    channel_specs = (
+        (
+            GROK46_IMAGE_CHANNEL_TAG,
+            1,
+            "星人 Grok 4.6 图片",
+            GROK46_IMAGE_PUBLIC_MODEL,
+            GROK46_IMAGE_UPSTREAM_MODEL,
+            "人民币 ¥0.10/张；仅文生图；1K/2K；low/medium",
+        ),
+        (
+            PUBLIC_GROK46_VIDEO_CHANNEL_TAG,
+            55,
+            "星人 Grok 4.6 视频",
+            PUBLIC_GROK46_VIDEO_MODEL,
+            UPSTREAM_GROK46_VIDEO_MODEL,
+            "人民币 ¥0.10/秒；仅 720P；6/10/15 秒",
+        ),
+    )
+    statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
+    for tag, channel_type, name, public_model, upstream_model, remark in channel_specs:
+        mapping = json.dumps(
+            {public_model: upstream_model},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        statements.extend(
+            [
+                "SET @grok46_media_channel_id := (SELECT MIN(id) FROM channels WHERE tag = "
+                + sql_quote(tag)
+                + ");",
+                "INSERT INTO channels "
+                "(type, `key`, status, name, weight, created_time, test_time, response_time, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark) "
+                "SELECT "
+                + ", ".join(
+                    [
+                        str(channel_type),
+                        "source.`key`",
+                        "1",
+                        sql_quote(name),
+                        "100",
+                        "@now",
+                        "0",
+                        "0",
+                        "source.base_url",
+                        sql_quote(public_model),
+                        sql_quote(GROK46_MEDIA_PUBLIC_CHANNEL_GROUPS),
+                        sql_quote(mapping),
+                        "0",
+                        "1",
+                        sql_quote(tag),
+                        sql_quote(remark),
+                    ]
+                )
+                + " FROM channels AS source WHERE source.id = "
+                + str(source_channel_id)
+                + " AND @grok46_media_channel_id IS NULL;",
+                "SET @grok46_media_channel_id := IFNULL(@grok46_media_channel_id, LAST_INSERT_ID());",
+                "UPDATE channels AS media JOIN channels AS source ON source.id = "
+                + str(source_channel_id)
+                + " SET media.type = "
+                + str(channel_type)
+                + ", media.`key` = source.`key`, media.status = 1, media.name = "
+                + sql_quote(name)
+                + ", media.weight = 100, media.base_url = source.base_url, media.models = "
+                + sql_quote(public_model)
+                + ", media.`group` = "
+                + sql_quote(GROK46_MEDIA_PUBLIC_CHANNEL_GROUPS)
+                + ", media.model_mapping = "
+                + sql_quote(mapping)
+                + ", media.priority = 0, media.auto_ban = 1, media.tag = "
+                + sql_quote(tag)
+                + ", media.remark = "
+                + sql_quote(remark)
+                + " WHERE media.id = @grok46_media_channel_id;",
+            ]
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+
+
+def ensure_grok46_image_model() -> None:
+    statements = [
+        "START TRANSACTION;",
+        "SET @now := UNIX_TIMESTAMP();",
+        "SET @grok46_image_model := "
+        + sql_quote(GROK46_IMAGE_PUBLIC_MODEL)
+        + " COLLATE utf8mb4_unicode_ci;",
+        "SET @keep_model_id := (SELECT MIN(id) FROM models WHERE model_name = @grok46_image_model AND deleted_at IS NULL);",
+        "SET @keep_model_id := IFNULL(@keep_model_id, (SELECT MIN(id) FROM models WHERE model_name = @grok46_image_model));",
+        "INSERT INTO models "
+        "(model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) "
+        "SELECT "
+        + ", ".join(
+            [
+                "@grok46_image_model",
+                sql_quote(GROK46_IMAGE_DESCRIPTION),
+                sql_quote("Grok"),
+                sql_quote("image,grok"),
+                "3",
+                sql_quote(GROK46_IMAGE_ENDPOINTS),
+                "1",
+                "0",
+                "@now",
+                "@now",
+                "0",
+            ]
+        )
+        + " WHERE @keep_model_id IS NULL;",
+        "SET @keep_model_id := IFNULL(@keep_model_id, LAST_INSERT_ID());",
+        "UPDATE models SET description = "
+        + sql_quote(GROK46_IMAGE_DESCRIPTION)
+        + ", icon = 'Grok', tags = 'image,grok', vendor_id = 3, endpoints = "
+        + sql_quote(GROK46_IMAGE_ENDPOINTS)
+        + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 WHERE id = @keep_model_id;",
+        "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+        "WHERE model_name = @grok46_image_model AND id <> @keep_model_id;",
+        "COMMIT;",
+    ]
+    mysql_exec("\n".join(statements))
 
 
 def ensure_public_video_models() -> None:
@@ -1864,6 +2103,12 @@ def sync_public_image_pricing() -> None:
     model_ratios.pop(GROK_IMAGE_MODEL, None)
     completion_ratios.pop(GROK_IMAGE_MODEL, None)
 
+    model_prices[GROK46_IMAGE_PUBLIC_MODEL] = decimal_to_float(
+        GROK46_IMAGE_PRICE_CNY / exchange_rate
+    )
+    model_ratios.pop(GROK46_IMAGE_PUBLIC_MODEL, None)
+    completion_ratios.pop(GROK46_IMAGE_PUBLIC_MODEL, None)
+
     for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
         price_cny = config["price_cny"]
         if not isinstance(price_cny, Decimal):
@@ -2160,6 +2405,11 @@ def sync_abilities() -> None:
     grok_channel_tags_sql = ", ".join(sql_quote(tag) for tag in GROK_CHANNEL_TAGS)
     grok_text_models = set(GROK_TEXT_MODELS)
     grok_text_models_sql = ", ".join(sql_quote(model) for model in GROK_TEXT_MODELS)
+    grok46_media_channel_model_by_tag = dict(GROK46_MEDIA_CHANNEL_MODEL_BY_TAG)
+    grok46_media_channel_tags = set(grok46_media_channel_model_by_tag)
+    grok46_media_model_tag_by_name = {
+        model: tag for tag, model in grok46_media_channel_model_by_tag.items()
+    }
     protected_channel_tags_sql = ", ".join(
         sql_quote(tag)
         for tag in (
@@ -2167,6 +2417,7 @@ def sync_abilities() -> None:
             *SPECIAL_TEXT_CHANNEL_TAGS,
             *PLUS_TEXT_CHANNEL_TAGS,
             *GROK_CHANNEL_TAGS,
+            *GROK46_MEDIA_CHANNEL_MODEL_BY_TAG,
             KIMI_K3_CHANNEL_TAG,
             *CLAUDE_CHANNEL_GROUPS,
             *DISCOUNT_IMAGE2_CHANNEL_TAGS,
@@ -2202,6 +2453,18 @@ def sync_abilities() -> None:
         + " AND FIND_IN_SET("
         + sql_quote(DISCOUNT_TEXT_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
+        *[
+            "UPDATE channels SET status = 2 WHERE tag = "
+            + sql_quote(tag)
+            + " AND (type <> "
+            + ("1" if tag == GROK46_IMAGE_CHANNEL_TAG else "55")
+            + " OR REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+            + sql_quote(GROK46_MEDIA_PUBLIC_CHANNEL_GROUPS)
+            + " OR REPLACE(COALESCE(models, ''), ' ', '') <> "
+            + sql_quote(expected_model)
+            + ");"
+            for tag, expected_model in grok46_media_channel_model_by_tag.items()
+        ],
         "UPDATE channels SET status = 2 WHERE tag IN ("
         + special_channel_tags_sql
         + ")"
@@ -2302,6 +2565,7 @@ def sync_abilities() -> None:
     invalid_special_channels: list[str] = []
     invalid_plus_channels: list[str] = []
     invalid_grok_channels: list[str] = []
+    invalid_grok46_media_channels: list[str] = []
     invalid_kimi_channels: list[str] = []
     invalid_grok1080_channels: list[str] = []
     invalid_discount_image2_channels: list[str] = []
@@ -2363,6 +2627,21 @@ def sync_abilities() -> None:
         elif GROK45_GROUP in channel_groups:
             invalid_grok_channels.append(channel_id)
             sync_groups = []
+        elif tag in grok46_media_channel_model_by_tag:
+            expected_model = grok46_media_channel_model_by_tag[tag]
+            if (
+                ",".join(channel_groups) != GROK46_MEDIA_PUBLIC_CHANNEL_GROUPS
+                or channel_models != [expected_model]
+            ):
+                invalid_grok46_media_channels.append(channel_id)
+                sync_groups = []
+            else:
+                sync_groups = [
+                    group
+                    for group in groups
+                    if group not in {DISCOUNT_TEXT_GROUP, SPECIAL_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
+                    and group not in ISOLATED_CLAUDE_GROUPS
+                ]
         elif tag == KIMI_K3_CHANNEL_TAG:
             if channel_groups != [KIMI_K3_GROUP] or channel_models != [KIMI_K3_MODEL]:
                 invalid_kimi_channels.append(channel_id)
@@ -2453,6 +2732,10 @@ def sync_abilities() -> None:
                 continue
             if tag in grok_channel_model_by_tag and model != grok_channel_model_by_tag[tag]:
                 continue
+            if model in grok46_media_model_tag_by_name and grok46_media_model_tag_by_name[model] != tag:
+                continue
+            if tag in grok46_media_channel_tags and model != grok46_media_channel_model_by_tag[tag]:
+                continue
             if model == KIMI_K3_MODEL and tag != KIMI_K3_CHANNEL_TAG:
                 continue
             if tag == KIMI_K3_CHANNEL_TAG and model != KIMI_K3_MODEL:
@@ -2492,7 +2775,7 @@ def sync_abilities() -> None:
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
                     )
-                elif tag in CLAUDE_CHANNEL_GROUPS or tag == KIMI_K3_CHANNEL_TAG:
+                elif tag in CLAUDE_CHANNEL_GROUPS or tag == KIMI_K3_CHANNEL_TAG or tag in grok46_media_channel_tags:
                     pass
                 elif tag not in grok_channel_tags:
                     current_channel_conditions.extend(
@@ -2749,6 +3032,11 @@ def sync_abilities() -> None:
             "Grok group isolation violation; disabled channel count: "
             + str(len(invalid_grok_channels))
         )
+    if invalid_grok46_media_channels:
+        raise RuntimeError(
+            "Grok 4.6 media channel isolation violation; invalid channel count: "
+            + str(len(invalid_grok46_media_channels))
+        )
     if invalid_kimi_channels:
         raise RuntimeError(
             "Kimi K3 group isolation violation; disabled channel count: "
@@ -2911,7 +3199,9 @@ def refresh_codex() -> None:
 
 
 def main() -> int:
+    ensure_grok46_media_channels()
     ensure_public_video_models()
+    ensure_grok46_image_model()
     ensure_discount_image2_backing_model()
     ensure_discount_image2_primary_and_fallback_channels()
     ensure_stable_image2_backing_model()

@@ -73,7 +73,7 @@
   },
   {
     "package": "./relay/channel/openai",
-    "run": "^(TestConvertGrokImageEditStripsRoutingGroup|TestConvertGrokImageGenerationMapsAspectRatioToVerifiedProviderSize|TestConvertGrokImageGenerationRejectsUnsupportedAspectRatio)$"
+    "run": "^(TestConvertGrokImageEditStripsRoutingGroup|TestConvertGrokImageGenerationMapsAspectRatioToVerifiedProviderSize|TestConvertGrokImageGenerationRejectsUnsupportedAspectRatio|TestConvertGrok46ImageGenerationPreservesOfficialParameters)$"
   },
   {
     "package": "./relay/channel/openai",

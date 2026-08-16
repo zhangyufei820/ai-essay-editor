@@ -17,6 +17,9 @@ import configure_grok45_model as grok45
 
 
 MODEL_NAME = "grok-4.6"
+IMAGE_MODEL_NAME = "grok-imagine-image"
+VIDEO_MODEL_NAME = "grok-imagine-video"
+REQUIRED_UPSTREAM_MODELS = (MODEL_NAME, IMAGE_MODEL_NAME, VIDEO_MODEL_NAME)
 MODEL_DESCRIPTION = "xAI Grok 4.6 文本模型，支持关联的图像与视频生成能力，适合推理、写作、分析与代码任务。"
 MODEL_TAGS = "text,xai,grok,codex,可生图像,可生视频"
 MODEL_ENDPOINTS = '{"openai":"/v1/chat/completions","openai-response":"/v1/responses"}'
@@ -159,8 +162,9 @@ def verify_upstream(base_url: str, api_key: str) -> None:
         for item in models.get("data", [])
         if isinstance(item, dict) and isinstance(item.get("id"), str)
     }
-    if MODEL_NAME not in available:
-        raise ConfigurationError("the required Grok 4.6 model is not available")
+    missing_models = [model for model in REQUIRED_UPSTREAM_MODELS if model not in available]
+    if missing_models:
+        raise ConfigurationError("the required Grok 4.6 text or media model is not available")
 
     chat = fetch_json(
         normalized + "/v1/chat/completions",

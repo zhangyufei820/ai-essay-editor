@@ -100,3 +100,28 @@ func TestConvertGrokImageGenerationRejectsUnsupportedAspectRatio(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertGrok46ImageGenerationPreservesOfficialParameters(t *testing.T) {
+	converted, err := (&Adaptor{}).ConvertImageRequest(
+		nil,
+		&relaycommon.RelayInfo{
+			RelayMode:       relayconstant.RelayModeImagesGenerations,
+			OriginModelName: "grok 4.6图片",
+		},
+		dto.ImageRequest{
+			Model:       "grok-imagine-image",
+			Prompt:      "test image",
+			AspectRatio: "2:1",
+			Resolution:  "2k",
+			Quality:     "medium",
+		},
+	)
+	require.NoError(t, err)
+
+	request, ok := converted.(dto.ImageRequest)
+	require.True(t, ok)
+	require.Equal(t, "2:1", request.AspectRatio)
+	require.Equal(t, "2k", request.Resolution)
+	require.Equal(t, "medium", request.Quality)
+	require.Empty(t, request.Size)
+}

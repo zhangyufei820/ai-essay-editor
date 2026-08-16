@@ -97,6 +97,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 "seedance-sd2-fast-720p",
                 "grok-video-1.5",
                 "grok-video-1.5-1080p",
+                "grok4.6视频",
             ),
         )
         self.assertTrue(
@@ -136,6 +137,97 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         ):
             self.module.mysql = lambda _query, rows=rows: rows
             self.assertEqual(self.module.grok15_1080_video_release_state(), expected)
+
+    def test_grok46_media_release_state_requires_exact_channel_contract(self) -> None:
+        image_mapping = self.module.json.dumps(
+            {"grok 4.6图片": "grok-imagine-image"},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        video_mapping = self.module.json.dumps(
+            {"grok4.6视频": "grok-imagine-video"},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for kind, rows, expected in (
+            ("image", [], "unavailable"),
+            ("image", [["1", "1", "default,standard,pro,code,internal", "grok 4.6图片", image_mapping, "64", "https://media.test"]], "published"),
+            ("video", [["55", "1", "default,standard,pro,code,internal", "grok4.6视频", video_mapping, "64", "https://media.test"]], "published"),
+            ("video", [["55", "1", "default,standard,pro,code,internal", "grok4.6视频", video_mapping, "64", "http://media.test"]], "invalid"),
+        ):
+            self.module.mysql = lambda _query, rows=rows: rows
+            self.assertEqual(self.module.grok46_media_release_state(kind), expected)
+
+    def test_ensure_grok46_media_channels_copies_managed_credentials_without_embedding_key(self) -> None:
+        captured: list[str] = []
+        self.module.require_grok46_source_channel_id = lambda: 46
+        self.module.validate_grok46_media_channel_isolation = lambda: None
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_grok46_media_channels()
+
+        sql = captured[0]
+        self.assertIn("source.`key`", sql)
+        self.assertIn("source.base_url", sql)
+        self.assertIn("xingren-grok46-image", sql)
+        self.assertIn("xingren-grok46-video", sql)
+        self.assertIn("'grok 4.6图片'", sql)
+        self.assertIn("'grok4.6视频'", sql)
+        self.assertIn('"grok 4.6图片":"grok-imagine-image"', sql)
+        self.assertIn('"grok4.6视频":"grok-imagine-video"', sql)
+        self.assertIn("media.type = 1", sql)
+        self.assertIn("media.type = 55", sql)
+        self.assertNotIn("sk-", sql)
+
+    def test_model_lists_publish_grok46_media_only_with_valid_managed_channels(self) -> None:
+        rows = [
+            ["1", "grok 4.6图片", "image,grok"],
+            ["2", "grok4.6视频", "video,grok"],
+            ["3", "gpt-5.5", "text,openai,codex"],
+            ["4", "claude-opus-4-8", "text,claude"],
+        ]
+        self.module.grok15_1080_video_release_state = lambda: "unavailable"
+        self.module.gemini_ddpapi_release_state = lambda: "unavailable"
+        self.module.discount_image2_release_state = lambda: "unavailable"
+        self.module.mysql = lambda _query: rows
+
+        self.module.grok46_media_release_state = lambda _kind: "unavailable"
+        unavailable_profiles = self.module.model_lists()
+        self.assertNotIn("grok 4.6图片", unavailable_profiles["image"])
+        self.assertNotIn("grok4.6视频", unavailable_profiles["video"])
+
+        self.module.grok46_media_release_state = lambda _kind: "published"
+        published_profiles = self.module.model_lists()
+        self.assertIn("grok 4.6图片", published_profiles["image"])
+        self.assertIn("grok4.6视频", published_profiles["video"])
+
+    def test_sync_abilities_publishes_grok46_media_only_to_non_isolated_groups(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [
+                    ["70", "grok 4.6图片", "0", "100", "xingren-grok46-image", "default,standard,pro,code,internal"],
+                    ["71", "grok4.6视频", "0", "100", "xingren-grok46-video", "default,standard,pro,code,internal"],
+                ]
+            if "SELECT model_name FROM models" in query:
+                return [["grok 4.6图片"], ["grok4.6视频"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "standard", "discount", "plus", "grok45", "kiro"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        for model, channel_id in (("grok 4.6图片", "70"), ("grok4.6视频", "71")):
+            self.assertIn("SELECT 'default', '" + model + "', " + channel_id, sql)
+            self.assertIn("SELECT 'standard', '" + model + "', " + channel_id, sql)
+            for group in ("discount", "plus", "grok45", "kiro"):
+                self.assertNotIn("SELECT '" + group + "', '" + model + "', " + channel_id, sql)
 
     def test_discount_image2_release_state_requires_exact_managed_groups(self) -> None:
         for rows, expected in (
@@ -204,6 +296,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sd_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["seedance-sd2-fast-720p"]["description"]
         grok_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["grok-video-1.5"]["description"]
         grok_1080_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["grok-video-1.5-1080p"]["description"]
+        grok_46_description = self.module.PUBLIC_VIDEO_MODEL_CONFIGS["grok4.6视频"]["description"]
 
         for expected in ("¥0.25/秒", "720P", "5/10/15", "文生视频", "图生视频", "图片", "不支持视频或音频", "人脸能力未承诺"):
             self.assertIn(expected, sd_description)
@@ -211,7 +304,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn(expected, grok_description)
         for expected in ("¥0.40/次", "1080P", "1-15", "仅支持图生视频", "必须上传 1 张图片", "不支持视频或音频"):
             self.assertIn(expected, grok_1080_description)
-        combined = f"{sd_description}\n{grok_description}\n{grok_1080_description}".lower()
+        for expected in ("¥0.10/秒", "720P", "6/10/15", "文生视频"):
+            self.assertIn(expected, grok_46_description)
+        combined = f"{sd_description}\n{grok_description}\n{grok_1080_description}\n{grok_46_description}".lower()
         for forbidden in ("smile-ai", "api.smile", "sd2-fast-720p", "grok-imagine-1.5-video", "grok-imagine-video-1.5", "provider", "supplier", "上游", "渠道"):
             self.assertNotIn(forbidden, combined)
 
@@ -654,6 +749,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("model_mapping = '{\"grok-video-1.5\":\"grok-imagine-1.5-video\"}'", sql)
         self.assertIn("models = 'grok-video-1.5-1080p'", sql)
         self.assertIn("model_mapping = '{\"grok-video-1.5-1080p\":\"grok-imagine-video-1.5\"}'", sql)
+        self.assertIn("models = 'grok4.6视频'", sql)
+        self.assertIn("model_mapping = '{\"grok4.6视频\":\"grok-imagine-video\"}'", sql)
         self.assertIn("UPDATE channels SET status = 2 WHERE id IN (5, 25)", sql)
         self.assertNotIn(
             "SET @public_video_model := 'seedance-2.0-wc-b-720p'",
@@ -702,6 +799,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(
             captured_options["ModelPrice"]["grok-video-1.5-1080p"],
             0.054794520548,
+        )
+        self.assertEqual(
+            captured_options["ModelPrice"]["grok4.6视频"],
+            0.013698630137,
         )
         for model in self.module.PUBLIC_VIDEO_FIXED_PRICES_CNY:
             self.assertNotIn(model, captured_options["ModelRatio"])
@@ -862,6 +963,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("grok-imagine-image", captured_options["ModelRatio"])
         self.assertNotIn("grok-imagine-image", captured_options["CompletionRatio"])
         self.assertAlmostEqual(
+            captured_options["ModelPrice"]["grok 4.6图片"],
+            0.013698630137,
+            places=12,
+        )
+        self.assertNotIn("grok 4.6图片", captured_options["ModelRatio"])
+        self.assertNotIn("grok 4.6图片", captured_options["CompletionRatio"])
+        self.assertAlmostEqual(
             captured_options["ModelPrice"]["gemini-3.1-flash-image"],
             0.013698630137,
             places=12,
@@ -888,6 +996,20 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("仅支持文生图", sql)
         self.assertNotIn("图生图", sql)
         self.assertIn("¥0.055/张", sql)
+        self.assertIn('/v1/images/generations', sql)
+        self.assertNotIn('/v1/images/edits', sql)
+
+    def test_ensure_grok46_image_model_uses_public_name_and_fixed_price_description(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_grok46_image_model()
+
+        sql = "\n".join(captured)
+        self.assertIn("grok 4.6图片", sql)
+        self.assertIn("¥0.10/张", sql)
+        self.assertIn("1K/2K", sql)
+        self.assertIn("low/medium", sql)
         self.assertIn('/v1/images/generations', sql)
         self.assertNotIn('/v1/images/edits', sql)
 

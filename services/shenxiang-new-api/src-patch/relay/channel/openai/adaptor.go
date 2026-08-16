@@ -441,7 +441,8 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
-	if info.RelayMode == relayconstant.RelayModeImagesGenerations && request.Model == "grok-imagine-image" {
+	if info.RelayMode == relayconstant.RelayModeImagesGenerations && request.Model == "grok-imagine-image" &&
+		strings.TrimSpace(info.OriginModelName) != "grok 4.6图片" {
 		aspectRatio := strings.TrimSpace(request.AspectRatio)
 		if aspectRatio != "" {
 			verifiedSize, ok := grokImageRequestSizeByAspectRatio[aspectRatio]

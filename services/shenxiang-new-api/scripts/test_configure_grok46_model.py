@@ -86,7 +86,13 @@ class ConfigureGrok46ModelTests(unittest.TestCase):
 
     def test_verify_upstream_requires_models_chat_and_responses_text(self) -> None:
         payloads = [
-            {"data": [{"id": "grok-4.6"}]},
+            {
+                "data": [
+                    {"id": "grok-4.6"},
+                    {"id": "grok-imagine-image"},
+                    {"id": "grok-imagine-video"},
+                ]
+            },
             {"choices": [{"message": {"content": "OK"}}]},
             {"output": [{"content": [{"type": "output_text", "text": "OK"}]}]},
         ]
@@ -94,6 +100,15 @@ class ConfigureGrok46ModelTests(unittest.TestCase):
             self.module.verify_upstream(self.module.EXPECTED_UPSTREAM_BASE_URL, "test-grok46-key-123456789")
 
         self.assertEqual(3, fetch_json.call_count)
+
+    def test_verify_upstream_rejects_missing_media_model(self) -> None:
+        with mock.patch.object(
+            self.module,
+            "fetch_json",
+            return_value={"data": [{"id": "grok-4.6"}, {"id": "grok-imagine-image"}]},
+        ):
+            with self.assertRaisesRegex(self.module.ConfigurationError, "text or media model"):
+                self.module.verify_upstream(self.module.EXPECTED_UPSTREAM_BASE_URL, "test-grok46-key-123456789")
 
     def test_validate_channel_isolation_rejects_duplicate_or_foreign_route(self) -> None:
         with mock.patch.object(self.module.grok45, "mysql", side_effect=[[['2']]]):
