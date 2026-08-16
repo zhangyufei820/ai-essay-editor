@@ -33,12 +33,10 @@ if [[ -n "$(git -C "$CHECKOUT" status --porcelain)" ]]; then
   echo "release checkout is dirty: $CHECKOUT" >&2
   exit 1
 fi
-for script in "$SYNC_SCRIPT" "$GROK45_SCRIPT" "$GROK46_SCRIPT" "$KIMI_K3_SCRIPT"; do
-  if [[ ! -f "$script" ]]; then
-    echo "missing release script: $script" >&2
-    exit 1
-  fi
-done
+if [[ ! -f "$SYNC_SCRIPT" ]]; then
+  echo "missing release script: $SYNC_SCRIPT" >&2
+  exit 1
+fi
 
 mkdir -p "$ROOT/logs"
 
@@ -50,9 +48,33 @@ set -a
 . "$ROOT/.env"
 set +a
 
+optional_failures=()
+
+# Core token permissions are mandatory; provider-specific reconciliation is best-effort.
+run_optional_reconcile() {
+  local model="$1"
+  local lock_marker="$2"
+  local script="$3"
+  local exit_code
+
+  if env "${lock_marker}=1" python3 "$script" --reconcile-if-configured; then
+    return 0
+  else
+    exit_code=$?
+  fi
+
+  optional_failures+=("${model}:${exit_code}")
+  printf 'warning: optional model reconcile failed model=%s exit_code=%s\n' "$model" "$exit_code" >&2
+  return 0
+}
+
 exec 9>"$LOCK"
 flock -n 9
-KIMI_K3_CHANNEL_SYNC_LOCK_HELD=1 python3 "$KIMI_K3_SCRIPT" --reconcile-if-configured
 python3 "$SYNC_SCRIPT"
-GROK45_MODEL_SYNC_LOCK_HELD=1 python3 "$GROK45_SCRIPT" --reconcile-if-configured
-GROK46_MODEL_SYNC_LOCK_HELD=1 python3 "$GROK46_SCRIPT" --reconcile-if-configured
+run_optional_reconcile "kimi-k3" "KIMI_K3_CHANNEL_SYNC_LOCK_HELD" "$KIMI_K3_SCRIPT"
+run_optional_reconcile "grok-4.5" "GROK45_MODEL_SYNC_LOCK_HELD" "$GROK45_SCRIPT"
+run_optional_reconcile "grok-4.6" "GROK46_MODEL_SYNC_LOCK_HELD" "$GROK46_SCRIPT"
+
+if [[ ${#optional_failures[@]} -gt 0 ]]; then
+  printf 'warning: model permission sync completed with optional_failures=%s\n' "$(IFS=,; printf '%s' "${optional_failures[*]}")" >&2
+fi
