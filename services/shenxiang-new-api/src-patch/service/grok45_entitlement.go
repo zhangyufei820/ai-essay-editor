@@ -48,6 +48,26 @@ func isExactManagedGrok45Token(token *model.Token, expectedName string) bool {
 		!token.CrossGroupRetry
 }
 
+func isLegacyDisabledManagedGrok45Token(token *model.Token, expectedName string) bool {
+	if token == nil || token.UserId <= 0 || strings.TrimSpace(token.Key) == "" {
+		return false
+	}
+	allowIPs := ""
+	if token.AllowIps != nil {
+		allowIPs = strings.TrimSpace(*token.AllowIps)
+	}
+	return token.Status == common.TokenStatusDisabled &&
+		token.Name == expectedName &&
+		token.Group == Grok45PricingGroupName &&
+		token.ModelLimitsEnabled &&
+		token.ModelLimits == Grok45ModelName &&
+		token.UnlimitedQuota &&
+		token.RemainQuota == 0 &&
+		token.ExpiredTime == -1 &&
+		allowIPs == "" &&
+		!token.CrossGroupRetry
+}
+
 func ManagedGrok45CapabilityActive(ctx context.Context) (bool, error) {
 	if model.DB == nil {
 		return false, errors.New("database is not initialized")
@@ -175,9 +195,15 @@ func EnsureManagedGrok45UserTokenForUserID(ctx context.Context, userID int) (Man
 				activeTokenIndexes = append(activeTokenIndexes, index)
 			}
 		}
+		legacyUpgrade := false
 		if len(activeTokenIndexes) == 0 && len(tokens) > 0 {
-			result.Skipped++
-			return nil
+			if len(tokens) == 1 && isLegacyDisabledManagedGrok45Token(&tokens[0], Grok45UserTokenName) {
+				activeTokenIndexes = append(activeTokenIndexes, 0)
+				legacyUpgrade = true
+			} else {
+				result.Skipped++
+				return nil
+			}
 		}
 		if len(tokens) == 0 {
 			key, generateErr := common.GenerateKey()
@@ -219,6 +245,9 @@ func EnsureManagedGrok45UserTokenForUserID(ctx context.Context, userID int) (Man
 				"allow_ips":            "",
 				"group":                Grok45PricingGroupName,
 				"cross_group_retry":    false,
+			}
+			if legacyUpgrade {
+				updates["status"] = common.TokenStatusEnabled
 			}
 			if strings.TrimSpace(canonical.Key) == "" {
 				key, generateErr := common.GenerateKey()
@@ -326,10 +355,40 @@ func ReconcileManagedGrok45UserTokens(ctx context.Context) (ManagedGrok45TokenEn
 						AND enabled_managed_grok_token.name = ?
 						AND enabled_managed_grok_token.status = ?
 				)
+				OR (
+					(SELECT COUNT(*) FROM tokens AS legacy_managed_grok_token_count
+					 WHERE legacy_managed_grok_token_count.user_id = users.id
+						AND legacy_managed_grok_token_count.deleted_at IS NULL
+						AND legacy_managed_grok_token_count.name = ?) = 1
+					AND EXISTS (
+					SELECT 1 FROM tokens AS legacy_disabled_managed_grok_token
+					WHERE legacy_disabled_managed_grok_token.user_id = users.id
+						AND legacy_disabled_managed_grok_token.deleted_at IS NULL
+						AND legacy_disabled_managed_grok_token.name = ?
+						AND legacy_disabled_managed_grok_token.status = ?
+						AND COALESCE(legacy_disabled_managed_grok_token.key, '') <> ''
+						AND legacy_disabled_managed_grok_token.model_limits_enabled = ?
+						AND legacy_disabled_managed_grok_token.model_limits = ?
+						AND legacy_disabled_managed_grok_token.unlimited_quota = ?
+						AND legacy_disabled_managed_grok_token.remain_quota = 0
+						AND legacy_disabled_managed_grok_token.expired_time = -1
+						AND COALESCE(legacy_disabled_managed_grok_token.allow_ips, '') = ''
+						AND legacy_disabled_managed_grok_token.`+"`group`"+` = ?
+						AND legacy_disabled_managed_grok_token.cross_group_retry = ?
+					)
+				)
 			)`,
 				Grok45UserTokenName,
 				Grok45UserTokenName,
 				common.TokenStatusEnabled,
+				Grok45UserTokenName,
+				Grok45UserTokenName,
+				common.TokenStatusDisabled,
+				true,
+				Grok45ModelName,
+				true,
+				Grok45PricingGroupName,
+				false,
 			).
 			Order("id").
 			Limit(managedGrok45ReconcileBatchSize).
