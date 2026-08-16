@@ -153,7 +153,7 @@ func TestEnsureManagedGrok45UserTokenCreatesAndRepairsExactProfile(t *testing.T)
 	require.True(t, IsExactManagedGrok45UserToken(&token))
 }
 
-func TestEnsureManagedGrok45UserTokenPreservesUserRevocation(t *testing.T) {
+func TestEnsureManagedGrok45UserTokenUpgradesDisabledLegacyProfileOnce(t *testing.T) {
 	setupGrok45EntitlementTestDB(t)
 	createManagedGrok45Capability(t)
 	createGrok45TestUser(t, 108, common.RoleCommonUser, common.UserStatusEnabled)
@@ -176,12 +176,51 @@ func TestEnsureManagedGrok45UserTokenPreservesUserRevocation(t *testing.T) {
 	result, err := EnsureManagedGrok45UserTokenForUserID(context.Background(), 108)
 
 	require.NoError(t, err)
+	require.Equal(t, 1, result.Updated)
+	var persisted model.Token
+	require.NoError(t, model.DB.First(&persisted, revoked.Id).Error)
+	require.Equal(t, common.TokenStatusEnabled, persisted.Status)
+	require.Equal(t, GrokManagedModelLimits, persisted.ModelLimits)
+	require.Equal(t, revoked.Key, persisted.Key)
+	entitled, err := UserHasManagedGrok45Entitlement(context.Background(), 108)
+	require.NoError(t, err)
+	require.True(t, entitled)
+
+	secondResult, err := EnsureManagedGrok45UserTokenForUserID(context.Background(), 108)
+	require.NoError(t, err)
+	require.Zero(t, secondResult.Created)
+	require.Zero(t, secondResult.Updated)
+	require.Equal(t, 1, secondResult.Skipped)
+}
+
+func TestEnsureManagedGrok45UserTokenPreservesCurrentProfileRevocation(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	createManagedGrok45Capability(t)
+	createGrok45TestUser(t, 118, common.RoleCommonUser, common.UserStatusEnabled)
+	emptyAllowIPs := ""
+	revoked := model.Token{
+		UserId:             118,
+		Key:                "revoked-current-grok-key",
+		Status:             common.TokenStatusDisabled,
+		Name:               Grok45UserTokenName,
+		ExpiredTime:        -1,
+		UnlimitedQuota:     true,
+		ModelLimitsEnabled: true,
+		ModelLimits:        GrokManagedModelLimits,
+		AllowIps:           &emptyAllowIPs,
+		Group:              Grok45PricingGroupName,
+		CrossGroupRetry:    false,
+	}
+	require.NoError(t, model.DB.Create(&revoked).Error)
+
+	result, err := EnsureManagedGrok45UserTokenForUserID(context.Background(), 118)
+
+	require.NoError(t, err)
 	require.Equal(t, 1, result.Skipped)
 	var persisted model.Token
 	require.NoError(t, model.DB.First(&persisted, revoked.Id).Error)
 	require.Equal(t, common.TokenStatusDisabled, persisted.Status)
-	require.Equal(t, revoked.Key, persisted.Key)
-	entitled, err := UserHasManagedGrok45Entitlement(context.Background(), 108)
+	entitled, err := UserHasManagedGrok45Entitlement(context.Background(), 118)
 	require.NoError(t, err)
 	require.False(t, entitled)
 }
@@ -263,7 +302,8 @@ func TestReconcileManagedGrok45UserTokensCoversEnabledCommonUsersOnly(t *testing
 	require.NoError(t, err)
 	require.True(t, result.CapabilityActive)
 	require.Equal(t, 2, result.Created)
-	require.Equal(t, 2, result.UsersScanned)
+	require.Equal(t, 1, result.Updated)
+	require.Equal(t, 3, result.UsersScanned)
 	var userIDs []int
 	require.NoError(t, model.DB.Model(&model.Token{}).Where("name = ?", Grok45UserTokenName).Order("user_id").Pluck("user_id", &userIDs).Error)
 	require.Equal(t, []int{104, 105, 108}, userIDs)
@@ -271,6 +311,37 @@ func TestReconcileManagedGrok45UserTokensCoversEnabledCommonUsersOnly(t *testing
 	secondResult, err := ReconcileManagedGrok45UserTokens(context.Background())
 	require.NoError(t, err)
 	require.Zero(t, secondResult.UsersScanned)
+}
+
+func TestReconcileManagedGrok45UserTokensIgnoresAmbiguousLegacyDuplicates(t *testing.T) {
+	setupGrok45EntitlementTestDB(t)
+	createManagedGrok45Capability(t)
+	createGrok45TestUser(t, 119, common.RoleCommonUser, common.UserStatusEnabled)
+	emptyAllowIPs := ""
+	for _, key := range []string{"legacy-grok-key-one", "legacy-grok-key-two"} {
+		require.NoError(t, model.DB.Create(&model.Token{
+			UserId:             119,
+			Key:                key,
+			Status:             common.TokenStatusDisabled,
+			Name:               Grok45UserTokenName,
+			ExpiredTime:        -1,
+			UnlimitedQuota:     true,
+			ModelLimitsEnabled: true,
+			ModelLimits:        Grok45ModelName,
+			AllowIps:           &emptyAllowIPs,
+			Group:              Grok45PricingGroupName,
+		}).Error)
+	}
+
+	result, err := ReconcileManagedGrok45UserTokens(context.Background())
+
+	require.NoError(t, err)
+	require.Zero(t, result.UsersScanned)
+	var enabledCount int64
+	require.NoError(t, model.DB.Model(&model.Token{}).
+		Where("user_id = ? AND name = ? AND status = ?", 119, Grok45UserTokenName, common.TokenStatusEnabled).
+		Count(&enabledCount).Error)
+	require.Zero(t, enabledCount)
 }
 
 func TestAdminSystemTokenDisablesCrossGroupRetryForFixedPricingTokens(t *testing.T) {
