@@ -23,7 +23,7 @@ MODEL_VENDOR_DESCRIPTION = "xAI 模型"
 MODEL_VENDOR_ICON = "XAI"
 PRICING_GROUP = "grok45"
 PRICING_GROUP_RATIO = 1
-PRICING_GROUP_DESCRIPTION = "Grok 4.5 专用通道"
+PRICING_GROUP_DESCRIPTION = "Grok 文本专用通道"
 PRIMARY_CHANNEL_TAG = "xingren-grok45-primary"
 PRIMARY_CHANNEL_NAME = "星人 Grok 4.5 主通道"
 PRIMARY_CHANNEL_REMARK = "Grok 4.5 主路由"
@@ -36,6 +36,8 @@ FALLBACK_CHANNEL_REMARK = "Grok 4.5 备用路由"
 FALLBACK_UPSTREAM_BASE_URL = "https://www.geek2api.com"
 FALLBACK_PRIORITY = 0
 MANAGED_CHANNEL_TAGS = (PRIMARY_CHANNEL_TAG, FALLBACK_CHANNEL_TAG)
+PEER_GROK_CHANNEL_TAGS = ("xingren-grok46-primary",)
+ALLOWED_GROK_GROUP_CHANNEL_TAGS = (*MANAGED_CHANNEL_TAGS, *PEER_GROK_CHANNEL_TAGS)
 ALLOWED_UPSTREAM_BASE_URLS = (PRIMARY_UPSTREAM_BASE_URL, FALLBACK_UPSTREAM_BASE_URL)
 MAX_MODELS_RESPONSE_BYTES = 5 * 1024 * 1024
 MAX_INFERENCE_RESPONSE_BYTES = 1 * 1024 * 1024
@@ -557,6 +559,8 @@ def build_apply_sql(
         [
             "UPDATE abilities SET enabled = 0 WHERE `group` = "
             + sql_quote(PRICING_GROUP)
+            + " AND model = "
+            + sql_quote(MODEL_NAME)
             + " AND channel_id NOT IN (@grok_primary_channel_id, @grok_fallback_channel_id);",
             "UPDATE abilities SET enabled = 0 WHERE model = "
             + sql_quote(MODEL_NAME)
@@ -609,7 +613,7 @@ def validate_channel_isolation() -> None:
         rows = mysql("SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(tag))
         if (int(rows[0][0]) if rows else 0) > 1:
             raise ConfigurationError("multiple channels use a reserved Grok isolation tag")
-    managed_tags_sql = ",".join(sql_quote(tag) for tag in MANAGED_CHANNEL_TAGS)
+    managed_tags_sql = ",".join(sql_quote(tag) for tag in ALLOWED_GROK_GROUP_CHANNEL_TAGS)
     rows = mysql(
         "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') NOT IN ("
         + managed_tags_sql

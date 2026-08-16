@@ -20,7 +20,7 @@ func TestManagedGrok45UserTokenProfileRequiresExactIsolation(t *testing.T) {
 		Name:               Grok45UserTokenName,
 		Group:              Grok45PricingGroupName,
 		ModelLimitsEnabled: true,
-		ModelLimits:        Grok45ModelName,
+		ModelLimits:        GrokManagedModelLimits,
 		UnlimitedQuota:     true,
 		RemainQuota:        0,
 		ExpiredTime:        -1,
@@ -50,4 +50,12 @@ func TestManagedGrok45UserTokenProfileRequiresExactIsolation(t *testing.T) {
 			require.False(t, IsManagedGrok45UserTokenProfile(profile))
 		})
 	}
+}
+
+func TestManagedGrok45TextModelsIncludeGrok46(t *testing.T) {
+	require.Equal(t, []string{Grok45ModelName, Grok46ModelName}, GrokManagedModelNames())
+	require.Equal(t, "grok-4.5,grok-4.6", GrokManagedModelLimits)
+	require.True(t, IsManagedGrokTextModelName(Grok45ModelName))
+	require.True(t, IsManagedGrokTextModelName(Grok46ModelName))
+	require.False(t, IsManagedGrokTextModelName("gpt-5.5"))
 }

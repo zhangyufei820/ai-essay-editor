@@ -84,6 +84,7 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertIn('MANIFEST="$ROOT/release-manifest.json"', runner)
         self.assertIn('CHECKOUT="$ROOT/release-state/checkouts/$RELEASE_COMMIT"', runner)
         self.assertIn('python3 "$SYNC_SCRIPT"', runner)
+        self.assertIn('python3 "$GROK46_SCRIPT" --reconcile-if-configured', runner)
         self.assertNotIn('python3 "$ROOT/scripts/sync_app_model_permissions.py"', runner)
 
         release_guard = MODULE_PATH.with_name("check-new-api-release-state.sh").read_text(encoding="utf-8")

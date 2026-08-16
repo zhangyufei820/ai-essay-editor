@@ -152,10 +152,12 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         self.assertIn("`group` = 'grok45'", sql)
         self.assertIn("'grok45', 'grok-4.5', @grok_primary_channel_id", sql)
         self.assertIn("'grok45', 'grok-4.5', @grok_fallback_channel_id", sql)
+        self.assertIn("AND model = 'grok-4.5' AND channel_id NOT IN", sql)
         self.assertIn("priority = 100", sql)
         self.assertIn("priority = 0", sql)
         self.assertIn("'xingren-grok45-primary'", sql)
         self.assertIn("'xingren-grok45'", sql)
+        self.assertNotIn("model = 'grok-4.6'", sql)
         self.assertIn("model = 'grok-4.5' AND `group` <> 'grok45'", sql)
         self.assertIn("INSERT INTO vendors", sql)
         self.assertIn("vendor_id = @grok_vendor_id", sql)
@@ -164,6 +166,18 @@ class ConfigureGrok45ModelTests(unittest.TestCase):
         self.assertNotIn("'default', 'grok-4.5'", sql)
         self.assertNotIn("INSERT INTO tokens", sql)
         self.assertNotIn("UPDATE tokens", sql)
+
+    def test_channel_isolation_allows_managed_grok46_peer(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            captured.append(query)
+            return [["0"]]
+
+        with mock.patch.object(self.module, "mysql", side_effect=fake_mysql):
+            self.module.validate_channel_isolation()
+
+        self.assertIn("'xingren-grok46-primary'", captured[-1])
 
     def test_apply_sql_rejects_swapped_primary_and_fallback_origins(self) -> None:
         with self.assertRaisesRegex(self.module.ConfigurationError, "unexpected endpoint"):

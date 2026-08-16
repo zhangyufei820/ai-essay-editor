@@ -139,7 +139,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "grok",
 			Name:   Grok45AdminTokenName,
-			Models: []string{Grok45ModelName},
+			Models: GrokManagedModelNames(),
 			Group:  Grok45PricingGroupName,
 		},
 	}

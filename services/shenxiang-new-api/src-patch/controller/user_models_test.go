@@ -57,6 +57,25 @@ func TestManagedGrok45PricingVisibilityUsesCapabilityForAnonymousCatalog(t *test
 	require.True(t, visible)
 }
 
+func TestFilterUserVisibleModelNamesRequiresManagedGrokEntitlementForGrok46(t *testing.T) {
+	originalEnsure := ensureManagedGrok45UserToken
+	originalHasToken := userHasManagedGrok45Token
+	t.Cleanup(func() {
+		ensureManagedGrok45UserToken = originalEnsure
+		userHasManagedGrok45Token = originalHasToken
+	})
+	ensureManagedGrok45UserToken = func(_ context.Context, userID int) (service.ManagedGrok45TokenEnsureResult, error) {
+		return service.ManagedGrok45TokenEnsureResult{UserID: userID, CapabilityActive: true}, nil
+	}
+	userHasManagedGrok45Token = func(_ context.Context, userID int) (bool, error) {
+		return userID == 46, nil
+	}
+
+	models := []string{service.Grok45ModelName, service.Grok46ModelName, "gpt-5.5"}
+	require.Equal(t, models, filterUserVisibleModelNames(46, models))
+	require.Equal(t, []string{"gpt-5.5"}, filterUserVisibleModelNames(47, models))
+}
+
 func TestPinManagedGrok45PricingUsesExactCNYRates(t *testing.T) {
 	originalExchangeRate := operation_setting.USDExchangeRate
 	operation_setting.USDExchangeRate = 8
@@ -66,29 +85,45 @@ func TestPinManagedGrok45PricingUsesExactCNYRates(t *testing.T) {
 	cacheRatio := 9.0
 	createCacheRatio := 7.0
 
-	pricing := pinManagedGrok45Pricing([]model.Pricing{{
-		ModelName:        service.Grok45ModelName,
-		QuotaType:        1,
-		ModelRatio:       99,
-		ModelPrice:       99,
-		CompletionRatio:  99,
-		CacheRatio:       &cacheRatio,
-		CreateCacheRatio: &createCacheRatio,
-		EnableGroup:      []string{service.Grok45PricingGroupName},
-		BillingMode:      "tiered_expr",
-		BillingExpr:      "unsafe",
-	}})
+	pricing := pinManagedGrok45Pricing([]model.Pricing{
+		{
+			ModelName:        service.Grok45ModelName,
+			QuotaType:        1,
+			ModelRatio:       99,
+			ModelPrice:       99,
+			CompletionRatio:  99,
+			CacheRatio:       &cacheRatio,
+			CreateCacheRatio: &createCacheRatio,
+			EnableGroup:      []string{service.Grok45PricingGroupName},
+			BillingMode:      "tiered_expr",
+			BillingExpr:      "unsafe",
+		},
+		{
+			ModelName:        service.Grok46ModelName,
+			QuotaType:        1,
+			ModelRatio:       77,
+			ModelPrice:       77,
+			CompletionRatio:  77,
+			CacheRatio:       &cacheRatio,
+			CreateCacheRatio: &createCacheRatio,
+			EnableGroup:      []string{service.Grok45PricingGroupName},
+			BillingMode:      "tiered_expr",
+			BillingExpr:      "unsafe",
+		},
+	})
 
-	require.Len(t, pricing, 1)
-	require.Zero(t, pricing[0].QuotaType)
-	require.InDelta(t, 0.125, pricing[0].ModelRatio, 0.000000001)
-	require.Zero(t, pricing[0].ModelPrice)
-	require.Equal(t, service.Grok45CompletionRatio, pricing[0].CompletionRatio)
-	require.NotNil(t, pricing[0].CacheRatio)
-	require.Equal(t, service.Grok45CacheReadRatio, *pricing[0].CacheRatio)
-	require.Nil(t, pricing[0].CreateCacheRatio)
-	require.Empty(t, pricing[0].BillingMode)
-	require.Empty(t, pricing[0].BillingExpr)
+	require.Len(t, pricing, 2)
+	for _, item := range pricing {
+		require.Zero(t, item.QuotaType)
+		require.InDelta(t, 0.125, item.ModelRatio, 0.000000001)
+		require.Zero(t, item.ModelPrice)
+		require.Equal(t, service.Grok45CompletionRatio, item.CompletionRatio)
+		require.NotNil(t, item.CacheRatio)
+		require.Equal(t, service.Grok45CacheReadRatio, *item.CacheRatio)
+		require.Nil(t, item.CreateCacheRatio)
+		require.Empty(t, item.BillingMode)
+		require.Empty(t, item.BillingExpr)
+	}
 }
 
 func TestNormalizeUserVisibleModelsAddsSeedancePrivateVideoForRootUser(t *testing.T) {
@@ -297,6 +332,7 @@ func TestPublicPricingGroupsExposesAllClaudeMarketplaceGroups(t *testing.T) {
 func TestFilterPricingByUsableGroupsExposesDedicatedGrokPricing(t *testing.T) {
 	pricing := filterPricingByUsableGroups([]model.Pricing{
 		{ModelName: "grok-4.5", EnableGroup: []string{"grok45"}},
+		{ModelName: "grok-4.6", EnableGroup: []string{"grok45"}},
 		{ModelName: "internal-only", EnableGroup: []string{"internal"}},
 	}, map[string]string{
 		"default": "原价",
@@ -305,6 +341,7 @@ func TestFilterPricingByUsableGroupsExposesDedicatedGrokPricing(t *testing.T) {
 
 	require.Equal(t, []model.Pricing{
 		{ModelName: "grok-4.5", EnableGroup: []string{"grok45"}},
+		{ModelName: "grok-4.6", EnableGroup: []string{"grok45"}},
 	}, pricing)
 }
 

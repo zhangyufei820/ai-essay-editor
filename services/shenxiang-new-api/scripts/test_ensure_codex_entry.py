@@ -354,6 +354,7 @@ API.get('/api/user/models');
         self.assertIn("API.get('/api/user/models')", home)
         self.assertNotIn("/api/user/models?group=", home)
         self.assertIn("const CLAUDE_STABLE_GROUP = 'kiro-stable';", model_filter)
+        self.assertIn("const GROK_TEXT_MODELS = new Set(['grok-4.5', 'grok-4.6']);", model_filter)
         self.assertIn("if (name.startsWith('claude-')) return CLAUDE_STABLE_GROUP;", model_filter)
         self.assertIn("usableGroup?.[group] || group", pricing_table)
         self.assertIn("CLAUDE_DISPLAY_GROUPS.has(group)", pricing_table)

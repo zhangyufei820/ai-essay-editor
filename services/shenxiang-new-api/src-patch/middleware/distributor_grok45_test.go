@@ -22,6 +22,7 @@ func TestCanUsePlaygroundGroupAllowsOnlyExactGrok45Pair(t *testing.T) {
 	specialGroups.Clear()
 
 	require.True(t, canUsePlaygroundGroup("default", service.Grok45PricingGroupName, service.Grok45ModelName, true))
+	require.True(t, canUsePlaygroundGroup("default", service.Grok45PricingGroupName, service.Grok46ModelName, true))
 	require.False(t, canUsePlaygroundGroup("default", service.Grok45PricingGroupName, service.Grok45ModelName, false))
 	require.False(t, canUsePlaygroundGroup("default", service.Grok45PricingGroupName, "gpt-5.5", true))
 	require.False(t, canUsePlaygroundGroup("default", "internal", service.Grok45ModelName, true))

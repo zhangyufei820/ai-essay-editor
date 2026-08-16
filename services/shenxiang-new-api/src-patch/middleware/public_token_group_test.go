@@ -400,14 +400,14 @@ func TestEnforcePublicTokenGroupSelectionAllowsManagedGrok45Profile(t *testing.T
 		require.NoError(t, c.ShouldBindJSON(&request))
 		require.Equal(t, "星人 Grok 4.5 专用令牌", request.Name)
 		require.Equal(t, "grok45", request.Group)
-		require.Equal(t, "grok-4.5", request.ModelLimits)
+		require.Equal(t, "grok-4.5,grok-4.6", request.ModelLimits)
 		require.False(t, request.CrossGroupRetry)
 		c.Status(http.StatusNoContent)
 	})
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/api/token/",
-		strings.NewReader(`{"name":"星人 Grok 4.5 专用令牌","group":"grok45","model_limits_enabled":true,"model_limits":"grok-4.5","unlimited_quota":true,"remain_quota":0,"expired_time":-1,"allow_ips":"","cross_group_retry":true}`),
+		strings.NewReader(`{"name":"星人 Grok 4.5 专用令牌","group":"grok45","model_limits_enabled":true,"model_limits":"grok-4.5,grok-4.6","unlimited_quota":true,"remain_quota":0,"expired_time":-1,"allow_ips":"","cross_group_retry":true}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
@@ -429,7 +429,7 @@ func TestEnforcePublicTokenGroupSelectionAllowsManagedGrok45ProfileUpdate(t *tes
 	request := httptest.NewRequest(
 		http.MethodPut,
 		"/api/token/",
-		strings.NewReader(`{"id":45,"status":1,"name":"星人 Grok 4.5 专用令牌","group":"grok45","model_limits_enabled":true,"model_limits":"grok-4.5","unlimited_quota":true,"remain_quota":0,"expired_time":-1,"allow_ips":"","cross_group_retry":false}`),
+		strings.NewReader(`{"id":45,"status":1,"name":"星人 Grok 4.5 专用令牌","group":"grok45","model_limits_enabled":true,"model_limits":"grok-4.5,grok-4.6","unlimited_quota":true,"remain_quota":0,"expired_time":-1,"allow_ips":"","cross_group_retry":false}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
@@ -606,7 +606,7 @@ func TestEnforcePublicTokenGroupSelectionRejectsGrokInFallbackChain(t *testing.T
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/api/token/",
-		strings.NewReader(`{"name":"星人 Grok 4.5 专用令牌","group":"grok45,default","model_limits_enabled":true,"model_limits":"grok-4.5","unlimited_quota":true,"remain_quota":0,"expired_time":-1}`),
+		strings.NewReader(`{"name":"星人 Grok 4.5 专用令牌","group":"grok45,default","model_limits_enabled":true,"model_limits":"grok-4.5,grok-4.6","unlimited_quota":true,"remain_quota":0,"expired_time":-1}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
