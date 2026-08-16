@@ -1471,7 +1471,7 @@ def grok46_media_release_state(kind: str) -> str:
         raise ValueError("unsupported Grok 4.6 media kind")
     rows = mysql(
         "SELECT type, status, REPLACE(COALESCE(`group`, ''), ' ', ''), "
-        "REPLACE(COALESCE(models, ''), ' ', ''), COALESCE(model_mapping, ''), "
+        "COALESCE(models, ''), COALESCE(model_mapping, ''), "
         "CHAR_LENGTH(COALESCE(`key`, '')), COALESCE(base_url, '') FROM channels WHERE tag = "
         + sql_quote(tag)
         + " ORDER BY id"
@@ -1590,7 +1590,7 @@ def validate_grok46_media_channel_isolation() -> None:
             + sql_quote(tag)
             + " AND FIND_IN_SET("
             + sql_quote(model)
-            + ", REPLACE(COALESCE(models, ''), ' ', '')) > 0"
+            + ", COALESCE(models, '')) > 0"
         )
         if (int(rows[0][0]) if rows else 0) > 0:
             raise RuntimeError("a Grok 4.6 public media model is assigned to an unmanaged channel")
@@ -2460,7 +2460,7 @@ def sync_abilities() -> None:
             + ("1" if tag == GROK46_IMAGE_CHANNEL_TAG else "55")
             + " OR REPLACE(COALESCE(`group`, ''), ' ', '') <> "
             + sql_quote(GROK46_MEDIA_PUBLIC_CHANNEL_GROUPS)
-            + " OR REPLACE(COALESCE(models, ''), ' ', '') <> "
+            + " OR COALESCE(models, '') <> "
             + sql_quote(expected_model)
             + ");"
             for tag, expected_model in grok46_media_channel_model_by_tag.items()
@@ -2754,10 +2754,17 @@ def sync_abilities() -> None:
                     "COALESCE(current_channel.tag, '') = " + sql_quote(tag),
                     "REPLACE(COALESCE(current_channel.`group`, ''), ' ', '') = "
                     + sql_quote(",".join(channel_groups)),
-                    "FIND_IN_SET("
-                    + sql_quote(model)
-                    + ", REPLACE(COALESCE(current_channel.models, ''), ' ', '')) > 0",
                 ]
+                if tag in grok46_media_channel_tags:
+                    current_channel_conditions.append(
+                        "COALESCE(current_channel.models, '') = " + sql_quote(model)
+                    )
+                else:
+                    current_channel_conditions.append(
+                        "FIND_IN_SET("
+                        + sql_quote(model)
+                        + ", REPLACE(COALESCE(current_channel.models, ''), ' ', '')) > 0"
+                    )
                 if tag in discount_channel_tags:
                     current_channel_conditions.append(
                         discount_text_models_allowed_sql("current_channel.models")
