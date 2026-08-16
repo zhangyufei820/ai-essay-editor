@@ -151,14 +151,37 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             sort_keys=True,
             separators=(",", ":"),
         )
+        captured_queries: list[str] = []
         for kind, rows, expected in (
             ("image", [], "unavailable"),
             ("image", [["1", "1", "default,standard,pro,code,internal", "grok 4.6图片", image_mapping, "64", "https://media.test"]], "published"),
             ("video", [["55", "1", "default,standard,pro,code,internal", "grok4.6视频", video_mapping, "64", "https://media.test"]], "published"),
             ("video", [["55", "1", "default,standard,pro,code,internal", "grok4.6视频", video_mapping, "64", "http://media.test"]], "invalid"),
         ):
-            self.module.mysql = lambda _query, rows=rows: rows
+            self.module.mysql = lambda query, rows=rows: captured_queries.append(query) or rows
             self.assertEqual(self.module.grok46_media_release_state(kind), expected)
+        self.assertTrue(captured_queries)
+        self.assertNotIn(
+            "REPLACE(COALESCE(models, ''), ' ', '')",
+            captured_queries[0],
+        )
+
+    def test_validate_grok46_media_channel_isolation_preserves_public_model_spaces(self) -> None:
+        captured_queries: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            captured_queries.append(query)
+            return [["0"]]
+
+        self.module.mysql = fake_mysql
+
+        self.module.validate_grok46_media_channel_isolation()
+
+        image_query = next(
+            query for query in captured_queries if "grok 4.6图片" in query and "FIND_IN_SET" in query
+        )
+        self.assertIn("FIND_IN_SET('grok 4.6图片', COALESCE(models, ''))", image_query)
+        self.assertNotIn("REPLACE(COALESCE(models, ''), ' ', '')", image_query)
 
     def test_ensure_grok46_media_channels_copies_managed_credentials_without_embedding_key(self) -> None:
         captured: list[str] = []
@@ -228,6 +251,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn("SELECT 'standard', '" + model + "', " + channel_id, sql)
             for group in ("discount", "plus", "grok45", "kiro"):
                 self.assertNotIn("SELECT '" + group + "', '" + model + "', " + channel_id, sql)
+        self.assertIn("COALESCE(models, '') <> 'grok 4.6图片'", sql)
+        self.assertIn("COALESCE(current_channel.models, '') = 'grok 4.6图片'", sql)
+        self.assertNotIn(
+            "REPLACE(COALESCE(models, ''), ' ', '') <> 'grok 4.6图片'",
+            sql,
+        )
 
     def test_discount_image2_release_state_requires_exact_managed_groups(self) -> None:
         for rows, expected in (
