@@ -7,6 +7,7 @@ import hmac
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
@@ -3205,7 +3206,24 @@ def refresh_codex() -> None:
     )
 
 
+def run_optional_reconcile(
+    step: str,
+    reconcile: Callable[[], None],
+    failures: list[str],
+) -> None:
+    try:
+        reconcile()
+    except Exception as exc:
+        failure = f"{step}:{type(exc).__name__}"
+        failures.append(failure)
+        print(
+            f"warning: optional model reconcile failed step={step} error={type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+
+
 def main() -> int:
+    optional_failures: list[str] = []
     ensure_grok46_media_channels()
     ensure_public_video_models()
     ensure_grok46_image_model()
@@ -3219,7 +3237,11 @@ def main() -> int:
     sync_public_image_pricing()
     sync_public_openai_text_pricing()
     codex_text_channel_result = ensure_codex_text_channel_models()
-    ensure_claude_opus5_stable_model()
+    run_optional_reconcile(
+        "claude_opus5_stable_model",
+        ensure_claude_opus5_stable_model,
+        optional_failures,
+    )
     retired_codex_text_result = retire_codex_text_models()
     retired_claude_result = retire_claude_models()
     metadata_result = sync_supplier_safe_public_metadata()
@@ -3246,6 +3268,7 @@ def main() -> int:
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
         + f", retired_claude={retired_claude_result}"
+        + f", optional_failures={optional_failures}"
     )
     return 0
 
