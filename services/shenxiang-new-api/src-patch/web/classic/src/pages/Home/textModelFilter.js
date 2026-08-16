@@ -4,7 +4,7 @@ const MEDIA_MODEL_PATTERN =
 const DEFAULT_TEXT_MODEL = 'gpt-5.4-mini';
 const CLAUDE_STABLE_GROUP = 'kiro-stable';
 const HIDDEN_TEXT_MODELS = new Set(['gpt-5.3-spark']);
-const GROK_TEXT_MODELS = new Set(['grok-4.5']);
+const GROK_TEXT_MODELS = new Set(['grok-4.5', 'grok-4.6']);
 const SPECIAL_TEXT_MODELS = new Set([
   'gpt-5.4-mini',
   'gpt-5.5',

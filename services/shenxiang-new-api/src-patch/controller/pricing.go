@@ -80,7 +80,7 @@ func appendPublicImageAliasPricing(pricing []model.Pricing) []model.Pricing {
 
 func pinManagedGrok45Pricing(pricing []model.Pricing) []model.Pricing {
 	for index := range pricing {
-		if pricing[index].ModelName != service.Grok45ModelName ||
+		if !service.IsManagedGrokTextModelName(pricing[index].ModelName) ||
 			!common.StringsContains(pricing[index].EnableGroup, service.Grok45PricingGroupName) {
 			continue
 		}
@@ -251,7 +251,7 @@ func GetPricing(c *gin.Context) {
 		"usable_group":       usableGroup,
 		"supported_endpoint": model.GetSupportedEndpointMap(),
 		"auto_groups":        service.GetPublicUserAutoGroup(group),
-		"pricing_version":    "a42d372ccf0b5dd13ecf71203521f9d2",
+		"pricing_version":    "3ac6d1b0fd570a3a27b0bfd1bf8b16b3",
 	})
 }
 

@@ -323,7 +323,7 @@ func canUsePlaygroundGroup(usingGroup, requestedGroup, modelName string, managed
 	modelName = strings.TrimSpace(modelName)
 	if usingGroup == service.Grok45PricingGroupName || requestedGroup == service.Grok45PricingGroupName {
 		return managedGrok45Entitled &&
-			modelName == service.Grok45ModelName &&
+			service.IsManagedGrokTextModelName(modelName) &&
 			requestedGroup == service.Grok45PricingGroupName
 	}
 	return service.GroupInUserUsableGroups(usingGroup, requestedGroup) || requestedGroup == usingGroup

@@ -387,18 +387,18 @@ func TestSystemTokenProfilesIncludesIsolatedGrok45Token(t *testing.T) {
 
 	require.NotNil(t, grokProfile)
 	require.Equal(t, "星人 Grok 4.5 测试令牌", grokProfile.Name)
-	require.Equal(t, []string{Grok45ModelName}, grokProfile.Models)
+	require.Equal(t, GrokManagedModelNames(), grokProfile.Models)
 	require.Equal(t, Grok45PricingGroupName, grokProfile.Group)
 }
 
 func TestGrok45SystemTokenLimitsAreReconciledExactly(t *testing.T) {
 	profile := SystemTokenProfile{
 		Mode:   "grok",
-		Models: []string{Grok45ModelName},
+		Models: GrokManagedModelNames(),
 		Group:  Grok45PricingGroupName,
 	}
 
-	require.Equal(t, Grok45ModelName, systemTokenModelLimits("gpt-5.5,"+Grok45ModelName, profile, Grok45PricingGroupName, profile.Models))
+	require.Equal(t, GrokManagedModelLimits, systemTokenModelLimits("gpt-5.5,"+Grok45ModelName, profile, Grok45PricingGroupName, profile.Models))
 }
 
 func TestSpecialCodexSystemTokenLimitsAreReconciledExactly(t *testing.T) {
@@ -426,7 +426,7 @@ func TestSystemTokenProfilesReconcilePreservesExternallyManagedModelLimitsExcept
 		limits := "externally-managed-" + profile.Mode
 		if profile.Mode == "grok" {
 			group = Grok45PricingGroupName
-			limits = Grok45ModelName
+			limits = GrokManagedModelLimits
 		} else if profile.Mode == "claude" {
 			group = ClaudeExternalPricingGroupName
 		}

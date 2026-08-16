@@ -33,10 +33,11 @@ class Grok45SyncIsolationTests(unittest.TestCase):
             return [
                 ["41", self.module.GROK45_MODEL, "0", "100", self.module.GROK45_CHANNEL_TAG, self.module.GROK45_GROUP],
                 ["42", self.module.GROK45_MODEL, "100", "100", self.module.GROK45_PRIMARY_CHANNEL_TAG, self.module.GROK45_GROUP],
+                ["46", self.module.GROK46_MODEL, "100", "100", self.module.GROK46_CHANNEL_TAG, self.module.GROK45_GROUP],
                 ["21", f"gpt-5.5,{self.module.GROK45_MODEL}", "0", "100", "normal", "default"],
             ]
         if "SELECT model_name FROM models" in query:
-            return [[self.module.GROK45_MODEL], ["gpt-5.5"]]
+            return [[self.module.GROK45_MODEL], [self.module.GROK46_MODEL], ["gpt-5.5"]]
         raise AssertionError(f"unexpected query: {query}")
 
     def test_sync_abilities_never_broadcasts_grok_model_or_group(self) -> None:
@@ -49,11 +50,34 @@ class Grok45SyncIsolationTests(unittest.TestCase):
         sql = captured[0]
         self.assertIn("'grok45', 'grok-4.5', 41", sql)
         self.assertIn("'grok45', 'grok-4.5', 42", sql)
+        self.assertIn("'grok45', 'grok-4.6', 46", sql)
         self.assertNotIn("'default', 'grok-4.5'", sql)
+        self.assertNotIn("'default', 'grok-4.6'", sql)
         self.assertNotIn("'grok45', 'gpt-5.5'", sql)
-        self.assertIn("model = 'grok-4.5' AND `group` <> 'grok45'", sql)
-        self.assertIn("'xingren-grok45-primary', 'xingren-grok45'", sql)
+        self.assertIn("model IN ('grok-4.5', 'grok-4.6') AND `group` <> 'grok45'", sql)
+        self.assertIn("'xingren-grok46-primary'", sql)
         self.assertIn("status <> 1 AND tag IN", sql)
+
+    def test_grok46_channel_cannot_serve_grok45(self) -> None:
+        def rows(query: str) -> list[list[str]]:
+            if "SELECT DISTINCT `group` FROM users" in query:
+                return [["default"]]
+            if "SELECT DISTINCT `group` FROM abilities" in query:
+                return []
+            if "FROM channels" in query:
+                return [["46", self.module.GROK45_MODEL, "100", "100", self.module.GROK46_CHANNEL_TAG, self.module.GROK45_GROUP]]
+            if "SELECT model_name FROM models" in query:
+                return [[self.module.GROK45_MODEL], [self.module.GROK46_MODEL]]
+            raise AssertionError(f"unexpected query: {query}")
+
+        captured: list[str] = []
+        with mock.patch.object(self.module, "mysql", side_effect=rows), mock.patch.object(
+            self.module, "mysql_exec", side_effect=captured.append
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Grok group isolation violation"):
+                self.module.sync_abilities()
+
+        self.assertNotIn("'grok45', 'grok-4.5', 46", captured[0])
 
     def test_misgrouped_grok_channel_is_disabled_and_reported(self) -> None:
         def rows(query: str) -> list[list[str]]:

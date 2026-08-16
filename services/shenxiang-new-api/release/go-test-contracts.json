@@ -32,6 +32,10 @@
     "run": "^(TestPublicPricingGroupsExposesSpecialWhenExplicitlyEnabled|TestShouldRetryAllowsSpecialTextTimeoutFallback)$"
   },
   {
+    "package": "./controller",
+    "run": "^(TestPinManagedGrok45PricingUsesExactCNYRates|TestFilterPricingByUsableGroupsExposesDedicatedGrokPricing|TestFilterUserVisibleModelNamesRequiresManagedGrokEntitlementForGrok46)$"
+  },
+  {
     "package": "./relay/channel/task/sora",
     "run": ""
   },

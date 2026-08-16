@@ -82,7 +82,7 @@ func isHiddenUserVisibleModelForUser(userID int, modelName string) bool {
 func filterUserVisibleModelNames(userID int, modelNames []string) []string {
 	managedGrok45Entitled := false
 	for _, modelName := range modelNames {
-		if strings.EqualFold(strings.TrimSpace(modelName), service.Grok45ModelName) {
+		if service.IsManagedGrokTextModelName(modelName) {
 			entitled, err := ensureManagedGrok45EntitlementForUser(context.Background(), userID)
 			if err != nil {
 				common.SysLog("failed to resolve managed Grok model entitlement: " + err.Error())
@@ -99,7 +99,7 @@ func filterUserVisibleModelNames(userID int, modelNames []string) []string {
 			continue
 		}
 		displayName := service.PublicImageModelDisplayName(trimmed, "")
-		if strings.EqualFold(displayName, service.Grok45ModelName) && !managedGrok45Entitled {
+		if service.IsManagedGrokTextModelName(displayName) && !managedGrok45Entitled {
 			continue
 		}
 		if isHiddenUserVisibleModelForUser(userID, displayName) {

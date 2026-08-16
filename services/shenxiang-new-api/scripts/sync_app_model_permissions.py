@@ -148,6 +148,7 @@ PLUS_TEXT_MODELS_REGEX = (
     "^(" + _PLUS_TEXT_MODEL_REGEX_ALTERNATION + ")(,(" + _PLUS_TEXT_MODEL_REGEX_ALTERNATION + "))*$"
 )
 GROK45_MODEL = "grok-4.5"
+GROK46_MODEL = "grok-4.6"
 GROK45_GROUP = "grok45"
 KIMI_K3_MODEL = "kimi-k3"
 KIMI_K3_GROUP = "kimi"
@@ -155,6 +156,14 @@ KIMI_K3_CHANNEL_TAG = "xingren-kimi-k3"
 GROK45_CHANNEL_TAG = "xingren-grok45"
 GROK45_PRIMARY_CHANNEL_TAG = "xingren-grok45-primary"
 GROK45_CHANNEL_TAGS = (GROK45_PRIMARY_CHANNEL_TAG, GROK45_CHANNEL_TAG)
+GROK46_CHANNEL_TAG = "xingren-grok46-primary"
+GROK_CHANNEL_MODEL_BY_TAG = {
+    GROK45_PRIMARY_CHANNEL_TAG: GROK45_MODEL,
+    GROK45_CHANNEL_TAG: GROK45_MODEL,
+    GROK46_CHANNEL_TAG: GROK46_MODEL,
+}
+GROK_CHANNEL_TAGS = tuple(GROK_CHANNEL_MODEL_BY_TAG)
+GROK_TEXT_MODELS = tuple(dict.fromkeys(GROK_CHANNEL_MODEL_BY_TAG.values()))
 MANAGED_CLAUDE_CHANNEL_GROUPS = {
     "xingren-claude-pdhlzy-kiro": "kiro",
     "xingren-claude-pdhlzy-kiro-stable": "kiro-stable",
@@ -2146,15 +2155,18 @@ def sync_abilities() -> None:
     special_channel_tags_sql = ", ".join(sql_quote(tag) for tag in SPECIAL_TEXT_CHANNEL_TAGS)
     plus_channel_tags = set(PLUS_TEXT_CHANNEL_TAGS)
     plus_channel_tags_sql = ", ".join(sql_quote(tag) for tag in PLUS_TEXT_CHANNEL_TAGS)
-    grok45_channel_tags = set(GROK45_CHANNEL_TAGS)
-    grok45_channel_tags_sql = ", ".join(sql_quote(tag) for tag in GROK45_CHANNEL_TAGS)
+    grok_channel_model_by_tag = dict(GROK_CHANNEL_MODEL_BY_TAG)
+    grok_channel_tags = set(GROK_CHANNEL_TAGS)
+    grok_channel_tags_sql = ", ".join(sql_quote(tag) for tag in GROK_CHANNEL_TAGS)
+    grok_text_models = set(GROK_TEXT_MODELS)
+    grok_text_models_sql = ", ".join(sql_quote(model) for model in GROK_TEXT_MODELS)
     protected_channel_tags_sql = ", ".join(
         sql_quote(tag)
         for tag in (
             *DISCOUNT_TEXT_CHANNEL_TAGS,
             *SPECIAL_TEXT_CHANNEL_TAGS,
             *PLUS_TEXT_CHANNEL_TAGS,
-            *GROK45_CHANNEL_TAGS,
+            *GROK_CHANNEL_TAGS,
             KIMI_K3_CHANNEL_TAG,
             *CLAUDE_CHANNEL_GROUPS,
             *DISCOUNT_IMAGE2_CHANNEL_TAGS,
@@ -2218,14 +2230,18 @@ def sync_abilities() -> None:
         + " AND FIND_IN_SET("
         + sql_quote(PLUS_TEXT_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
-        "UPDATE channels SET status = 2 WHERE tag IN ("
-        + grok45_channel_tags_sql
-        + ")"
-        + " AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
-        + sql_quote(GROK45_GROUP)
-        + ";",
+        *[
+            "UPDATE channels SET status = 2 WHERE tag = "
+            + sql_quote(tag)
+            + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+            + sql_quote(GROK45_GROUP)
+            + " OR REPLACE(COALESCE(models, ''), ' ', '') <> "
+            + sql_quote(expected_model)
+            + ");"
+            for tag, expected_model in grok_channel_model_by_tag.items()
+        ],
         "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') NOT IN ("
-        + grok45_channel_tags_sql
+        + grok_channel_tags_sql
         + ")"
         + " AND FIND_IN_SET("
         + sql_quote(GROK45_GROUP)
@@ -2338,8 +2354,8 @@ def sync_abilities() -> None:
         elif PLUS_TEXT_GROUP in channel_groups:
             invalid_plus_channels.append(channel_id)
             sync_groups = []
-        elif tag in grok45_channel_tags:
-            if channel_groups != [GROK45_GROUP]:
+        elif tag in grok_channel_model_by_tag:
+            if channel_groups != [GROK45_GROUP] or channel_models != [grok_channel_model_by_tag[tag]]:
                 invalid_grok_channels.append(channel_id)
                 sync_groups = []
             else:
@@ -2433,9 +2449,9 @@ def sync_abilities() -> None:
                 continue
             if tag in gemini_model_by_tag and model != gemini_model_by_tag[tag]:
                 continue
-            if model == GROK45_MODEL and tag not in grok45_channel_tags:
+            if model in grok_text_models and grok_channel_model_by_tag.get(tag) != model:
                 continue
-            if tag in grok45_channel_tags and model != GROK45_MODEL:
+            if tag in grok_channel_model_by_tag and model != grok_channel_model_by_tag[tag]:
                 continue
             if model == KIMI_K3_MODEL and tag != KIMI_K3_CHANNEL_TAG:
                 continue
@@ -2478,7 +2494,7 @@ def sync_abilities() -> None:
                     )
                 elif tag in CLAUDE_CHANNEL_GROUPS or tag == KIMI_K3_CHANNEL_TAG:
                     pass
-                elif tag not in grok45_channel_tags:
+                elif tag not in grok_channel_tags:
                     current_channel_conditions.extend(
                         [
                             "COALESCE(current_channel.tag, '') NOT IN ("
@@ -2611,24 +2627,28 @@ def sync_abilities() -> None:
             "UPDATE abilities SET enabled = 0 WHERE `group` = "
             + sql_quote(GROK45_GROUP)
             + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag IN ("
-            + grok45_channel_tags_sql
+            + grok_channel_tags_sql
             + "));",
-            "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
-            + "(SELECT id FROM channels WHERE tag IN ("
-            + grok45_channel_tags_sql
-            + ")) AND (`group` <> "
-            + sql_quote(GROK45_GROUP)
-            + " OR model <> "
-            + sql_quote(GROK45_MODEL)
-            + ");",
-            "UPDATE abilities SET enabled = 0 WHERE model = "
-            + sql_quote(GROK45_MODEL)
+            *[
+                "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+                "SET ability.enabled = 0 WHERE channel.tag = "
+                + sql_quote(tag)
+                + " AND (ability.`group` <> "
+                + sql_quote(GROK45_GROUP)
+                + " OR ability.model <> "
+                + sql_quote(expected_model)
+                + ");"
+                for tag, expected_model in grok_channel_model_by_tag.items()
+            ],
+            "UPDATE abilities SET enabled = 0 WHERE model IN ("
+            + grok_text_models_sql
+            + ")"
             + " AND `group` <> "
             + sql_quote(GROK45_GROUP)
             + ";",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
             + "(SELECT id FROM channels WHERE status <> 1 AND tag IN ("
-            + grok45_channel_tags_sql
+            + grok_channel_tags_sql
             + "));",
             "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
             "SET ability.enabled = 0 WHERE channel.tag = "

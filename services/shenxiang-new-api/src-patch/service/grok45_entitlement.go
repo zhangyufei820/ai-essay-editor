@@ -40,7 +40,7 @@ func isExactManagedGrok45Token(token *model.Token, expectedName string) bool {
 		token.Name == expectedName &&
 		token.Group == Grok45PricingGroupName &&
 		token.ModelLimitsEnabled &&
-		token.ModelLimits == Grok45ModelName &&
+		token.ModelLimits == GrokManagedModelLimits &&
 		token.UnlimitedQuota &&
 		token.RemainQuota == 0 &&
 		token.ExpiredTime == -1 &&
@@ -196,7 +196,7 @@ func EnsureManagedGrok45UserTokenForUserID(ctx context.Context, userID int) (Man
 				RemainQuota:        0,
 				UnlimitedQuota:     true,
 				ModelLimitsEnabled: true,
-				ModelLimits:        Grok45ModelName,
+				ModelLimits:        GrokManagedModelLimits,
 				AllowIps:           &emptyAllowIPs,
 				Group:              Grok45PricingGroupName,
 				CrossGroupRetry:    false,
@@ -215,7 +215,7 @@ func EnsureManagedGrok45UserTokenForUserID(ctx context.Context, userID int) (Man
 				"remain_quota":         0,
 				"unlimited_quota":      true,
 				"model_limits_enabled": true,
-				"model_limits":         Grok45ModelName,
+				"model_limits":         GrokManagedModelLimits,
 				"allow_ips":            "",
 				"group":                Grok45PricingGroupName,
 				"cross_group_retry":    false,
@@ -307,7 +307,7 @@ func ReconcileManagedGrok45UserTokens(ctx context.Context) (ManagedGrok45TokenEn
 				common.TokenStatusEnabled,
 				Grok45UserTokenName,
 				true,
-				Grok45ModelName,
+				GrokManagedModelLimits,
 				true,
 				Grok45PricingGroupName,
 				false,

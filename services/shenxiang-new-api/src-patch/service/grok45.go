@@ -8,6 +8,8 @@ import (
 
 const (
 	Grok45ModelName                = "grok-4.5"
+	Grok46ModelName                = "grok-4.6"
+	GrokManagedModelLimits         = Grok45ModelName + "," + Grok46ModelName
 	Grok45PricingGroupName         = "grok45"
 	Grok45PricingGroupRatio        = 1.0
 	Grok45UserTokenName            = "星人 Grok 4.5 专用令牌"
@@ -16,12 +18,27 @@ const (
 	Grok45PrimaryManagedBaseURL    = "https://dragtokens.com"
 	Grok45ManagedChannelTag        = "xingren-grok45"
 	Grok45ManagedBaseURL           = "https://www.geek2api.com"
+	Grok46ManagedChannelTag        = "xingren-grok46-primary"
+	Grok46ManagedBaseURL           = "https://wangwang.sbs"
 	Grok45InputCNYPer1M            = 2.0
 	Grok45OutputCNYPer1M           = 6.0
 	Grok45CacheReadCNYPer1M        = 0.5
 	Grok45CompletionRatio          = Grok45OutputCNYPer1M / Grok45InputCNYPer1M
 	Grok45CacheReadRatio           = Grok45CacheReadCNYPer1M / Grok45InputCNYPer1M
 )
+
+func GrokManagedModelNames() []string {
+	return []string{Grok45ModelName, Grok46ModelName}
+}
+
+func IsManagedGrokTextModelName(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case Grok45ModelName, Grok46ModelName:
+		return true
+	default:
+		return false
+	}
+}
 
 func Grok45ModelRatioForExchangeRate(exchangeRate float64) float64 {
 	if exchangeRate <= 0 {
@@ -46,7 +63,7 @@ func IsManagedGrok45UserTokenProfile(profile Grok45UserTokenProfile) bool {
 	return profile.Name == Grok45UserTokenName &&
 		profile.Group == Grok45PricingGroupName &&
 		profile.ModelLimitsEnabled &&
-		profile.ModelLimits == Grok45ModelName &&
+		profile.ModelLimits == GrokManagedModelLimits &&
 		profile.UnlimitedQuota &&
 		profile.RemainQuota == 0 &&
 		profile.ExpiredTime == -1 &&
