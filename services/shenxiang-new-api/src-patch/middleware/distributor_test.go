@@ -408,6 +408,29 @@ func TestGetTaskOriginModelNameUsesPublicDiscountImage2Alias(t *testing.T) {
 	}
 }
 
+func TestDistributeAllowsVideoFetchWithoutSelectingChannel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET(
+		"/v1/videos/:task_id",
+		func(c *gin.Context) {
+			c.Set("id", 1)
+			c.Next()
+		},
+		Distribute(),
+		func(c *gin.Context) {
+			c.Status(http.StatusNoContent)
+		},
+	)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/videos/task_public_video", nil))
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d body=%s, want %d", recorder.Code, recorder.Body.String(), http.StatusNoContent)
+	}
+}
+
 func TestGetModelRequestRejectsChatImageModelBeforeChannelSelection(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())

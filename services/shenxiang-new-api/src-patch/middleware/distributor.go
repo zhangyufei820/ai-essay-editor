@@ -242,6 +242,10 @@ func Distribute() func(c *gin.Context) {
 			service.IsTextPricingPreferenceModel(modelRequest.Model) && selectedGroup != "" {
 			c.Header("X-Aiphui-Pricing-Group", selectedGroup)
 		}
+		if !shouldSelectChannel && channel == nil {
+			c.Next()
+			return
+		}
 		if setupErr := SetupContextForSelectedChannel(c, channel, modelRequest.Model); setupErr != nil {
 			abortWithOpenAiMessage(c, setupErr.StatusCode, setupErr.Error(), setupErr.GetErrorCode())
 			return
