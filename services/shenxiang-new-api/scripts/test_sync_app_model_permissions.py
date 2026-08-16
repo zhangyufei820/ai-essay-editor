@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import os
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT_PATH = Path(__file__).with_name("sync_app_model_permissions.py")
@@ -1772,6 +1775,97 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             {"channel_found": 1, "models_updated": 0, "mapping_updated": 0, "models_retired": 0, "mapping_retired": 0},
         )
         self.assertEqual(captured, [])
+
+    def test_main_continues_core_permission_sync_when_optional_claude_reconcile_fails(self) -> None:
+        profiles = {
+            "codex": ["gpt-5.6"],
+            "claude": ["claude-opus-4-8"],
+            "image": ["gpt-image-1"],
+            "video": ["grok-video-1.5"],
+        }
+        sync_abilities = mock.Mock()
+        sync_user_codex_tokens = mock.Mock(return_value={"tokens_rewritten": 1, "token_caches_deleted": 1})
+        optional_reconcile = mock.Mock(
+            side_effect=RuntimeError("Claude Opus 5 requires exactly one enabled Kiro stable channel")
+        )
+        no_result = mock.Mock()
+        empty_result = mock.Mock(return_value={})
+        output = io.StringIO()
+        errors = io.StringIO()
+
+        with mock.patch.multiple(
+            self.module,
+            ensure_grok46_media_channels=no_result,
+            ensure_public_video_models=no_result,
+            ensure_grok46_image_model=no_result,
+            ensure_discount_image2_backing_model=no_result,
+            ensure_discount_image2_primary_and_fallback_channels=no_result,
+            ensure_stable_image2_backing_model=no_result,
+            ensure_gemini_ddpapi_image_models=no_result,
+            sync_grok_image_metadata=no_result,
+            ensure_public_openai_text_models=no_result,
+            sync_public_video_pricing=no_result,
+            sync_public_image_pricing=no_result,
+            sync_public_openai_text_pricing=no_result,
+            ensure_codex_text_channel_models=empty_result,
+            ensure_claude_opus5_stable_model=optional_reconcile,
+            retire_codex_text_models=empty_result,
+            retire_claude_models=empty_result,
+            sync_supplier_safe_public_metadata=empty_result,
+            model_lists=mock.Mock(return_value=profiles),
+            sync_abilities=sync_abilities,
+            system_token_profiles=mock.Mock(return_value=profiles),
+            sync_tokens=empty_result,
+            sync_user_codex_tokens=sync_user_codex_tokens,
+            sync_controlled_codex_alias_tokens=empty_result,
+            sync_user_claude_tokens=empty_result,
+            sync_user_image_tokens=empty_result,
+            sync_user_video_tokens=empty_result,
+            enforce_gpt_image2_db_guard=empty_result,
+            sync_codex_env=mock.Mock(return_value=False),
+        ), redirect_stdout(output), redirect_stderr(errors):
+            result = self.module.main()
+
+        self.assertEqual(0, result)
+        sync_abilities.assert_called_once_with()
+        sync_user_codex_tokens.assert_called_once_with(profiles)
+        self.assertIn("optional model reconcile failed step=claude_opus5_stable_model", errors.getvalue())
+        self.assertIn("optional_failures=['claude_opus5_stable_model:RuntimeError']", output.getvalue())
+
+    def test_main_keeps_core_ability_sync_failure_fatal(self) -> None:
+        profiles = {
+            "codex": ["gpt-5.6"],
+            "claude": ["claude-opus-4-8"],
+            "image": ["gpt-image-1"],
+            "video": ["grok-video-1.5"],
+        }
+        no_result = mock.Mock()
+        empty_result = mock.Mock(return_value={})
+
+        with mock.patch.multiple(
+            self.module,
+            ensure_grok46_media_channels=no_result,
+            ensure_public_video_models=no_result,
+            ensure_grok46_image_model=no_result,
+            ensure_discount_image2_backing_model=no_result,
+            ensure_discount_image2_primary_and_fallback_channels=no_result,
+            ensure_stable_image2_backing_model=no_result,
+            ensure_gemini_ddpapi_image_models=no_result,
+            sync_grok_image_metadata=no_result,
+            ensure_public_openai_text_models=no_result,
+            sync_public_video_pricing=no_result,
+            sync_public_image_pricing=no_result,
+            sync_public_openai_text_pricing=no_result,
+            ensure_codex_text_channel_models=empty_result,
+            ensure_claude_opus5_stable_model=no_result,
+            retire_codex_text_models=empty_result,
+            retire_claude_models=empty_result,
+            sync_supplier_safe_public_metadata=empty_result,
+            model_lists=mock.Mock(return_value=profiles),
+            sync_abilities=mock.Mock(side_effect=RuntimeError("core ability sync failed")),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "core ability sync failed"):
+                self.module.main()
 
 
 if __name__ == "__main__":
