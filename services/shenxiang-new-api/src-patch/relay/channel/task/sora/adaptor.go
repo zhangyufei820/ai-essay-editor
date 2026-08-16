@@ -2068,7 +2068,7 @@ func supportsVideoContentStatusFallback(body map[string]any) bool {
 		if modelName == "" || modelName == "<nil>" {
 			continue
 		}
-		if isGrok15VideoModel(modelName) || isGrok15Video1080Model(modelName) || isSD2FastVideoModel(modelName) || modelName == seedanceLD17PublicModel || modelName == seedanceLD17UpstreamModel {
+		if isGrok46VideoModel(modelName) || isGrok15VideoModel(modelName) || isGrok15Video1080Model(modelName) || isSD2FastVideoModel(modelName) || modelName == seedanceLD17PublicModel || modelName == seedanceLD17UpstreamModel {
 			return true
 		}
 	}

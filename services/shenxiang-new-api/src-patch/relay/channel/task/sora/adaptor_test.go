@@ -524,6 +524,61 @@ func TestFetchTaskKeepsUnavailableStatusAndContentPending(t *testing.T) {
 	}
 }
 
+func TestFetchGrok46TaskUsesContentFallback(t *testing.T) {
+	tests := []struct {
+		name          string
+		contentStatus int
+		contentType   string
+		wantStatus    string
+	}{
+		{name: "completed", contentStatus: http.StatusOK, contentType: "video/mp4", wantStatus: string(model.TaskStatusSuccess)},
+		{name: "pending", contentStatus: http.StatusNotFound, wantStatus: string(model.TaskStatusQueued)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+				switch request.URL.Path {
+				case "/v1/videos/grok46-task":
+					w.WriteHeader(http.StatusForbidden)
+				case "/v1/videos/grok46-task/content":
+					if test.contentType != "" {
+						w.Header().Set("Content-Type", test.contentType)
+					}
+					w.WriteHeader(test.contentStatus)
+					if test.contentStatus == http.StatusOK {
+						_, _ = w.Write([]byte("fake mp4 content"))
+					}
+				default:
+					t.Fatalf("unexpected path %q", request.URL.Path)
+				}
+			}))
+			defer server.Close()
+
+			response, err := (&TaskAdaptor{}).FetchTask(server.URL, "saved-task-key", map[string]any{
+				"task_id":        "grok46-task",
+				"origin_model":   grok46VideoPublicModel,
+				"upstream_model": grok46VideoUpstreamModel,
+			}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			body, err := io.ReadAll(response.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := (&TaskAdaptor{}).ParseTaskResult(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response.StatusCode != http.StatusOK || result.Status != test.wantStatus {
+				t.Fatalf("status=%d result=%#v body=%s", response.StatusCode, result, body)
+			}
+		})
+	}
+}
+
 func TestDoResponseUsesPublicModelAndProxyURL(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)
