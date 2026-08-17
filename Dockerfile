@@ -57,7 +57,7 @@ ENV HOSTNAME=0.0.0.0
 # 注意：不复制整个 node_modules！
 # Next.js standalone 模式已将所有运行时依赖打包到 .next/standalone/ 目录
 COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/public ./.next/standalone/public
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/scripts ./scripts
 
@@ -71,10 +71,9 @@ EXPOSE 3000
 ENTRYPOINT []
 
 # Next.js standalone 模式：静态文件在 .next/static/ 但 standalone server 在 .next/standalone/
-# 需要创建符号链接让 server.js 能找到静态文件和 public 文件
+# public 已直接复制到 standalone 根目录；这里只链接构建产出的静态 chunks。
 RUN mkdir -p /app/.next/standalone/.next/cache/images && \
-    ln -s /app/.next/static /app/.next/standalone/.next/static && \
-    ln -s /app/public /app/.next/standalone/public
+    ln -s /app/.next/static /app/.next/standalone/.next/static
 
 # 运行时创建缓存目录（overlay 文件系统需要启动时可写）
 RUN echo '#!/bin/sh\nmkdir -p /app/.next/standalone/.next/cache/images /app/.next/standalone/.next/cache/fetch-cache\nif [ -z "${DEPLOYMENT_VERSION:-}" ] && [ -r /app/.next/deployment-version ]; then\n  export DEPLOYMENT_VERSION="$(cat /app/.next/deployment-version)"\nfi\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
