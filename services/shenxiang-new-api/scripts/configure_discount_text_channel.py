@@ -18,6 +18,9 @@ from pathlib import Path
 
 DISCOUNT_GROUP = "discount"
 DISCOUNT_RATIO = 0.25
+KIMI_K3_MODEL = "kimi-k3"
+KIMI_K3_GROUP = "kimi"
+KIMI_K3_CHANNEL_TAG = "xingren-kimi-k3"
 DEFAULT_GROUP_DESCRIPTION = "原价稳定通道"
 DISCOUNT_GROUP_DESCRIPTION = "特价通道（可能随时下架；不可用时请切回原价）"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
@@ -32,11 +35,9 @@ LEGACY_DISCOUNT_CHANNEL_TAG = "xingren-discount-text"
 LEGACY_RESERVE_CHANNEL_TAG = "xingren-discount-text-reserve"
 LEGACY_AIHUB_CHANNEL_TAG = "xingren-discount-text-aihub"
 LEGACY_PDHLZY_CHANNEL_TAG = "xingren-discount-text-pdhlzy"
-DEFAULT_CHANNEL_ORDER = ("geek2api", "aihub", "wangwang")
+DEFAULT_CHANNEL_ORDER = ("zwaca", "tkfora", "aihub")
 DISCOUNT_TEXT_MODELS = (
-    "gpt-5.4-mini",
     "gpt-5.5",
-    "gpt-5.6",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
 )
@@ -78,20 +79,21 @@ class DiscountChannelSpec:
     approved_hosts: tuple[str, ...]
     channel_type: int
     expected_channel_id: int
+    wire_api: str = "responses"
     lookup_tags: tuple[str, ...] = ()
     require_all_models: bool = True
 
 
 DISCOUNT_CHANNEL_SPECS = (
     DiscountChannelSpec(
-        slug="geek2api",
-        # Keep the legacy tag so replacing channel 42 cannot disturb live channel 28.
+        slug="zwaca",
+        # Existing tags are immutable database identities, not supplier labels.
         tag=LEGACY_AIHUB_CHANNEL_TAG,
         name="星人特价文本主链路",
-        key_envs=("DISCOUNT_GEEK2API_API_KEY", "DISCOUNT_UPSTREAM_API_KEY"),
-        base_url_envs=("DISCOUNT_GEEK2API_BASE_URL", "DISCOUNT_UPSTREAM_BASE_URL"),
-        default_base_url="https://www.geek2api.com",
-        approved_hosts=("www.geek2api.com", "api.geek2api.com"),
+        key_envs=("DISCOUNT_ZWACA_API_KEY", "DISCOUNT_UPSTREAM_API_KEY"),
+        base_url_envs=("DISCOUNT_ZWACA_BASE_URL", "DISCOUNT_UPSTREAM_BASE_URL"),
+        default_base_url="https://new.zwaca.ggff.net",
+        approved_hosts=("new.zwaca.ggff.net",),
         channel_type=OPENAI_CHANNEL_TYPE,
         expected_channel_id=28,
         lookup_tags=(
@@ -101,26 +103,27 @@ DISCOUNT_CHANNEL_SPECS = (
         ),
     ),
     DiscountChannelSpec(
-        slug="aihub",
+        slug="tkfora",
         tag="xingren-discount-text-aihub-fallback",
+        name="星人特价文本 fallback A",
+        key_envs=("DISCOUNT_TKFORA_API_KEY", "DISCOUNT_WANGWANG_API_KEY"),
+        base_url_envs=("DISCOUNT_TKFORA_BASE_URL",),
+        default_base_url="https://ai.tkfora.cn",
+        approved_hosts=("ai.tkfora.cn",),
+        channel_type=OPENAI_CHANNEL_TYPE,
+        expected_channel_id=42,
+        wire_api="chat_completions",
+        lookup_tags=("xingren-discount-text-aihub-fallback", LEGACY_PDHLZY_CHANNEL_TAG),
+        require_all_models=False,
+    ),
+    DiscountChannelSpec(
+        slug="aihub",
+        tag="xingren-discount-text-wangwang",
         name="星人特价文本 fallback B",
         key_envs=("DISCOUNT_AIHUB_API_KEY",),
         base_url_envs=("DISCOUNT_AIHUB_BASE_URL",),
         default_base_url="https://aihub.top",
         approved_hosts=("aihub.top",),
-        channel_type=OPENAI_CHANNEL_TYPE,
-        expected_channel_id=42,
-        lookup_tags=("xingren-discount-text-aihub-fallback", LEGACY_PDHLZY_CHANNEL_TAG),
-        require_all_models=False,
-    ),
-    DiscountChannelSpec(
-        slug="wangwang",
-        tag="xingren-discount-text-wangwang",
-        name="星人特价文本 fallback A",
-        key_envs=("DISCOUNT_WANGWANG_API_KEY",),
-        base_url_envs=("DISCOUNT_WANGWANG_BASE_URL",),
-        default_base_url="https://wangwang.sbs",
-        approved_hosts=("wangwang.sbs",),
         channel_type=OPENAI_CHANNEL_TYPE,
         expected_channel_id=41,
         require_all_models=False,
@@ -184,7 +187,7 @@ def parse_channel_order(raw_value: str) -> tuple[str, ...]:
     order = tuple(item.strip() for item in raw_value.split(",") if item.strip())
     expected = {spec.slug for spec in DISCOUNT_CHANNEL_SPECS}
     if len(order) != len(expected) or set(order) != expected:
-        raise ConfigurationError("channel order must contain geek2api,aihub,wangwang exactly once")
+        raise ConfigurationError("channel order must contain zwaca,tkfora,aihub exactly once")
     return order
 
 
@@ -614,12 +617,25 @@ def build_apply_sql(
         )
 
     channel_variables = ",".join(channel_id_variable(spec.slug) for spec in DISCOUNT_CHANNEL_SPECS)
+    protected_kimi_ability_sql = (
+        "model = "
+        + sql_quote(KIMI_K3_MODEL)
+        + " AND channel_id IN (SELECT id FROM channels WHERE status = 1 AND tag = "
+        + sql_quote(KIMI_K3_CHANNEL_TAG)
+        + " AND REPLACE(COALESCE(`group`, ''), ' ', '') = "
+        + sql_quote(KIMI_K3_GROUP)
+        + " AND REPLACE(COALESCE(models, ''), ' ', '') = "
+        + sql_quote(KIMI_K3_MODEL)
+        + ")"
+    )
     statements.extend(
         [
             "UPDATE abilities SET enabled = 0 WHERE `group` = "
             + sql_quote(DISCOUNT_GROUP)
             + " AND channel_id NOT IN ("
             + channel_variables
+            + ") AND NOT ("
+            + protected_kimi_ability_sql
             + ") AND @discount_apply_allowed = 1;",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN ("
             + channel_variables
@@ -921,7 +937,7 @@ def main() -> int:
                         "upstream_model_count": plans[spec.slug].upstream_model_count,
                         "matched_public_models": plans[spec.slug].matched_models,
                         "missing_public_models": plans[spec.slug].missing_models,
-                        "wire_api": "responses",
+                        "wire_api": spec.wire_api,
                     }
                     for spec in selected_specs
                 },

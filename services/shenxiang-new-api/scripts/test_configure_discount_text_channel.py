@@ -58,14 +58,14 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
             self.options,
         )
 
-    def test_build_discount_plan_requires_exact_five_models(self) -> None:
+    def test_build_discount_plan_requires_exact_supported_models(self) -> None:
         upstream = set(self.module.DISCOUNT_TEXT_MODELS) | {"gpt-5.4", "supplier-private-model"}
 
         plan = self.module.build_discount_plan(upstream)
 
         self.assertEqual(plan.matched_models, self.module.DISCOUNT_TEXT_MODELS)
         self.assertEqual(plan.missing_models, ())
-        self.assertEqual(plan.upstream_model_count, 7)
+        self.assertEqual(plan.upstream_model_count, 5)
 
     def test_build_discount_plan_rejects_missing_required_model(self) -> None:
         upstream = set(self.module.DISCOUNT_TEXT_MODELS)
@@ -81,8 +81,7 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         )
 
         self.assertEqual(plan.matched_models, ("gpt-5.5", "gpt-5.6-sol"))
-        self.assertIn("gpt-5.4-mini", plan.missing_models)
-        self.assertIn("gpt-5.6", plan.missing_models)
+        self.assertIn("gpt-5.6-terra", plan.missing_models)
 
         with self.assertRaisesRegex(self.module.ConfigurationError, "none"):
             self.module.build_discount_plan({"supplier-private-model"}, require_all=False)
@@ -110,21 +109,22 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
 
     def test_parse_channel_order_accepts_any_exact_permutation(self) -> None:
         self.assertEqual(
-            self.module.parse_channel_order("aihub,geek2api,wangwang"),
-            ("aihub", "geek2api", "wangwang"),
+            self.module.parse_channel_order("aihub,zwaca,tkfora"),
+            ("aihub", "zwaca", "tkfora"),
         )
         with self.assertRaises(self.module.ConfigurationError):
-            self.module.parse_channel_order("wangwang,aihub,aihub")
+            self.module.parse_channel_order("tkfora,aihub,aihub")
 
-    def test_aihub_fallback_uses_native_openai_responses(self) -> None:
-        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "aihub")
+    def test_tkfora_fallback_uses_chat_completions_upstream(self) -> None:
+        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "tkfora")
 
         self.assertEqual(spec.channel_type, self.module.OPENAI_CHANNEL_TYPE)
         self.assertEqual(spec.expected_channel_id, 42)
+        self.assertEqual(spec.wire_api, "chat_completions")
         self.assertFalse(spec.require_all_models)
         self.assertNotIn("gpt-5.6-luna", self.module.DISCOUNT_TEXT_MODELS)
 
-    def test_probe_output_reports_native_responses_for_every_channel(self) -> None:
+    def test_probe_output_reports_each_upstream_wire_api(self) -> None:
         plan = self.module.DiscountPlan(
             upstream_model_count=5,
             matched_models=self.module.DISCOUNT_TEXT_MODELS,
@@ -138,25 +138,24 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         ), mock.patch.object(
             self.module, "build_discount_plan", return_value=plan
         ), mock.patch.object(
-            sys, "argv", ["configure_discount_text_channel.py", "--order", "geek2api,aihub,wangwang"]
+            sys, "argv", ["configure_discount_text_channel.py", "--order", "zwaca,tkfora,aihub"]
         ), mock.patch(
             "sys.stdout", stdout
         ):
             self.assertEqual(self.module.main(), 0)
 
         payload = self.module.json.loads(stdout.getvalue())
-        self.assertEqual(payload["channel_order"], ["geek2api", "aihub", "wangwang"])
-        self.assertEqual(
-            {channel["wire_api"] for channel in payload["channels"].values()},
-            {"responses"},
-        )
+        self.assertEqual(payload["channel_order"], ["zwaca", "tkfora", "aihub"])
+        self.assertEqual(payload["channels"]["zwaca"]["wire_api"], "responses")
+        self.assertEqual(payload["channels"]["tkfora"]["wire_api"], "chat_completions")
+        self.assertEqual(payload["channels"]["aihub"]["wire_api"], "responses")
 
     def test_build_apply_sql_creates_three_isolated_priority_channels(self) -> None:
         sql = self.build_sql()
 
-        self.assertIn("@discount_channel_id_wangwang", sql)
+        self.assertIn("@discount_channel_id_tkfora", sql)
         self.assertIn("@discount_channel_id_aihub", sql)
-        self.assertIn("@discount_channel_id_geek2api", sql)
+        self.assertIn("@discount_channel_id_zwaca", sql)
         self.assertIn("priority = 30", sql)
         self.assertIn("priority = 20", sql)
         self.assertIn("priority = 10", sql)
@@ -172,16 +171,16 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertNotIn("'discount', 'codex-auto-review'", sql)
 
     def test_build_apply_sql_uses_each_fallback_model_subset(self) -> None:
-        self.plans["aihub"] = self.module.DiscountPlan(
-            upstream_model_count=4,
-            matched_models=("gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
-            missing_models=("gpt-5.6",),
+        self.plans["tkfora"] = self.module.DiscountPlan(
+            upstream_model_count=2,
+            matched_models=("gpt-5.5", "gpt-5.6-sol"),
+            missing_models=("gpt-5.6-terra",),
         )
 
         sql = self.build_sql()
 
-        self.assertIn("'discount', 'gpt-5.6', @discount_channel_id_geek2api", sql)
-        self.assertNotIn("'discount', 'gpt-5.6', @discount_channel_id_aihub", sql)
+        self.assertIn("'discount', 'gpt-5.6-terra', @discount_channel_id_zwaca", sql)
+        self.assertNotIn("'discount', 'gpt-5.6-terra', @discount_channel_id_tkfora", sql)
 
     def test_build_apply_sql_clears_managed_channel_settings_and_legacy_other(self) -> None:
         sql = self.build_sql()
@@ -190,6 +189,13 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertIn(", settings = ", sql)
         self.assertIn(", other = '{}'", sql)
         self.assertNotIn("remark, other) SELECT", sql)
+
+    def test_build_apply_sql_preserves_dedicated_kimi_ability(self) -> None:
+        sql = self.build_sql()
+
+        self.assertIn("AND NOT (model = 'kimi-k3'", sql)
+        self.assertIn("tag = 'xingren-kimi-k3'", sql)
+        self.assertIn("REPLACE(COALESCE(`group`, ''), ' ', '') = 'kimi'", sql)
 
     def test_build_apply_sql_guards_every_mutation(self) -> None:
         sql = self.build_sql()
@@ -258,7 +264,7 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertNotIn("UPDATE options", sql)
 
     def test_single_channel_apply_replaces_only_channel_42_and_disables_luna(self) -> None:
-        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "aihub")
+        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "tkfora")
         plan = self.module.DiscountPlan(
             upstream_model_count=8,
             matched_models=self.module.DISCOUNT_TEXT_MODELS,
@@ -268,8 +274,8 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         sql = self.module.build_single_channel_apply_sql(
             spec,
             plan,
-            "fake-aihub-key-for-test",
-            "https://aihub.top",
+            "fake-tkfora-key-for-test",
+            "https://ai.tkfora.cn",
             20,
         )
 
@@ -284,8 +290,8 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         self.assertNotIn("'discount', 'gpt-5.6-luna'", sql)
 
     def test_single_channel_apply_fails_closed_on_identity_drift(self) -> None:
-        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "aihub")
-        plan = self.plans["aihub"]
+        spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "tkfora")
+        plan = self.plans["tkfora"]
         cases = (
             ("channel_missing", "does not exist"),
             ("channel_identity_mismatch", "identity changed"),
@@ -301,8 +307,8 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
                     self.module.apply_single_discount_channel(
                         spec,
                         plan,
-                        self.keys["aihub"],
-                        self.base_urls["aihub"],
+                        self.keys["tkfora"],
+                        self.base_urls["tkfora"],
                         20,
                     )
 

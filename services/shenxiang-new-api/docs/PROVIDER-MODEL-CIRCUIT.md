@@ -4,7 +4,7 @@
 
 ## 受管链路
 
-- `discount_text`：channel `28/42/41`，固定 `discount` group 和五个 GPT 模型；`gpt-5.6-luna` 不在受管集合中。
+- `discount_text`：channel `28/42/41`，固定 `discount` group 和 `gpt-5.5`、`gpt-5.6-sol`、`gpt-5.6-terra`；其他 GPT 模型不在受管集合中。
 - `plus_text`：按三个受管私有 tag 动态解析 channel ID，固定 `plus` group、七个公开模型和 `30/20/10` 主备优先级。
 - `configure_plus_text_channel.py` 的默认顺序与 `provider_monitor.py` 的监控基线必须一致；只切换主备时使用 order-only 操作，保留现有熔断和手工停用状态。
 - 每个公开模型必须至少有一条真实可用链路；主渠道可以只覆盖真实存在的模型交集，未覆盖模型继续由下一优先级链路承载，不创建伪能力。
@@ -16,7 +16,7 @@
 
 ## 请求与路由
 
-探测请求固定使用原生 `/v1/responses`，payload 最小化且不记录输入输出、密钥、供应商 URL 或完整上游错误。运行时对 `discount/plus` 选择出的 channel 做一次实时 ability 检查；被熔断的高优先级模型会在发出上游请求前直接跳到下一优先级。ability 查询异常时保持原有路由，避免 MySQL 短暂异常把整组误判为无可用通道。
+探测 payload 最小化且不记录输入输出、密钥、供应商 URL 或完整上游错误。`discount_text` 的 channel `42` 使用 `/v1/chat/completions` 探测，其余受管通道使用原生 `/v1/responses`；两种探针都必须收到真实输出并完整结束才算成功。运行时对 `discount/plus` 选择出的 channel 做一次实时 ability 检查；被熔断的高优先级模型会在发出上游请求前直接跳到下一优先级。ability 查询异常时保持原有路由，避免 MySQL 短暂异常把整组误判为无可用通道。
 
 ## 调度
 
