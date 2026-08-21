@@ -53,7 +53,7 @@
   },
   {
     "package": "./relay",
-    "run": "^(TestLogDebugRequestBodySkipsWorkWhenDebugDisabled|TestDebugBodyPreviewStillRedactsSensitiveValues|TestCloneOpenAIResponsesRequestDoesNotShareMutableData)$"
+    "run": "^(TestLogDebugRequestBodySkipsWorkWhenDebugDisabled|TestDebugBodyPreviewStillRedactsSensitiveValues|TestCloneOpenAIResponsesRequestDoesNotShareMutableData|TestResponsesChatCompatIsScopedToDiscountChannel42|TestResponsesChatCompatPreservesToolCallRoundTripInput|TestResponsesChatStreamHandlerEmitsFunctionCallEvents)$"
   },
   {
     "package": "./service/relayconvert",

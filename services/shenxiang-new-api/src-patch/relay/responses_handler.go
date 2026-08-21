@@ -66,6 +66,13 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())
 	}
 	adaptor.Init(info)
+	if shouldResponsesUseChatCompletionsCompat(info) {
+		usage, compatErr := responsesViaChatCompletions(c, info, adaptor, request)
+		if compatErr != nil {
+			return compatErr
+		}
+		return finalizeResponsesUsage(c, info, usage)
+	}
 	var requestBody io.Reader
 	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
 		storage, err := common.GetBodyStorage(c)
@@ -142,6 +149,14 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 	usageDto, ok := usage.(*dto.Usage)
 	if !ok || usageDto == nil {
 		common.SysError(fmt.Sprintf("ResponsesHelper: unexpected usage type %T for model %s, skip billing", usage, info.OriginModelName))
+		return nil
+	}
+	return finalizeResponsesUsage(c, info, usageDto)
+}
+
+func finalizeResponsesUsage(c *gin.Context, info *relaycommon.RelayInfo, usageDto *dto.Usage) *types.NewAPIError {
+	if usageDto == nil {
+		common.SysError(fmt.Sprintf("ResponsesHelper: nil usage for model %s, skip billing", info.OriginModelName))
 		return nil
 	}
 	if info.RelayMode == relayconstant.RelayModeResponsesCompact {

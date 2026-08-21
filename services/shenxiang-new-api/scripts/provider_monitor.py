@@ -70,6 +70,7 @@ class TextFamily:
     manage_model_abilities: bool = False
     managed_tag_priorities: tuple[tuple[str, int], ...] = ()
     probe_models_by_tag: dict[str, tuple[str, ...]] | None = None
+    request_formats_by_channel: dict[int, str] | None = None
 
 
 TEXT_FAMILIES = (
@@ -81,7 +82,7 @@ TEXT_FAMILIES = (
     ),
     TextFamily(
         name="discount_text",
-        models=("gpt-5.4-mini", "gpt-5.5", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra"),
+        models=("gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
         channel_ids=(28, 42, 41),
         baseline_priorities={28: 30, 42: 20, 41: 10},
         allow_disable=False,
@@ -94,9 +95,7 @@ TEXT_FAMILIES = (
         },
         ability_group="discount",
         manage_model_abilities=True,
-        probe_models_by_tag={
-            "xingren-discount-text-aihub": ("gpt-5.6-sol",),
-        },
+        request_formats_by_channel={42: "chat"},
     ),
     TextFamily(
         name="plus_text",
@@ -609,31 +608,60 @@ def request_chat(base_url: str, api_key: str, model: str) -> dict[str, Any]:
         method="POST",
     )
     start = time.monotonic()
-    preview = ""
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
             status = resp.getcode()
             first_ms: int | None = None
+            saw_output = False
+            completed = False
             deadline = time.monotonic() + HTTP_TIMEOUT
             while time.monotonic() < deadline:
-                line = resp.readline(4096)
+                line = resp.readline(SSE_LINE_MAX_BYTES + 1)
                 if not line:
                     break
-                text = line.decode("utf-8", "replace")
-                if text.strip():
-                    preview = (preview + text)[:180]
-                stripped = text.strip()
-                if stripped.startswith("data:") and stripped != "data: [DONE]":
-                    first_ms = int((time.monotonic() - start) * 1000)
+                if len(line) > SSE_LINE_MAX_BYTES:
+                    return {
+                        "ok": False,
+                        "status": status,
+                        "first_token_ms": int((time.monotonic() - start) * 1000),
+                        "reason": "response_event_too_large",
+                    }
+                text = line.decode("utf-8", "replace").strip()
+                if not text.startswith("data:"):
+                    continue
+                payload = text[5:].strip()
+                if payload == "[DONE]":
+                    completed = saw_output
                     break
+                try:
+                    event = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                choices = event.get("choices")
+                if not isinstance(choices, list):
+                    continue
+                for choice in choices:
+                    if not isinstance(choice, dict):
+                        continue
+                    delta = choice.get("delta")
+                    if not isinstance(delta, dict):
+                        continue
+                    content = delta.get("content")
+                    tool_calls = delta.get("tool_calls")
+                    if (isinstance(content, str) and content) or (isinstance(tool_calls, list) and tool_calls):
+                        saw_output = True
+                        if first_ms is None:
+                            first_ms = int((time.monotonic() - start) * 1000)
             if first_ms is None:
                 first_ms = int((time.monotonic() - start) * 1000)
-            ok = 200 <= status < 300 and ("data:" in preview or "OK" in preview or first_ms < int(HTTP_TIMEOUT * 1000))
+            ok = 200 <= status < 300 and completed and saw_output
             return {
                 "ok": bool(ok),
                 "status": status,
                 "first_token_ms": first_ms,
-                "reason": "ok" if ok else "bad_stream",
+                "reason": "ok" if ok else "chat_not_completed",
             }
     except urllib.error.HTTPError as exc:
         _ = exc.read(512)
@@ -749,7 +777,7 @@ def request_responses(base_url: str, api_key: str, model: str) -> dict[str, Any]
     )
     start = time.monotonic()
     first_ms: int | None = None
-    saw_data = False
+    saw_output = False
     completed = False
     failed = False
     try:
@@ -772,7 +800,7 @@ def request_responses(base_url: str, api_key: str, model: str) -> dict[str, Any]
                     continue
                 payload = text[5:].strip()
                 if payload == "[DONE]":
-                    completed = saw_data and not failed
+                    completed = saw_output and not failed
                     break
                 try:
                     event = json.loads(payload)
@@ -780,10 +808,21 @@ def request_responses(base_url: str, api_key: str, model: str) -> dict[str, Any]
                     continue
                 if not isinstance(event, dict):
                     continue
-                saw_data = True
-                if first_ms is None:
-                    first_ms = int((time.monotonic() - start) * 1000)
                 event_type = str(event.get("type") or "")
+                delta = event.get("delta")
+                item = event.get("item") if isinstance(event.get("item"), dict) else {}
+                if (
+                    event_type == "response.output_text.delta"
+                    and isinstance(delta, str)
+                    and delta
+                ) or (
+                    event_type == "response.function_call_arguments.delta"
+                    and isinstance(delta, str)
+                    and delta
+                ) or item.get("type") in {"function_call", "custom_tool_call"}:
+                    saw_output = True
+                    if first_ms is None:
+                        first_ms = int((time.monotonic() - start) * 1000)
                 response = event.get("response") if isinstance(event.get("response"), dict) else {}
                 response_status = str(response.get("status") or event.get("status") or "")
                 if event_type == "response.completed" or response_status == "completed":
@@ -798,7 +837,7 @@ def request_responses(base_url: str, api_key: str, model: str) -> dict[str, Any]
                     break
             if first_ms is None:
                 first_ms = int((time.monotonic() - start) * 1000)
-            ok = 200 <= status < 300 and completed and not failed
+            ok = 200 <= status < 300 and completed and saw_output and not failed
             return {
                 "ok": bool(ok),
                 "status": status,
@@ -1305,7 +1344,9 @@ def evaluate_managed_model_family(
                 upstream_model = model_mapping.get(model, model).strip()
                 if not upstream_model:
                     continue
-                futures[pool.submit(request_responses, base_url, api_key, upstream_model)] = (channel_id, model)
+                request_format = (family.request_formats_by_channel or {}).get(channel_id, family.request_format)
+                requester = request_chat if request_format == "chat" else request_responses
+                futures[pool.submit(requester, base_url, api_key, upstream_model)] = (channel_id, model)
         for future in concurrent.futures.as_completed(futures):
             channel_id, model = futures[future]
             result = future.result()

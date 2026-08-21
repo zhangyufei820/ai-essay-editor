@@ -25,22 +25,10 @@ func shouldResponsesUseChatCompletionsCompat(info *relaycommon.RelayInfo) bool {
 	if info == nil || info.RelayMode != relayconstant.RelayModeResponses || info.ApiType != appconstant.APITypeOpenAI {
 		return false
 	}
-	model := strings.ToLower(info.UpstreamModelName)
-	if model == "" {
-		model = strings.ToLower(info.OriginModelName)
-	}
-	return strings.HasPrefix(model, "claude-")
+	return info.ChannelId == 42 && strings.TrimSpace(info.UsingGroup) == service.DiscountPricingGroupName
 }
 
 func responsesViaChatCompletions(c *gin.Context, info *relaycommon.RelayInfo, adaptor channel.Adaptor, request *dto.OpenAIResponsesRequest) (*dto.Usage, *types.NewAPIError) {
-	if responsesRequestHasTools(request) {
-		return nil, types.NewErrorWithStatusCode(
-			fmt.Errorf("tools are not supported for this model on this endpoint"),
-			types.ErrorCodeInvalidRequest,
-			http.StatusBadRequest,
-			types.ErrOptionWithSkipRetry(),
-		)
-	}
 	chatReq, err := service.ResponsesRequestToChatCompletionsRequest(request)
 	if err != nil {
 		return nil, types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
@@ -149,32 +137,6 @@ func responsesChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *htt
 	return usage, nil
 }
 
-func responsesRequestHasTools(request *dto.OpenAIResponsesRequest) bool {
-	if request == nil {
-		return false
-	}
-	return hasNonEmptyResponsesTools(request.Tools)
-}
-
-func hasNonEmptyResponsesTools(tools any) bool {
-	switch value := tools.(type) {
-	case nil:
-		return false
-	case json.RawMessage:
-		raw := strings.TrimSpace(string(value))
-		return raw != "" && raw != "null" && raw != "[]"
-	case []byte:
-		raw := strings.TrimSpace(string(value))
-		return raw != "" && raw != "null" && raw != "[]"
-	case []map[string]any:
-		return len(value) > 0
-	case []any:
-		return len(value) > 0
-	default:
-		return false
-	}
-}
-
 func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response, request *dto.OpenAIResponsesRequest) (*dto.Usage, *types.NewAPIError) {
 	if resp == nil || resp.Body == nil {
 		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
@@ -197,6 +159,15 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 	reasoningOutputIndex := -1
 	messageOutputIndex := -1
 	nextOutputIndex := 0
+	type compatToolCall struct {
+		itemID      string
+		callID      string
+		name        string
+		arguments   strings.Builder
+		outputIndex int
+	}
+	toolCalls := make(map[string]*compatToolCall)
+	toolCallOrder := make([]*compatToolCall, 0)
 
 	startReasoningItem := func() {
 		reasoningStarted = true
@@ -307,6 +278,60 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 					return
 				}
 			}
+			for position, delta := range choice.Delta.ToolCalls {
+				toolIndex := position
+				if delta.Index != nil {
+					toolIndex = *delta.Index
+				}
+				key := fmt.Sprintf("%d:%d", choice.Index, toolIndex)
+				toolCall := toolCalls[key]
+				if toolCall == nil {
+					toolCall = &compatToolCall{
+						itemID:      fmt.Sprintf("fc_%s_%d", responseID, len(toolCallOrder)),
+						callID:      strings.TrimSpace(delta.ID),
+						name:        strings.TrimSpace(delta.Function.Name),
+						outputIndex: nextOutputIndex,
+					}
+					if toolCall.callID == "" {
+						toolCall.callID = fmt.Sprintf("call_%s_%d", responseID, len(toolCallOrder))
+					}
+					nextOutputIndex++
+					toolCalls[key] = toolCall
+					toolCallOrder = append(toolCallOrder, toolCall)
+					if err := writeResponsesCompatEvent(c, "response.output_item.added", map[string]any{
+						"output_index": toolCall.outputIndex,
+						"item": map[string]any{
+							"id":        toolCall.itemID,
+							"type":      "function_call",
+							"status":    "in_progress",
+							"arguments": "",
+							"call_id":   toolCall.callID,
+							"name":      toolCall.name,
+						},
+					}); err != nil {
+						sr.Error(err)
+						return
+					}
+				}
+				if id := strings.TrimSpace(delta.ID); id != "" {
+					toolCall.callID = id
+				}
+				if name := strings.TrimSpace(delta.Function.Name); name != "" {
+					toolCall.name = name
+				}
+				if argumentsDelta := delta.Function.Arguments; argumentsDelta != "" {
+					toolCall.arguments.WriteString(argumentsDelta)
+					if err := writeResponsesCompatEvent(c, "response.function_call_arguments.delta", map[string]any{
+						"item_id":      toolCall.itemID,
+						"output_index": toolCall.outputIndex,
+						"delta":        argumentsDelta,
+					}); err != nil {
+						sr.Error(err)
+						return
+					}
+				}
+				c.Set("response_stream_output_sent", true)
+			}
 		}
 	})
 
@@ -319,8 +344,8 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 	}
 	service.CopyResponseHeaderCostFields(usage, resp.Header)
 
-	// 即使上游没有可见正文，也补一个 message item，维持下游"至少一条 message 输出"的契约。
-	if !messageStarted {
+	// Pure tool-call responses must not gain a synthetic empty assistant message.
+	if !messageStarted && len(toolCallOrder) == 0 {
 		startMessageItem()
 	}
 
@@ -357,35 +382,59 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 		ordered[reasoningOutputIndex] = reasoningItem
 	}
 
-	content := map[string]any{
-		"type":        "output_text",
-		"text":        text,
-		"annotations": []any{},
+	for _, toolCall := range toolCallOrder {
+		arguments := toolCall.arguments.String()
+		_ = writeResponsesCompatEvent(c, "response.function_call_arguments.done", map[string]any{
+			"item_id":      toolCall.itemID,
+			"output_index": toolCall.outputIndex,
+			"arguments":    arguments,
+		})
+		item := map[string]any{
+			"id":        toolCall.itemID,
+			"type":      "function_call",
+			"status":    "completed",
+			"arguments": arguments,
+			"call_id":   toolCall.callID,
+			"name":      toolCall.name,
+		}
+		_ = writeResponsesCompatEvent(c, "response.output_item.done", map[string]any{
+			"output_index": toolCall.outputIndex,
+			"item":         item,
+		})
+		ordered[toolCall.outputIndex] = item
 	}
-	messageItem := map[string]any{
-		"id":      messageID,
-		"type":    "message",
-		"status":  "completed",
-		"role":    "assistant",
-		"content": []any{content},
+
+	if messageStarted {
+		content := map[string]any{
+			"type":        "output_text",
+			"text":        text,
+			"annotations": []any{},
+		}
+		messageItem := map[string]any{
+			"id":      messageID,
+			"type":    "message",
+			"status":  "completed",
+			"role":    "assistant",
+			"content": []any{content},
+		}
+		_ = writeResponsesCompatEvent(c, "response.output_text.done", map[string]any{
+			"item_id":       messageID,
+			"output_index":  messageOutputIndex,
+			"content_index": 0,
+			"text":          text,
+		})
+		_ = writeResponsesCompatEvent(c, "response.content_part.done", map[string]any{
+			"item_id":       messageID,
+			"output_index":  messageOutputIndex,
+			"content_index": 0,
+			"part":          content,
+		})
+		_ = writeResponsesCompatEvent(c, "response.output_item.done", map[string]any{
+			"output_index": messageOutputIndex,
+			"item":         messageItem,
+		})
+		ordered[messageOutputIndex] = messageItem
 	}
-	_ = writeResponsesCompatEvent(c, "response.output_text.done", map[string]any{
-		"item_id":       messageID,
-		"output_index":  messageOutputIndex,
-		"content_index": 0,
-		"text":          text,
-	})
-	_ = writeResponsesCompatEvent(c, "response.content_part.done", map[string]any{
-		"item_id":       messageID,
-		"output_index":  messageOutputIndex,
-		"content_index": 0,
-		"part":          content,
-	})
-	_ = writeResponsesCompatEvent(c, "response.output_item.done", map[string]any{
-		"output_index": messageOutputIndex,
-		"item":         messageItem,
-	})
-	ordered[messageOutputIndex] = messageItem
 
 	_ = writeResponsesCompatEvent(c, "response.completed", map[string]any{
 		"response": responseEnvelope(responseID, createdAt, model, "completed", ordered, usage),

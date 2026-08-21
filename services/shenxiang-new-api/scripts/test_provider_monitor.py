@@ -28,6 +28,7 @@ class FakeResponsesStream:
         self.lines = [
             b"event: response.created\n",
             b'data: {"type":"response.created"}\n',
+            b'data: {"type":"response.output_text.delta","delta":"OK"}\n',
             b"event: response.completed\n",
             self.completed_line,
         ]
@@ -54,6 +55,26 @@ class FakeResponsesStream:
             self.pending = line[_limit:]
             return line[:_limit]
         return line
+
+
+class FakeChatStream:
+    def __init__(self, with_output: bool = True) -> None:
+        self.lines = [b'data: {"choices":[{"index":0,"delta":{"role":"assistant"}}]}\n']
+        if with_output:
+            self.lines.append(b'data: {"choices":[{"index":0,"delta":{"content":"OK"}}]}\n')
+        self.lines.append(b"data: [DONE]\n")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _exc_type, _exc, _traceback) -> None:
+        return None
+
+    def getcode(self) -> int:
+        return 200
+
+    def readline(self, _limit: int) -> bytes:
+        return self.lines.pop(0) if self.lines else b""
 
 
 class ProviderMonitorModelCircuitTest(unittest.TestCase):
@@ -97,15 +118,13 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(families["discount_text"].channel_ids, (28, 42, 41))
         self.assertEqual(
             families["discount_text"].models,
-            ("gpt-5.4-mini", "gpt-5.5", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra"),
+            ("gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
         )
         self.assertEqual(families["discount_text"].expected_tags[28], "xingren-discount-text-aihub")
         self.assertEqual(families["discount_text"].expected_tags[42], "xingren-discount-text-aihub-fallback")
-        self.assertEqual(
-            families["discount_text"].probe_models_by_tag,
-            {"xingren-discount-text-aihub": ("gpt-5.6-sol",)},
-        )
+        self.assertIsNone(families["discount_text"].probe_models_by_tag)
         self.assertEqual(families["discount_text"].ability_group, "discount")
+        self.assertEqual(families["discount_text"].request_formats_by_channel, {42: "chat"})
         self.assertEqual(families["plus_text"].channel_ids, ())
         self.assertEqual(
             families["plus_text"].managed_tag_priorities,
@@ -262,6 +281,57 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
             result = self.module.request_responses("https://example.invalid", "test-secret", "gpt-5.5")
 
         self.assertTrue(result["ok"])
+
+    def test_chat_probe_requires_visible_output_and_completion(self) -> None:
+        with mock.patch.object(self.module.urllib.request, "urlopen", return_value=FakeChatStream()) as urlopen:
+            result = self.module.request_chat("https://example.invalid", "test-secret", "gpt-5.6-sol")
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://example.invalid/v1/chat/completions")
+        self.assertTrue(result["ok"])
+
+        with mock.patch.object(
+            self.module.urllib.request, "urlopen", return_value=FakeChatStream(with_output=False)
+        ):
+            empty = self.module.request_chat("https://example.invalid", "test-secret", "gpt-5.6-sol")
+        self.assertFalse(empty["ok"])
+        self.assertEqual(empty["reason"], "chat_not_completed")
+
+    def test_discount_channel_42_uses_chat_probe_only(self) -> None:
+        family = next(family for family in self.module.TEXT_FAMILIES if family.name == "discount_text")
+        channels = {
+            channel_id: {
+                "id": channel_id,
+                "status": 1,
+                "priority": family.baseline_priorities[channel_id],
+                "weight": 100,
+                "group": "discount",
+                "models": ",".join(family.models),
+                "model_mapping": "{}",
+                "tag": family.expected_tags[channel_id],
+                "key": f"test-key-{channel_id}",
+                "base_url": f"https://channel-{channel_id}.invalid",
+            }
+            for channel_id in family.channel_ids
+        }
+        abilities = {
+            (channel_id, model): {"enabled": 1, "tag": channels[channel_id]["tag"]}
+            for channel_id in family.channel_ids
+            for model in family.models
+        }
+        success = {"ok": True, "status": 200, "first_token_ms": 10, "reason": "ok"}
+        with (
+            mock.patch.object(self.module, "load_abilities", return_value=abilities),
+            mock.patch.object(self.module, "request_chat", return_value=success) as chat,
+            mock.patch.object(self.module, "request_responses", return_value=success) as responses,
+            mock.patch.object(self.module, "set_model_ability_enabled"),
+            mock.patch.object(self.module, "write_event"),
+        ):
+            self.module.evaluate_managed_model_family(family, channels, {}, {}, False, False)
+
+        self.assertTrue(chat.call_args_list)
+        self.assertEqual({call.args[0] for call in chat.call_args_list}, {"https://channel-42.invalid"})
+        self.assertNotIn("https://channel-42.invalid", {call.args[0] for call in responses.call_args_list})
 
     def test_codex_auto_review_maps_to_gpt_55(self) -> None:
         mapping = self.module.parse_model_mapping(
