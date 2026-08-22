@@ -9,6 +9,10 @@
   },
   {
     "package": "./middleware",
+    "run": "^TestRegistrationRateLimitIgnoresSharedCriticalSwitch$"
+  },
+  {
+    "package": "./middleware",
     "run": "^(TestUserAuthRequiresMatchingSessionAndHeader|TestEnforceClaudeTerminalGroup.*|TestSetupContextForSelectedChannel.*|TestApplyPlaygroundTextPricingPreferenceUsesManagedGroupChain)$"
   },
   {
