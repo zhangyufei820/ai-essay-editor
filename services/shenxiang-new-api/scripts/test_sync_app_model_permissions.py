@@ -632,6 +632,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                         "kiro-stable",
                     ],
                     [
+                        "9",
+                        "claude-opus-4-8,claude-sonnet-4-6",
+                        "10",
+                        "100",
+                        "xingren-claude-moonapix-fallback",
+                        "kiro-stable",
+                    ],
+                    [
                         "50",
                         "claude-haiku-4-5-20251001,claude-sonnet-4-6",
                         "50",
@@ -649,7 +657,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     ],
                 ]
             if "SELECT model_name FROM models" in query:
-                return [["claude-haiku-4-5-20251001"], ["claude-opus-4-5-20251101"], ["claude-sonnet-4-6"]]
+                return [
+                    ["claude-haiku-4-5-20251001"],
+                    ["claude-opus-4-5-20251101"],
+                    ["claude-opus-4-8"],
+                    ["claude-sonnet-4-6"],
+                ]
             return []
 
         self.module.active_groups = lambda: [
@@ -668,7 +681,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sql = "\n".join(captured)
         self.assertIn("SELECT 'kiro-stable', 'claude-opus-4-5-20251101', 47", sql)
         self.assertIn("SELECT 'kiro-stable', 'claude-sonnet-4-6', 47", sql)
+        self.assertIn("SELECT 'kiro-stable', 'claude-opus-4-8', 9", sql)
+        self.assertIn("SELECT 'kiro-stable', 'claude-sonnet-4-6', 9", sql)
         self.assertNotIn("SELECT 'default', 'claude-sonnet-4-6', 47", sql)
+        self.assertNotIn("SELECT 'default', 'claude-sonnet-4-6', 9", sql)
         self.assertNotIn("SELECT 'kiro', 'claude-sonnet-4-6', 47", sql)
         self.assertIn("WHERE `group` = 'kiro-stable'", sql)
         self.assertIn("SELECT 'welfare', 'claude-haiku-4-5-20251001', 50", sql)
