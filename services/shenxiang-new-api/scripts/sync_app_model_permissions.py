@@ -173,6 +173,7 @@ GROK_TEXT_MODELS = tuple(dict.fromkeys(GROK_CHANNEL_MODEL_BY_TAG.values()))
 MANAGED_CLAUDE_CHANNEL_GROUPS = {
     "xingren-claude-pdhlzy-kiro": "kiro",
     "xingren-claude-pdhlzy-kiro-stable": "kiro-stable",
+    "xingren-claude-moonapix-fallback": "kiro-stable",
     "xingren-claude-pdhlzy-ccmax-terminal": "ccmax-terminal",
     "xingren-claude-pdhlzy-claude-external": "claude-external",
     "xingren-claude-geek2api-welfare": "welfare",

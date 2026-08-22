@@ -156,12 +156,13 @@ TEXT_FAMILIES = (
             "claude-sonnet-4-6",
             "claude-sonnet-5",
         ),
-        channel_ids=(51, 47),
-        baseline_priorities={51: 30, 47: 20},
+        channel_ids=(51, 47, 9),
+        baseline_priorities={51: 30, 47: 20, 9: 10},
         standalone=True,
         expected_tags={
             51: "kiro-stable-primary-20260724",
             47: "xingren-claude-pdhlzy-kiro-stable",
+            9: "xingren-claude-moonapix-fallback",
         },
     ),
     TextFamily(

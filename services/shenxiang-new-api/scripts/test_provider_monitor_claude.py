@@ -45,7 +45,11 @@ class ProviderMonitorClaudeTest(unittest.TestCase):
         families = {family.name: family for family in self.module.TEXT_FAMILIES}
 
         self.assertEqual(families["claude_kiro_text"].channel_ids, (50, 46))
-        self.assertEqual(families["claude_kiro_stable_text"].channel_ids, (51, 47))
+        self.assertEqual(families["claude_kiro_stable_text"].channel_ids, (51, 47, 9))
+        self.assertEqual(
+            families["claude_kiro_stable_text"].baseline_priorities,
+            {51: 30, 47: 20, 9: 10},
+        )
         self.assertEqual(families["claude_opus5_kiro_stable_text"].channel_ids, (47,))
         self.assertEqual(families["claude_opus5_kiro_stable_text"].models, ("claude-opus-5",))
         self.assertNotIn("claude-opus-5", families["claude_kiro_text"].models)
@@ -66,6 +70,7 @@ class ProviderMonitorClaudeTest(unittest.TestCase):
             {
                 51: "kiro-stable-primary-20260724",
                 47: "xingren-claude-pdhlzy-kiro-stable",
+                9: "xingren-claude-moonapix-fallback",
             },
         )
         self.assertEqual(
