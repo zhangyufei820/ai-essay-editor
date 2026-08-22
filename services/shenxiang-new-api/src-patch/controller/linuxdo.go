@@ -239,6 +239,7 @@ func LinuxdoOAuth(c *gin.Context) {
 					})
 					return
 				}
+				recordRegistrationAudit(c, user.Id, user.Username, "linuxdo")
 			} else {
 				c.JSON(http.StatusOK, gin.H{
 					"success": false,

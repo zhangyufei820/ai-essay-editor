@@ -29,6 +29,14 @@
   },
   {
     "package": "./controller",
+    "run": "^TestRecordRegistrationAuditUsesTrustedClientIP$"
+  },
+  {
+    "package": "./controller",
+    "run": "^TestRegistrationAuditParamsExcludeSensitiveFields$"
+  },
+  {
+    "package": "./controller",
     "run": "^(TestPublicPricingGroupsExposesSpecialWhenExplicitlyEnabled|TestShouldRetryAllowsSpecialTextTimeoutFallback)$"
   },
   {

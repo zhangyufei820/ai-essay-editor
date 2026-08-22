@@ -231,6 +231,7 @@ func GitHubOAuth(c *gin.Context) {
 				})
 				return
 			}
+			recordRegistrationAudit(c, user.Id, user.Username, "github")
 			ensureSystemTokensForUser(c, user.Id)
 		} else {
 			c.JSON(http.StatusOK, gin.H{
