@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -356,32 +355,6 @@ func TestFilterPricingVendorsHidesSupplierExposedVendors(t *testing.T) {
 	})
 
 	require.Equal(t, []model.PricingVendor{{ID: 2, Name: "星人模型"}}, vendors)
-}
-
-func TestRegistrationBonusQuotaForCNYConvertsFiveYuan(t *testing.T) {
-	oldQuotaPerUnit := common.QuotaPerUnit
-	oldExchangeRate := operation_setting.USDExchangeRate
-	common.QuotaPerUnit = 500_000
-	operation_setting.USDExchangeRate = 7.3
-	defer func() {
-		common.QuotaPerUnit = oldQuotaPerUnit
-		operation_setting.USDExchangeRate = oldExchangeRate
-	}()
-
-	require.Equal(t, 342466, registrationBonusQuotaForCNY(5))
-}
-
-func TestRegistrationBonusQuotaForCNYDoesNotGrantWhenExchangeRateInvalid(t *testing.T) {
-	oldQuotaPerUnit := common.QuotaPerUnit
-	oldExchangeRate := operation_setting.USDExchangeRate
-	common.QuotaPerUnit = 500_000
-	operation_setting.USDExchangeRate = 0
-	defer func() {
-		common.QuotaPerUnit = oldQuotaPerUnit
-		operation_setting.USDExchangeRate = oldExchangeRate
-	}()
-
-	require.Equal(t, 0, registrationBonusQuotaForCNY(5))
 }
 
 func TestBuildInitialUserTokenUsesStablePublicGroup(t *testing.T) {

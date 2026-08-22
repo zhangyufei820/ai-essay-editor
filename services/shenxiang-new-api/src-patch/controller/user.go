@@ -23,7 +23,6 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -40,22 +39,7 @@ var (
 const (
 	seedancePrivateVideoModel         = "seedance-nsfw"
 	seedancePrivateVideoAllowedUserID = 1
-	registrationBonusCNY              = 5.0
 )
-
-func registrationBonusQuotaForCNY(amountCNY float64) int {
-	if amountCNY <= 0 || common.QuotaPerUnit <= 0 || operation_setting.USDExchangeRate <= 0 {
-		return 0
-	}
-	quota := decimal.NewFromFloat(amountCNY).
-		Div(decimal.NewFromFloat(operation_setting.USDExchangeRate)).
-		Mul(decimal.NewFromFloat(common.QuotaPerUnit)).
-		Round(0)
-	if quota.LessThanOrEqual(decimal.Zero) {
-		return 0
-	}
-	return int(quota.IntPart())
-}
 
 func buildInitialUserToken(userID int, username string, key string) model.Token {
 	return model.Token{
@@ -308,13 +292,7 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserRegisterFailed)
 		return
 	}
-	if bonusQuota := registrationBonusQuotaForCNY(registrationBonusCNY); bonusQuota > 0 {
-		if err := model.IncreaseUserQuota(insertedUser.Id, bonusQuota, true); err != nil {
-			common.SysLog(fmt.Sprintf("failed to grant registration bonus to user %d: %v", insertedUser.Id, err))
-		} else {
-			model.RecordLog(insertedUser.Id, model.LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(bonusQuota)))
-		}
-	}
+	recordRegistrationAudit(c, insertedUser.Id, insertedUser.Username, "password")
 
 	// 生成默认令牌
 	if constant.GenerateDefaultToken {

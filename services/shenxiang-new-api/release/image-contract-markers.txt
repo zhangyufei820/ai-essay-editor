@@ -11,3 +11,4 @@ mp-video-preview-modal
 模型服务响应超时，请稍后重试。
 xingren-grok-video-15-6s
 xingren-grok-video-15-10s
+user.register
