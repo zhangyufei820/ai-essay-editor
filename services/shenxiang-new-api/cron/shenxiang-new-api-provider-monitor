@@ -1,7 +1,7 @@
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Fast model-level circuit checks. The full run occupies minutes 7,22,37,52.
-0-6,8-21,23-36,38-51,53-59 * * * * root /opt/shenxiang-new-api/scripts/provider_monitor.sh --fast >> /opt/shenxiang-new-api/logs/provider-monitor-fast.cron.log 2>&1
-# Full latency, text-provider, and media guard every 15 minutes.
-7,22,37,52 * * * * root /opt/shenxiang-new-api/scripts/provider_monitor.sh --full >> /opt/shenxiang-new-api/logs/provider-monitor.cron.log 2>&1
+# Fast model-level circuit checks every 30 minutes, limited to 08:00-23:59.
+0,30 8-23 * * * root /opt/shenxiang-new-api/scripts/provider_monitor.sh --fast >> /opt/shenxiang-new-api/logs/provider-monitor-fast.cron.log 2>&1
+# Full latency, text-provider, and media guard every 30 minutes, staggered by 15 minutes.
+15,45 8-23 * * * root /opt/shenxiang-new-api/scripts/provider_monitor.sh --full >> /opt/shenxiang-new-api/logs/provider-monitor.cron.log 2>&1

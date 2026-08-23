@@ -22,9 +22,9 @@
 
 受控发布安装 `/etc/cron.d/shenxiang-new-api-provider-monitor`：
 
-- 快速轮每分钟运行，只探测 `discount_text` 和 `plus_text`。
-- 完整轮每 15 分钟运行，保留既有文本延迟、真实请求和媒体守卫。
-- 两类任务错开分钟，并同时使用 provider-monitor lock 与 model-sync lock。
+- 快速轮每 30 分钟运行，只探测 `discount_text` 和 `plus_text`，仅在 `08:00-23:59` 执行。
+- 完整轮每 30 分钟运行，保留既有文本延迟、真实请求和媒体守卫，仅在 `08:00-23:59` 执行。
+- 两类任务错开 15 分钟，并同时使用 provider-monitor lock 与 model-sync lock，避免同一时刻抢锁。
 
 默认连续失败 `2` 次熔断，连续成功 `2` 次且满足 `300` 秒 cooldown 后恢复。可通过已有 `PROVIDER_MONITOR_*` 环境变量调整，但不得在 Cron 中放置密钥。
 
