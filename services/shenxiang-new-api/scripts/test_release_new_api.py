@@ -109,8 +109,11 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertNotIn('python3 "$ROOT/scripts/provider_monitor.py"', runner)
 
         cron = (MODULE_PATH.parent.parent / "cron" / "shenxiang-new-api-provider-monitor").read_text(encoding="utf-8")
+        self.assertIn("0,30 8-23 * * * root", cron)
         self.assertIn("provider_monitor.sh --fast", cron)
+        self.assertIn("15,45 8-23 * * * root", cron)
         self.assertIn("provider_monitor.sh --full", cron)
+        self.assertNotIn("* * * * * root", cron)
 
         release_guard = MODULE_PATH.with_name("check-new-api-release-state.sh").read_text(encoding="utf-8")
         self.assertIn("release provider monitor runner or cron drift", release_guard)
