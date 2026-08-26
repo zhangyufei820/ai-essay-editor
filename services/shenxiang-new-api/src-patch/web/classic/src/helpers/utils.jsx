@@ -86,8 +86,8 @@ const PRICING_DISPLAY_OVERRIDES = {
   },
   '官转image 2稳定': {
     display_name: '官转image 2稳定',
-    description: '稳定图像生成线路，支持 1K/2K/4K 与合法自定义尺寸，人民币 ¥0.135/张。',
-    fixed_price_label: '¥0.135',
+    description: '稳定图像生成线路，支持 1K/2K/4K 与合法自定义尺寸，1K/2K/4K 均固定 ¥0.17/张。',
+    fixed_price_label: '¥0.17',
     price_unit_label: '张',
     billing_label: '按张计费',
     visible_vendor_name: '星人媒体',

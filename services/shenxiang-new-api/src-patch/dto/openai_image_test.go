@@ -196,6 +196,6 @@ func TestImageRequestStableImage2UsesFixedCNYPrice(t *testing.T) {
 	} {
 		var request ImageRequest
 		require.NoError(t, json.Unmarshal([]byte(raw), &request))
-		require.InDelta(t, 0.135, request.GetTokenCountMeta().ImagePriceCNY, 0.000001)
+		require.InDelta(t, 0.17, request.GetTokenCountMeta().ImagePriceCNY, 0.000001)
 	}
 }

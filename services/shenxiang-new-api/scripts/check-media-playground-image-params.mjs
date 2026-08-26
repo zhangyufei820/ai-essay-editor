@@ -280,8 +280,11 @@ async function main() {
     if (!stableImage2Block.includes('resolutions: GPT_IMAGE_2_RESOLUTIONS')) {
       errors.push('官转image 2稳定 must use GPT_IMAGE_2_RESOLUTIONS')
     }
-    if (!stableImage2Block.includes("priceLabel: '¥0.135/张'")) {
-      errors.push('官转image 2稳定 must show ¥0.135 fixed price')
+    if (!stableImage2Block.includes("priceLabel: '¥0.17/张'")) {
+      errors.push('官转image 2稳定 must show ¥0.17 fixed price')
+    }
+    if (!stableImage2Block.includes('1K / 2K / 4K 均固定 ¥0.17/张。')) {
+      errors.push('官转image 2稳定 must state the fixed ¥0.17 price for 1K / 2K / 4K')
     }
     if (!stableImage2Block.includes('maxCount: 1')) {
       errors.push('官转image 2稳定 must limit image generations to one')

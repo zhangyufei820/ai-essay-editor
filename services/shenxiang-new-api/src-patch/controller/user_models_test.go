@@ -208,12 +208,12 @@ func TestFilterPricingByUsableGroupsSynthesizesStableImage2PublicPricing(t *test
 	t.Cleanup(func() {
 		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(originalModelPrice))
 	})
-	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"官转image 2稳定":0.018493150685}`))
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"官转image 2稳定":0.023287671233}`))
 
 	pricing := filterPricingByUsableGroups([]model.Pricing{
 		{
 			ModelName:              service.InternalStableImage2ModelName,
-			Description:            "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.135/张。",
+			Description:            "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.17/张。",
 			Tags:                   "image,openai",
 			EnableGroup:            []string{"default"},
 			SupportedEndpointTypes: nil,
@@ -223,10 +223,10 @@ func TestFilterPricingByUsableGroupsSynthesizesStableImage2PublicPricing(t *test
 	require.Equal(t, []model.Pricing{
 		{
 			ModelName:   service.PublicStableImage2ModelName,
-			Description: "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.135/张。",
+			Description: "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.17/张。",
 			Tags:        "image,openai",
 			QuotaType:   1,
-			ModelPrice:  0.018493150685,
+			ModelPrice:  0.023287671233,
 			EnableGroup: []string{"default"},
 		},
 	}, pricing)

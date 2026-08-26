@@ -166,7 +166,7 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 	if priceCNY, ok := discountImage2PriceCNY(i); ok {
 		imagePriceCNY = priceCNY
 	} else if isStableImage2Model(i.Model) {
-		imagePriceCNY = 0.135
+		imagePriceCNY = 0.17
 	}
 
 	// n is NOT included here; it is handled via OtherRatio("n") in
