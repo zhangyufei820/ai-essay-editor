@@ -37,13 +37,13 @@ class StableImage2ChannelTest(unittest.TestCase):
 
     def test_base_url_is_exactly_allowlisted(self) -> None:
         self.assertEqual(
-            self.module.normalize_base_url("https://api.smile-ai-studio.com/"),
-            "https://api.smile-ai-studio.com",
+            self.module.normalize_base_url("https://moonapix.com/"),
+            "https://moonapix.com",
         )
         for value in (
-            "http://api.smile-ai-studio.com",
-            "https://api.smile-ai-studio.com/v1",
-            "https://api.smile-ai-studio.com.evil.test",
+            "http://moonapix.com",
+            "https://moonapix.com/v1",
+            "https://moonapix.com.evil.test",
         ):
             with self.assertRaises(self.module.ConfigurationError):
                 self.module.normalize_base_url(value)

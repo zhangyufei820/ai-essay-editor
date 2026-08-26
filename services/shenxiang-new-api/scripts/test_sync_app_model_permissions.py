@@ -957,7 +957,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sql = "\n".join(captured)
         self.assertIn("internal-image2-stable-v1", sql)
         self.assertIn("官转image 2稳定", sql)
-        self.assertIn("¥0.135/张", sql)
+        self.assertIn("¥0.17/张", sql)
         self.assertNotIn("smile-ai-studio", sql)
         self.assertIn('/v1/images/generations', sql)
         self.assertNotIn('/v1/images/edits', sql)
@@ -996,7 +996,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("特价 image-2", captured_options["CompletionRatio"])
         self.assertAlmostEqual(
             captured_options["ModelPrice"]["官转image 2稳定"],
-            0.018493150685,
+            0.023287671233,
             places=12,
         )
         self.assertNotIn("官转image 2稳定", captured_options["ModelRatio"])
