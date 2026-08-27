@@ -220,7 +220,7 @@ def build_stage_sql(
                 str(permissions.DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[CHANNEL_TAG]),
                 "1",
                 sql_quote(CHANNEL_TAG),
-                sql_quote("Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张"),
+                sql_quote(permissions.DISCOUNT_IMAGE2_CHANNEL_REMARK),
             ]
         )
         + " WHERE @managed_channel_id IS NULL;",
@@ -241,7 +241,9 @@ def build_stage_sql(
         + str(permissions.DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[CHANNEL_TAG])
         + ", auto_ban = 1, tag = "
         + sql_quote(CHANNEL_TAG)
-        + ", remark = 'Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张' "
+        + ", remark = "
+        + sql_quote(permissions.DISCOUNT_IMAGE2_CHANNEL_REMARK)
+        + " "
         "WHERE id = @managed_channel_id;",
         "SET @managed_model_id := (SELECT MIN(id) FROM models WHERE model_name = "
         + sql_quote(INTERNAL_MODEL)
@@ -346,6 +348,7 @@ def publish() -> dict[str, int]:
         )
         if permissions.discount_image2_release_state() != "published":
             raise ConfigurationError("the image channel did not enter the published state")
+        permissions.ensure_discount_image2_primary_and_fallback_channels()
         permissions.ensure_discount_image2_backing_model()
         permissions.sync_public_image_pricing()
         profiles = permissions.model_lists()

@@ -293,6 +293,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn("WHERE tag = '" + tag + "'", sql)
         self.assertEqual(1, sql.count("WHERE tag = 'xingren-discount-image2-pdhlzy-primary'"))
         self.assertIn("`group` = 'default,standard,pro,code,internal'", sql)
+        self.assertEqual(3, sql.count("remark = 'Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张'"))
 
     def test_staged_discount_image2_is_admin_only_until_published(self) -> None:
         self.module.grok15_1080_video_release_state = lambda: "unavailable"

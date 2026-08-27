@@ -50,6 +50,7 @@ DISCOUNT_IMAGE2_CHANNEL_PRIORITIES = {
 }
 DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
 DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：仅支持文生图；已验证 1K/2K/4K 方图，固定 high 质量与 PNG 输出。人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张。"
+DISCOUNT_IMAGE2_CHANNEL_REMARK = "Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张"
 DISCOUNT_IMAGE2_TAGS = "image,openai,internal-hidden"
 DISCOUNT_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
 DISCOUNT_IMAGE2_BASE_PRICE_CNY = Decimal("0.06")
@@ -2010,6 +2011,8 @@ def ensure_discount_image2_primary_and_fallback_channels() -> None:
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
         + ", model_mapping = "
         + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_REMARK)
         + " WHERE tag = "
         + sql_quote(DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG)
         + ";",
@@ -2021,6 +2024,8 @@ def ensure_discount_image2_primary_and_fallback_channels() -> None:
         + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
         + ", model_mapping = "
         + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_REMARK)
         + " WHERE tag = "
         + sql_quote(DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG)
         + ";",
@@ -2032,6 +2037,8 @@ def ensure_discount_image2_primary_and_fallback_channels() -> None:
         + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
         + ", model_mapping = "
         + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_REMARK)
         + " WHERE tag = "
         + sql_quote(DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG)
         + ";",

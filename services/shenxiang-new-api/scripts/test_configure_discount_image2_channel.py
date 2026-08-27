@@ -109,6 +109,7 @@ class ConfigureDiscountImage2ChannelTest(unittest.TestCase):
         self.module.require_staged_channel_ready = lambda: calls.append("ready")
         self.module.permissions.mysql_exec = lambda sql: calls.append("publish:" + sql)
         self.module.permissions.discount_image2_release_state = lambda: "published"
+        self.module.permissions.ensure_discount_image2_primary_and_fallback_channels = lambda: calls.append("order")
         self.module.permissions.ensure_discount_image2_backing_model = lambda: calls.append("model")
         self.module.permissions.sync_public_image_pricing = lambda: calls.append("pricing")
         self.module.permissions.model_lists = lambda: {"image": ["特价 image-2"]}
@@ -123,7 +124,7 @@ class ConfigureDiscountImage2ChannelTest(unittest.TestCase):
         self.assertEqual(result, {"tokens_rewritten": 2, "token_caches_deleted": 2})
         self.assertEqual(calls[:2], ["isolation", "ready"])
         self.assertIn("default,standard,pro,code,internal", calls[2])
-        self.assertEqual(calls[3:], ["model", "pricing", "abilities"])
+        self.assertEqual(calls[3:], ["order", "model", "pricing", "abilities"])
 
     def test_publish_restores_internal_group_when_global_sync_fails(self) -> None:
         sql_calls: list[str] = []
