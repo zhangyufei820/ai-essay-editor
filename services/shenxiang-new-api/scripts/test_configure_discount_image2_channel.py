@@ -25,14 +25,14 @@ class ConfigureDiscountImage2ChannelTest(unittest.TestCase):
 
     def test_normalize_base_url_only_accepts_allowlisted_origin(self) -> None:
         self.assertEqual(
-            self.module.normalize_base_url("https://new.ddpapi.top/"),
+            self.module.normalize_base_url("https://pdhlzy.art/"),
             self.module.EXPECTED_BASE_URL,
         )
         for value in (
-            "http://new.ddpapi.top",
-            "https://new.ddpapi.top/v1",
-            "https://new.ddpapi.top:8443",
-            "https://user@new.ddpapi.top",
+            "http://pdhlzy.art",
+            "https://pdhlzy.art/v1",
+            "https://pdhlzy.art:8443",
+            "https://user@pdhlzy.art",
             "https://example.com",
         ):
             with self.subTest(value=value):
@@ -60,10 +60,10 @@ class ConfigureDiscountImage2ChannelTest(unittest.TestCase):
 
         self.assertEqual(models, {"gpt-image-2"})
         request = opener.open.call_args.args[0]
-        self.assertEqual(request.full_url, "https://new.ddpapi.top/v1/models")
+        self.assertEqual(request.full_url, "https://pdhlzy.art/v1/models")
         self.assertIsNone(request.data)
 
-    def test_build_stage_sql_is_internal_only_and_preserves_legacy_channel(self) -> None:
+    def test_build_stage_sql_is_internal_only_and_preserves_fallback_channels(self) -> None:
         self.module.permissions.sanitize_token_models = lambda models: list(models)
         sql = self.module.build_stage_sql(
             "sk-test-key-12345678901234567890",
@@ -77,13 +77,15 @@ class ConfigureDiscountImage2ChannelTest(unittest.TestCase):
             "gpt-image-2-4K",
         )
 
-        self.assertIn("xingren-discount-image2-v2", sql)
-        self.assertIn("internal-image2-discount-v2", sql)
-        self.assertIn('{"internal-image2-discount-v2":"gpt-image-2"}', sql)
-        self.assertIn("'internal', 'internal-image2-discount-v2', @managed_channel_id", sql)
+        self.assertIn("xingren-discount-image2-pdhlzy-primary", sql)
+        self.assertIn("geek2api-image-2", sql)
+        self.assertIn('{"geek2api-image-2":"gpt-image-2"}', sql)
+        self.assertIn("'internal', 'geek2api-image-2', @managed_channel_id", sql)
         self.assertIn("gpt-image-2-4K,特价 image-2", sql)
+        self.assertIn("priority = 32", sql)
         self.assertIn("AND user_id = 1", sql)
-        self.assertNotIn("geek2api-image-2", sql)
+        self.assertNotIn("xingren-discount-image2-v2", sql)
+        self.assertNotIn("geek2api-image2", sql)
         self.assertNotIn("default,standard,pro,code,internal", sql)
 
     def test_staging_price_options_converts_cny_once(self) -> None:

@@ -242,7 +242,7 @@ func TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing(t *te
 	pricing := filterPricingByUsableGroups([]model.Pricing{
 		{
 			ModelName:   service.InternalDiscountImage2ModelName,
-			Description: "特价 image-2：人民币 1K ¥0.06、2K ¥0.09、4K ¥0.10/张。",
+			Description: "特价 image-2：人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张。",
 			Tags:        "image,openai,internal-hidden",
 			EnableGroup: []string{"default"},
 		},

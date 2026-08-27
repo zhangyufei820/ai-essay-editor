@@ -95,8 +95,8 @@ const PRICING_DISPLAY_OVERRIDES = {
   },
   '特价 image-2': {
     display_name: '特价 image-2',
-    description: '特价 image-2：仅支持文生图；已验证 1K/2K/4K 方图，固定 high 质量与 PNG 输出。人民币 1K ¥0.06 / 2K ¥0.09 / 4K ¥0.10。',
-    fixed_price_label: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.10',
+    description: '特价 image-2：仅支持文生图；已验证 1K/2K/4K 方图，固定 high 质量与 PNG 输出。人民币 1K ¥0.06 / 2K ¥0.09 / 4K ¥0.13。',
+    fixed_price_label: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.13',
     price_unit_label: '张',
     billing_label: '按张计费',
     icon: 'OpenAI',

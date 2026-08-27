@@ -220,9 +220,9 @@ const IMAGE_MODELS = [
     backgroundOptions: [],
     edit: false,
     statusLabel: '稳定',
-    priceLabel: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.10',
+    priceLabel: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.13',
     billingLabel: '按张计费',
-    hint: '仅支持文生图；支持与 Image 2 一致的画面比例及 1K / 2K / 4K，固定 high 质量与 PNG 输出。费用：1K ¥0.06，2K ¥0.09，4K ¥0.10。',
+    hint: '仅支持文生图；支持与 Image 2 一致的画面比例及 1K / 2K / 4K，固定 high 质量与 PNG 输出。费用：1K ¥0.06，2K ¥0.09，4K ¥0.13。',
   },
   {
     value: 'banana-2',

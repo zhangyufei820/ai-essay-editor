@@ -260,15 +260,39 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
 
     def test_discount_image2_release_state_requires_exact_managed_groups(self) -> None:
+        primary = self.module.DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG
+        ddpapi = self.module.DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG
+        geek2api = self.module.DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG
+        internal_model = self.module.INTERNAL_DISCOUNT_IMAGE2_MODEL
+        public_groups = self.module.DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS
+        fallback_rows = [
+            [ddpapi, "1", public_groups, internal_model],
+            [geek2api, "1", public_groups, internal_model],
+        ]
         for rows, expected in (
             ([], "unavailable"),
-            ([["1", "internal"]], "staged"),
-            ([["1", "default,standard,pro,code,internal"]], "published"),
-            ([["1", "default,internal"]], "invalid"),
-            ([["2", "default,standard,pro,code,internal"]], "unavailable"),
+            (fallback_rows, "published"),
+            (fallback_rows + [[primary, "1", "internal", internal_model]], "staged"),
+            (fallback_rows + [[primary, "1", public_groups, internal_model]], "published"),
+            (fallback_rows + [[primary, "1", "default,internal", internal_model]], "invalid"),
+            (fallback_rows + [[primary, "2", public_groups, internal_model]], "invalid"),
+            ([[ddpapi, "1", public_groups, internal_model]], "unavailable"),
         ):
             self.module.mysql = lambda _query, rows=rows: rows
             self.assertEqual(self.module.discount_image2_release_state(), expected)
+
+    def test_discount_image2_reconcile_orders_primary_and_two_fallbacks(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_discount_image2_primary_and_fallback_channels()
+
+        sql = "\n".join(captured)
+        for tag, priority in self.module.DISCOUNT_IMAGE2_CHANNEL_PRIORITIES.items():
+            self.assertIn("priority = " + str(priority), sql)
+            self.assertIn("WHERE tag = '" + tag + "'", sql)
+        self.assertEqual(1, sql.count("WHERE tag = 'xingren-discount-image2-pdhlzy-primary'"))
+        self.assertIn("`group` = 'default,standard,pro,code,internal'", sql)
 
     def test_staged_discount_image2_is_admin_only_until_published(self) -> None:
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
@@ -943,7 +967,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sql = "\n".join(captured)
         self.assertIn("geek2api-image-2", sql)
         self.assertIn("特价 image-2", sql)
-        self.assertIn("1K ¥0.06、2K ¥0.09、4K ¥0.10", sql)
+        self.assertIn("1K ¥0.06、2K ¥0.09、4K ¥0.13", sql)
         self.assertNotIn("new.ddpapi.top", sql)
         self.assertIn('/v1/images/generations', sql)
         self.assertNotIn('/v1/images/edits', sql)

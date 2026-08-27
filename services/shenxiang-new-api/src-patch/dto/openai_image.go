@@ -193,7 +193,7 @@ func discountImage2PriceCNY(request *ImageRequest) (float64, bool) {
 	}
 	switch discountImage2Resolution(request) {
 	case "4K":
-		return 0.10, true
+		return 0.13, true
 	case "2K":
 		return 0.09, true
 	default:

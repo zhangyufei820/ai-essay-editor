@@ -249,7 +249,7 @@ async function main() {
       "formats: ['png']",
       'maxCount: 1',
       'edit: false',
-      '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.10',
+      '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.13',
     ]) {
       if (!discountImage2Block.includes(marker)) {
         errors.push(`特价 image-2 missing verified contract marker: ${marker}`)

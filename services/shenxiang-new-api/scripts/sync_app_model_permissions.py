@@ -31,14 +31,25 @@ GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
 DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
 INTERNAL_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
 FALLBACK_DISCOUNT_IMAGE2_MODEL = "internal-image2-discount-v2"
-DISCOUNT_IMAGE2_CHANNEL_TAG = "geek2api-image2"
-DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG = "xingren-discount-image2-v2"
+DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG = "xingren-discount-image2-pdhlzy-primary"
+DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG = "xingren-discount-image2-v2"
+DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG = "geek2api-image2"
+# Keep the generic names for the staging script and older callers.  The
+# primary is PDHLZY; DDPAPI and Geek2API are the ordered fallbacks.
+DISCOUNT_IMAGE2_CHANNEL_TAG = DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG
+DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG = DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG
 DISCOUNT_IMAGE2_CHANNEL_TAGS = (
     DISCOUNT_IMAGE2_CHANNEL_TAG,
     DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG,
+    DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG,
 )
+DISCOUNT_IMAGE2_CHANNEL_PRIORITIES = {
+    DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG: 32,
+    DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG: 16,
+    DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG: 0,
+}
 DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
-DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：仅支持文生图；已验证 1K/2K/4K 方图，固定 high 质量与 PNG 输出。人民币 1K ¥0.06、2K ¥0.09、4K ¥0.10/张。"
+DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：仅支持文生图；已验证 1K/2K/4K 方图，固定 high 质量与 PNG 输出。人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张。"
 DISCOUNT_IMAGE2_TAGS = "image,openai,internal-hidden"
 DISCOUNT_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
 DISCOUNT_IMAGE2_BASE_PRICE_CNY = Decimal("0.06")
@@ -1500,13 +1511,41 @@ def grok46_media_release_state(kind: str) -> str:
 
 def discount_image2_release_state() -> str:
     rows = mysql(
-        "SELECT status, REPLACE(COALESCE(`group`, ''), ' ', '') FROM channels WHERE tag = "
-        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
-        + " ORDER BY id"
+        "SELECT COALESCE(tag, ''), status, REPLACE(COALESCE(`group`, ''), ' ', ''), "
+        "REPLACE(COALESCE(models, ''), ' ', '') FROM channels WHERE tag IN ("
+        + ", ".join(sql_quote(tag) for tag in DISCOUNT_IMAGE2_CHANNEL_TAGS)
+        + ") ORDER BY tag, id"
     )
-    if len(rows) != 1 or rows[0][0] != "1":
+    by_tag: dict[str, list[str]] = {}
+    for row in rows:
+        if len(row) != 4 or row[0] in by_tag:
+            return "invalid"
+        by_tag[row[0]] = row
+
+    fallback_tags = (
+        DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG,
+        DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG,
+    )
+    if any(tag not in by_tag for tag in fallback_tags):
         return "unavailable"
-    groups = rows[0][1]
+    for tag in fallback_tags:
+        _tag, status, groups, models = by_tag[tag]
+        if (
+            status != "1"
+            or groups != DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS
+            or models != INTERNAL_DISCOUNT_IMAGE2_MODEL
+        ):
+            return "invalid"
+
+    primary = by_tag.get(DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG)
+    # The existing verified DDPAPI + Geek2API pair keeps the public model
+    # available during the one-time deployment that introduces the new
+    # PDHLZY primary channel.
+    if primary is None:
+        return "published"
+    _tag, status, groups, models = primary
+    if status != "1" or models != INTERNAL_DISCOUNT_IMAGE2_MODEL:
+        return "invalid"
     if groups == "internal":
         return "staged"
     if groups == DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS:
@@ -1961,27 +2000,40 @@ def ensure_discount_image2_backing_model() -> None:
 
 
 def ensure_discount_image2_primary_and_fallback_channels() -> None:
-    """Keep the verified primary/fallback pair ordered without touching credentials."""
+    """Keep the verified three-channel order without touching credentials."""
     mapping = json.dumps({INTERNAL_DISCOUNT_IMAGE2_MODEL: RAW_GPT_IMAGE2_MODEL}, separators=(",", ":"))
     statements = [
         "START TRANSACTION;",
-        "UPDATE channels SET status = 1, priority = 16, weight = 100, models = "
+        "UPDATE channels SET status = 1, priority = "
+        + str(DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG])
+        + ", weight = 100, models = "
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
-        + ", `group` = "
-        + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
         + ", model_mapping = "
         + sql_quote(mapping)
         + " WHERE tag = "
-        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+        + sql_quote(DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG)
         + ";",
-        "UPDATE channels SET status = 1, priority = 0, weight = 100, models = "
+        "UPDATE channels SET status = 1, priority = "
+        + str(DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG])
+        + ", weight = 100, models = "
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
         + ", `group` = "
         + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
         + ", model_mapping = "
         + sql_quote(mapping)
         + " WHERE tag = "
-        + sql_quote(DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG)
+        + sql_quote(DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG)
+        + ";",
+        "UPDATE channels SET status = 1, priority = "
+        + str(DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG])
+        + ", weight = 100, models = "
+        + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+        + ", `group` = "
+        + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
+        + ", model_mapping = "
+        + sql_quote(mapping)
+        + " WHERE tag = "
+        + sql_quote(DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG)
         + ";",
         "COMMIT;",
     ]

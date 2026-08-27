@@ -20,9 +20,9 @@ UPSTREAM_MODEL = permissions.RAW_GPT_IMAGE2_MODEL
 CHANNEL_TAG = permissions.DISCOUNT_IMAGE2_CHANNEL_TAG
 CHANNEL_GROUPS = permissions.DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS
 STAGING_GROUP = "internal"
-CHANNEL_NAME = "星人 Image 2 特价通道"
-EXPECTED_BASE_URL = "https://new.ddpapi.top"
-UPSTREAM_KEY_ENV = "DISCOUNT_IMAGE2_UPSTREAM_API_KEY"
+CHANNEL_NAME = "星人 Image 2 特价主通道"
+EXPECTED_BASE_URL = "https://pdhlzy.art"
+UPSTREAM_KEY_ENV = "PDHLZY_DISCOUNT_IMAGE2_UPSTREAM_API_KEY"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_MODELS_RESPONSE_BYTES = 2 * 1024 * 1024
 
@@ -160,14 +160,24 @@ def admin_image_token() -> tuple[str, str, str]:
 
 
 def validate_channel_isolation() -> None:
-    rows = permissions.mysql(
-        "SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(CHANNEL_TAG)
+    rows = permissions.mysql_raw(
+        "SELECT COALESCE(tag, ''), COUNT(*) FROM channels WHERE tag IN ("
+        + ", ".join(sql_quote(tag) for tag in permissions.DISCOUNT_IMAGE2_CHANNEL_TAGS)
+        + ") GROUP BY tag"
     )
-    if (int(rows[0][0]) if rows else 0) > 1:
-        raise ConfigurationError("multiple channels use the managed image tag")
+    counts = {row[0]: int(row[1]) for row in rows if len(row) == 2}
+    if counts.get(CHANNEL_TAG, 0) > 1:
+        raise ConfigurationError("multiple channels use the managed primary image tag")
+    for tag in (
+        permissions.DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG,
+        permissions.DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG,
+    ):
+        if counts.get(tag, 0) != 1:
+            raise ConfigurationError("the required image fallback channel is missing or ambiguous")
     rows = permissions.mysql(
-        "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') <> "
-        + sql_quote(CHANNEL_TAG)
+        "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') NOT IN ("
+        + ", ".join(sql_quote(tag) for tag in permissions.DISCOUNT_IMAGE2_CHANNEL_TAGS)
+        + ")"
         + " AND FIND_IN_SET("
         + sql_quote(INTERNAL_MODEL)
         + ", REPLACE(COALESCE(models, ''), ' ', '')) > 0"
@@ -207,10 +217,10 @@ def build_stage_sql(
                 sql_quote(INTERNAL_MODEL),
                 sql_quote(STAGING_GROUP),
                 sql_quote(mapping),
-                "0",
+                str(permissions.DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[CHANNEL_TAG]),
                 "1",
                 sql_quote(CHANNEL_TAG),
-                sql_quote("Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.10/张"),
+                sql_quote("Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张"),
             ]
         )
         + " WHERE @managed_channel_id IS NULL;",
@@ -227,9 +237,11 @@ def build_stage_sql(
         + sql_quote(STAGING_GROUP)
         + ", model_mapping = "
         + sql_quote(mapping)
-        + ", priority = 0, auto_ban = 1, tag = "
+        + ", priority = "
+        + str(permissions.DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[CHANNEL_TAG])
+        + ", auto_ban = 1, tag = "
         + sql_quote(CHANNEL_TAG)
-        + ", remark = 'Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.10/张' "
+        + ", remark = 'Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张' "
         "WHERE id = @managed_channel_id;",
         "SET @managed_model_id := (SELECT MIN(id) FROM models WHERE model_name = "
         + sql_quote(INTERNAL_MODEL)
