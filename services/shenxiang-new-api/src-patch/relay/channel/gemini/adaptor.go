@@ -1,6 +1,7 @@
 package gemini
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -8,7 +9,9 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	appconstant "github.com/QuantumNous/new-api/constant"
@@ -30,6 +33,30 @@ type Adaptor struct {
 }
 
 const openAIChatGeminiImageMaxResponseBytes = 64 * 1024 * 1024
+
+const (
+	managedGeminiAsyncImagePrimaryChannelID = 18
+	managedGeminiAsyncImageModel            = "gemini-3-pro-image-preview"
+	managedGeminiAsyncImageMaxResponseBytes = 1024 * 1024
+)
+
+var managedGeminiAsyncImagePollInterval = 2 * time.Second
+
+type managedGeminiAsyncImageRequest struct {
+	Model      string `json:"model"`
+	Prompt     string `json:"prompt"`
+	Size       string `json:"size"`
+	Resolution string `json:"resolution"`
+	N          uint   `json:"n"`
+}
+
+type managedGeminiAsyncImageTask struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Data   []struct {
+		URL string `json:"url"`
+	} `json:"data"`
+}
 
 type openAIChatGeminiImageRequest struct {
 	Model     string                         `json:"model"`
@@ -107,12 +134,58 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 	if !isGeminiNativeImageModel(info.UpstreamModelName) {
 		return nil, errors.New("not supported model for image generation, only imagen and approved Gemini image models are supported")
 	}
+	if usesManagedGeminiAsyncImagePrimary(info) {
+		return convertManagedGeminiAsyncImageRequest(request)
+	}
 
 	if usesOpenAIChatGeminiImageBridge(info) {
 		return convertOpenAIChatGeminiImageRequest(c, info, request)
 	}
 
 	return convertGeminiImagePreviewRequest(c, request)
+}
+
+func usesManagedGeminiAsyncImagePrimary(info *relaycommon.RelayInfo) bool {
+	return info != nil &&
+		info.ChannelId == managedGeminiAsyncImagePrimaryChannelID &&
+		info.RelayMode == constant.RelayModeImagesGenerations &&
+		strings.EqualFold(strings.TrimSpace(info.UpstreamModelName), managedGeminiAsyncImageModel)
+}
+
+func convertManagedGeminiAsyncImageRequest(request dto.ImageRequest) (*managedGeminiAsyncImageRequest, error) {
+	prompt := strings.TrimSpace(request.Prompt)
+	if prompt == "" {
+		return nil, errors.New("prompt is required")
+	}
+
+	resolution := geminiImagePreviewImageSize(request)
+	if resolution == "" {
+		resolution = "4K"
+	}
+	if resolution != "4K" {
+		return nil, errors.New("managed Gemini async image primary supports 4K generation only")
+	}
+
+	size := geminiImagePreviewAspectRatio(request)
+	if size == "" {
+		size = "1:1"
+	}
+
+	n := uint(1)
+	if request.N != nil {
+		n = *request.N
+	}
+	if n == 0 {
+		return nil, errors.New("n must be at least 1")
+	}
+
+	return &managedGeminiAsyncImageRequest{
+		Model:      managedGeminiAsyncImageModel,
+		Prompt:     prompt,
+		Size:       size,
+		Resolution: resolution,
+		N:          n,
+	}, nil
 }
 
 func convertOpenAIChatGeminiImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (*openAIChatGeminiImageRequest, error) {
@@ -503,6 +576,9 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	if usesManagedGeminiAsyncImagePrimary(info) {
+		return strings.TrimRight(info.ChannelBaseUrl, "/") + "/v1/images/generations/async", nil
+	}
 	if usesOpenAIChatGeminiImageBridge(info) {
 		return strings.TrimRight(info.ChannelBaseUrl, "/") + "/v1/chat/completions", nil
 	}
@@ -638,6 +714,9 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 }
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
+	if usesManagedGeminiAsyncImagePrimary(info) {
+		return managedGeminiAsyncImageHandler(c, info, resp)
+	}
 	if usesOpenAIChatGeminiImageBridge(info) {
 		return openAIChatGeminiImageHandler(c, info, resp)
 	}
@@ -724,6 +803,121 @@ func usesOpenAIChatGeminiImageBridge(info *relaycommon.RelayInfo) bool {
 		info.ChannelType == appconstant.ChannelTypeOpenAI &&
 		isGeminiImageRelay(info) &&
 		isOpenAIChatGeminiImageModel(info.UpstreamModelName)
+}
+
+func managedGeminiAsyncImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+	if c == nil || c.Request == nil || resp == nil || resp.Body == nil {
+		return nil, types.NewOpenAIError(errors.New("empty managed Gemini async image response"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+	defer resp.Body.Close()
+
+	submission, err := decodeManagedGeminiAsyncImageTask(resp.Body)
+	if err != nil {
+		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+	}
+	if strings.TrimSpace(submission.ID) == "" {
+		return nil, types.NewOpenAIError(errors.New("managed Gemini async image response did not include a task id"), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+	}
+	return pollManagedGeminiAsyncImageTask(c, info, submission.ID)
+}
+
+func decodeManagedGeminiAsyncImageTask(body io.Reader) (*managedGeminiAsyncImageTask, error) {
+	if body == nil {
+		return nil, errors.New("empty managed Gemini async image task response")
+	}
+	limitedBody := io.LimitReader(body, managedGeminiAsyncImageMaxResponseBytes+1)
+	payload, err := io.ReadAll(limitedBody)
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) > managedGeminiAsyncImageMaxResponseBytes {
+		return nil, errors.New("managed Gemini async image task response exceeded size limit")
+	}
+	var task managedGeminiAsyncImageTask
+	if err := common.Unmarshal(payload, &task); err != nil {
+		return nil, err
+	}
+	return &task, nil
+}
+
+func pollManagedGeminiAsyncImageTask(c *gin.Context, info *relaycommon.RelayInfo, taskID string) (*dto.Usage, *types.NewAPIError) {
+	timeoutSeconds := common.GetEnvOrDefault("PLAYGROUND_IMAGE_RELAY_TIMEOUT_SECONDS", 95)
+	if c.GetBool("playground_image_async_worker") {
+		timeoutSeconds = common.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_TIMEOUT_SECONDS", 600)
+	}
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = 95
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
+	pollURL := strings.TrimRight(info.ChannelBaseUrl, "/") + "/v1/images/tasks/" + url.PathEscape(taskID)
+	for {
+		task, apiErr := requestManagedGeminiAsyncImageTask(c, info, pollURL)
+		if apiErr != nil {
+			return nil, apiErr
+		}
+		switch strings.ToLower(strings.TrimSpace(task.Status)) {
+		case "succeeded", "success", "completed":
+			return writeManagedGeminiAsyncImageResponse(c, task)
+		case "failed", "cancelled", "canceled":
+			return nil, types.NewOpenAIError(errors.New("managed Gemini async image task failed"), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+		case "submitted", "queued", "pending", "running", "processing", "in_progress":
+		default:
+			return nil, types.NewOpenAIError(errors.New("managed Gemini async image task returned an unknown status"), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, types.NewOpenAIError(errors.New("managed Gemini async image task timed out"), types.ErrorCodeDoRequestFailed, http.StatusGatewayTimeout)
+		case <-time.After(managedGeminiAsyncImagePollInterval):
+		}
+	}
+}
+
+func requestManagedGeminiAsyncImageTask(c *gin.Context, info *relaycommon.RelayInfo, pollURL string) (*managedGeminiAsyncImageTask, *types.NewAPIError) {
+	resp, err := channel.DoApiRequestToURL(&Adaptor{}, c, info, http.MethodGet, pollURL, nil)
+	if err != nil {
+		return nil, types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusBadGateway)
+	}
+	if resp == nil || resp.Body == nil {
+		return nil, types.NewOpenAIError(errors.New("empty managed Gemini async image task poll response"), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		apiErr := service.RelayErrorHandler(c.Request.Context(), resp, false)
+		_ = resp.Body.Close()
+		return nil, apiErr
+	}
+	defer resp.Body.Close()
+	task, decodeErr := decodeManagedGeminiAsyncImageTask(resp.Body)
+	if decodeErr != nil {
+		return nil, types.NewOpenAIError(decodeErr, types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+	}
+	return task, nil
+}
+
+func writeManagedGeminiAsyncImageResponse(c *gin.Context, task *managedGeminiAsyncImageTask) (*dto.Usage, *types.NewAPIError) {
+	if task == nil {
+		return nil, types.NewOpenAIError(errors.New("empty managed Gemini async image task"), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+	}
+	imageData := make([]dto.ImageData, 0, len(task.Data))
+	for _, item := range task.Data {
+		if imageURL := strings.TrimSpace(item.URL); imageURL != "" {
+			imageData = append(imageData, dto.ImageData{Url: imageURL})
+		}
+	}
+	if len(imageData) == 0 {
+		return nil, types.NewOpenAIError(errors.New("managed Gemini async image task completed without images"), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+	}
+	imageResponse := dto.ImageResponse{Created: common.GetTimestamp(), Data: imageData}
+	jsonResponse, err := common.Marshal(imageResponse)
+	if err != nil {
+		return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
+	}
+	c.Writer.Header().Set("Content-Type", "application/json")
+	c.Writer.WriteHeader(http.StatusOK)
+	_, _ = c.Writer.Write(jsonResponse)
+	return geminiImageUsageFromImageCount(len(imageData)), nil
 }
 
 func openAIChatGeminiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {

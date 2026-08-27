@@ -309,8 +309,25 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	if err != nil {
 		return nil, fmt.Errorf("get request url failed: %w", err)
 	}
-	logger.LogDebug(c, "fullRequestURL: %s", fullRequestURL)
-	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
+	return DoApiRequestToURL(a, c, info, c.Request.Method, fullRequestURL, requestBody)
+}
+
+// DoApiRequestToURL sends a request to an explicit upstream URL while retaining
+// the same authentication, proxy, timeout, and header-override behavior as the
+// normal relay path. It is used by adaptors that submit a task and then poll a
+// provider-defined status endpoint.
+func DoApiRequestToURL(a Adaptor, c *gin.Context, info *common.RelayInfo, method, requestURL string, requestBody io.Reader) (*http.Response, error) {
+	if c == nil || c.Request == nil {
+		return nil, errors.New("gin request context is required")
+	}
+	if strings.TrimSpace(method) == "" {
+		return nil, errors.New("request method is required")
+	}
+	if strings.TrimSpace(requestURL) == "" {
+		return nil, errors.New("request url is required")
+	}
+	logger.LogDebug(c, "fullRequestURL: %s", requestURL)
+	req, err := http.NewRequest(method, requestURL, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
 	}
@@ -571,6 +588,12 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		}
 	} else {
 		client = service.GetHttpClient()
+		if client == nil {
+			// Unit tests and early-start paths may run before InitHttpClient.
+			// Keep a relay request from panicking while normal production startup
+			// continues to use the configured shared client.
+			client = http.DefaultClient
+		}
 	}
 
 	var stopPinger context.CancelFunc
@@ -637,8 +660,12 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		c.Set(common2.UpstreamRequestIdKey, upID)
 	}
 
-	_ = req.Body.Close()
-	_ = c.Request.Body.Close()
+	if req.Body != nil {
+		_ = req.Body.Close()
+	}
+	if c.Request.Body != nil {
+		_ = c.Request.Body.Close()
+	}
 	return resp, nil
 }
 
