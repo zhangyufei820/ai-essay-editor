@@ -87,7 +87,7 @@ class Gemini3ProImagePrimaryTest(unittest.TestCase):
         payload = json.loads(submit_request.data)
         self.assertEqual(payload["model"], self.module.UPSTREAM_MODEL)
         self.assertEqual(payload["size"], "16:9")
-        self.assertEqual(payload["resolution"], "1K")
+        self.assertEqual(payload["resolution"], "4K")
         self.assertEqual(payload["n"], 1)
 
     def test_apply_probes_before_copying_and_syncing(self) -> None:

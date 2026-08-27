@@ -89,7 +89,7 @@ def require_upstream_image(api_key: str) -> None:
             "model": UPSTREAM_MODEL,
             "prompt": "A single blue circle centered on a plain white background, clean vector style.",
             "size": "16:9",
-            "resolution": "1K",
+            "resolution": "4K",
             "n": 1,
         },
     )
