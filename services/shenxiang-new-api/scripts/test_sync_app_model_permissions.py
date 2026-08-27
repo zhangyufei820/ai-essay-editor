@@ -987,6 +987,18 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn('/v1/images/generations', sql)
         self.assertNotIn('/v1/images/edits', sql)
 
+    def test_ensure_stable_image2_channel_order_preserves_primary_and_fallback(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_stable_image2_channel_order()
+
+        sql = "\n".join(captured)
+        for tag, priority in self.module.STABLE_IMAGE2_CHANNEL_PRIORITIES.items():
+            self.assertIn("priority = " + str(priority), sql)
+            self.assertIn("WHERE tag = '" + tag + "'", sql)
+        self.assertIn("Image 2 稳定备用线路；人民币 ¥0.17/张", sql)
+
     def test_ensure_gemini_ddpapi_models_uses_public_metadata(self) -> None:
         captured: list[str] = []
         self.module.mysql_exec = captured.append
@@ -1840,6 +1852,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             ensure_discount_image2_backing_model=no_result,
             ensure_discount_image2_primary_and_fallback_channels=no_result,
             ensure_stable_image2_backing_model=no_result,
+            ensure_stable_image2_channel_order=no_result,
             ensure_gemini_ddpapi_image_models=no_result,
             sync_grok_image_metadata=no_result,
             ensure_public_openai_text_models=no_result,
@@ -1889,6 +1902,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             ensure_discount_image2_backing_model=no_result,
             ensure_discount_image2_primary_and_fallback_channels=no_result,
             ensure_stable_image2_backing_model=no_result,
+            ensure_stable_image2_channel_order=no_result,
             ensure_gemini_ddpapi_image_models=no_result,
             sync_grok_image_metadata=no_result,
             ensure_public_openai_text_models=no_result,

@@ -61,6 +61,14 @@ STABLE_IMAGE2_DESCRIPTION = "官转image 2稳定：支持 1K/2K/4K 输出，人�
 STABLE_IMAGE2_TAGS = "image,openai"
 STABLE_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
 STABLE_IMAGE2_PRICE_CNY = Decimal("0.17")
+STABLE_IMAGE2_PRIMARY_CHANNEL_TAG = "xingren-stable-image2"
+STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG = "xingren-stable-image2-enterprise-fallback"
+STABLE_IMAGE2_CHANNEL_PRIORITIES = {
+    STABLE_IMAGE2_PRIMARY_CHANNEL_TAG: 16,
+    STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG: 0,
+}
+STABLE_IMAGE2_CHANNEL_REMARK = "Image 2 稳定线路；人民币 ¥0.17/张"
+STABLE_IMAGE2_ENTERPRISE_FALLBACK_REMARK = "Image 2 稳定备用线路；人民币 ¥0.17/张"
 GROK_IMAGE_MODEL = "grok-imagine-image"
 GROK_IMAGE_DESCRIPTION = "Grok Image Pro：当前供应商实际仅返回约 1K，仅支持文生图，人民币 ¥0.055/张。"
 GROK_IMAGE_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
@@ -2097,6 +2105,38 @@ def ensure_stable_image2_backing_model() -> None:
     mysql_exec("\n".join(statements))
 
 
+def ensure_stable_image2_channel_order() -> None:
+    """Keep the stable Image 2 primary/fallback ordering without touching credentials."""
+    mapping = json.dumps({INTERNAL_STABLE_IMAGE2_MODEL: RAW_GPT_IMAGE2_MODEL}, separators=(",", ":"))
+    statements = [
+        "START TRANSACTION;",
+        "UPDATE channels SET status = 1, priority = "
+        + str(STABLE_IMAGE2_CHANNEL_PRIORITIES[STABLE_IMAGE2_PRIMARY_CHANNEL_TAG])
+        + ", weight = 100, models = "
+        + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+        + ", model_mapping = "
+        + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(STABLE_IMAGE2_CHANNEL_REMARK)
+        + " WHERE tag = "
+        + sql_quote(STABLE_IMAGE2_PRIMARY_CHANNEL_TAG)
+        + ";",
+        "UPDATE channels SET status = 1, priority = "
+        + str(STABLE_IMAGE2_CHANNEL_PRIORITIES[STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG])
+        + ", weight = 100, models = "
+        + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+        + ", model_mapping = "
+        + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(STABLE_IMAGE2_ENTERPRISE_FALLBACK_REMARK)
+        + " WHERE tag = "
+        + sql_quote(STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG)
+        + ";",
+        "COMMIT;",
+    ]
+    mysql_exec("\n".join(statements))
+
+
 def ensure_gemini_ddpapi_image_models() -> None:
     statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
     for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
@@ -3288,6 +3328,7 @@ def main() -> int:
     ensure_discount_image2_backing_model()
     ensure_discount_image2_primary_and_fallback_channels()
     ensure_stable_image2_backing_model()
+    ensure_stable_image2_channel_order()
     ensure_gemini_ddpapi_image_models()
     sync_grok_image_metadata()
     ensure_public_openai_text_models()
