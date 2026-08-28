@@ -23,7 +23,6 @@ TOKEN_PROFILES = {
     "video": ("星人视频生成令牌",),
 }
 USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
-MONTHLY_CARD_TOKEN_NAMES = ("月卡专用 Key", "¥500 月卡专用")
 CLAUDE_USER_TOKEN_NAME = "claude"
 
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
@@ -2289,7 +2288,7 @@ def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict
     names = TOKEN_PROFILES["codex"]
     required_models = profiles["codex"] if profiles and profiles.get("codex") else CODEX_ALLOWED_MODELS
     name_predicates = [
-        "name IN (" + ", ".join(sql_quote(name) for name in (*names, *MONTHLY_CARD_TOKEN_NAMES)) + ")",
+        "name IN (" + ", ".join(sql_quote(name) for name in names) + ")",
         *[
             "name LIKE " + sql_quote(prefix + "%")
             for prefix in USER_CODEX_TOKEN_NAME_PREFIXES

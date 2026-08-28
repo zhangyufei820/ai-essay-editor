@@ -1155,8 +1155,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         def fake_mysql(query: str) -> list[list[str]]:
             self.assertIn("user_id <> 1", query)
             self.assertIn("name LIKE '星人Codex %'", query)
-            self.assertIn("'月卡专用 Key'", query)
-            self.assertIn("'¥500 月卡专用'", query)
+            self.assertNotIn("'月卡专用 Key'", query)
+            self.assertNotIn("'¥500 月卡专用'", query)
             self.assertIn("COALESCE(`key`, '')", query)
             self.assertNotIn("model_limits_enabled = 1", query)
             full_limits = (
