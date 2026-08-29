@@ -83,6 +83,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(
             self.module.DISCOUNT_TEXT_CHANNEL_TAGS,
             (
+                "xingren-discount-text-geek2api",
                 "xingren-discount-text-aihub",
                 "xingren-discount-text-aihub-fallback",
                 "xingren-discount-text-wangwang",
@@ -536,6 +537,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     ["31", "gpt-5.5", "30", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[0], "discount"],
                     ["32", "gpt-5.5", "20", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[1], "discount"],
                     ["33", "gpt-5.5", "10", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[2], "discount"],
+                    ["34", "gpt-5.5", "10", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[3], "discount"],
                     ["21", "gpt-5.5", "0", "100", "stable", "default,internal"],
                     ["7", "grok-video-super-720p", "15", "100", "xingren-grok-video", "default,internal"],
                 ]
@@ -550,7 +552,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.sync_abilities()
 
         sql = "\n".join(captured)
-        for channel_id, tag in zip(("31", "32", "33"), self.module.DISCOUNT_TEXT_CHANNEL_TAGS):
+        for channel_id, tag in zip(("31", "32", "33", "34"), self.module.DISCOUNT_TEXT_CHANNEL_TAGS):
             self.assertIn("SELECT 'discount', 'gpt-5.5', " + channel_id, sql)
             self.assertNotIn("'default', 'gpt-5.5', " + channel_id, sql)
             self.assertIn("COALESCE(current_channel.tag, '') = '" + tag + "'", sql)
