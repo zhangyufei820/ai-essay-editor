@@ -1177,7 +1177,7 @@ const IMAGE_LONG_WAIT_MESSAGE =
 const IMAGE_VERY_LONG_WAIT_MS = 180 * 1000;
 const IMAGE_VERY_LONG_WAIT_MESSAGE =
   '图像任务已进入长尾等待，系统仍会继续轮询并保留任务结果。请保持当前页面或稍后用任务 ID 查询。';
-const REVERSE_PROMPT_MODEL = 'gpt-5.4-mini';
+const REVERSE_PROMPT_MODEL = 'gpt-5.5';
 const REVERSE_PROMPT_MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const REVERSE_PROMPT_REFERENCE_PREFIX = '我需要按参考图生成图片：';
 const REVERSE_PROMPT_INSTRUCTION_BASE =
