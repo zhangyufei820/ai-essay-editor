@@ -161,7 +161,6 @@ PLUS_TEXT_ALLOWED_MODELS = (
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.5",
-    "gpt-5.6-luna",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "codex-auto-review",
@@ -233,7 +232,6 @@ CODEX_ALLOWED_MODELS = [
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.6",
-    "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     "kimi-k3",
@@ -411,12 +409,11 @@ CODEX_TEXT_CHANNEL_ID = "21"
 CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
     "gpt-5.5",
     "gpt-5.4",
-    "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     CODEX_AUTO_REVIEW_MODEL,
 ]
-RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact")
+RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact", "gpt-5.6-luna")
 PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M: dict[str, dict[str, Decimal]] = {}
 PUBLIC_VIDEO_FIXED_PRICES_CNY = {
     "grok-video-super-720p": Decimal("6.50"),
