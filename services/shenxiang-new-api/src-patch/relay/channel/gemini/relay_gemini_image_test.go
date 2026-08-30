@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	appconstant "github.com/QuantumNous/new-api/constant"
@@ -132,6 +133,96 @@ func TestConvertImageRequestRejectsNonImagineGeminiModel(t *testing.T) {
 		ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "gemini-2.0-flash"},
 	}, dto.ImageRequest{Prompt: "test"})
 	require.ErrorContains(t, err, "only imagen and approved Gemini image models are supported")
+}
+
+func TestManagedGeminiAsyncImagePrimaryUsesDocumentedAsyncPayload(t *testing.T) {
+	count := uint(1)
+	info := &relaycommon.RelayInfo{
+		RelayMode: constant.RelayModeImagesGenerations,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelId:         managedGeminiAsyncImagePrimaryChannelID,
+			ChannelBaseUrl:    "https://example.test",
+			UpstreamModelName: managedGeminiAsyncImageModel,
+		},
+	}
+
+	converted, err := (&Adaptor{}).ConvertImageRequest(nil, info, dto.ImageRequest{
+		Prompt:      "a blue circle on a white background",
+		AspectRatio: "16:9",
+		ImageSize:   "4K",
+		N:           &count,
+	})
+	require.NoError(t, err)
+	payload, ok := converted.(*managedGeminiAsyncImageRequest)
+	require.True(t, ok)
+	require.Equal(t, managedGeminiAsyncImageModel, payload.Model)
+	require.Equal(t, "a blue circle on a white background", payload.Prompt)
+	require.Equal(t, "16:9", payload.Size)
+	require.Equal(t, "4K", payload.Resolution)
+	require.EqualValues(t, 1, payload.N)
+
+	endpoint, err := (&Adaptor{}).GetRequestURL(info)
+	require.NoError(t, err)
+	require.Equal(t, "https://example.test/v1/images/generations/async", endpoint)
+}
+
+func TestManagedGeminiAsyncImagePrimaryRejectsNon4KForFallback(t *testing.T) {
+	_, err := convertManagedGeminiAsyncImageRequest(dto.ImageRequest{
+		Prompt:    "a blue circle",
+		ImageSize: "2K",
+	})
+	require.ErrorContains(t, err, "4K")
+}
+
+func TestManagedGeminiAsyncImageHandlerPollsAndReturnsOpenAIImageResponse(t *testing.T) {
+	pollCount := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		require.Equal(t, "/v1/images/tasks/task_123", r.URL.Path)
+		require.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
+		pollCount++
+		w.Header().Set("Content-Type", "application/json")
+		if pollCount == 1 {
+			_, _ = w.Write([]byte(`{"id":"task_123","status":"running"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":"task_123","status":"succeeded","data":[{"url":"https://images.example.test/result.png"}]}`))
+	}))
+	defer upstream.Close()
+
+	previousInterval := managedGeminiAsyncImagePollInterval
+	managedGeminiAsyncImagePollInterval = time.Millisecond
+	t.Cleanup(func() { managedGeminiAsyncImagePollInterval = previousInterval })
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/images/generations", nil)
+	ctx.Set("playground_image_async_worker", true)
+
+	usage, apiErr := managedGeminiAsyncImageHandler(ctx, &relaycommon.RelayInfo{
+		RelayMode: constant.RelayModeImagesGenerations,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelId:         managedGeminiAsyncImagePrimaryChannelID,
+			ChannelBaseUrl:    upstream.URL,
+			ChannelType:       appconstant.ChannelTypeOpenAI,
+			UpstreamModelName: managedGeminiAsyncImageModel,
+			ApiKey:            "test-key",
+		},
+	}, &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"id":"task_123","status":"queued"}`)),
+	})
+
+	require.Nil(t, apiErr)
+	require.Equal(t, 2, pollCount)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Greater(t, usage.TotalTokens, 0)
+	var response dto.ImageResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	require.Len(t, response.Data, 1)
+	require.Equal(t, "https://images.example.test/result.png", response.Data[0].Url)
 }
 
 func TestConvertImageRequestBridgesApprovedGeminiModelsToOpenAIChat(t *testing.T) {

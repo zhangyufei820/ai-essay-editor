@@ -115,16 +115,31 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
     def test_discount_and_plus_families_use_responses_model_circuits(self) -> None:
         families = {family.name: family for family in self.module.TEXT_FAMILIES}
 
-        self.assertEqual(families["discount_text"].channel_ids, (28, 42, 41))
+        self.assertEqual(families["discount_text"].channel_ids, ())
         self.assertEqual(
             families["discount_text"].models,
             ("gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
         )
-        self.assertEqual(families["discount_text"].expected_tags[28], "xingren-discount-text-aihub")
-        self.assertEqual(families["discount_text"].expected_tags[42], "xingren-discount-text-aihub-fallback")
+        self.assertEqual(
+            families["discount_text"].managed_tag_priorities,
+            (
+                ("xingren-discount-text-pdhlzy", 40),
+                ("xingren-discount-text-geek2api", 30),
+                ("xingren-discount-text-aihub", 20),
+                ("xingren-discount-text-wangwang", 10),
+            ),
+        )
+        self.assertEqual(
+            families["discount_text"].managed_tag_fallback,
+            (
+                ("xingren-discount-text-geek2api", 68, 30),
+                ("xingren-discount-text-aihub", 28, 20),
+                ("xingren-discount-text-wangwang", 41, 10),
+            ),
+        )
         self.assertIsNone(families["discount_text"].probe_models_by_tag)
         self.assertEqual(families["discount_text"].ability_group, "discount")
-        self.assertEqual(families["discount_text"].request_formats_by_channel, {42: "chat"})
+        self.assertIsNone(families["discount_text"].request_formats_by_channel)
         self.assertEqual(families["plus_text"].channel_ids, ())
         self.assertEqual(
             families["plus_text"].managed_tag_priorities,
@@ -297,41 +312,34 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertFalse(empty["ok"])
         self.assertEqual(empty["reason"], "chat_not_completed")
 
-    def test_discount_channel_42_uses_chat_probe_only(self) -> None:
+    def test_discount_family_resolves_primary_and_fallbacks_by_tag(self) -> None:
         family = next(family for family in self.module.TEXT_FAMILIES if family.name == "discount_text")
-        channels = {
-            channel_id: {
-                "id": channel_id,
-                "status": 1,
-                "priority": family.baseline_priorities[channel_id],
-                "weight": 100,
-                "group": "discount",
-                "models": ",".join(family.models),
-                "model_mapping": "{}",
-                "tag": family.expected_tags[channel_id],
-                "key": f"test-key-{channel_id}",
-                "base_url": f"https://channel-{channel_id}.invalid",
-            }
-            for channel_id in family.channel_ids
-        }
-        abilities = {
-            (channel_id, model): {"enabled": 1, "tag": channels[channel_id]["tag"]}
-            for channel_id in family.channel_ids
-            for model in family.models
-        }
-        success = {"ok": True, "status": 200, "first_token_ms": 10, "reason": "ok"}
-        with (
-            mock.patch.object(self.module, "load_abilities", return_value=abilities),
-            mock.patch.object(self.module, "request_chat", return_value=success) as chat,
-            mock.patch.object(self.module, "request_responses", return_value=success) as responses,
-            mock.patch.object(self.module, "set_model_ability_enabled"),
-            mock.patch.object(self.module, "write_event"),
-        ):
-            self.module.evaluate_managed_model_family(family, channels, {}, {}, False, False)
+        rows = [
+            {"id": 42, "tag": "xingren-discount-text-pdhlzy"},
+            {"id": 68, "tag": "xingren-discount-text-geek2api"},
+            {"id": 28, "tag": "xingren-discount-text-aihub"},
+            {"id": 41, "tag": "xingren-discount-text-wangwang"},
+        ]
+        with mock.patch.object(self.module, "mysql_json", return_value=rows):
+            resolved = self.module.resolve_dynamic_text_families({}, (family,))[0]
 
-        self.assertTrue(chat.call_args_list)
-        self.assertEqual({call.args[0] for call in chat.call_args_list}, {"https://channel-42.invalid"})
-        self.assertNotIn("https://channel-42.invalid", {call.args[0] for call in responses.call_args_list})
+        self.assertEqual(resolved.channel_ids, (42, 68, 28, 41))
+        self.assertEqual(resolved.baseline_priorities, {42: 40, 68: 30, 28: 20, 41: 10})
+        self.assertEqual(resolved.expected_tags[42], "xingren-discount-text-pdhlzy")
+        self.assertEqual(resolved.request_format, "responses")
+
+    def test_discount_family_keeps_existing_route_until_primary_tag_exists(self) -> None:
+        family = next(family for family in self.module.TEXT_FAMILIES if family.name == "discount_text")
+        rows = [
+            {"id": 68, "tag": "xingren-discount-text-geek2api"},
+            {"id": 28, "tag": "xingren-discount-text-aihub"},
+            {"id": 41, "tag": "xingren-discount-text-wangwang"},
+        ]
+        with mock.patch.object(self.module, "mysql_json", return_value=rows):
+            resolved = self.module.resolve_dynamic_text_families({}, (family,))[0]
+
+        self.assertEqual(resolved.channel_ids, (68, 28, 41))
+        self.assertEqual(resolved.baseline_priorities, {68: 30, 28: 20, 41: 10})
 
     def test_codex_auto_review_maps_to_gpt_55(self) -> None:
         mapping = self.module.parse_model_mapping(

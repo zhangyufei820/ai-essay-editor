@@ -23,7 +23,6 @@ TOKEN_PROFILES = {
     "video": ("星人视频生成令牌",),
 }
 USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
-MONTHLY_CARD_TOKEN_NAMES = ("月卡专用 Key", "¥500 月卡专用")
 CLAUDE_USER_TOKEN_NAME = "claude"
 
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
@@ -31,24 +30,44 @@ GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
 DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
 INTERNAL_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
 FALLBACK_DISCOUNT_IMAGE2_MODEL = "internal-image2-discount-v2"
-DISCOUNT_IMAGE2_CHANNEL_TAG = "geek2api-image2"
-DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG = "xingren-discount-image2-v2"
+DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG = "xingren-discount-image2-pdhlzy-primary"
+DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG = "xingren-discount-image2-v2"
+DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG = "geek2api-image2"
+# Keep the generic names for the staging script and older callers.  The
+# primary is PDHLZY; DDPAPI and Geek2API are the ordered fallbacks.
+DISCOUNT_IMAGE2_CHANNEL_TAG = DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG
+DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG = DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG
 DISCOUNT_IMAGE2_CHANNEL_TAGS = (
     DISCOUNT_IMAGE2_CHANNEL_TAG,
     DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG,
+    DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG,
 )
+DISCOUNT_IMAGE2_CHANNEL_PRIORITIES = {
+    DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG: 32,
+    DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG: 16,
+    DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG: 0,
+}
 DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
-DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：仅支持文生图；已验证 1K/2K/4K 方图，固定 high 质量与 PNG 输出。人民币 1K ¥0.06、2K ¥0.09、4K ¥0.10/张。"
+DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：仅支持文生图；已验证 1K/2K/4K 方图，固定 high 质量与 PNG 输出。人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张。"
+DISCOUNT_IMAGE2_CHANNEL_REMARK = "Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张"
 DISCOUNT_IMAGE2_TAGS = "image,openai,internal-hidden"
 DISCOUNT_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
 DISCOUNT_IMAGE2_BASE_PRICE_CNY = Decimal("0.06")
 RETIRED_IMAGE_MODELS: tuple[str, ...] = ()
 INTERNAL_STABLE_IMAGE2_MODEL = "internal-image2-stable-v1"
 STABLE_IMAGE2_PUBLIC_MODEL = "官转image 2稳定"
-STABLE_IMAGE2_DESCRIPTION = "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.135/张。"
+STABLE_IMAGE2_DESCRIPTION = "官转image 2稳定：支持 1K/2K/4K 输出，人民币 ¥0.17/张。"
 STABLE_IMAGE2_TAGS = "image,openai"
 STABLE_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
-STABLE_IMAGE2_PRICE_CNY = Decimal("0.135")
+STABLE_IMAGE2_PRICE_CNY = Decimal("0.17")
+STABLE_IMAGE2_PRIMARY_CHANNEL_TAG = "xingren-stable-image2"
+STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG = "xingren-stable-image2-enterprise-fallback"
+STABLE_IMAGE2_CHANNEL_PRIORITIES = {
+    STABLE_IMAGE2_PRIMARY_CHANNEL_TAG: 16,
+    STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG: 0,
+}
+STABLE_IMAGE2_CHANNEL_REMARK = "Image 2 稳定线路；人民币 ¥0.17/张"
+STABLE_IMAGE2_ENTERPRISE_FALLBACK_REMARK = "Image 2 稳定备用线路；人民币 ¥0.17/张"
 GROK_IMAGE_MODEL = "grok-imagine-image"
 GROK_IMAGE_DESCRIPTION = "Grok Image Pro：当前供应商实际仅返回约 1K，仅支持文生图，人民币 ¥0.055/张。"
 GROK_IMAGE_ENDPOINTS = '{"image-generation":"/v1/images/generations"}'
@@ -91,8 +110,9 @@ PUBLIC_ALIAS_BACKING_MODELS = {
 }
 DISCOUNT_TEXT_GROUP = "discount"
 DISCOUNT_TEXT_CHANNEL_TAGS = (
+    "xingren-discount-text-pdhlzy",
+    "xingren-discount-text-geek2api",
     "xingren-discount-text-aihub",
-    "xingren-discount-text-aihub-fallback",
     "xingren-discount-text-wangwang",
 )
 DISCOUNT_TEXT_ALLOWED_MODELS = (
@@ -142,7 +162,6 @@ PLUS_TEXT_ALLOWED_MODELS = (
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.5",
-    "gpt-5.6-luna",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "codex-auto-review",
@@ -214,7 +233,6 @@ CODEX_ALLOWED_MODELS = [
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.6",
-    "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     "kimi-k3",
@@ -392,12 +410,11 @@ CODEX_TEXT_CHANNEL_ID = "21"
 CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
     "gpt-5.5",
     "gpt-5.4",
-    "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     CODEX_AUTO_REVIEW_MODEL,
 ]
-RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact")
+RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact", "gpt-5.6-luna")
 PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M: dict[str, dict[str, Decimal]] = {}
 PUBLIC_VIDEO_FIXED_PRICES_CNY = {
     "grok-video-super-720p": Decimal("6.50"),
@@ -1500,13 +1517,41 @@ def grok46_media_release_state(kind: str) -> str:
 
 def discount_image2_release_state() -> str:
     rows = mysql(
-        "SELECT status, REPLACE(COALESCE(`group`, ''), ' ', '') FROM channels WHERE tag = "
-        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
-        + " ORDER BY id"
+        "SELECT COALESCE(tag, ''), status, REPLACE(COALESCE(`group`, ''), ' ', ''), "
+        "REPLACE(COALESCE(models, ''), ' ', '') FROM channels WHERE tag IN ("
+        + ", ".join(sql_quote(tag) for tag in DISCOUNT_IMAGE2_CHANNEL_TAGS)
+        + ") ORDER BY tag, id"
     )
-    if len(rows) != 1 or rows[0][0] != "1":
+    by_tag: dict[str, list[str]] = {}
+    for row in rows:
+        if len(row) != 4 or row[0] in by_tag:
+            return "invalid"
+        by_tag[row[0]] = row
+
+    fallback_tags = (
+        DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG,
+        DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG,
+    )
+    if any(tag not in by_tag for tag in fallback_tags):
         return "unavailable"
-    groups = rows[0][1]
+    for tag in fallback_tags:
+        _tag, status, groups, models = by_tag[tag]
+        if (
+            status != "1"
+            or groups != DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS
+            or models != INTERNAL_DISCOUNT_IMAGE2_MODEL
+        ):
+            return "invalid"
+
+    primary = by_tag.get(DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG)
+    # The existing verified DDPAPI + Geek2API pair keeps the public model
+    # available during the one-time deployment that introduces the new
+    # PDHLZY primary channel.
+    if primary is None:
+        return "published"
+    _tag, status, groups, models = primary
+    if status != "1" or models != INTERNAL_DISCOUNT_IMAGE2_MODEL:
+        return "invalid"
     if groups == "internal":
         return "staged"
     if groups == DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS:
@@ -1961,27 +2006,46 @@ def ensure_discount_image2_backing_model() -> None:
 
 
 def ensure_discount_image2_primary_and_fallback_channels() -> None:
-    """Keep the verified primary/fallback pair ordered without touching credentials."""
+    """Keep the verified three-channel order without touching credentials."""
     mapping = json.dumps({INTERNAL_DISCOUNT_IMAGE2_MODEL: RAW_GPT_IMAGE2_MODEL}, separators=(",", ":"))
     statements = [
         "START TRANSACTION;",
-        "UPDATE channels SET status = 1, priority = 16, weight = 100, models = "
+        "UPDATE channels SET status = 1, priority = "
+        + str(DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG])
+        + ", weight = 100, models = "
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
-        + ", `group` = "
-        + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
         + ", model_mapping = "
         + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_REMARK)
         + " WHERE tag = "
-        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_TAG)
+        + sql_quote(DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG)
         + ";",
-        "UPDATE channels SET status = 1, priority = 0, weight = 100, models = "
+        "UPDATE channels SET status = 1, priority = "
+        + str(DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG])
+        + ", weight = 100, models = "
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
         + ", `group` = "
         + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
         + ", model_mapping = "
         + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_REMARK)
         + " WHERE tag = "
-        + sql_quote(DISCOUNT_IMAGE2_FALLBACK_CHANNEL_TAG)
+        + sql_quote(DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG)
+        + ";",
+        "UPDATE channels SET status = 1, priority = "
+        + str(DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG])
+        + ", weight = 100, models = "
+        + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+        + ", `group` = "
+        + sql_quote(DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS)
+        + ", model_mapping = "
+        + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(DISCOUNT_IMAGE2_CHANNEL_REMARK)
+        + " WHERE tag = "
+        + sql_quote(DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG)
         + ";",
         "COMMIT;",
     ]
@@ -2033,6 +2097,38 @@ def ensure_stable_image2_backing_model() -> None:
         "WHERE id = @keep_model_id;",
         "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
         "WHERE model_name = @stable_image2_model AND id <> @keep_model_id;",
+        "COMMIT;",
+    ]
+    mysql_exec("\n".join(statements))
+
+
+def ensure_stable_image2_channel_order() -> None:
+    """Keep the stable Image 2 primary/fallback ordering without touching credentials."""
+    mapping = json.dumps({INTERNAL_STABLE_IMAGE2_MODEL: RAW_GPT_IMAGE2_MODEL}, separators=(",", ":"))
+    statements = [
+        "START TRANSACTION;",
+        "UPDATE channels SET status = 1, priority = "
+        + str(STABLE_IMAGE2_CHANNEL_PRIORITIES[STABLE_IMAGE2_PRIMARY_CHANNEL_TAG])
+        + ", weight = 100, models = "
+        + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+        + ", model_mapping = "
+        + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(STABLE_IMAGE2_CHANNEL_REMARK)
+        + " WHERE tag = "
+        + sql_quote(STABLE_IMAGE2_PRIMARY_CHANNEL_TAG)
+        + ";",
+        "UPDATE channels SET status = 1, priority = "
+        + str(STABLE_IMAGE2_CHANNEL_PRIORITIES[STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG])
+        + ", weight = 100, models = "
+        + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+        + ", model_mapping = "
+        + sql_quote(mapping)
+        + ", remark = "
+        + sql_quote(STABLE_IMAGE2_ENTERPRISE_FALLBACK_REMARK)
+        + " WHERE tag = "
+        + sql_quote(STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG)
+        + ";",
         "COMMIT;",
     ]
     mysql_exec("\n".join(statements))
@@ -2190,7 +2286,7 @@ def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict
     names = TOKEN_PROFILES["codex"]
     required_models = profiles["codex"] if profiles and profiles.get("codex") else CODEX_ALLOWED_MODELS
     name_predicates = [
-        "name IN (" + ", ".join(sql_quote(name) for name in (*names, *MONTHLY_CARD_TOKEN_NAMES)) + ")",
+        "name IN (" + ", ".join(sql_quote(name) for name in names) + ")",
         *[
             "name LIKE " + sql_quote(prefix + "%")
             for prefix in USER_CODEX_TOKEN_NAME_PREFIXES
@@ -3229,6 +3325,7 @@ def main() -> int:
     ensure_discount_image2_backing_model()
     ensure_discount_image2_primary_and_fallback_channels()
     ensure_stable_image2_backing_model()
+    ensure_stable_image2_channel_order()
     ensure_gemini_ddpapi_image_models()
     sync_grok_image_metadata()
     ensure_public_openai_text_models()

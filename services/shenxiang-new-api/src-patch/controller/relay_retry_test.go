@@ -253,6 +253,18 @@ func TestShouldRetryExplicitGroupChainStopsAfterResponsesOutput(t *testing.T) {
 	require.False(t, shouldRetry(ctx, upstreamErr, 1))
 }
 
+func TestShouldRetryStopsWhenResponsesClientDisconnected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil).WithContext(ctx)
+	upstreamErr := types.NewOpenAIError(errors.New("upstream unavailable"), types.ErrorCodeDoRequestFailed, http.StatusServiceUnavailable)
+
+	require.False(t, shouldRetry(c, upstreamErr, 1))
+}
+
 func TestWriteResponsesStreamErrorWritesOneExplicitSSEError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()

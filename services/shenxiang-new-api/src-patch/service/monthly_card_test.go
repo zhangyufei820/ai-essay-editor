@@ -21,7 +21,7 @@ func TestMonthlyCardAllowedModelsMatchSubscriptionWhitelist(t *testing.T) {
 	require.NotContains(t, allowed, "seedance-2.0-cl-mini")
 	require.NotContains(t, allowed, "gpt-5.3-codex-spark")
 	require.NotContains(t, allowed, "gpt-5.3-spark")
-	require.Contains(t, allowed, "gpt-5.6-luna")
+	require.NotContains(t, allowed, "gpt-5.6-luna")
 	require.Contains(t, allowed, "gpt-5.6-terra")
 	require.Contains(t, allowed, "gpt-5.6-sol")
 	require.Contains(t, allowed, "gpt-5.5-openai-compact")
@@ -46,7 +46,7 @@ func TestMonthlyCardChannelRejectsClaudeModels(t *testing.T) {
 func TestSubscriptionFundingModelGuardOnlyAppliesToMonthlyCardUsers(t *testing.T) {
 	require.True(t, canUseSubscriptionFundingForModel(false, "claude-opus-4-6"))
 	require.True(t, canUseSubscriptionFundingForModel(true, "gpt-5.5"))
-	require.True(t, canUseSubscriptionFundingForModel(true, "gpt-5.6-luna"))
+	require.False(t, canUseSubscriptionFundingForModel(true, "gpt-5.6-luna"))
 	require.True(t, canUseSubscriptionFundingForModel(true, "gpt-5.6-terra"))
 	require.True(t, canUseSubscriptionFundingForModel(true, "gpt-5.6-sol"))
 	require.True(t, canUseSubscriptionFundingForModel(true, "image 2电商商品图快速通道(1.5K)"))

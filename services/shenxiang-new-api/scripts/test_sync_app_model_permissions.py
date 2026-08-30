@@ -36,7 +36,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
     def test_codex_allowed_models_include_controlled_review_alias(self) -> None:
         self.assertIn("image 2电商商品图快速通道(1.5K)", self.module.CODEX_ALLOWED_MODELS)
-        self.assertIn("gpt-5.6-luna", self.module.CODEX_ALLOWED_MODELS)
+        self.assertNotIn("gpt-5.6-luna", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.6-terra", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.6-sol", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("kimi-k3", self.module.CODEX_ALLOWED_MODELS)
@@ -83,8 +83,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(
             self.module.DISCOUNT_TEXT_CHANNEL_TAGS,
             (
+                "xingren-discount-text-pdhlzy",
+                "xingren-discount-text-geek2api",
                 "xingren-discount-text-aihub",
-                "xingren-discount-text-aihub-fallback",
                 "xingren-discount-text-wangwang",
             ),
         )
@@ -260,15 +261,40 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
 
     def test_discount_image2_release_state_requires_exact_managed_groups(self) -> None:
+        primary = self.module.DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG
+        ddpapi = self.module.DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG
+        geek2api = self.module.DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG
+        internal_model = self.module.INTERNAL_DISCOUNT_IMAGE2_MODEL
+        public_groups = self.module.DISCOUNT_IMAGE2_PUBLIC_CHANNEL_GROUPS
+        fallback_rows = [
+            [ddpapi, "1", public_groups, internal_model],
+            [geek2api, "1", public_groups, internal_model],
+        ]
         for rows, expected in (
             ([], "unavailable"),
-            ([["1", "internal"]], "staged"),
-            ([["1", "default,standard,pro,code,internal"]], "published"),
-            ([["1", "default,internal"]], "invalid"),
-            ([["2", "default,standard,pro,code,internal"]], "unavailable"),
+            (fallback_rows, "published"),
+            (fallback_rows + [[primary, "1", "internal", internal_model]], "staged"),
+            (fallback_rows + [[primary, "1", public_groups, internal_model]], "published"),
+            (fallback_rows + [[primary, "1", "default,internal", internal_model]], "invalid"),
+            (fallback_rows + [[primary, "2", public_groups, internal_model]], "invalid"),
+            ([[ddpapi, "1", public_groups, internal_model]], "unavailable"),
         ):
             self.module.mysql = lambda _query, rows=rows: rows
             self.assertEqual(self.module.discount_image2_release_state(), expected)
+
+    def test_discount_image2_reconcile_orders_primary_and_two_fallbacks(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_discount_image2_primary_and_fallback_channels()
+
+        sql = "\n".join(captured)
+        for tag, priority in self.module.DISCOUNT_IMAGE2_CHANNEL_PRIORITIES.items():
+            self.assertIn("priority = " + str(priority), sql)
+            self.assertIn("WHERE tag = '" + tag + "'", sql)
+        self.assertEqual(1, sql.count("WHERE tag = 'xingren-discount-image2-pdhlzy-primary'"))
+        self.assertIn("`group` = 'default,standard,pro,code,internal'", sql)
+        self.assertEqual(3, sql.count("remark = 'Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张'"))
 
     def test_staged_discount_image2_is_admin_only_until_published(self) -> None:
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
@@ -345,7 +371,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -353,7 +379,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_token_cache_key_uses_crypto_secret_hmac(self) -> None:
@@ -444,7 +470,6 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 "gpt-5.5",
                 "gpt-5.4",
                 "gpt-5.4-mini",
-                "gpt-5.6-luna",
                 "gpt-5.6-terra",
                 "gpt-5.6-sol",
                 "gpt-5.5-openai-compact",
@@ -512,6 +537,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     ["31", "gpt-5.5", "30", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[0], "discount"],
                     ["32", "gpt-5.5", "20", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[1], "discount"],
                     ["33", "gpt-5.5", "10", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[2], "discount"],
+                    ["34", "gpt-5.5", "10", "100", self.module.DISCOUNT_TEXT_CHANNEL_TAGS[3], "discount"],
                     ["21", "gpt-5.5", "0", "100", "stable", "default,internal"],
                     ["7", "grok-video-super-720p", "15", "100", "xingren-grok-video", "default,internal"],
                 ]
@@ -526,7 +552,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.sync_abilities()
 
         sql = "\n".join(captured)
-        for channel_id, tag in zip(("31", "32", "33"), self.module.DISCOUNT_TEXT_CHANNEL_TAGS):
+        for channel_id, tag in zip(("31", "32", "33", "34"), self.module.DISCOUNT_TEXT_CHANNEL_TAGS):
             self.assertIn("SELECT 'discount', 'gpt-5.5', " + channel_id, sql)
             self.assertNotIn("'default', 'gpt-5.5', " + channel_id, sql)
             self.assertIn("COALESCE(current_channel.tag, '') = '" + tag + "'", sql)
@@ -943,7 +969,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sql = "\n".join(captured)
         self.assertIn("geek2api-image-2", sql)
         self.assertIn("特价 image-2", sql)
-        self.assertIn("1K ¥0.06、2K ¥0.09、4K ¥0.10", sql)
+        self.assertIn("1K ¥0.06、2K ¥0.09、4K ¥0.13", sql)
         self.assertNotIn("new.ddpapi.top", sql)
         self.assertIn('/v1/images/generations', sql)
         self.assertNotIn('/v1/images/edits', sql)
@@ -957,10 +983,22 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sql = "\n".join(captured)
         self.assertIn("internal-image2-stable-v1", sql)
         self.assertIn("官转image 2稳定", sql)
-        self.assertIn("¥0.135/张", sql)
+        self.assertIn("¥0.17/张", sql)
         self.assertNotIn("smile-ai-studio", sql)
         self.assertIn('/v1/images/generations', sql)
         self.assertNotIn('/v1/images/edits', sql)
+
+    def test_ensure_stable_image2_channel_order_preserves_primary_and_fallback(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_stable_image2_channel_order()
+
+        sql = "\n".join(captured)
+        for tag, priority in self.module.STABLE_IMAGE2_CHANNEL_PRIORITIES.items():
+            self.assertIn("priority = " + str(priority), sql)
+            self.assertIn("WHERE tag = '" + tag + "'", sql)
+        self.assertIn("Image 2 稳定备用线路；人民币 ¥0.17/张", sql)
 
     def test_ensure_gemini_ddpapi_models_uses_public_metadata(self) -> None:
         captured: list[str] = []
@@ -996,7 +1034,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("特价 image-2", captured_options["CompletionRatio"])
         self.assertAlmostEqual(
             captured_options["ModelPrice"]["官转image 2稳定"],
-            0.018493150685,
+            0.023287671233,
             places=12,
         )
         self.assertNotIn("官转image 2稳定", captured_options["ModelRatio"])
@@ -1075,7 +1113,6 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             {
                 "codex": [
                     "gpt-5.5",
-                    "gpt-5.6-luna",
                     "gpt-5.6-terra",
                     "gpt-5.6-sol",
                     "codex-auto-review",
@@ -1095,7 +1132,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '103'", sql)
         self.assertNotIn("WHERE id = '104'", sql)
         self.assertIn("WHERE id = '105'", sql)
-        self.assertIn("gpt-5.6-luna", sql)
+        self.assertNotIn("gpt-5.6-luna", sql)
         self.assertIn("gpt-5.6-terra", sql)
         self.assertIn("gpt-5.6-sol", sql)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
@@ -1118,8 +1155,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         def fake_mysql(query: str) -> list[list[str]]:
             self.assertIn("user_id <> 1", query)
             self.assertIn("name LIKE '星人Codex %'", query)
-            self.assertIn("'月卡专用 Key'", query)
-            self.assertIn("'¥500 月卡专用'", query)
+            self.assertNotIn("'月卡专用 Key'", query)
+            self.assertNotIn("'¥500 月卡专用'", query)
             self.assertIn("COALESCE(`key`, '')", query)
             self.assertNotIn("model_limits_enabled = 1", query)
             full_limits = (
@@ -1151,8 +1188,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '106'", sql)
         self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105,key-106", sql)
         self.assertIn("model_limits_enabled = 1", sql)
-        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
-        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("gpt-5.3-codex-spark", sql)
         self.assertNotIn("gpt-5.3-spark", sql)
         self.assertNotIn("gpt-5.4-openai-compact", sql)
@@ -1765,7 +1802,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
         sql = "\n".join(captured)
         self.assertIn("UPDATE channels SET models", sql)
-        self.assertIn("gpt-5.5,gpt-5.4,codex-auto-review,gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,codex-auto-review,gpt-5.6-terra,gpt-5.6-sol", sql)
         self.assertNotIn("gpt-5.3-codex-spark", sql)
         self.assertNotIn("gpt-5.3-spark", sql)
         self.assertNotIn("gpt-5.4-openai-compact", sql)
@@ -1786,9 +1823,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             result,
-            {"channel_found": 1, "models_updated": 0, "mapping_updated": 0, "models_retired": 0, "mapping_retired": 0},
+            {"channel_found": 1, "models_updated": 1, "mapping_updated": 0, "models_retired": 1, "mapping_retired": 0},
         )
-        self.assertEqual(captured, [])
+        self.assertNotIn("gpt-5.6-luna", "\n".join(captured))
 
     def test_main_continues_core_permission_sync_when_optional_claude_reconcile_fails(self) -> None:
         profiles = {
@@ -1815,6 +1852,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             ensure_discount_image2_backing_model=no_result,
             ensure_discount_image2_primary_and_fallback_channels=no_result,
             ensure_stable_image2_backing_model=no_result,
+            ensure_stable_image2_channel_order=no_result,
             ensure_gemini_ddpapi_image_models=no_result,
             sync_grok_image_metadata=no_result,
             ensure_public_openai_text_models=no_result,
@@ -1864,6 +1902,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             ensure_discount_image2_backing_model=no_result,
             ensure_discount_image2_primary_and_fallback_channels=no_result,
             ensure_stable_image2_backing_model=no_result,
+            ensure_stable_image2_channel_order=no_result,
             ensure_gemini_ddpapi_image_models=no_result,
             sync_grok_image_metadata=no_result,
             ensure_public_openai_text_models=no_result,

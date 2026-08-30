@@ -34,7 +34,6 @@ CODEX_ALLOWED_MODELS = (
     "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
-    "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     "kimi-k3",
@@ -72,6 +71,7 @@ RETIRED_CODEX_TEXT_MODELS = (
     "gpt-5.3-codex-spark",
     "gpt-5.3-spark",
     "gpt-5.4-openai-compact",
+    "gpt-5.6-luna",
 )
 
 

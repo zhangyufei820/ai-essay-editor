@@ -39,7 +39,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$TOKEN_PROFILE" in
-  codex) TOKEN_NAME="星人 Codex 文本令牌"; MODEL="gpt-5.4-mini" ;;
+  codex) TOKEN_NAME="星人 Codex 文本令牌"; MODEL="gpt-5.5" ;;
   image) TOKEN_NAME="星人图像生成令牌"; MODEL="gpt-image-2-4K" ;;
   claude) TOKEN_NAME="星人 Claude 高阶令牌"; MODEL="claude-sonnet-4-6" ;;
   video) TOKEN_NAME="星人视频生成令牌"; MODEL="seedance-2.0-cl-mini" ;;

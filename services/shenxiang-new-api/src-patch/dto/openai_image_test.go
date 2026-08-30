@@ -63,7 +63,7 @@ func TestImageRequestDiscountImage2UsesCNYTierPrice(t *testing.T) {
 		{
 			name:      "extra body 4K",
 			raw:       `{"model":"特价 image-2","prompt":"poster","extra_body":{"google":{"image_config":{"image_size":"4K"}}}}`,
-			wantPrice: 0.10,
+			wantPrice: 0.13,
 		},
 		{
 			name:      "pixel size infers 2K",
@@ -196,6 +196,6 @@ func TestImageRequestStableImage2UsesFixedCNYPrice(t *testing.T) {
 	} {
 		var request ImageRequest
 		require.NoError(t, json.Unmarshal([]byte(raw), &request))
-		require.InDelta(t, 0.135, request.GetTokenCountMeta().ImagePriceCNY, 0.000001)
+		require.InDelta(t, 0.17, request.GetTokenCountMeta().ImagePriceCNY, 0.000001)
 	}
 }

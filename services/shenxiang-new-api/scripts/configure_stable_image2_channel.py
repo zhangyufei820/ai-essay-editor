@@ -18,7 +18,9 @@ INTERNAL_MODEL = "internal-image2-stable-v1"
 UPSTREAM_MODEL = "gpt-image-2"
 CHANNEL_NAME = "星人 Image 2 稳定通道"
 CHANNEL_TAG = "xingren-stable-image2"
-EXPECTED_BASE_URL = "https://api.smile-ai-studio.com"
+FALLBACK_CHANNEL_TAG = "xingren-stable-image2-enterprise-fallback"
+PRIMARY_PRIORITY = 16
+EXPECTED_BASE_URL = "https://moonapix.com"
 UPSTREAM_KEY_ENV = "STABLE_IMAGE2_UPSTREAM_API_KEY"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_RESPONSE_BYTES = 32 * 1024 * 1024
@@ -206,8 +208,11 @@ def validate_channel_uniqueness() -> None:
     if (int(rows[0][0]) if rows else 0) > 1:
         raise ConfigurationError("multiple channels use the reserved image channel tag")
     rows = mysql(
-        "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') <> "
+        "SELECT COUNT(*) FROM channels WHERE COALESCE(tag, '') NOT IN ("
         + sql_quote(CHANNEL_TAG)
+        + ", "
+        + sql_quote(FALLBACK_CHANNEL_TAG)
+        + ")"
         + " AND FIND_IN_SET("
         + sql_quote(INTERNAL_MODEL)
         + ", REPLACE(COALESCE(models, ''), ' ', '')) > 0"
@@ -242,7 +247,7 @@ def build_apply_sql(api_key: str, base_url: str) -> str:
                     sql_quote(INTERNAL_MODEL),
                     sql_quote("default"),
                     sql_quote(mapping),
-                    "0",
+                    str(PRIMARY_PRIORITY),
                     "1",
                     sql_quote(CHANNEL_TAG),
                     sql_quote("Image 2 稳定线路"),
@@ -260,7 +265,9 @@ def build_apply_sql(api_key: str, base_url: str) -> str:
             + sql_quote(INTERNAL_MODEL)
             + ", `group` = 'default', model_mapping = "
             + sql_quote(mapping)
-            + ", priority = 0, auto_ban = 1, tag = "
+            + ", priority = "
+            + str(PRIMARY_PRIORITY)
+            + ", auto_ban = 1, tag = "
             + sql_quote(CHANNEL_TAG)
             + ", remark = 'Image 2 稳定线路' WHERE id = @stable_channel_id;",
             "UPDATE abilities SET enabled = 0 WHERE channel_id = @stable_channel_id;",

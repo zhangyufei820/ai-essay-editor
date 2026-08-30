@@ -69,6 +69,7 @@ class TextFamily:
     ability_group: str | None = None
     manage_model_abilities: bool = False
     managed_tag_priorities: tuple[tuple[str, int], ...] = ()
+    managed_tag_fallback: tuple[tuple[str, int, int], ...] = ()
     probe_models_by_tag: dict[str, tuple[str, ...]] | None = None
     request_formats_by_channel: dict[int, str] | None = None
 
@@ -83,19 +84,24 @@ TEXT_FAMILIES = (
     TextFamily(
         name="discount_text",
         models=("gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
-        channel_ids=(28, 42, 41),
-        baseline_priorities={28: 30, 42: 20, 41: 10},
+        channel_ids=(),
+        baseline_priorities={},
         allow_disable=False,
         standalone=True,
         request_format="responses",
-        expected_tags={
-            28: "xingren-discount-text-aihub",
-            42: "xingren-discount-text-aihub-fallback",
-            41: "xingren-discount-text-wangwang",
-        },
         ability_group="discount",
         manage_model_abilities=True,
-        request_formats_by_channel={42: "chat"},
+        managed_tag_priorities=(
+            ("xingren-discount-text-pdhlzy", 40),
+            ("xingren-discount-text-geek2api", 30),
+            ("xingren-discount-text-aihub", 20),
+            ("xingren-discount-text-wangwang", 10),
+        ),
+        managed_tag_fallback=(
+            ("xingren-discount-text-geek2api", 68, 30),
+            ("xingren-discount-text-aihub", 28, 20),
+            ("xingren-discount-text-wangwang", 41, 10),
+        ),
     ),
     TextFamily(
         name="plus_text",
@@ -436,6 +442,27 @@ def resolve_dynamic_text_families(
             if len(channel_ids_by_tag.get(tag, ())) > 1
         ]
         if missing or duplicates:
+            if (
+                family.managed_tag_fallback
+                and not duplicates
+                and missing == [family.managed_tag_priorities[0][0]]
+            ):
+                fallback_ids = tuple(channel_id for _tag, channel_id, _priority in family.managed_tag_fallback)
+                resolved.append(
+                    replace(
+                        family,
+                        channel_ids=fallback_ids,
+                        baseline_priorities={
+                            channel_id: priority
+                            for _tag, channel_id, priority in family.managed_tag_fallback
+                        },
+                        expected_tags={
+                            channel_id: tag
+                            for tag, channel_id, _priority in family.managed_tag_fallback
+                        },
+                    )
+                )
+                continue
             details = []
             if missing:
                 details.append("missing tags: " + ",".join(missing))

@@ -43,7 +43,7 @@ const requiredClassicOnlyMarkers = {
   mediaPromptLimitProp: 'promptMaxLength={MEDIA_PROMPT_MAX_LENGTH}',
   promptTextareaMaxLength: 'maxLength={promptLimit}',
   discountImage2StableLabel: "statusLabel: '稳定'",
-  discountImage2TierPriceLabel: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.10',
+  discountImage2TierPriceLabel: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.13',
   compactModelOptionLabel: 'function modelOptionDisplayLabel(model)',
 }
 

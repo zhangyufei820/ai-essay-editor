@@ -17,7 +17,6 @@ const DISCOUNT_TEXT_MODELS = new Set([
   'gpt-5.4-mini',
   'gpt-5.5',
   'gpt-5.5-openai-compact',
-  'gpt-5.6-luna',
   'gpt-5.6',
   'gpt-5.6-terra',
   'gpt-5.6-sol',
@@ -28,7 +27,6 @@ const PLUS_TEXT_MODELS = new Set([
   'gpt-5.4',
   'gpt-5.4-mini',
   'gpt-5.5',
-  'gpt-5.6-luna',
   'gpt-5.6-terra',
   'gpt-5.6-sol',
   'codex-auto-review',
@@ -59,7 +57,6 @@ const REASONING_EFFORT_OPTIONS_BY_MODEL = new Map([
   ['gpt-5.6', GPT_55_REASONING_EFFORT_OPTIONS],
   ['gpt-5.6-sol', GPT_55_REASONING_EFFORT_OPTIONS],
   ['gpt-5.6-terra', GPT_55_REASONING_EFFORT_OPTIONS],
-  ['gpt-5.6-luna', GPT_55_REASONING_EFFORT_OPTIONS],
 ]);
 
 function isHiddenTextModel(modelName) {

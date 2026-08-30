@@ -25,6 +25,9 @@ const (
 	InitialScannerBufferSize    = 64 << 10  // 64KB (64*1024)
 	DefaultMaxScannerBufferSize = 128 << 20 // 64MB (64*1024*1024) default SSE buffer size
 	DefaultPingInterval         = 10 * time.Second
+	// DefaultResponsesInitialResponseTimeout bounds only the wait for the first
+	// usable /v1/responses SSE event, before desktop clients give up silently.
+	DefaultResponsesInitialResponseTimeout = 45 * time.Second
 	// streamWriteTimeout bounds a single blocked write to a slow client so the
 	// unconditional wg.Wait() in cleanup can always finish. Without it, a slow
 	// but connected client (full TCP buffer, no server WriteTimeout) could hang
@@ -67,6 +70,20 @@ func shouldDrainResponsesUsageAfterClientGone(c *gin.Context) bool {
 		c.GetBool("response_stream_output_sent")
 }
 
+func responsesInitialResponseTimeout(c *gin.Context) time.Duration {
+	if c == nil || c.Request == nil || c.Request.URL == nil || c.Request.URL.Path != "/v1/responses" {
+		return 0
+	}
+	seconds := common.GetEnvOrDefault(
+		"RESPONSES_INITIAL_RESPONSE_TIMEOUT",
+		int(DefaultResponsesInitialResponseTimeout.Seconds()),
+	)
+	if seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
+}
+
 func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo, dataHandler func(data string, sr *StreamResult)) {
 	if resp == nil || dataHandler == nil {
 		return
@@ -78,6 +95,13 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	ctx, cancel := context.WithCancel(context.Background())
 
 	streamingTimeout := time.Duration(constant.StreamingTimeout) * time.Second
+	initialResponseTimeout := responsesInitialResponseTimeout(c)
+	var initialResponseTimer *time.Timer
+	var initialResponseTimeoutChan <-chan time.Time
+	if initialResponseTimeout > 0 {
+		initialResponseTimer = time.NewTimer(initialResponseTimeout)
+		initialResponseTimeoutChan = initialResponseTimer.C
+	}
 
 	var (
 		stopChan    = make(chan bool, 3) // 增加缓冲区避免阻塞
@@ -111,6 +135,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	logger.LogDebug(c, "relay max idle conns: %d", common.RelayMaxIdleConns)
 	logger.LogDebug(c, "relay max idle conns per host: %d", common.RelayMaxIdleConnsPerHost)
 	logger.LogDebug(c, "streaming timeout seconds: %d", int64(streamingTimeout.Seconds()))
+	if initialResponseTimeout > 0 {
+		logger.LogDebug(c, "responses initial response timeout seconds: %d", int64(initialResponseTimeout.Seconds()))
+	}
 	logger.LogDebug(c, "ping interval seconds: %d", int64(pingInterval.Seconds()))
 
 	cleanup := func() {
@@ -122,6 +149,12 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			}
 
 			ticker.Stop()
+			if initialResponseTimer != nil && !initialResponseTimer.Stop() {
+				select {
+				case <-initialResponseTimer.C:
+				default:
+				}
+			}
 			if pingTicker != nil {
 				pingTicker.Stop()
 			}
@@ -254,6 +287,12 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				continue
 			}
 			if !strings.HasPrefix(data, "[DONE]") {
+				if initialResponseTimer != nil && !initialResponseTimer.Stop() {
+					select {
+					case <-initialResponseTimer.C:
+					default:
+					}
+				}
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
 
@@ -283,6 +322,8 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	// 主循环等待完成或超时
 	select {
 	case <-ticker.C:
+		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonTimeout, nil)
+	case <-initialResponseTimeoutChan:
 		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonTimeout, nil)
 	case <-stopChan:
 		// EndReason already set by the goroutine that triggered stopChan

@@ -197,9 +197,9 @@ const IMAGE_MODELS = [
     backgroundOptions: ['auto', 'opaque'],
     edit: true,
     statusLabel: '稳定',
-    priceLabel: '¥0.135/张',
+    priceLabel: '¥0.17/张',
     billingLabel: '按张计费',
-    hint: '稳定图像生成与编辑线路，支持 1K / 2K / 4K 和合法自定义 WxH，固定 ¥0.135/张。',
+    hint: '稳定图像生成与编辑线路，支持 1K / 2K / 4K 和合法自定义 WxH；1K / 2K / 4K 均固定 ¥0.17/张。',
   },
   {
     value: '特价 image-2',
@@ -220,9 +220,9 @@ const IMAGE_MODELS = [
     backgroundOptions: [],
     edit: false,
     statusLabel: '稳定',
-    priceLabel: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.10',
+    priceLabel: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.13',
     billingLabel: '按张计费',
-    hint: '仅支持文生图；支持与 Image 2 一致的画面比例及 1K / 2K / 4K，固定 high 质量与 PNG 输出。费用：1K ¥0.06，2K ¥0.09，4K ¥0.10。',
+    hint: '仅支持文生图；支持与 Image 2 一致的画面比例及 1K / 2K / 4K，固定 high 质量与 PNG 输出。费用：1K ¥0.06，2K ¥0.09，4K ¥0.13。',
   },
   {
     value: 'banana-2',
@@ -1177,7 +1177,7 @@ const IMAGE_LONG_WAIT_MESSAGE =
 const IMAGE_VERY_LONG_WAIT_MS = 180 * 1000;
 const IMAGE_VERY_LONG_WAIT_MESSAGE =
   '图像任务已进入长尾等待，系统仍会继续轮询并保留任务结果。请保持当前页面或稍后用任务 ID 查询。';
-const REVERSE_PROMPT_MODEL = 'gpt-5.4-mini';
+const REVERSE_PROMPT_MODEL = 'gpt-5.5';
 const REVERSE_PROMPT_MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const REVERSE_PROMPT_REFERENCE_PREFIX = '我需要按参考图生成图片：';
 const REVERSE_PROMPT_INSTRUCTION_BASE =

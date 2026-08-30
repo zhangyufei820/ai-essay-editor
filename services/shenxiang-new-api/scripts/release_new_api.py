@@ -440,6 +440,11 @@ class Release:
             else:
                 run([*docker_go, "-count=1", package])
 
+        permission_sync_test = self.checkout / "services/shenxiang-new-api/scripts/test_sync_app_model_permissions.py"
+        if not permission_sync_test.is_file():
+            raise ReleaseError("candidate is missing model permission sync tests")
+        run(["python3", str(permission_sync_test)])
+
     def build_image(self) -> None:
         labels = self.image_labels(self.image)
         expected = self.expected_labels()

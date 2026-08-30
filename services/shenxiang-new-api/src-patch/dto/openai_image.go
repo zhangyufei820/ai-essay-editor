@@ -166,7 +166,7 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 	if priceCNY, ok := discountImage2PriceCNY(i); ok {
 		imagePriceCNY = priceCNY
 	} else if isStableImage2Model(i.Model) {
-		imagePriceCNY = 0.135
+		imagePriceCNY = 0.17
 	}
 
 	// n is NOT included here; it is handled via OtherRatio("n") in
@@ -193,7 +193,7 @@ func discountImage2PriceCNY(request *ImageRequest) (float64, bool) {
 	}
 	switch discountImage2Resolution(request) {
 	case "4K":
-		return 0.10, true
+		return 0.13, true
 	case "2K":
 		return 0.09, true
 	default:

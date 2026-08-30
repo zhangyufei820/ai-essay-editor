@@ -61,7 +61,6 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
                 "gpt-5.4",
                 "gpt-5.4-mini",
                 "gpt-5.5",
-                "gpt-5.6-luna",
                 "gpt-5.6-sol",
                 "gpt-5.6-terra",
                 "codex-auto-review",
@@ -79,7 +78,7 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
 
         self.assertEqual(plan.matched_models, self.module.PLUS_UPSTREAM_MODELS)
         self.assertEqual(plan.missing_models, ())
-        self.assertEqual(plan.upstream_model_count, 8)
+        self.assertEqual(plan.upstream_model_count, 7)
 
     def test_build_plus_plan_rejects_missing_required_model(self) -> None:
         upstream = set(self.module.PLUS_UPSTREAM_MODELS)
@@ -89,7 +88,7 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
             self.module.build_plus_plan(upstream)
 
     def test_build_plus_plan_allows_fallback_to_publish_only_real_intersection(self) -> None:
-        upstream = {"gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"}
+        upstream = {"gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"}
 
         plan = self.module.build_plus_plan(upstream, allow_partial=True)
 
@@ -98,7 +97,6 @@ class ConfigurePlusTextChannelTests(unittest.TestCase):
             self.module.published_models_for_plan(plan),
             (
                 "gpt-5.5",
-                "gpt-5.6-luna",
                 "gpt-5.6-sol",
                 "gpt-5.6-terra",
                 "codex-auto-review",
