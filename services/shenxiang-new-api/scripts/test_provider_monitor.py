@@ -123,6 +123,7 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(
             families["discount_text"].managed_tag_priorities,
             (
+                ("xingren-discount-text-pdhlzy", 40),
                 ("xingren-discount-text-geek2api", 30),
                 ("xingren-discount-text-aihub", 20),
                 ("xingren-discount-text-wangwang", 10),
@@ -131,8 +132,8 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(
             families["discount_text"].managed_tag_fallback,
             (
-                ("xingren-discount-text-aihub", 28, 30),
-                ("xingren-discount-text-aihub-fallback", 42, 20),
+                ("xingren-discount-text-geek2api", 68, 30),
+                ("xingren-discount-text-aihub", 28, 20),
                 ("xingren-discount-text-wangwang", 41, 10),
             ),
         )
@@ -314,6 +315,22 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
     def test_discount_family_resolves_primary_and_fallbacks_by_tag(self) -> None:
         family = next(family for family in self.module.TEXT_FAMILIES if family.name == "discount_text")
         rows = [
+            {"id": 42, "tag": "xingren-discount-text-pdhlzy"},
+            {"id": 68, "tag": "xingren-discount-text-geek2api"},
+            {"id": 28, "tag": "xingren-discount-text-aihub"},
+            {"id": 41, "tag": "xingren-discount-text-wangwang"},
+        ]
+        with mock.patch.object(self.module, "mysql_json", return_value=rows):
+            resolved = self.module.resolve_dynamic_text_families({}, (family,))[0]
+
+        self.assertEqual(resolved.channel_ids, (42, 68, 28, 41))
+        self.assertEqual(resolved.baseline_priorities, {42: 40, 68: 30, 28: 20, 41: 10})
+        self.assertEqual(resolved.expected_tags[42], "xingren-discount-text-pdhlzy")
+        self.assertEqual(resolved.request_format, "responses")
+
+    def test_discount_family_keeps_existing_route_until_primary_tag_exists(self) -> None:
+        family = next(family for family in self.module.TEXT_FAMILIES if family.name == "discount_text")
+        rows = [
             {"id": 68, "tag": "xingren-discount-text-geek2api"},
             {"id": 28, "tag": "xingren-discount-text-aihub"},
             {"id": 41, "tag": "xingren-discount-text-wangwang"},
@@ -323,21 +340,6 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
 
         self.assertEqual(resolved.channel_ids, (68, 28, 41))
         self.assertEqual(resolved.baseline_priorities, {68: 30, 28: 20, 41: 10})
-        self.assertEqual(resolved.expected_tags[68], "xingren-discount-text-geek2api")
-        self.assertEqual(resolved.request_format, "responses")
-
-    def test_discount_family_keeps_legacy_route_until_primary_tag_exists(self) -> None:
-        family = next(family for family in self.module.TEXT_FAMILIES if family.name == "discount_text")
-        rows = [
-            {"id": 28, "tag": "xingren-discount-text-aihub"},
-            {"id": 42, "tag": "xingren-discount-text-aihub-fallback"},
-            {"id": 41, "tag": "xingren-discount-text-wangwang"},
-        ]
-        with mock.patch.object(self.module, "mysql_json", return_value=rows):
-            resolved = self.module.resolve_dynamic_text_families({}, (family,))[0]
-
-        self.assertEqual(resolved.channel_ids, (28, 42, 41))
-        self.assertEqual(resolved.baseline_priorities, {28: 30, 42: 20, 41: 10})
 
     def test_codex_auto_review_maps_to_gpt_55(self) -> None:
         mapping = self.module.parse_model_mapping(

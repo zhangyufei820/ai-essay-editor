@@ -92,13 +92,14 @@ TEXT_FAMILIES = (
         ability_group="discount",
         manage_model_abilities=True,
         managed_tag_priorities=(
+            ("xingren-discount-text-pdhlzy", 40),
             ("xingren-discount-text-geek2api", 30),
             ("xingren-discount-text-aihub", 20),
             ("xingren-discount-text-wangwang", 10),
         ),
         managed_tag_fallback=(
-            ("xingren-discount-text-aihub", 28, 30),
-            ("xingren-discount-text-aihub-fallback", 42, 20),
+            ("xingren-discount-text-geek2api", 68, 30),
+            ("xingren-discount-text-aihub", 28, 20),
             ("xingren-discount-text-wangwang", 41, 10),
         ),
     ),
