@@ -46,6 +46,7 @@ import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
 import { evaluateOpenClawRuntimeRequest } from "@/lib/openclaw-runtime-guard"
+import { buildDifyServiceUser } from "@/lib/openclaw-dify-user"
 import { getCodexSkillById } from "@/lib/codex-skills"
 import { getOpenClawSkillById } from "@/lib/openclaw-skills"
 import { detectAllInOneMediaRequest } from "@/lib/all-in-one-media-intent"
@@ -3487,6 +3488,12 @@ export async function POST(request: NextRequest) {
     const isGeminiImageGatewayRequest = isGeminiImageGatewayModel(model)
     const isDirectImageGatewayRequest = isGptImageGatewayRequest || isGeminiImageGatewayRequest
     const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(isDirectImageGatewayRequest ? "img" : "chat")
+    const difyServiceUser = buildDifyServiceUser({
+      model,
+      userId,
+      sessionId,
+      conversationId: conversation_id,
+    })
     logPerf(requestId, "api_enter", apiStartedAt, { model: model || "general-chat" })
     logPerf(requestId, "auth_done", apiStartedAt)
     const taskKind = isDirectImageGatewayRequest ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
@@ -4101,7 +4108,7 @@ export async function POST(request: NextRequest) {
               ? {
                   inputs: buildVocabCardWorkflowInputs({ query: effectiveQuery, inputs }),
                   response_mode: "streaming",
-                  user: userId || "default-user",
+                  user: difyServiceUser,
                 }
               : {
                   inputs: {
@@ -4109,7 +4116,7 @@ export async function POST(request: NextRequest) {
                     ...(inputs || {})
                   },
                   response_mode: "streaming",
-                  user: userId || "default-user",
+                  user: difyServiceUser,
               }
 
             // 🔥 如果有文件，构造文件对象格式
@@ -4171,7 +4178,7 @@ export async function POST(request: NextRequest) {
                 inputs: chatInputs,
                 query: difyQuery,
                 response_mode: useBlockingDifyChat ? "blocking" : isGptImage2 ? "blocking" : "streaming",
-                user: userId || "default-user",
+                user: difyServiceUser,
                 conversation_id: currentConvId,
                 auto_generate_name: false,
             }
