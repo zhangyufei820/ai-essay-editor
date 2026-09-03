@@ -579,7 +579,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             for statement in sql.splitlines()
             if "SELECT 'discount', 'gpt-5.5', 31" in statement
         )
-        self.assertNotIn("enabled = 1", discount_insert.split("ON DUPLICATE KEY UPDATE", 1)[1])
+        self.assertIn("enabled = 1", discount_insert.split("ON DUPLICATE KEY UPDATE", 1)[1])
 
     def test_sync_abilities_keeps_special_channels_isolated(self) -> None:
         captured: list[str] = []
@@ -767,7 +767,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             for statement in sql.splitlines()
             if "SELECT 'plus', 'gpt-5.5', 41" in statement
         )
-        self.assertNotIn("enabled = 1", plus_insert.split("ON DUPLICATE KEY UPDATE", 1)[1])
+        self.assertIn("enabled = 1", plus_insert.split("ON DUPLICATE KEY UPDATE", 1)[1])
 
     def test_sync_abilities_rejects_plus_channel_with_compact(self) -> None:
         captured: list[str] = []

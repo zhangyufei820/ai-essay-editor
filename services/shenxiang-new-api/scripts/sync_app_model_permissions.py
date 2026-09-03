@@ -2901,7 +2901,10 @@ def sync_abilities() -> None:
                         ]
                     )
                 duplicate_update = "enabled = 1, priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag)"
-                if tag in discount_channel_tags or tag in special_channel_tags or tag in plus_channel_tags:
+                # Discount and Plus are fully managed tiers: a valid, active
+                # channel must recover its ability after an incidental disable.
+                # Special remains deliberately operator-controlled.
+                if tag in special_channel_tags:
                     duplicate_update = "priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag)"
                 statements.append(
                     "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) SELECT "
