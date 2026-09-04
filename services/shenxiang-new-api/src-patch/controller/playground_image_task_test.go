@@ -838,6 +838,125 @@ func TestMarkPlaygroundImageTaskLogFailureKeepsSubmittedChannelWhenTaskChannelMi
 	require.Equal(t, float64(22), other["channel_id"])
 }
 
+func TestMarkPlaygroundImageTaskLogFailureRecordsAttemptMetadata(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	oldLogDB := model.LOG_DB
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		model.LOG_DB = oldLogDB
+	})
+
+	requestID := "req-image-attempt-metadata"
+	task := &model.Task{
+		TaskID:     "task-image-attempt-metadata",
+		UserId:     1001,
+		ChannelId:  66,
+		Group:      "default",
+		StartTime:  time.Now().Add(-4 * time.Second).Unix(),
+		FinishTime: time.Now().Unix(),
+	}
+	payload := &playgroundImageTaskPayload{
+		RequestID:         requestID,
+		RetryCount:        2,
+		AttemptedChannels: []int{32, 66, 32, 66},
+		LastStatusCode:    http.StatusBadGateway,
+		LastFailureKind:   "upstream_5xx",
+	}
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    task.UserId,
+		CreatedAt: common.GetTimestamp(),
+		Type:      model.LogTypeConsume,
+		Content:   "媒体工坊图片任务生成中",
+		ModelName: "gpt-image-2-4K",
+		ChannelId: 32,
+		RequestId: requestID,
+		Other:     common.MapToJsonStr(map[string]interface{}{"request_phase": "submitted"}),
+	}).Error)
+
+	markPlaygroundImageTaskLogFailure(task, payload, "bad response status code 502")
+
+	var log model.Log
+	require.NoError(t, model.LOG_DB.Where("request_id = ?", requestID).First(&log).Error)
+	other, err := common.StrToMap(log.Other)
+	require.NoError(t, err)
+	require.Equal(t, "upstream_5xx", other["failure_kind"])
+	require.Equal(t, "media_task_failed", other["task_failure_kind"])
+	require.Equal(t, float64(http.StatusBadGateway), other["final_status_code"])
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, []interface{}{float64(32), float64(66), float64(32), float64(66)}, adminInfo["use_channel"])
+	require.Equal(t, float64(4), adminInfo["relay_attempt_count"])
+	require.Equal(t, float64(2), adminInfo["task_retry_count"])
+	require.Equal(t, float64(3), adminInfo["task_attempt_index"])
+	require.Equal(t, float64(http.StatusBadGateway), adminInfo["last_status_code"])
+	require.Equal(t, "upstream_5xx", adminInfo["failure_kind"])
+}
+
+func TestMarkPlaygroundImageTaskLogRetryingRecordsAttemptMetadata(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	oldLogDB := model.LOG_DB
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		model.LOG_DB = oldLogDB
+	})
+
+	requestID := "req-image-retry-metadata"
+	task := &model.Task{
+		TaskID:    "task-image-retry-metadata",
+		UserId:    1001,
+		Status:    model.TaskStatusInProgress,
+		ChannelId: 66,
+	}
+	payload := &playgroundImageTaskPayload{
+		RequestID:         requestID,
+		RetryCount:        1,
+		AttemptedChannels: []int{32, 66},
+		LastStatusCode:    http.StatusBadGateway,
+		LastFailureKind:   "upstream_5xx",
+	}
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    task.UserId,
+		CreatedAt: common.GetTimestamp(),
+		Type:      model.LogTypeConsume,
+		Content:   "媒体工坊图片任务生成中",
+		ModelName: "gpt-image-2-4K",
+		ChannelId: 32,
+		RequestId: requestID,
+		Other:     common.MapToJsonStr(map[string]interface{}{"request_phase": "submitted"}),
+	}).Error)
+
+	markPlaygroundImageTaskLogRetrying(task, payload)
+
+	var log model.Log
+	require.NoError(t, model.LOG_DB.Where("request_id = ?", requestID).First(&log).Error)
+	other, err := common.StrToMap(log.Other)
+	require.NoError(t, err)
+	require.Equal(t, "retrying", other["request_phase"])
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, []interface{}{float64(32), float64(66)}, adminInfo["use_channel"])
+	require.Equal(t, float64(1), adminInfo["task_retry_count"])
+	require.Equal(t, float64(2), adminInfo["task_attempt_index"])
+}
+
+func TestSanitizePlaygroundImageTaskPayloadForResponseHidesAttemptMetadata(t *testing.T) {
+	payload := &playgroundImageTaskPayload{
+		AttemptedChannels: []int{32, 66},
+		LastStatusCode:    http.StatusBadGateway,
+		LastFailureKind:   "upstream_5xx",
+	}
+
+	sanitizePlaygroundImageTaskPayloadForResponse(payload, "官转image 2稳定")
+
+	require.Empty(t, payload.AttemptedChannels)
+	require.Zero(t, payload.LastStatusCode)
+	require.Empty(t, payload.LastFailureKind)
+}
+
 func TestMarkPlaygroundImageTaskLogFailureFallsBackToSubmittedChannelLog(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)

@@ -280,30 +280,33 @@ type openAIImageTaskListResponse struct {
 }
 
 type playgroundImageTaskPayload struct {
-	Model           string                 `json:"model,omitempty"`
-	DisplayModel    string                 `json:"display_model,omitempty"`
-	Prompt          string                 `json:"prompt,omitempty"`
-	Workflow        string                 `json:"workflow,omitempty"`
-	RequestPath     string                 `json:"request_path,omitempty"`
-	RequestMethod   string                 `json:"request_method,omitempty"`
-	RequestFile     string                 `json:"request_file,omitempty"`
-	ContentType     string                 `json:"content_type,omitempty"`
-	RequestID       string                 `json:"request_id,omitempty"`
-	TokenID         int                    `json:"token_id,omitempty"`
-	TokenName       string                 `json:"token_name,omitempty"`
-	UseAPIToken     bool                   `json:"use_api_token,omitempty"`
-	ClientIP        string                 `json:"client_ip,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	CachedURL       string                 `json:"cached_url,omitempty"`
-	Item            *playgroundMediaItem   `json:"item,omitempty"`
-	OriginalStatus  int                    `json:"original_status,omitempty"`
-	Error           string                 `json:"error,omitempty"`
-	ActualQuota     int                    `json:"actual_quota,omitempty"`
-	RetryCount      int                    `json:"retry_count,omitempty"`
-	MaxRetries      int                    `json:"max_retries,omitempty"`
-	NextRetryAt     int64                  `json:"next_retry_at,omitempty"`
-	DeadlineAt      int64                  `json:"deadline_at,omitempty"`
-	LastRetryReason string                 `json:"last_retry_reason,omitempty"`
+	Model             string                 `json:"model,omitempty"`
+	DisplayModel      string                 `json:"display_model,omitempty"`
+	Prompt            string                 `json:"prompt,omitempty"`
+	Workflow          string                 `json:"workflow,omitempty"`
+	RequestPath       string                 `json:"request_path,omitempty"`
+	RequestMethod     string                 `json:"request_method,omitempty"`
+	RequestFile       string                 `json:"request_file,omitempty"`
+	ContentType       string                 `json:"content_type,omitempty"`
+	RequestID         string                 `json:"request_id,omitempty"`
+	TokenID           int                    `json:"token_id,omitempty"`
+	TokenName         string                 `json:"token_name,omitempty"`
+	UseAPIToken       bool                   `json:"use_api_token,omitempty"`
+	ClientIP          string                 `json:"client_ip,omitempty"`
+	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+	CachedURL         string                 `json:"cached_url,omitempty"`
+	Item              *playgroundMediaItem   `json:"item,omitempty"`
+	OriginalStatus    int                    `json:"original_status,omitempty"`
+	Error             string                 `json:"error,omitempty"`
+	ActualQuota       int                    `json:"actual_quota,omitempty"`
+	RetryCount        int                    `json:"retry_count,omitempty"`
+	MaxRetries        int                    `json:"max_retries,omitempty"`
+	NextRetryAt       int64                  `json:"next_retry_at,omitempty"`
+	DeadlineAt        int64                  `json:"deadline_at,omitempty"`
+	LastRetryReason   string                 `json:"last_retry_reason,omitempty"`
+	AttemptedChannels []int                  `json:"attempted_channels,omitempty"`
+	LastStatusCode    int                    `json:"last_status_code,omitempty"`
+	LastFailureKind   string                 `json:"last_failure_kind,omitempty"`
 }
 
 type playgroundImageTaskResultCapture struct {
@@ -643,6 +646,9 @@ func sanitizePlaygroundImageTaskPayloadForResponse(payload *playgroundImageTaskP
 	payload.TokenName = ""
 	payload.UseAPIToken = false
 	payload.ClientIP = ""
+	payload.AttemptedChannels = nil
+	payload.LastStatusCode = 0
+	payload.LastFailureKind = ""
 	if payload.Error != "" {
 		payload.Error = publicPlaygroundTaskFailureReason(payload.Error)
 	}
@@ -1222,8 +1228,8 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	})
 	engine.ServeHTTP(recorder, request)
 	if recorder.Code >= http.StatusBadRequest {
-		applyPlaygroundImageTaskFailureCapture(task, capture)
 		reason := resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, recorder.Body.Bytes(), recorder.Code)
+		recordPlaygroundImageTaskAttempt(task, &payload, relayCtx, capture, recorder.Code, reason)
 		retryOrFailPlaygroundImageTask(task, reason, recorder.Code, userID, username, role, userGroup, usingGroup, tokenName)
 		return
 	}
@@ -1237,10 +1243,11 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	responseBody := recorder.Body.Bytes()
 	if err := common.Unmarshal(responseBody, &response); err != nil || len(response.Data) == 0 {
 		if msg := extractPlaygroundImageTaskError(responseBody, recorder.Code); msg != "" {
-			applyPlaygroundImageTaskFailureCapture(task, capture)
 			reason := resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, responseBody, recorder.Code)
+			recordPlaygroundImageTaskAttempt(task, &payload, relayCtx, capture, recorder.Code, reason)
 			retryOrFailPlaygroundImageTask(task, reason, recorder.Code, userID, username, role, userGroup, usingGroup, tokenName)
 		} else {
+			recordPlaygroundImageTaskAttempt(task, &payload, relayCtx, capture, recorder.Code, "image task completed without a usable image")
 			markPlaygroundImageTaskFailure(task, "image task completed without a usable image")
 		}
 		return
@@ -1249,6 +1256,7 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 
 	item, err := cacheFirstPlaygroundImageTaskResult(relayCtx, task, &payload, capture.Response)
 	if err != nil {
+		recordPlaygroundImageTaskAttempt(task, &payload, relayCtx, capture, recorder.Code, err.Error())
 		markPlaygroundImageTaskFailure(task, err.Error())
 		return
 	}
@@ -1640,6 +1648,100 @@ func applyPlaygroundImageTaskFailureCapture(task *model.Task, capture *playgroun
 	task.ChannelId = capture.LastFailureChannelID
 }
 
+func recordPlaygroundImageTaskAttempt(task *model.Task, payload *playgroundImageTaskPayload, relayCtx *gin.Context, capture *playgroundImageTaskResultCapture, status int, reason string) {
+	if task == nil || payload == nil {
+		return
+	}
+	applyPlaygroundImageTaskFailureCapture(task, capture)
+	if relayCtx != nil {
+		for _, raw := range relayCtx.GetStringSlice("use_channel") {
+			channelID, err := strconv.Atoi(strings.TrimSpace(raw))
+			if err == nil && channelID > 0 {
+				payload.AttemptedChannels = append(payload.AttemptedChannels, channelID)
+			}
+		}
+	}
+	if capture != nil && capture.LastFailureChannelID > 0 && (len(payload.AttemptedChannels) == 0 || payload.AttemptedChannels[len(payload.AttemptedChannels)-1] != capture.LastFailureChannelID) {
+		payload.AttemptedChannels = append(payload.AttemptedChannels, capture.LastFailureChannelID)
+	}
+	payload.LastStatusCode = status
+	payload.LastFailureKind = classifyPlaygroundImageTaskFailure(reason, status)
+	task.SetData(*payload)
+	if err := task.Update(); err != nil {
+		logger.LogError(nil, fmt.Sprintf("failed to persist playground image task %s attempt metadata: %s", task.TaskID, err.Error()))
+		return
+	}
+	markPlaygroundImageTaskLogRetrying(task, payload)
+}
+
+func classifyPlaygroundImageTaskFailure(reason string, status int) string {
+	lower := strings.ToLower(strings.TrimSpace(reason))
+	switch {
+	case playgroundFailureContainsAny(lower, "precharge", "预扣费额度失败"):
+		return "billing_precharge"
+	case playgroundFailureContainsAny(lower, "insufficient balance", "insufficient quota", "余额不足", "账户余额", "upstream credit"):
+		return "upstream_credit"
+	case playgroundFailureContainsAny(lower, "prompt_blocked", "content_policy", "content policy", "moderation", "safety", "安全审核", "安全策略"):
+		return "content_safety"
+	case playgroundFailureContainsAny(lower, "timeout", "timed out", "deadline exceeded", "context deadline", "gateway time"):
+		return "timeout"
+	case playgroundFailureContainsAny(lower, "without a usable", "no usable image", "images[].image_url", "empty response", "empty result"):
+		return "response_contract"
+	case status >= http.StatusInternalServerError:
+		return "upstream_5xx"
+	case status >= http.StatusBadRequest:
+		return "upstream_4xx"
+	default:
+		return "relay_error"
+	}
+}
+
+func applyPlaygroundImageTaskAttemptMetadata(other map[string]interface{}, payload *playgroundImageTaskPayload) {
+	if other == nil || payload == nil {
+		return
+	}
+	adminInfo, _ := other["admin_info"].(map[string]interface{})
+	if adminInfo == nil {
+		adminInfo = map[string]interface{}{}
+	}
+	if len(payload.AttemptedChannels) > 0 {
+		adminInfo["use_channel"] = append([]int(nil), payload.AttemptedChannels...)
+	}
+	adminInfo["relay_attempt_count"] = len(payload.AttemptedChannels)
+	adminInfo["task_retry_count"] = payload.RetryCount
+	adminInfo["task_attempt_index"] = payload.RetryCount + 1
+	if payload.LastStatusCode > 0 {
+		adminInfo["last_status_code"] = payload.LastStatusCode
+	}
+	if payload.LastFailureKind != "" {
+		adminInfo["failure_kind"] = payload.LastFailureKind
+	}
+	other["admin_info"] = adminInfo
+}
+
+func markPlaygroundImageTaskLogRetrying(task *model.Task, payload *playgroundImageTaskPayload) {
+	if task == nil || payload == nil || payload.RequestID == "" || model.LOG_DB == nil {
+		return
+	}
+	var existing model.Log
+	err := model.LOG_DB.Where("user_id = ? AND request_id = ? AND type = ?", task.UserId, payload.RequestID, model.LogTypeConsume).
+		Order("id asc").
+		First(&existing).Error
+	if err != nil {
+		return
+	}
+	other, _ := common.StrToMap(existing.Other)
+	if other == nil {
+		other = map[string]interface{}{}
+	}
+	other["request_phase"] = "retrying"
+	other["task_status"] = string(task.Status)
+	applyPlaygroundImageTaskAttemptMetadata(other, payload)
+	if err := model.LOG_DB.Model(&model.Log{}).Where("id = ?", existing.Id).Update("other", common.MapToJsonStr(other)).Error; err != nil {
+		common.SysError("failed to update playground image task retry log: " + err.Error())
+	}
+}
+
 func capturePlaygroundImageTaskBilling(taskID string, actualQuota int, info *relaycommon.RelayInfo) {
 	task, exists, err := model.GetByOnlyTaskId(taskID)
 	if err != nil || !exists || task == nil {
@@ -1820,6 +1922,9 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	_ = task.GetData(&payload)
 	payload.Error = reason
 	payload.NextRetryAt = 0
+	if payload.LastFailureKind == "" {
+		payload.LastFailureKind = classifyPlaygroundImageTaskFailure(reason, payload.LastStatusCode)
+	}
 	requestFile := payload.RequestFile
 	payload.RequestFile = ""
 	task.SetData(payload)
@@ -2050,7 +2155,11 @@ func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImag
 	other["task_status"] = string(model.TaskStatusFailure)
 	other["playground_image_task"] = true
 	other["media_kind"] = "image"
-	other["failure_kind"] = "media_task_failed"
+	other["failure_kind"] = payload.LastFailureKind
+	if other["failure_kind"] == "" {
+		other["failure_kind"] = "media_task_failed"
+	}
+	other["task_failure_kind"] = "media_task_failed"
 	other["final_log_type"] = "error"
 	other["refund_reason"] = "media_task_failed"
 	other["billing_settlement"] = "preconsume_refund_task_failed"
@@ -2059,6 +2168,10 @@ func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImag
 	other["result_url"] = ""
 	other["image_url"] = ""
 	other["cached_url"] = ""
+	applyPlaygroundImageTaskAttemptMetadata(other, payload)
+	if payload.LastStatusCode > 0 {
+		other["final_status_code"] = payload.LastStatusCode
+	}
 	if failureChannelID > 0 {
 		other["channel_id"] = failureChannelID
 	}
