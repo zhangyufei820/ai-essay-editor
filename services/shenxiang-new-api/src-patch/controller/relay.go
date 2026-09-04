@@ -122,6 +122,8 @@ const (
 	playgroundImage2VipMappedChannelID            = 4
 	discountImage2PrimaryChannelID                = 27
 	discountImage2FallbackChannelID               = 36
+	stableImage2PrimaryChannelID                  = 32
+	stableImage2FallbackChannelID                 = 66
 
 	playgroundForcedChannelIDsKey           = "playground_forced_channel_ids"
 	playgroundImage2TempCircuitScopeKey     = "playground_image2_temp_circuit_scope"
@@ -933,6 +935,23 @@ func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo 
 		c.Set("playground_forced_channel_unavailable", true)
 		return
 	}
+	if relayInfo.OriginModelName == service.InternalStableImage2ModelName {
+		setPlaygroundForcedChannelIDs(c, stableImage2ForcedChannelIDs())
+		for _, channelID := range getPlaygroundForcedChannelIDs(c) {
+			if !model.IsChannelEnabledForGroupModel(relayInfo.TokenGroup, relayInfo.OriginModelName, channelID) {
+				continue
+			}
+			channel, err := model.CacheGetChannel(channelID)
+			if err != nil || channel == nil || channel.Status != common.ChannelStatusEnabled {
+				continue
+			}
+			c.Set("playground_forced_channel_id", channelID)
+			logger.LogInfo(c, "stable image-2 selected configured channel")
+			return
+		}
+		c.Set("playground_forced_channel_unavailable", true)
+		return
+	}
 	if relayInfo.OriginModelName != "gpt-image-2-4K" {
 		return
 	}
@@ -959,6 +978,10 @@ func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo 
 		logger.LogError(c, fmt.Sprintf("image2 configured %s channels %v are unavailable for group %s", envKey, channelIDs, relayInfo.TokenGroup))
 		c.Set("playground_forced_channel_unavailable", true)
 	}
+}
+
+func stableImage2ForcedChannelIDs() []int {
+	return []int{stableImage2PrimaryChannelID, stableImage2FallbackChannelID}
 }
 
 func playgroundImage2ForcedChannelResolution(imageReq *dto.ImageRequest) string {

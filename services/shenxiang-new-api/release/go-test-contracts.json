@@ -25,7 +25,7 @@
   },
   {
     "package": "./controller",
-    "run": "^TestShouldRetryAllowsDiscountImage2Fallback$"
+    "run": "^(TestShouldRetryAllowsDiscountImage2Fallback|TestStableImage2ForcedChannelIDs|TestShouldRetryAllowsStableImage2Fallback)$"
   },
   {
     "package": "./controller",
