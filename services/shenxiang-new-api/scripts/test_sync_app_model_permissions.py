@@ -999,6 +999,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn("priority = " + str(priority), sql)
             self.assertIn("WHERE tag = '" + tag + "'", sql)
         self.assertIn("Image 2 稳定备用线路；人民币 ¥0.17/张", sql)
+        self.assertIn("UPDATE channels SET status = IF(status = 2, 2, 1)", sql)
 
     def test_ensure_gemini_ddpapi_models_uses_public_metadata(self) -> None:
         captured: list[str] = []
