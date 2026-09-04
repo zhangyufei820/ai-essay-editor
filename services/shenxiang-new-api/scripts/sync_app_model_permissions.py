@@ -2118,7 +2118,10 @@ def ensure_stable_image2_channel_order() -> None:
         + " WHERE tag = "
         + sql_quote(STABLE_IMAGE2_PRIMARY_CHANNEL_TAG)
         + ";",
-        "UPDATE channels SET status = 1, priority = "
+        # A fallback that was explicitly offlined after a failed probe must
+        # remain offlined across periodic permission syncs. Operators re-enable
+        # it deliberately through the channel configuration flow.
+        "UPDATE channels SET status = IF(status = 2, 2, 1), priority = "
         + str(STABLE_IMAGE2_CHANNEL_PRIORITIES[STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG])
         + ", weight = 100, models = "
         + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
