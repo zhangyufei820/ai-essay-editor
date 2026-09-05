@@ -216,6 +216,16 @@ def validate_group_options() -> None:
             raise ConfigurationError(f"{key} does not contain all managed Astra groups")
 
 
+def validate_managed_channel_tags() -> None:
+    rows = sync.mysql(
+        "SELECT tag, COUNT(*) FROM channels WHERE tag LIKE "
+        + sql_quote(MANAGED_TAG_PREFIX + "%")
+        + " GROUP BY tag HAVING COUNT(*) > 1"
+    )
+    if rows:
+        raise ConfigurationError("GPT-6 Astra managed tags are duplicated")
+
+
 def build_apply_sql(sources: tuple[SourceChannel, ...]) -> str:
     tags = managed_tags()
     all_tags = (LEGACY_CHANNEL_TAG, *tags)
@@ -259,17 +269,14 @@ def build_apply_sql(sources: tuple[SourceChannel, ...]) -> str:
             statements.append(
                 "INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES (" + ",".join([sql_quote(group), sql_quote(MODEL_NAME), variable, "1", str(CHAIN_PRIORITIES[index]), "100", sql_quote(tag)]) + ") ON DUPLICATE KEY UPDATE enabled=1,priority=VALUES(priority),weight=100,tag=VALUES(tag);"
             )
-    statements.extend(["COMMIT;", "SELECT CONCAT('astra_apply_status=', @astra_apply_status);"])
+    statements.append("COMMIT;")
     return "\n".join(statements)
 
 
 def apply_sources(sources: tuple[SourceChannel, ...]) -> None:
     validate_group_options()
-    output = sync.mysql_exec(build_apply_sql(sources))
-    status = next((line.removeprefix("astra_apply_status=") for line in output if line.startswith("astra_apply_status=")), "")
-    if status != "ok":
-        errors = {"duplicate_channels": "GPT-6 Astra managed tags are duplicated", "group_options_invalid": "Astra groups are missing from pricing options"}
-        raise ConfigurationError(errors.get(status, "GPT-6 Astra apply failed closed"))
+    validate_managed_channel_tags()
+    sync.mysql_exec(build_apply_sql(sources))
 
 
 def main() -> int:

@@ -64,6 +64,19 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
             result = self.module.probe_source(source)
         self.assertNotIn(secret, json.dumps(result))
 
+    def test_apply_rejects_duplicate_managed_tags_before_sql(self) -> None:
+        with mock.patch.object(
+            self.module,
+            "validate_group_options",
+        ), mock.patch.object(
+            self.module,
+            "sync",
+        ) as sync_module:
+            sync_module.mysql.return_value = [["xingren-gpt6-astra-default-1", "2"]]
+            with self.assertRaisesRegex(self.module.ConfigurationError, "duplicated"):
+                self.module.apply_sources(())
+            sync_module.mysql_exec.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
