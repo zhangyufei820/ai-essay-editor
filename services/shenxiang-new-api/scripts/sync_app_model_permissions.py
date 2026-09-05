@@ -2756,7 +2756,7 @@ def sync_abilities() -> None:
                 sync_groups = []
             else:
                 sync_groups = channel_groups
-        elif DISCOUNT_TEXT_GROUP in channel_groups:
+        elif DISCOUNT_TEXT_GROUP in channel_groups and tag not in GPT6_ASTRA_CHANNEL_GROUP_BY_TAG:
             invalid_discount_channels.append(channel_id)
             sync_groups = []
         elif tag in special_channel_tags:
@@ -2769,7 +2769,7 @@ def sync_abilities() -> None:
                 sync_groups = []
             else:
                 sync_groups = channel_groups
-        elif SPECIAL_TEXT_GROUP in channel_groups:
+        elif SPECIAL_TEXT_GROUP in channel_groups and tag not in GPT6_ASTRA_CHANNEL_GROUP_BY_TAG:
             invalid_special_channels.append(channel_id)
             sync_groups = []
         elif tag in plus_channel_tags:
@@ -2782,7 +2782,7 @@ def sync_abilities() -> None:
                 sync_groups = []
             else:
                 sync_groups = channel_groups
-        elif PLUS_TEXT_GROUP in channel_groups:
+        elif PLUS_TEXT_GROUP in channel_groups and tag not in GPT6_ASTRA_CHANNEL_GROUP_BY_TAG:
             invalid_plus_channels.append(channel_id)
             sync_groups = []
         elif tag in grok_channel_model_by_tag:

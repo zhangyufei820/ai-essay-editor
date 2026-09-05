@@ -100,6 +100,30 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("astra_enabled_channel_sql", source)
         self.assertGreaterEqual(source.count("sql_quote(GPT6_ASTRA_MODEL)"), 6)
 
+    def test_sync_abilities_accepts_astra_channels_in_discount_plus_and_special(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [
+                    ["94", "gpt-6-astra", "40", "100", "xingren-gpt6-astra-discount-1", "discount"],
+                    ["90", "gpt-6-astra", "40", "100", "xingren-gpt6-astra-plus-1", "plus"],
+                    ["98", "gpt-6-astra", "40", "100", "xingren-gpt6-astra-special-1", "special"],
+                ]
+            if "SELECT model_name FROM models" in query:
+                return [["gpt-6-astra"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "discount", "plus", "special"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        for group in ("discount", "plus", "special"):
+            self.assertIn(f"SELECT '{group}', 'gpt-6-astra'", sql)
+
     def test_discount_text_models_are_exactly_the_public_text_aliases(self) -> None:
         self.assertEqual(
             self.module.DISCOUNT_TEXT_ALLOWED_MODELS,
