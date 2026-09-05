@@ -127,10 +127,6 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 		result.FallbackReason = "kimi_k3_static_pricing"
 		return currentQuota, result
 	}
-	if IsGpt6AstraPricingGroup(relayInfo) {
-		result.FallbackReason = "gpt6_astra_static_pricing"
-		return currentQuota, result
-	}
 	if IsSpecialPricingGroup(relayInfo) {
 		result.FallbackReason = "special_group_static_pricing"
 		return currentQuota, result

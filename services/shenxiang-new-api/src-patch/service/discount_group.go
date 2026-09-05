@@ -20,6 +20,7 @@ var textPricingPreferenceModels = map[string]struct{}{
 	"gpt-5.6":                {},
 	"gpt-5.6-sol":            {},
 	"gpt-5.6-terra":          {},
+	"gpt-6-astra":            {},
 	"codex-auto-review":      {},
 }
 

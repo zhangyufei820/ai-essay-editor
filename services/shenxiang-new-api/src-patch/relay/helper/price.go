@@ -61,10 +61,6 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 		groupRatioInfo.GroupRatio = service.KimiK3PricingGroupRatio
 		return groupRatioInfo
 	}
-	if service.IsGpt6AstraPricingGroup(relayInfo) {
-		groupRatioInfo.GroupRatio = service.Gpt6AstraPricingGroupRatio
-		return groupRatioInfo
-	}
 	if service.IsSpecialPricingGroup(relayInfo) {
 		groupRatioInfo.GroupRatio = service.SpecialPricingGroupRatio
 		return groupRatioInfo

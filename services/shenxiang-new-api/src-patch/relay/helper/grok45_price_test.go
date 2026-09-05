@@ -80,7 +80,7 @@ func TestHandleGroupRatioPinsKimiK3Price(t *testing.T) {
 	require.False(t, ratioInfo.HasSpecialRatio)
 }
 
-func TestHandleGroupRatioPinsGpt6AstraPrice(t *testing.T) {
+func TestHandleGroupRatioUsesSelectedAstraPricingGroup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	originalGroupRatio := ratio_setting.GroupRatio2JSONString()
 	originalSpecialRatio := ratio_setting.GroupGroupRatio2JSONString()
@@ -88,13 +88,12 @@ func TestHandleGroupRatioPinsGpt6AstraPrice(t *testing.T) {
 		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatio))
 		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(originalSpecialRatio))
 	})
-	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"astra":0.25}`))
-	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"vip":{"astra":0.5}}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"plus":0.5,"discount":0.25}`))
 	ctx, _ := gin.CreateTestContext(nil)
-	relayInfo := &relaycommon.RelayInfo{UserGroup: "vip", UsingGroup: service.Gpt6AstraPricingGroupName}
+	relayInfo := &relaycommon.RelayInfo{UserGroup: "default", UsingGroup: "plus"}
 
 	ratioInfo := HandleGroupRatio(ctx, relayInfo)
 
-	require.Equal(t, service.Gpt6AstraPricingGroupRatio, ratioInfo.GroupRatio)
+	require.Equal(t, 0.5, ratioInfo.GroupRatio)
 	require.False(t, ratioInfo.HasSpecialRatio)
 }

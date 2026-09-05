@@ -181,6 +181,28 @@ KIMI_K3_CHANNEL_TAG = "xingren-kimi-k3"
 GPT6_ASTRA_MODEL = "gpt-6-astra"
 GPT6_ASTRA_GROUP = "astra"
 GPT6_ASTRA_CHANNEL_TAG = "xingren-gpt6-astra"
+GPT6_ASTRA_MANAGED_GROUPS = (
+    "default",
+    "standard",
+    "pro",
+    "code",
+    "internal",
+    "plus",
+    "discount",
+    "special",
+)
+GPT6_ASTRA_CHANNEL_TAG_PREFIX = "xingren-gpt6-astra-"
+GPT6_ASTRA_CHANNEL_TAGS = tuple(
+    f"{GPT6_ASTRA_CHANNEL_TAG_PREFIX}{group}-{index}"
+    for group in GPT6_ASTRA_MANAGED_GROUPS
+    for index in range(1, 5)
+)
+GPT6_ASTRA_CHANNEL_GROUP_BY_TAG = {
+    tag: group
+    for group in GPT6_ASTRA_MANAGED_GROUPS
+    for index in range(1, 5)
+    for tag in (f"{GPT6_ASTRA_CHANNEL_TAG_PREFIX}{group}-{index}",)
+}
 GROK45_CHANNEL_TAG = "xingren-grok45"
 GROK45_PRIMARY_CHANNEL_TAG = "xingren-grok45-primary"
 GROK45_CHANNEL_TAGS = (GROK45_PRIMARY_CHANNEL_TAG, GROK45_CHANNEL_TAG)
@@ -2536,6 +2558,7 @@ def sync_abilities() -> None:
             *GROK46_MEDIA_CHANNEL_MODEL_BY_TAG,
             KIMI_K3_CHANNEL_TAG,
             GPT6_ASTRA_CHANNEL_TAG,
+            *GPT6_ASTRA_CHANNEL_TAGS,
             *CLAUDE_CHANNEL_GROUPS,
             *DISCOUNT_IMAGE2_CHANNEL_TAGS,
         )
@@ -2555,11 +2578,11 @@ def sync_abilities() -> None:
         + sql_quote(KIMI_K3_MODEL)
     )
     astra_enabled_channel_sql = (
-        "SELECT id FROM channels WHERE status = 1 AND tag = "
-        + sql_quote(GPT6_ASTRA_CHANNEL_TAG)
-        + " AND REPLACE(COALESCE(`group`, ''), ' ', '') = "
-        + sql_quote(GPT6_ASTRA_GROUP)
-        + " AND REPLACE(COALESCE(models, ''), ' ', '') = "
+        "SELECT id FROM channels WHERE status = 1 AND tag IN ("
+        + ", ".join(sql_quote(tag) for tag in GPT6_ASTRA_CHANNEL_TAGS)
+        + ") AND REPLACE(COALESCE(`group`, ''), ' ', '') IN ("
+        + ", ".join(sql_quote(group) for group in GPT6_ASTRA_MANAGED_GROUPS)
+        + ") AND REPLACE(COALESCE(models, ''), ' ', '') = "
         + sql_quote(GPT6_ASTRA_MODEL)
     )
     statements = [
@@ -2653,14 +2676,20 @@ def sync_abilities() -> None:
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
         "UPDATE channels SET status = 2 WHERE tag = "
         + sql_quote(GPT6_ASTRA_CHANNEL_TAG)
-        + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') <> "
-        + sql_quote(GPT6_ASTRA_GROUP)
-        + " OR REPLACE(COALESCE(models, ''), ' ', '') <> "
-        + sql_quote(GPT6_ASTRA_MODEL)
-        + ");",
-        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') <> "
-        + sql_quote(GPT6_ASTRA_CHANNEL_TAG)
-        + " AND FIND_IN_SET("
+        + ";",
+        *[
+            "UPDATE channels SET status = 2 WHERE tag = "
+            + sql_quote(tag)
+            + " AND (type <> 1 OR REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+            + sql_quote(group)
+            + " OR REPLACE(COALESCE(models, ''), ' ', '') <> "
+            + sql_quote(GPT6_ASTRA_MODEL)
+            + ");"
+            for tag, group in GPT6_ASTRA_CHANNEL_GROUP_BY_TAG.items()
+        ],
+        "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') NOT IN ("
+        + ", ".join(sql_quote(tag) for tag in (GPT6_ASTRA_CHANNEL_TAG, *GPT6_ASTRA_CHANNEL_TAGS))
+        + ") AND FIND_IN_SET("
         + sql_quote(GPT6_ASTRA_GROUP)
         + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0;",
         "UPDATE channels SET status = 2 WHERE tag IN ("
@@ -2792,14 +2821,14 @@ def sync_abilities() -> None:
         elif KIMI_K3_GROUP in channel_groups:
             invalid_kimi_channels.append(channel_id)
             sync_groups = []
-        elif tag == GPT6_ASTRA_CHANNEL_TAG:
-            if channel_groups != [GPT6_ASTRA_GROUP] or channel_models != [GPT6_ASTRA_MODEL]:
+        elif tag in GPT6_ASTRA_CHANNEL_GROUP_BY_TAG:
+            expected_group = GPT6_ASTRA_CHANNEL_GROUP_BY_TAG[tag]
+            if channel_groups != [expected_group] or channel_models != [GPT6_ASTRA_MODEL]:
                 invalid_astra_channels.append(channel_id)
                 sync_groups = []
             else:
-                # Astra is visible to normal token groups, while requests are
-                # forced to its fixed-price group before channel selection.
-                sync_groups = groups
+                # Each pricing/role group owns an independent Astra chain.
+                sync_groups = [expected_group]
         elif GPT6_ASTRA_GROUP in channel_groups:
             invalid_astra_channels.append(channel_id)
             sync_groups = []
@@ -2893,9 +2922,9 @@ def sync_abilities() -> None:
                 continue
             if tag == KIMI_K3_CHANNEL_TAG and model != KIMI_K3_MODEL:
                 continue
-            if model == GPT6_ASTRA_MODEL and tag != GPT6_ASTRA_CHANNEL_TAG:
+            if model == GPT6_ASTRA_MODEL and tag not in GPT6_ASTRA_CHANNEL_TAGS:
                 continue
-            if tag == GPT6_ASTRA_CHANNEL_TAG and model != GPT6_ASTRA_MODEL:
+            if tag in GPT6_ASTRA_CHANNEL_TAGS and model != GPT6_ASTRA_MODEL:
                 continue
             if not should_sync_ability_model(model):
                 continue
@@ -2939,7 +2968,7 @@ def sync_abilities() -> None:
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
                     )
-                elif tag in CLAUDE_CHANNEL_GROUPS or tag in {KIMI_K3_CHANNEL_TAG, GPT6_ASTRA_CHANNEL_TAG} or tag in grok46_media_channel_tags:
+                elif tag in CLAUDE_CHANNEL_GROUPS or tag in {KIMI_K3_CHANNEL_TAG, GPT6_ASTRA_CHANNEL_TAG, *GPT6_ASTRA_CHANNEL_TAGS} or tag in grok46_media_channel_tags:
                     pass
                 elif tag not in grok_channel_tags:
                     current_channel_conditions.extend(
@@ -3122,18 +3151,17 @@ def sync_abilities() -> None:
             + sql_quote(KIMI_K3_CHANNEL_TAG)
             + ");",
             "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
-            "SET ability.enabled = 0 WHERE channel.tag = "
-            + sql_quote(GPT6_ASTRA_CHANNEL_TAG)
-            + " AND (ability.model <> "
+            "SET ability.enabled = 0 WHERE channel.tag IN ("
+            + ", ".join(sql_quote(tag) for tag in GPT6_ASTRA_CHANNEL_TAGS)
+            + ") AND (ability.model <> "
             + sql_quote(GPT6_ASTRA_MODEL)
-            + " OR REPLACE(COALESCE(channel.`group`, ''), ' ', '') <> "
-            + sql_quote(GPT6_ASTRA_GROUP)
-            + ");",
+            + " OR ability.`group` <> REPLACE(COALESCE(channel.`group`, ''), ' ', '') "
+            + " OR ability.tag <> channel.tag);",
             "UPDATE abilities SET enabled = 0 WHERE model = "
             + sql_quote(GPT6_ASTRA_MODEL)
-            + " AND channel_id NOT IN (SELECT id FROM channels WHERE status = 1 AND tag = "
-            + sql_quote(GPT6_ASTRA_CHANNEL_TAG)
-            + ");",
+            + " AND channel_id NOT IN (SELECT id FROM channels WHERE status = 1 AND tag IN ("
+            + ", ".join(sql_quote(tag) for tag in GPT6_ASTRA_CHANNEL_TAGS)
+            + "));",
             "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
             "SET ability.enabled = 0 WHERE channel.tag = "
             + sql_quote(PUBLIC_GROK15_1080_VIDEO_CHANNEL_TAG)

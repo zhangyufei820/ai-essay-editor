@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	Gpt6AstraModelName         = "gpt-6-astra"
+	Gpt6AstraModelName = "gpt-6-astra"
+	// Kept as migration identifiers for the retired fixed-price route.
 	Gpt6AstraPricingGroupName  = "astra"
 	Gpt6AstraPricingGroupRatio = 1.0
 )
@@ -16,12 +17,9 @@ func IsGpt6AstraModel(modelName string) bool {
 	return strings.EqualFold(strings.TrimSpace(modelName), Gpt6AstraModelName)
 }
 
-// IsGpt6AstraPricingGroup identifies requests pinned to the dedicated route.
-// Its RMB sale price must remain independent of the caller's token group.
+// IsGpt6AstraPricingGroup is retained for source compatibility only. Astra
+// now follows the caller's selected pricing group, so the legacy fixed-price
+// group must never override group billing.
 func IsGpt6AstraPricingGroup(relayInfo *relaycommon.RelayInfo) bool {
-	if relayInfo == nil {
-		return false
-	}
-	return strings.TrimSpace(relayInfo.UsingGroup) == Gpt6AstraPricingGroupName ||
-		strings.TrimSpace(relayInfo.TokenGroup) == Gpt6AstraPricingGroupName
+	return false
 }

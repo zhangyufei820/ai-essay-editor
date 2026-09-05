@@ -28,14 +28,3 @@ func TestApplyUpstreamCostBillingKeepsFixedKimiK3Price(t *testing.T) {
 	require.Equal(t, "kimi_k3_static_pricing", result.FallbackReason)
 	require.Equal(t, 321, quota)
 }
-
-func TestApplyUpstreamCostBillingKeepsFixedGpt6AstraPrice(t *testing.T) {
-	relayInfo := &relaycommon.RelayInfo{UsingGroup: Gpt6AstraPricingGroupName, OriginModelName: Gpt6AstraModelName}
-
-	quota, result := ApplyUpstreamCostBilling(relayInfo, &dto.Usage{CostCNY: 999}, 321)
-
-	require.False(t, result.Applied)
-	require.Equal(t, "gpt6_astra_static_pricing", result.FallbackReason)
-	require.Equal(t, 321, quota)
-	require.Equal(t, 321, result.FinalQuota)
-}

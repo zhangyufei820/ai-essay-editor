@@ -102,9 +102,6 @@ func resolveRealtimeGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	if IsKimiK3PricingGroup(relayInfo) {
 		return KimiK3PricingGroupRatio
 	}
-	if IsGpt6AstraPricingGroup(relayInfo) {
-		return Gpt6AstraPricingGroupRatio
-	}
 	groupRatio := GetUserGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)
 	logger.LogDebug(ctx, "final group ratio: %f", groupRatio)
 	return groupRatio
