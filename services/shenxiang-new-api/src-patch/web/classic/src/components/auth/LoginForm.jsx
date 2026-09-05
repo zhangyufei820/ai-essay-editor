@@ -814,7 +814,10 @@ const LoginForm = () => {
                     onClick={handleSubmit}
                     loading={loginLoading}
                     disabled={
-                      (hasUserAgreement || hasPrivacyPolicy) && !agreedToTerms
+                      loginLoading ||
+                      ((hasUserAgreement || hasPrivacyPolicy) &&
+                        !agreedToTerms) ||
+                      (turnstileEnabled && turnstileToken === '')
                     }
                   >
                     {t('继续')}
