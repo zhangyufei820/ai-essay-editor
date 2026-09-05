@@ -115,6 +115,69 @@ class ConfigureDiscountTextChannelTests(unittest.TestCase):
         with self.assertRaises(self.module.ConfigurationError):
             self.module.parse_channel_order("tkfora,aihub,aihub")
 
+    def test_default_orders_make_aihub_primary_and_preserve_legacy_fallbacks(self) -> None:
+        self.assertEqual(self.module.DEFAULT_CHANNEL_ORDER, ("aihub", "zwaca", "tkfora"))
+        self.assertEqual(
+            self.module.DEFAULT_MANAGED_CHANNEL_ORDER,
+            ("aihub", "zwaca", "pdhlzy", "geek2api"),
+        )
+        self.assertEqual(
+            self.module.parse_managed_channel_order("aihub,zwaca,pdhlzy,geek2api"),
+            self.module.DEFAULT_MANAGED_CHANNEL_ORDER,
+        )
+        with self.assertRaises(self.module.ConfigurationError):
+            self.module.parse_managed_channel_order("aihub,zwaca,pdhlzy,aihub")
+
+    def test_order_only_sql_changes_priorities_without_credentials_or_availability(self) -> None:
+        sql = self.module.build_order_only_sql()
+
+        self.assertIn("discount_order_apply_status", sql)
+        self.assertIn("xingren-discount-text-wangwang' THEN 40", sql)
+        self.assertIn("xingren-discount-text-aihub' THEN 30", sql)
+        self.assertIn("xingren-discount-text-pdhlzy' THEN 20", sql)
+        self.assertIn("xingren-discount-text-geek2api' THEN 10", sql)
+        self.assertIn("UPDATE channels AS channel SET channel.priority", sql)
+        self.assertIn("UPDATE abilities AS ability", sql)
+        self.assertNotIn("channel.status =", sql)
+        self.assertNotIn("channel.`key` =", sql)
+        self.assertNotIn("channel.models =", sql)
+
+    def test_apply_channel_order_uses_guarded_transaction_and_fails_closed(self) -> None:
+        with mock.patch.object(
+            self.module, "mysql_exec", return_value=["discount_order_apply_status=ok"]
+        ) as mysql_exec:
+            self.module.apply_channel_order()
+        self.assertIn("START TRANSACTION", mysql_exec.call_args.args[0])
+
+        cases = (
+            ("channel_identity_conflict", "missing or duplicated"),
+            ("channel_group_conflict", "unmanaged group"),
+            ("ability_tag_conflict", "do not match"),
+        )
+        for status, message in cases:
+            with self.subTest(status=status), mock.patch.object(
+                self.module, "mysql_exec", return_value=["discount_order_apply_status=" + status]
+            ):
+                with self.assertRaisesRegex(self.module.ConfigurationError, message):
+                    self.module.apply_channel_order()
+
+    def test_order_only_cli_skips_upstream_credentials_and_probes(self) -> None:
+        stdout = io.StringIO()
+        with mock.patch.object(self.module, "apply_channel_order") as apply_order, mock.patch.object(
+            self.module, "require_upstream_key", side_effect=AssertionError("must not load credentials")
+        ), mock.patch.object(
+            self.module, "fetch_upstream_models", side_effect=AssertionError("must not probe upstream")
+        ), mock.patch.object(
+            sys, "argv", ["configure_discount_text_channel.py", "--apply-order-only"]
+        ), mock.patch("sys.stdout", stdout):
+            self.assertEqual(self.module.main(), 0)
+
+        apply_order.assert_called_once_with(self.module.DEFAULT_MANAGED_CHANNEL_ORDER)
+        payload = self.module.json.loads(stdout.getvalue())
+        self.assertEqual(payload["action"], "order_applied")
+        self.assertEqual(payload["ratio"], 0.25)
+        self.assertEqual(payload["channel_order"], list(self.module.DEFAULT_MANAGED_CHANNEL_ORDER))
+
     def test_tkfora_fallback_uses_chat_completions_upstream(self) -> None:
         spec = next(spec for spec in self.module.DISCOUNT_CHANNEL_SPECS if spec.slug == "tkfora")
 

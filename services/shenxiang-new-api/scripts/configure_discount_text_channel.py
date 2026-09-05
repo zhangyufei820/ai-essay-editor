@@ -35,7 +35,14 @@ LEGACY_DISCOUNT_CHANNEL_TAG = "xingren-discount-text"
 LEGACY_RESERVE_CHANNEL_TAG = "xingren-discount-text-reserve"
 LEGACY_AIHUB_CHANNEL_TAG = "xingren-discount-text-aihub"
 LEGACY_PDHLZY_CHANNEL_TAG = "xingren-discount-text-pdhlzy"
-DEFAULT_CHANNEL_ORDER = ("zwaca", "tkfora", "aihub")
+DEFAULT_CHANNEL_ORDER = ("aihub", "zwaca", "tkfora")
+MANAGED_DISCOUNT_ROUTE_TAGS = {
+    "aihub": "xingren-discount-text-wangwang",
+    "zwaca": LEGACY_AIHUB_CHANNEL_TAG,
+    "pdhlzy": LEGACY_PDHLZY_CHANNEL_TAG,
+    "geek2api": "xingren-discount-text-geek2api",
+}
+DEFAULT_MANAGED_CHANNEL_ORDER = ("aihub", "zwaca", "pdhlzy", "geek2api")
 DISCOUNT_TEXT_MODELS = (
     "gpt-5.5",
     "gpt-5.6-sol",
@@ -192,6 +199,18 @@ def parse_channel_order(raw_value: str) -> tuple[str, ...]:
 
 
 def channel_priorities(order: tuple[str, ...]) -> dict[str, int]:
+    return {slug: (len(order) - index) * 10 for index, slug in enumerate(order)}
+
+
+def parse_managed_channel_order(raw_value: str) -> tuple[str, ...]:
+    order = tuple(item.strip() for item in raw_value.split(",") if item.strip())
+    expected = set(MANAGED_DISCOUNT_ROUTE_TAGS)
+    if len(order) != len(expected) or set(order) != expected:
+        raise ConfigurationError("managed channel order must contain aihub,zwaca,pdhlzy,geek2api exactly once")
+    return order
+
+
+def managed_channel_priorities(order: tuple[str, ...]) -> dict[str, int]:
     return {slug: (len(order) - index) * 10 for index, slug in enumerate(order)}
 
 
@@ -428,6 +447,83 @@ def mysql_status(output: list[str], prefix: str) -> str:
         if line.startswith(prefix):
             return line.removeprefix(prefix)
     raise ConfigurationError("production MySQL update returned no completion status")
+
+
+def build_order_only_sql(order: tuple[str, ...] = DEFAULT_MANAGED_CHANNEL_ORDER) -> str:
+    priorities = managed_channel_priorities(order)
+    allowed_tags = tuple(MANAGED_DISCOUNT_ROUTE_TAGS.values())
+    allowed_tags_sql = sql_list(list(allowed_tags))
+    priority_case = "CASE channel.tag " + " ".join(
+        "WHEN " + sql_quote(tag) + " THEN " + str(priorities[slug])
+        for slug, tag in MANAGED_DISCOUNT_ROUTE_TAGS.items()
+    ) + " ELSE channel.priority END"
+    tag_identity_conflicts = " + ".join(
+        "IF((SELECT COUNT(*) FROM channels WHERE tag = " + sql_quote(tag) + ") <> 1, 1, 0)"
+        for tag in allowed_tags
+    )
+    return "\n".join(
+        [
+            "START TRANSACTION;",
+            "SELECT id FROM channels WHERE tag IN ("
+            + allowed_tags_sql
+            + ") OR FIND_IN_SET("
+            + sql_quote(DISCOUNT_GROUP)
+            + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0 ORDER BY id FOR UPDATE;",
+            "SET @discount_order_tag_identity_conflicts := " + tag_identity_conflicts + ";",
+            "SET @discount_order_group_conflicts := (SELECT COUNT(*) FROM channels WHERE "
+            + "(tag IN ("
+            + allowed_tags_sql
+            + ") AND REPLACE(COALESCE(`group`, ''), ' ', '') <> "
+            + sql_quote(DISCOUNT_GROUP)
+            + ") OR (FIND_IN_SET("
+            + sql_quote(DISCOUNT_GROUP)
+            + ", REPLACE(COALESCE(`group`, ''), ' ', '')) > 0 AND COALESCE(tag, '') NOT IN ("
+            + allowed_tags_sql
+            + ")));",
+            "SET @discount_order_ability_conflicts := (SELECT COUNT(*) FROM abilities AS ability "
+            + "JOIN channels AS channel ON channel.id = ability.channel_id WHERE channel.tag IN ("
+            + allowed_tags_sql
+            + ") AND ability.`group` = "
+            + sql_quote(DISCOUNT_GROUP)
+            + " AND COALESCE(ability.tag, '') <> channel.tag);",
+            "SET @discount_order_apply_status := CASE "
+            + "WHEN @discount_order_tag_identity_conflicts > 0 THEN 'channel_identity_conflict' "
+            + "WHEN @discount_order_group_conflicts > 0 THEN 'channel_group_conflict' "
+            + "WHEN @discount_order_ability_conflicts > 0 THEN 'ability_tag_conflict' "
+            + "ELSE 'ok' END;",
+            "SET @discount_order_apply_allowed := IF(@discount_order_apply_status = 'ok', 1, 0);",
+            "UPDATE channels AS channel SET channel.priority = "
+            + priority_case
+            + " WHERE channel.tag IN ("
+            + allowed_tags_sql
+            + ") AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = "
+            + sql_quote(DISCOUNT_GROUP)
+            + " AND @discount_order_apply_allowed = 1;",
+            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id SET ability.priority = "
+            + priority_case
+            + " WHERE channel.tag IN ("
+            + allowed_tags_sql
+            + ") AND REPLACE(COALESCE(channel.`group`, ''), ' ', '') = "
+            + sql_quote(DISCOUNT_GROUP)
+            + " AND ability.`group` = "
+            + sql_quote(DISCOUNT_GROUP)
+            + " AND ability.tag = channel.tag AND @discount_order_apply_allowed = 1;",
+            "COMMIT;",
+            "SELECT CONCAT('discount_order_apply_status=', @discount_order_apply_status);",
+        ]
+    )
+
+
+def apply_channel_order(order: tuple[str, ...] = DEFAULT_MANAGED_CHANNEL_ORDER) -> None:
+    output = mysql_exec(build_order_only_sql(order))
+    status = mysql_status(output, "discount_order_apply_status=")
+    errors = {
+        "channel_identity_conflict": "Discount route identities are missing or duplicated",
+        "channel_group_conflict": "Discount routes contain an unmanaged group assignment",
+        "ability_tag_conflict": "Discount abilities do not match their managed route identity",
+    }
+    if status != "ok":
+        raise ConfigurationError(errors.get(status, "Discount channel order apply failed closed"))
 
 
 def reset_provider_monitor_channel_state(channel_id: int) -> bool:
@@ -854,10 +950,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Safely configure the isolated discount text channels")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--apply", action="store_true", help="write the validated channels and group configuration")
+    action.add_argument(
+        "--apply-order-only",
+        action="store_true",
+        help="change only managed channel and ability priorities, preserving availability state and credentials",
+    )
     action.add_argument("--disable", action="store_true", help="disable all managed channels and hide the discount group")
     parser.add_argument(
         "--order",
-        default=",".join(DEFAULT_CHANNEL_ORDER),
+        default=None,
         help="comma-separated channel order from primary to final fallback",
     )
     parser.add_argument(
@@ -867,8 +968,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if args.disable and args.channel:
-        parser.error("--channel cannot be combined with --disable")
+    if (args.disable or args.apply_order_only) and args.channel:
+        parser.error("--channel cannot be combined with --disable or --apply-order-only")
 
     if args.disable:
         with model_sync_lock():
@@ -887,7 +988,26 @@ def main() -> int:
         )
         return 0
 
-    order = parse_channel_order(args.order)
+    if args.apply_order_only:
+        order = parse_managed_channel_order(args.order or ",".join(DEFAULT_MANAGED_CHANNEL_ORDER))
+        with model_sync_lock():
+            apply_channel_order(order)
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "action": "order_applied",
+                    "ratio": DISCOUNT_RATIO,
+                    "channel_order": order,
+                    "runtime_cache_refresh_required": True,
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+        return 0
+
+    order = parse_channel_order(args.order or ",".join(DEFAULT_CHANNEL_ORDER))
     plans: dict[str, DiscountPlan] = {}
     api_keys: dict[str, str] = {}
     base_urls: dict[str, str] = {}
