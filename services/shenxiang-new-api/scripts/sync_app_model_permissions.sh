@@ -24,6 +24,7 @@ SYNC_SCRIPT="$SERVICE_DIR/scripts/sync_app_model_permissions.py"
 GROK45_SCRIPT="$SERVICE_DIR/scripts/configure_grok45_model.py"
 GROK46_SCRIPT="$SERVICE_DIR/scripts/configure_grok46_model.py"
 KIMI_K3_SCRIPT="$SERVICE_DIR/scripts/configure_kimi_k3_channel.py"
+GPT6_ASTRA_SCRIPT="$SERVICE_DIR/scripts/configure_gpt6_astra_channel.py"
 
 if [[ "$(git -C "$CHECKOUT" rev-parse HEAD)" != "$RELEASE_COMMIT" ]]; then
   echo "release checkout does not match manifest commit $RELEASE_COMMIT" >&2
@@ -72,6 +73,7 @@ exec 9>"$LOCK"
 flock -n 9
 python3 "$SYNC_SCRIPT"
 run_optional_reconcile "kimi-k3" "KIMI_K3_CHANNEL_SYNC_LOCK_HELD" "$KIMI_K3_SCRIPT"
+run_optional_reconcile "gpt-6-astra" "GPT6_ASTRA_CHANNEL_SYNC_LOCK_HELD" "$GPT6_ASTRA_SCRIPT"
 run_optional_reconcile "grok-4.5" "GROK45_MODEL_SYNC_LOCK_HELD" "$GROK45_SCRIPT"
 run_optional_reconcile "grok-4.6" "GROK46_MODEL_SYNC_LOCK_HELD" "$GROK46_SCRIPT"
 

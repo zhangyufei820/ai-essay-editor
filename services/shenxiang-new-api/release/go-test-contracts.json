@@ -13,7 +13,7 @@
   },
   {
     "package": "./middleware",
-    "run": "^(TestUserAuthRequiresMatchingSessionAndHeader|TestEnforceClaudeTerminalGroup.*|TestSetupContextForSelectedChannel.*|TestApplyPlaygroundTextPricingPreferenceUsesManagedGroupChain)$"
+    "run": "^(TestUserAuthRequiresMatchingSessionAndHeader|TestEnforceClaudeTerminalGroup.*|TestSetupContextForSelectedChannel.*|TestApplyPlaygroundTextPricingPreferenceUsesManagedGroupChain|TestApplyGpt6AstraPricingRouteOverridesDiscountAndPlusGroups)$"
   },
   {
     "package": "./router",
@@ -97,7 +97,7 @@
   },
   {
     "package": "./relay/helper",
-    "run": "^(TestHandleGroupRatioPinsSpecialMarketplaceRatio|TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice|TestResponsesInitialResponseTimeoutOnlyAppliesToResponses|TestStreamScannerHandlerTimesOutSilentResponsesStreamBeforeGlobalTimeout)$"
+    "run": "^(TestHandleGroupRatioPinsSpecialMarketplaceRatio|TestHandleGroupRatioPinsGpt6AstraPrice|TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice|TestResponsesInitialResponseTimeoutOnlyAppliesToResponses|TestStreamScannerHandlerTimesOutSilentResponsesStreamBeforeGlobalTimeout)$"
   },
   {
     "package": "./service",

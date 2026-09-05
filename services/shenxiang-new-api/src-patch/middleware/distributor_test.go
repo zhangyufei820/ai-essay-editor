@@ -321,6 +321,24 @@ func TestApplyKimiK3PricingRouteOverridesDiscountAndPlusGroups(t *testing.T) {
 	}
 }
 
+func TestApplyGpt6AstraPricingRouteOverridesDiscountAndPlusGroups(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tokenGroup := range []string{service.DiscountPricingGroupName, service.PlusPricingGroupName} {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		common.SetContextKey(ctx, constant.ContextKeyUsingGroup, tokenGroup)
+		modelRequest := &ModelRequest{Model: service.Gpt6AstraModelName, Group: tokenGroup}
+
+		got := applyGpt6AstraPricingRoute(ctx, modelRequest)
+
+		require.Equal(t, service.Gpt6AstraPricingGroupName, got)
+		require.Equal(t, service.Gpt6AstraPricingGroupName, modelRequest.Group)
+		require.Equal(t, service.Gpt6AstraPricingGroupName, common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup))
+		require.Equal(t, []string{service.Gpt6AstraPricingGroupName}, service.GetTokenGroupChain(ctx))
+		require.Equal(t, service.Gpt6AstraPricingGroupName, recorder.Header().Get("X-Aiphui-Pricing-Group"))
+	}
+}
+
 func truncateMiddlewareTestDB(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {

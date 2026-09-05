@@ -69,7 +69,36 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         source = SCRIPT_PATH.read_text(encoding="utf-8")
 
         self.assertIn("kimi_enabled_channel_sql", source)
-        self.assertGreaterEqual(source.count("AND NOT (model = "), 2)
+        self.assertGreaterEqual(source.count("AND NOT ((model = "), 2)
+
+    def test_gpt6_astra_price_config_is_exact_rmb_sale_price(self) -> None:
+        prices = self.module.PUBLIC_OPENAI_TEXT_MODELS["gpt-6-astra"]
+
+        self.assertEqual(prices["input_cny"], self.module.Decimal("10"))
+        self.assertEqual(prices["output_cny"], self.module.Decimal("50"))
+        self.assertEqual(prices["cache_read_cny"], self.module.Decimal("1"))
+        self.assertEqual(prices["cache_create_cny"], self.module.Decimal("10"))
+        self.assertEqual(prices["longcontext_input_cny"], self.module.Decimal("10"))
+        self.assertEqual(prices["longcontext_output_cny"], self.module.Decimal("50"))
+        self.assertIn("105 万 Token", prices["description"])
+        self.assertNotIn("$", prices["description"])
+
+    def test_gpt6_astra_uses_a_dedicated_fixed_price_group(self) -> None:
+        self.assertEqual(self.module.GPT6_ASTRA_MODEL, "gpt-6-astra")
+        self.assertEqual(self.module.GPT6_ASTRA_GROUP, "astra")
+        self.assertEqual(self.module.GPT6_ASTRA_CHANNEL_TAG, "xingren-gpt6-astra")
+        self.module.mysql = lambda _query: []
+        self.assertIn(self.module.GPT6_ASTRA_GROUP, self.module.active_groups())
+
+    def test_gpt6_astra_is_marketplace_only_not_added_to_cloud_codex(self) -> None:
+        self.assertIn("gpt-6-astra", self.module.PUBLIC_OPENAI_TEXT_MODELS)
+        self.assertNotIn("gpt-6-astra", self.module.CODEX_ALLOWED_MODELS)
+
+    def test_gpt6_astra_ability_sync_preserves_discount_and_plus_visibility(self) -> None:
+        source = SCRIPT_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("astra_enabled_channel_sql", source)
+        self.assertGreaterEqual(source.count("sql_quote(GPT6_ASTRA_MODEL)"), 6)
 
     def test_discount_text_models_are_exactly_the_public_text_aliases(self) -> None:
         self.assertEqual(
@@ -1538,7 +1567,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.ensure_public_openai_text_models()
 
         sql = "\n".join(captured)
-        for model in ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
+        for model in ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-astra"]:
             self.assertIn(model, sql)
         self.assertIn("text,openai,codex", sql)
         self.assertIn('{"openai":"/v1/chat/completions"}', sql)
@@ -1564,6 +1593,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             "gpt-5.6-luna": 0.068493150685,
             "gpt-5.6-terra": 0.171232876712,
             "gpt-5.6-sol": 0.342465753425,
+            "gpt-6-astra": 0.684931506849,
         }
         expected_completion_ratios = {
             "gpt-5.4": 6.136363636364,
@@ -1572,12 +1602,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             "gpt-5.6-luna": 6.0,
             "gpt-5.6-terra": 6.0,
             "gpt-5.6-sol": 6.0,
+            "gpt-6-astra": 5.0,
         }
         for model, ratio in expected_model_ratios.items():
             self.assertEqual(captured_options["ModelRatio"][model], ratio)
             self.assertEqual(captured_options["CompletionRatio"][model], expected_completion_ratios[model])
             self.assertEqual(captured_options["CacheRatio"][model], 0.1)
-            self.assertEqual(captured_options["CreateCacheRatio"][model], 1.25)
+            self.assertEqual(captured_options["CreateCacheRatio"][model], 1.0 if model == "gpt-6-astra" else 1.25)
             self.assertNotIn(model, captured_options["ModelPrice"])
             self.assertEqual(captured_options["billing_setting.billing_mode"][model], "tiered_expr")
 
@@ -1593,6 +1624,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 captured_options[option_name]["codex-auto-review"],
                 captured_options[option_name]["gpt-5.5"],
             )
+
+        self.assertEqual(captured_options["CacheRatio"]["gpt-6-astra"], 0.1)
+        self.assertEqual(captured_options["CreateCacheRatio"]["gpt-6-astra"], 1.0)
+        astra_expr = captured_options["billing_setting.billing_expr"]["gpt-6-astra"]
+        self.assertIn("p * 1.369863013699", astra_expr)
+        self.assertIn("c * 6.849315068493", astra_expr)
+        self.assertIn("cr * 0.13698630137", astra_expr)
+        self.assertIn("cc * 1.369863013699", astra_expr)
 
         gpt54_expr = captured_options["billing_setting.billing_expr"]["gpt-5.4"]
         gpt55_expr = captured_options["billing_setting.billing_expr"]["gpt-5.5"]

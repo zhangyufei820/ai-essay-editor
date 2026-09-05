@@ -153,6 +153,9 @@ func Distribute() func(c *gin.Context) {
 				if kimiGroup := applyKimiK3PricingRoute(c, modelRequest); kimiGroup != "" {
 					usingGroup = kimiGroup
 				}
+				if astraGroup := applyGpt6AstraPricingRoute(c, modelRequest); astraGroup != "" {
+					usingGroup = astraGroup
+				}
 
 				if routedChannel, routedGroup, handled, routeErr := selectGrokVideo15DurationChannel(c, modelRequest, usingGroup); handled {
 					if routeErr != nil {
@@ -315,6 +318,17 @@ func applyKimiK3PricingRoute(c *gin.Context, modelRequest *ModelRequest) string 
 		return ""
 	}
 	group := service.KimiK3PricingGroupName
+	modelRequest.Group = group
+	service.SetTokenGroupChain(c, []string{group})
+	c.Header("X-Aiphui-Pricing-Group", group)
+	return group
+}
+
+func applyGpt6AstraPricingRoute(c *gin.Context, modelRequest *ModelRequest) string {
+	if c == nil || modelRequest == nil || !service.IsGpt6AstraModel(modelRequest.Model) {
+		return ""
+	}
+	group := service.Gpt6AstraPricingGroupName
 	modelRequest.Group = group
 	service.SetTokenGroupChain(c, []string{group})
 	c.Header("X-Aiphui-Pricing-Group", group)
