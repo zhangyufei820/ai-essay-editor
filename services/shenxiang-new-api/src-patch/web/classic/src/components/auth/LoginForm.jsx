@@ -974,8 +974,13 @@ const LoginForm = () => {
               onVerify={(token) => {
                 setTurnstileToken(token);
               }}
+              refreshExpired='auto'
+              retry='auto'
               onExpire={() => setTurnstileToken('')}
-              onError={() => setTurnstileToken('')}
+              onError={(_, turnstile) => {
+                setTurnstileToken('');
+                turnstile?.reset();
+              }}
             />
           </div>
         )}
