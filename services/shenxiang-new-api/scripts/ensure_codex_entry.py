@@ -36,6 +36,7 @@ CODEX_ALLOWED_MODELS = (
     "gpt-5.4-mini",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
+    "gpt-6-astra",
     "kimi-k3",
     "gpt-5.5-openai-compact",
     CODEX_AUTO_REVIEW_MODEL,

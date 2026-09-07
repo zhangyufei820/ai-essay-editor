@@ -43,6 +43,12 @@ func TestXingrenCodexModelRejectsUnknownAsciiModel(t *testing.T) {
 	}
 }
 
+func TestXingrenCodexModelAcceptsAstra(t *testing.T) {
+	if got := xingrenCodexModel("gpt-6-astra"); got != "gpt-6-astra" {
+		t.Fatalf("xingrenCodexModel() = %q, want gpt-6-astra", got)
+	}
+}
+
 func TestXingrenCodexTokenGroupDefaultsLegacyUserGroup(t *testing.T) {
 	token := buildXingrenCodexUserToken(42, "test-key", "test-token", "gpt-5.5", "internal")
 	if token.Group != "default" {
@@ -279,6 +285,9 @@ func TestXingrenCodexFrontendRejectsInvalidPayloadBeforeConfiguration(t *testing
 	}
 	text := string(source)
 	for _, marker := range []string{
+		"codexModel: \"gpt-6-astra\"",
+		"fallbackCodexModel: \"gpt-5.5\"",
+		"model_provider = \"aiphui\"",
 		"function validateCodexTokenPayload(payload, userId)",
 		"return validateCodexTokenPayload(payload, userId);",
 		"state.generatedKey = \"\";",
