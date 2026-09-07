@@ -191,6 +191,7 @@ GPT6_ASTRA_MANAGED_GROUPS = (
     "discount",
     "special",
 )
+GPT6_ASTRA_USER_ACCESS_GROUPS = ("default", "plus", "discount")
 GPT6_ASTRA_CHANNEL_TAG_PREFIX = "xingren-gpt6-astra-"
 GPT6_ASTRA_CHANNEL_TAGS = tuple(
     f"{GPT6_ASTRA_CHANNEL_TAG_PREFIX}{group}-{index}"
@@ -2374,6 +2375,45 @@ def append_model_limit(raw_limits: str, model: str) -> str:
     return raw_limits + separator + model
 
 
+def sync_astra_access_for_target_user_tokens() -> dict[str, int]:
+    """Grant Astra to restricted user keys that can use a target pricing group."""
+    normalized_group = "REPLACE(COALESCE(`group`, ''), ' ', '')"
+    group_predicate = " OR ".join(
+        "FIND_IN_SET(" + sql_quote(group) + ", " + normalized_group + ") > 0"
+        for group in GPT6_ASTRA_USER_ACCESS_GROUPS
+    )
+    token_rows = mysql(
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(`group`, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND status = 1 AND model_limits_enabled = 1 "
+        "AND user_id <> "
+        + str(ADMIN_SYSTEM_TOKEN_USER_ID)
+        + " AND ("
+        + group_predicate
+        + ");"
+    )
+    token_updates: list[tuple[str, str, str]] = []
+    for token_id, token_key, raw_limits, _raw_group in token_rows:
+        next_limits = append_model_limit(raw_limits, GPT6_ASTRA_MODEL)
+        if next_limits != raw_limits:
+            token_updates.append((token_id, next_limits, token_key))
+
+    statements = ["START TRANSACTION;"]
+    for token_id, next_limits, _token_key in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits = "
+            + sql_quote(next_limits)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    caches_deleted = delete_token_caches(
+        [token_key for _token_id, _next_limits, token_key in token_updates]
+    )
+    return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
+
+
 def sync_controlled_codex_alias_tokens() -> dict[str, int]:
     token_rows = mysql(
         "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, '') FROM tokens "
@@ -3475,6 +3515,7 @@ def main() -> int:
     sync_abilities()
     system_token_result = sync_tokens(system_token_profiles(profiles))
     codex_token_result = sync_user_codex_tokens(profiles)
+    astra_token_result = sync_astra_access_for_target_user_tokens()
     codex_alias_token_result = sync_controlled_codex_alias_tokens()
     claude_token_result = sync_user_claude_tokens(profiles)
     image_token_result = sync_user_image_tokens(profiles)
@@ -3486,7 +3527,7 @@ def main() -> int:
     print(
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
-        + f", codex_env_changed={env_changed}, system_token_sync={system_token_result}, codex_token_sync={codex_token_result}, codex_alias_token_sync={codex_alias_token_result}, claude_token_sync={claude_token_result}, image_token_sync={image_token_result}, video_token_sync={video_token_result}, gpt_image2_guard={guard_result}"
+        + f", codex_env_changed={env_changed}, system_token_sync={system_token_result}, codex_token_sync={codex_token_result}, astra_token_sync={astra_token_result}, codex_alias_token_sync={codex_alias_token_result}, claude_token_sync={claude_token_result}, image_token_sync={image_token_result}, video_token_sync={video_token_result}, gpt_image2_guard={guard_result}"
         + f", supplier_safe_metadata={metadata_result}, codex_text_channel={codex_text_channel_result}"
         + f", retired_codex_text={retired_codex_text_result}"
         + f", retired_claude={retired_claude_result}"

@@ -1302,6 +1302,35 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertIn("CACHE:key-108", sql)
 
+    def test_sync_astra_access_updates_all_target_group_user_tokens_regardless_of_name(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            self.assertIn("FIND_IN_SET('default'", query)
+            self.assertIn("FIND_IN_SET('plus'", query)
+            self.assertIn("FIND_IN_SET('discount'", query)
+            self.assertIn("user_id <> 1", query)
+            return [
+                ["401", "user-key-default", "gpt-5.5", "default"],
+                ["402", "user-key-plus", "gpt-5.6-sol", "plus"],
+                ["403", "user-key-discount", "gpt-5.5,gpt-6-astra", "discount"],
+            ]
+
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: captured.append("CACHE:" + ",".join(keys)) or len(keys)
+
+        result = self.module.sync_astra_access_for_target_user_tokens()
+
+        sql = "\n".join(captured)
+        self.assertEqual(result, {"tokens_rewritten": 2, "token_caches_deleted": 2})
+        self.assertIn("WHERE id = '401'", sql)
+        self.assertIn("WHERE id = '402'", sql)
+        self.assertNotIn("WHERE id = '403'", sql)
+        self.assertIn("gpt-5.5,gpt-6-astra", sql)
+        self.assertIn("gpt-5.6-sol,gpt-6-astra", sql)
+        self.assertIn("CACHE:user-key-default,user-key-plus", sql)
+
     def test_sync_user_claude_tokens_replaces_unrestricted_limits(self) -> None:
         captured: list[str] = []
 
@@ -1913,6 +1942,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         }
         sync_abilities = mock.Mock()
         sync_user_codex_tokens = mock.Mock(return_value={"tokens_rewritten": 1, "token_caches_deleted": 1})
+        sync_astra_access_for_target_user_tokens = mock.Mock(return_value={"tokens_rewritten": 1, "token_caches_deleted": 1})
         optional_reconcile = mock.Mock(
             side_effect=RuntimeError("Claude Opus 5 requires exactly one enabled Kiro stable channel")
         )
@@ -1946,6 +1976,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             system_token_profiles=mock.Mock(return_value=profiles),
             sync_tokens=empty_result,
             sync_user_codex_tokens=sync_user_codex_tokens,
+            sync_astra_access_for_target_user_tokens=sync_astra_access_for_target_user_tokens,
             sync_controlled_codex_alias_tokens=empty_result,
             sync_user_claude_tokens=empty_result,
             sync_user_image_tokens=empty_result,
@@ -1958,6 +1989,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(0, result)
         sync_abilities.assert_called_once_with()
         sync_user_codex_tokens.assert_called_once_with(profiles)
+        sync_astra_access_for_target_user_tokens.assert_called_once_with()
         self.assertIn("optional model reconcile failed step=claude_opus5_stable_model", errors.getvalue())
         self.assertIn("optional_failures=['claude_opus5_stable_model:RuntimeError']", output.getvalue())
 
