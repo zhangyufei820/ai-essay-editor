@@ -2539,6 +2539,7 @@ def sync_abilities() -> None:
     special_channel_tags_sql = ", ".join(sql_quote(tag) for tag in SPECIAL_TEXT_CHANNEL_TAGS)
     plus_channel_tags = set(PLUS_TEXT_CHANNEL_TAGS)
     plus_channel_tags_sql = ", ".join(sql_quote(tag) for tag in PLUS_TEXT_CHANNEL_TAGS)
+    astra_channel_tags_sql = ", ".join(sql_quote(tag) for tag in GPT6_ASTRA_CHANNEL_TAGS)
     grok_channel_model_by_tag = dict(GROK_CHANNEL_MODEL_BY_TAG)
     grok_channel_tags = set(GROK_CHANNEL_TAGS)
     grok_channel_tags_sql = ", ".join(sql_quote(tag) for tag in GROK_CHANNEL_TAGS)
@@ -2598,6 +2599,8 @@ def sync_abilities() -> None:
         + "));",
         "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') NOT IN ("
         + discount_channel_tags_sql
+        + ", "
+        + astra_channel_tags_sql
         + ")"
         + " AND FIND_IN_SET("
         + sql_quote(DISCOUNT_TEXT_GROUP)
@@ -2624,6 +2627,8 @@ def sync_abilities() -> None:
         + "));",
         "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') NOT IN ("
         + special_channel_tags_sql
+        + ", "
+        + astra_channel_tags_sql
         + ")"
         + " AND FIND_IN_SET("
         + sql_quote(SPECIAL_TEXT_GROUP)
@@ -2638,6 +2643,8 @@ def sync_abilities() -> None:
         + "));",
         "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') NOT IN ("
         + plus_channel_tags_sql
+        + ", "
+        + astra_channel_tags_sql
         + ")"
         + " AND FIND_IN_SET("
         + sql_quote(PLUS_TEXT_GROUP)

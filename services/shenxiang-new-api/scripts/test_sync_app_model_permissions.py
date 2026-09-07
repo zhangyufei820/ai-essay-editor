@@ -123,6 +123,19 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sql = "\n".join(captured)
         for group in ("discount", "plus", "special"):
             self.assertIn(f"SELECT '{group}', 'gpt-6-astra'", sql)
+            isolation_guard = next(
+                statement
+                for statement in sql.split(";\n")
+                if statement.startswith(
+                    "UPDATE channels SET status = 2 WHERE COALESCE(tag, '') NOT IN ("
+                )
+                and f"FIND_IN_SET('{group}'," in statement
+            )
+            self.assertIn(
+                "'xingren-gpt6-astra-" + group + "-1'",
+                isolation_guard,
+                msg=f"{group} isolation must not disable its managed Astra chain",
+            )
 
     def test_discount_text_models_are_exactly_the_public_text_aliases(self) -> None:
         self.assertEqual(
