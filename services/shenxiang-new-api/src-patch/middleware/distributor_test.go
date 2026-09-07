@@ -285,21 +285,23 @@ func TestApplyPlaygroundTextPricingPreferenceUsesManagedGroupChain(t *testing.T)
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			recorder := httptest.NewRecorder()
-			ctx, _ := gin.CreateTestContext(recorder)
-			ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/chat/completions", nil)
-			ctx.Set("id", test.user.Id)
-			modelRequest := &ModelRequest{Model: "gpt-5.5", Group: model.TextPricingGroupDefault}
+		for _, modelName := range []string{"gpt-5.5", service.Gpt6AstraModelName} {
+			t.Run(test.name+"_"+modelName, func(t *testing.T) {
+				recorder := httptest.NewRecorder()
+				ctx, _ := gin.CreateTestContext(recorder)
+				ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/chat/completions", nil)
+				ctx.Set("id", test.user.Id)
+				modelRequest := &ModelRequest{Model: modelName, Group: model.TextPricingGroupDefault}
 
-			group, err := applyPlaygroundTextPricingPreference(ctx, modelRequest)
+				group, err := applyPlaygroundTextPricingPreference(ctx, modelRequest)
 
-			require.NoError(t, err)
-			require.Equal(t, model.TextPricingGroupDiscount, group)
-			require.Equal(t, model.TextPricingGroupDiscount, modelRequest.Group)
-			require.Equal(t, test.wantGroups, service.GetTokenGroupChain(ctx))
-			require.Equal(t, model.TextPricingGroupDiscount, recorder.Header().Get("X-Aiphui-Pricing-Group"))
-		})
+				require.NoError(t, err)
+				require.Equal(t, model.TextPricingGroupDiscount, group)
+				require.Equal(t, model.TextPricingGroupDiscount, modelRequest.Group)
+				require.Equal(t, test.wantGroups, service.GetTokenGroupChain(ctx))
+				require.Equal(t, model.TextPricingGroupDiscount, recorder.Header().Get("X-Aiphui-Pricing-Group"))
+			})
+		}
 	}
 }
 

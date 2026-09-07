@@ -97,7 +97,7 @@
   },
   {
     "package": "./relay/helper",
-    "run": "^(TestHandleGroupRatioPinsSpecialMarketplaceRatio|TestHandleGroupRatioUsesSelectedAstraPricingGroup|TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice|TestResponsesInitialResponseTimeoutOnlyAppliesToResponses|TestStreamScannerHandlerTimesOutSilentResponsesStreamBeforeGlobalTimeout)$"
+    "run": "^(TestHandleGroupRatioPinsSpecialMarketplaceRatio|TestHandleGroupRatioPinsAstraMarketplacePriceAcrossPublicRoutingGroups|TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice|TestResponsesInitialResponseTimeoutOnlyAppliesToResponses|TestStreamScannerHandlerTimesOutSilentResponsesStreamBeforeGlobalTimeout)$"
   },
   {
     "package": "./service",
