@@ -31,6 +31,26 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         self.assertEqual(len(set(self.module.managed_tags())), 32)
         self.assertEqual(self.module.managed_tag("discount", 0), "xingren-gpt6-astra-discount-1")
 
+    def test_discount_uses_aihub_first_without_reordering_other_groups(self) -> None:
+        sources = tuple(
+            self.module.SourceChannel(tag, "test-astra-key-123456", f"https://{index}.example", index)
+            for index, tag in enumerate(self.module.SOURCE_CHANNEL_TAGS, start=1)
+        )
+
+        self.assertEqual(
+            tuple(source.tag for source in self.module.sources_for_group("discount", sources)),
+            (
+                "xingren-discount-text-aihub",
+                "xingren-gpt6-astra",
+                "xingren-discount-text-wangwang",
+                "xingren-plus-text-pdhlzy",
+            ),
+        )
+        self.assertEqual(
+            tuple(source.tag for source in self.module.sources_for_group("default", sources)),
+            self.module.SOURCE_CHANNEL_TAGS,
+        )
+
     def test_probe_source_requires_responses_and_chat_completion(self) -> None:
         source = self.module.SourceChannel("source-a", "test-astra-key-123456", "https://aihub.top", 69)
         models = {"data": [{"id": "gpt-6-astra"}]}

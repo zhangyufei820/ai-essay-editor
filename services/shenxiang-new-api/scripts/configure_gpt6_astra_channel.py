@@ -26,6 +26,16 @@ SOURCE_CHANNEL_TAGS = (
     "xingren-discount-text-wangwang",
     "xingren-plus-text-pdhlzy",
 )
+# Only the public 0.25x tier uses AiHub as its Astra primary.  Every other
+# managed group keeps the established source order above.
+GROUP_SOURCE_TAG_ORDER_OVERRIDES = {
+    "discount": (
+        "xingren-discount-text-aihub",
+        LEGACY_CHANNEL_TAG,
+        "xingren-discount-text-wangwang",
+        "xingren-plus-text-pdhlzy",
+    ),
+}
 MANAGED_GROUPS = ("default", "standard", "pro", "code", "internal", "plus", "discount", "special")
 MANAGED_TAG_PREFIX = "xingren-gpt6-astra-"
 CHAIN_PRIORITIES = (40, 30, 20, 10)
@@ -204,6 +214,16 @@ def managed_tags() -> tuple[str, ...]:
     return tuple(managed_tag(group, index) for group in MANAGED_GROUPS for index in range(len(SOURCE_CHANNEL_TAGS)))
 
 
+def sources_for_group(group: str, sources: tuple[SourceChannel, ...]) -> tuple[SourceChannel, ...]:
+    source_by_tag = {source.tag: source for source in sources}
+    if len(source_by_tag) != len(sources):
+        raise ConfigurationError("source channel identities are duplicated")
+    if set(source_by_tag) != set(SOURCE_CHANNEL_TAGS):
+        return sources
+    ordered_tags = GROUP_SOURCE_TAG_ORDER_OVERRIDES.get(group, SOURCE_CHANNEL_TAGS)
+    return tuple(source_by_tag[tag] for tag in ordered_tags)
+
+
 def validate_group_options() -> None:
     rows = sync.mysql("SELECT `key`, COALESCE(`value`,'') FROM options WHERE `key` IN ('GroupRatio','UserUsableGroups')")
     options = {row[0]: row[1] for row in rows if len(row) == 2}
@@ -249,7 +269,8 @@ def build_apply_sql(
         "UPDATE channels SET status=2 WHERE tag=" + sql_quote(LEGACY_CHANNEL_TAG) + " AND @astra_apply_allowed=1;",
     ]
     for group in MANAGED_GROUPS:
-        for index, source in enumerate(sources):
+        group_sources = sources_for_group(group, sources)
+        for index, source in enumerate(group_sources):
             tag = managed_tag(group, index)
             variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
             channel_status = "1" if source.tag in enabled_source_tags else "2"
@@ -272,10 +293,11 @@ def build_apply_sql(
         ]
     )
     for group in MANAGED_GROUPS:
-        for index in range(len(sources)):
+        group_sources = sources_for_group(group, sources)
+        for index, source in enumerate(group_sources):
             tag = managed_tag(group, index)
             variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
-            ability_enabled = "1" if sources[index].tag in enabled_source_tags else "0"
+            ability_enabled = "1" if source.tag in enabled_source_tags else "0"
             statements.append(
                 "INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES (" + ",".join([sql_quote(group), sql_quote(MODEL_NAME), variable, ability_enabled, str(CHAIN_PRIORITIES[index]), "100", sql_quote(tag)]) + ") ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),priority=VALUES(priority),weight=100,tag=VALUES(tag);"
             )
