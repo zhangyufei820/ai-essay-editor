@@ -1307,9 +1307,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         def fake_mysql(query: str) -> list[list[str]]:
             self.assertIn("FIND_IN_SET('default'", query)
+            self.assertIn("FIND_IN_SET('standard'", query)
+            self.assertIn("FIND_IN_SET('pro'", query)
+            self.assertIn("FIND_IN_SET('code'", query)
+            self.assertIn("FIND_IN_SET('internal'", query)
             self.assertIn("FIND_IN_SET('plus'", query)
             self.assertIn("FIND_IN_SET('discount'", query)
             self.assertIn("user_id <> 1", query)
+            self.assertIn("NOT IN", query)
             return [
                 ["401", "user-key-default", "gpt-5.5", "default"],
                 ["402", "user-key-plus", "gpt-5.6-sol", "plus"],

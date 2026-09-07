@@ -191,7 +191,16 @@ GPT6_ASTRA_MANAGED_GROUPS = (
     "discount",
     "special",
 )
-GPT6_ASTRA_USER_ACCESS_GROUPS = ("default", "plus", "discount")
+GPT6_ASTRA_USER_ACCESS_GROUPS = (
+    "default",
+    "standard",
+    "pro",
+    "code",
+    "internal",
+    "plus",
+    "discount",
+)
+GPT6_ASTRA_EXCLUDED_TOKEN_NAMES = TOKEN_PROFILES["image"] + TOKEN_PROFILES["video"]
 GPT6_ASTRA_CHANNEL_TAG_PREFIX = "xingren-gpt6-astra-"
 GPT6_ASTRA_CHANNEL_TAGS = tuple(
     f"{GPT6_ASTRA_CHANNEL_TAG_PREFIX}{group}-{index}"
@@ -2382,6 +2391,7 @@ def sync_astra_access_for_target_user_tokens() -> dict[str, int]:
         "FIND_IN_SET(" + sql_quote(group) + ", " + normalized_group + ") > 0"
         for group in GPT6_ASTRA_USER_ACCESS_GROUPS
     )
+    excluded_names_sql = ", ".join(sql_quote(name) for name in GPT6_ASTRA_EXCLUDED_TOKEN_NAMES)
     token_rows = mysql(
         "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(`group`, '') FROM tokens "
         "WHERE deleted_at IS NULL AND status = 1 AND model_limits_enabled = 1 "
@@ -2389,6 +2399,8 @@ def sync_astra_access_for_target_user_tokens() -> dict[str, int]:
         + str(ADMIN_SYSTEM_TOKEN_USER_ID)
         + " AND ("
         + group_predicate
+        + ") AND COALESCE(name, '') NOT IN ("
+        + excluded_names_sql
         + ");"
     )
     token_updates: list[tuple[str, str, str]] = []
