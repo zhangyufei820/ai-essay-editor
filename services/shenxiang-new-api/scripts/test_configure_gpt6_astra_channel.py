@@ -54,6 +54,32 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         self.assertIn("UPDATE abilities SET enabled=0 WHERE model='gpt-6-astra'", sql)
         self.assertNotIn("'astra'", sql)
 
+    def test_partial_reconcile_enables_only_verified_source_routes(self) -> None:
+        source_a = self.module.SourceChannel("source-a", "test-astra-key-123456", "https://a.example", 69)
+        source_b = self.module.SourceChannel("source-b", "test-astra-key-654321", "https://b.example", 70)
+
+        sql = self.module.build_apply_sql((source_a, source_b), {"source-b"})
+
+        self.assertIn("status=2, name='GPT-6 Astra discount 链路 A'", sql)
+        self.assertIn("status=1, name='GPT-6 Astra discount 链路 B'", sql)
+        self.assertIn("'discount','gpt-6-astra',@astra_discount_1,0", sql)
+        self.assertIn("'discount','gpt-6-astra',@astra_discount_2,1", sql)
+
+    def test_probe_sources_keeps_verified_fallbacks_when_a_source_fails(self) -> None:
+        source_a = self.module.SourceChannel("source-a", "test-astra-key-123456", "https://a.example", 69)
+        source_b = self.module.SourceChannel("source-b", "test-astra-key-654321", "https://b.example", 70)
+        verified = {"tag": "source-b", "channel_id": 70, "models": True, "responses": True, "chat": True}
+
+        with mock.patch.object(
+            self.module,
+            "probe_source",
+            side_effect=[self.module.ConfigurationError("timeout"), verified],
+        ):
+            results, unavailable = self.module.probe_sources((source_a, source_b))
+
+        self.assertEqual(results, [verified])
+        self.assertEqual(unavailable, ["source-a"])
+
     def test_probe_output_does_not_include_credentials(self) -> None:
         secret = "test-astra-key-123456"
         source = self.module.SourceChannel("source-a", secret, "https://aihub.top", 69)

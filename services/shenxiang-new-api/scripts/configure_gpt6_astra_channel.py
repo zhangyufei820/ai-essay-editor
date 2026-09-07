@@ -226,7 +226,15 @@ def validate_managed_channel_tags() -> None:
         raise ConfigurationError("GPT-6 Astra managed tags are duplicated")
 
 
-def build_apply_sql(sources: tuple[SourceChannel, ...]) -> str:
+def build_apply_sql(
+    sources: tuple[SourceChannel, ...],
+    enabled_source_tags: set[str] | None = None,
+) -> str:
+    if enabled_source_tags is None:
+        enabled_source_tags = {source.tag for source in sources}
+    unknown_tags = enabled_source_tags.difference(source.tag for source in sources)
+    if unknown_tags:
+        raise ConfigurationError("enabled Astra source set contains an unknown source")
     tags = managed_tags()
     all_tags = (LEGACY_CHANNEL_TAG, *tags)
     tag_sql = ",".join(sql_quote(tag) for tag in all_tags)
@@ -244,15 +252,16 @@ def build_apply_sql(sources: tuple[SourceChannel, ...]) -> str:
         for index, source in enumerate(sources):
             tag = managed_tag(group, index)
             variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
+            channel_status = "1" if source.tag in enabled_source_tags else "2"
             target_vars.append(variable)
             mapping = json.dumps({MODEL_NAME: MODEL_NAME}, separators=(",", ":"))
             name = "GPT-6 Astra " + group + " 链路 " + chr(65 + index)
             statements.extend(
                 [
                     "SET " + variable + " := IF(@astra_apply_allowed=1,(SELECT MIN(id) FROM channels WHERE tag=" + sql_quote(tag) + "),NULL);",
-                    "INSERT INTO channels (type,`key`,status,name,weight,created_time,test_time,response_time,base_url,models,`group`,model_mapping,priority,auto_ban,tag,remark,settings) SELECT 1," + sql_quote(source.api_key) + ",1," + sql_quote(name) + ",100,UNIX_TIMESTAMP(),0,0," + sql_quote(source.base_url) + "," + sql_quote(MODEL_NAME) + "," + sql_quote(group) + "," + sql_quote(mapping) + "," + str(CHAIN_PRIORITIES[index]) + ",1," + sql_quote(tag) + ",'独立分组计费链路','{}' WHERE " + variable + " IS NULL AND @astra_apply_allowed=1;",
+                    "INSERT INTO channels (type,`key`,status,name,weight,created_time,test_time,response_time,base_url,models,`group`,model_mapping,priority,auto_ban,tag,remark,settings) SELECT 1," + sql_quote(source.api_key) + "," + channel_status + "," + sql_quote(name) + ",100,UNIX_TIMESTAMP(),0,0," + sql_quote(source.base_url) + "," + sql_quote(MODEL_NAME) + "," + sql_quote(group) + "," + sql_quote(mapping) + "," + str(CHAIN_PRIORITIES[index]) + ",1," + sql_quote(tag) + ",'独立分组计费链路','{}' WHERE " + variable + " IS NULL AND @astra_apply_allowed=1;",
                     "SET " + variable + " := IF(@astra_apply_allowed=1,IFNULL(" + variable + ",LAST_INSERT_ID()),NULL);",
-                    "UPDATE channels SET type=1, `key`=" + sql_quote(source.api_key) + ", status=1, name=" + sql_quote(name) + ", weight=100, base_url=" + sql_quote(source.base_url) + ", models=" + sql_quote(MODEL_NAME) + ", `group`=" + sql_quote(group) + ", model_mapping=" + sql_quote(mapping) + ", priority=" + str(CHAIN_PRIORITIES[index]) + ", auto_ban=1, tag=" + sql_quote(tag) + ", remark='独立分组计费链路', settings='{}' WHERE id=" + variable + " AND @astra_apply_allowed=1;",
+                    "UPDATE channels SET type=1, `key`=" + sql_quote(source.api_key) + ", status=" + channel_status + ", name=" + sql_quote(name) + ", weight=100, base_url=" + sql_quote(source.base_url) + ", models=" + sql_quote(MODEL_NAME) + ", `group`=" + sql_quote(group) + ", model_mapping=" + sql_quote(mapping) + ", priority=" + str(CHAIN_PRIORITIES[index]) + ", auto_ban=1, tag=" + sql_quote(tag) + ", remark='独立分组计费链路', settings='{}' WHERE id=" + variable + " AND @astra_apply_allowed=1;",
                 ]
             )
     id_list = ",".join(target_vars)
@@ -266,17 +275,29 @@ def build_apply_sql(sources: tuple[SourceChannel, ...]) -> str:
         for index in range(len(sources)):
             tag = managed_tag(group, index)
             variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
+            ability_enabled = "1" if sources[index].tag in enabled_source_tags else "0"
             statements.append(
-                "INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES (" + ",".join([sql_quote(group), sql_quote(MODEL_NAME), variable, "1", str(CHAIN_PRIORITIES[index]), "100", sql_quote(tag)]) + ") ON DUPLICATE KEY UPDATE enabled=1,priority=VALUES(priority),weight=100,tag=VALUES(tag);"
+                "INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES (" + ",".join([sql_quote(group), sql_quote(MODEL_NAME), variable, ability_enabled, str(CHAIN_PRIORITIES[index]), "100", sql_quote(tag)]) + ") ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),priority=VALUES(priority),weight=100,tag=VALUES(tag);"
             )
     statements.append("COMMIT;")
     return "\n".join(statements)
 
 
-def apply_sources(sources: tuple[SourceChannel, ...]) -> None:
+def apply_sources(sources: tuple[SourceChannel, ...], enabled_source_tags: set[str] | None = None) -> None:
     validate_group_options()
     validate_managed_channel_tags()
-    sync.mysql_exec(build_apply_sql(sources))
+    sync.mysql_exec(build_apply_sql(sources, enabled_source_tags))
+
+
+def probe_sources(sources: tuple[SourceChannel, ...]) -> tuple[list[dict[str, object]], list[str]]:
+    results: list[dict[str, object]] = []
+    unavailable_tags: list[str] = []
+    for source in sources:
+        try:
+            results.append(probe_source(source))
+        except ConfigurationError:
+            unavailable_tags.append(source.tag)
+    return results, unavailable_tags
 
 
 def main() -> int:
@@ -287,14 +308,19 @@ def main() -> int:
     args = parser.parse_args()
     with channel_lock():
         sources = load_sources()
-        probe_results = [probe_source(source) for source in sources]
+        probe_results, unavailable_tags = probe_sources(sources)
+        if not probe_results:
+            raise ConfigurationError("no GPT-6 Astra source passed verification")
+        if args.apply and unavailable_tags:
+            raise ConfigurationError("one or more GPT-6 Astra sources failed verification")
         configured = sync.mysql("SELECT COUNT(*) FROM channels WHERE tag LIKE " + sql_quote(MANAGED_TAG_PREFIX + "%"))
         if args.reconcile_if_configured and (not configured or int(configured[0][0]) == 0):
             print(json.dumps({"ok": True, "action": "not_configured", "model": MODEL_NAME, "sources": probe_results}, ensure_ascii=False, separators=(",", ":")))
             return 0
         if args.apply or args.reconcile_if_configured:
-            apply_sources(sources)
-    print(json.dumps({"ok": True, "action": "applied" if args.apply or args.reconcile_if_configured else "probe", "model": MODEL_NAME, "groups": MANAGED_GROUPS, "sources": probe_results}, ensure_ascii=False, separators=(",", ":")))
+            apply_sources(sources, {str(result["tag"]) for result in probe_results})
+    action_name = "applied" if args.apply else "reconciled" if args.reconcile_if_configured else "probe"
+    print(json.dumps({"ok": True, "action": action_name, "model": MODEL_NAME, "groups": MANAGED_GROUPS, "sources": probe_results, "unavailable_sources": unavailable_tags}, ensure_ascii=False, separators=(",", ":")))
     return 0
 
 
