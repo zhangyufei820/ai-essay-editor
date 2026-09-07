@@ -31,9 +31,9 @@ SOURCE_CHANNEL_TAGS = (
 GROUP_SOURCE_TAG_ORDER_OVERRIDES = {
     "discount": (
         "xingren-discount-text-aihub",
+        "xingren-plus-text-pdhlzy",
         LEGACY_CHANNEL_TAG,
         "xingren-discount-text-wangwang",
-        "xingren-plus-text-pdhlzy",
     ),
 }
 MANAGED_GROUPS = ("default", "standard", "pro", "code", "internal", "plus", "discount", "special")

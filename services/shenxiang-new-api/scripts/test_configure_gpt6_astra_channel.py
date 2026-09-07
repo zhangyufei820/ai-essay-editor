@@ -41,9 +41,9 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
             tuple(source.tag for source in self.module.sources_for_group("discount", sources)),
             (
                 "xingren-discount-text-aihub",
+                "xingren-plus-text-pdhlzy",
                 "xingren-gpt6-astra",
                 "xingren-discount-text-wangwang",
-                "xingren-plus-text-pdhlzy",
             ),
         )
         self.assertEqual(
