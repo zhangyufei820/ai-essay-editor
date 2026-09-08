@@ -157,6 +157,7 @@ SPECIAL_TEXT_MODELS_REGEX = (
 )
 PLUS_TEXT_GROUP = "plus"
 PLUS_TEXT_CHANNEL_TAGS = (
+    "xingren-plus-text-wangwang-fallback",
     "xingren-plus-text-aihub-codex",
     "xingren-plus-text-aihub",
     "xingren-plus-text-wangwang",
@@ -185,6 +186,7 @@ KIMI_K3_GROUP = "kimi"
 KIMI_K3_CHANNEL_TAG = "xingren-kimi-k3"
 GPT6_ASTRA_MODEL = "gpt-6-astra"
 DEFAULT_CODEX_CHANNEL_TAGS = (
+    "xingren-default-text-wangwang-fallback",
     "xingren-default-text-wangwang-codex",
     "xingren-default-text-aihub-codex",
 )

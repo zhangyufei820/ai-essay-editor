@@ -108,7 +108,7 @@ TEXT_FAMILIES = (
     ),
     TextFamily(
         name="plus_text",
-        optional_managed_tags=("xingren-plus-text-aihub-codex",),
+        optional_managed_tags=("xingren-plus-text-aihub-codex", "xingren-plus-text-wangwang-fallback"),
         models=(
             "gpt-5.4",
             "gpt-5.4-mini",
@@ -127,6 +127,7 @@ TEXT_FAMILIES = (
         manage_model_abilities=True,
         managed_tag_priorities=(
             ("xingren-plus-text-aihub-codex", 25),
+            ("xingren-plus-text-wangwang-fallback", 35),
             ("xingren-plus-text-aihub", 30),
             ("xingren-plus-text-pdhlzy", 20),
             ("xingren-plus-text-wangwang", 10),
@@ -134,12 +135,13 @@ TEXT_FAMILIES = (
     ),
     TextFamily(
         name="default_codex_text",
-        optional_managed_tags=("xingren-default-text-wangwang-codex", "xingren-default-text-aihub-codex"),
+        optional_managed_tags=("xingren-default-text-wangwang-codex", "xingren-default-text-aihub-codex", "xingren-default-text-wangwang-fallback"),
         models=("gpt-5.6", "gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
         channel_ids=(), baseline_priorities={}, allow_disable=False, standalone=True,
         request_format="responses", ability_group="default", manage_model_abilities=True,
         managed_tag_priorities=(
             ("xingren-default-text-wangwang-codex", 100),
+            ("xingren-default-text-wangwang-fallback", 95),
             ("xingren-default-text-aihub-codex", 80),
         ),
     ),
@@ -804,7 +806,8 @@ def request_responses(base_url: str, api_key: str, model: str) -> dict[str, Any]
     body = json.dumps(
         {
             "model": model,
-            "input": "Reply with OK only.",
+            "instructions": "Reply exactly OK.",
+            "input": [{"role": "user", "content": [{"type": "input_text", "text": "OK?"}]}],
             "stream": True,
             "store": False,
             "max_output_tokens": 256,
@@ -819,7 +822,7 @@ def request_responses(base_url: str, api_key: str, model: str) -> dict[str, Any]
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
-            "User-Agent": "shenxiang-new-api-model-circuit/1.0",
+            "User-Agent": "codex_cli_rs/0.114.0",
         },
         method="POST",
     )

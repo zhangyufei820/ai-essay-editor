@@ -146,6 +146,7 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
             families["plus_text"].managed_tag_priorities,
             (
                 ("xingren-plus-text-aihub-codex", 25),
+                ("xingren-plus-text-wangwang-fallback", 35),
                 ("xingren-plus-text-aihub", 30),
                 ("xingren-plus-text-pdhlzy", 20),
                 ("xingren-plus-text-wangwang", 10),
@@ -283,7 +284,8 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(request.full_url, "https://example.invalid/v1/responses")
         self.assertEqual(headers["authorization"], "Bearer test-secret")
         self.assertEqual(body["model"], "gpt-5.6-sol")
-        self.assertEqual(body["input"], "Reply with OK only.")
+        self.assertEqual(body["input"], [{"role": "user", "content": [{"type": "input_text", "text": "OK?"}]}])
+        self.assertEqual(body["instructions"], "Reply exactly OK.")
         self.assertTrue(body["stream"])
         self.assertFalse(body["store"])
         self.assertGreaterEqual(body["max_output_tokens"], 256)

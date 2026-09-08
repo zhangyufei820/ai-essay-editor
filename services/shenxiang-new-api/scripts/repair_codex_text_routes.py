@@ -20,6 +20,7 @@ MODELS = ("gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4-mini")
 SOURCE_MODELS = {
     "xingren-plus-text-wangwang": ("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4-mini"),
     "xingren-discount-text-aihub": ("gpt-5.6", "gpt-5.6-sol"),
+    "xingren-discount-text-wangwang": ("gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
 }
 # target tag, exact group, source tag, priority
 CLONES = (
@@ -27,6 +28,8 @@ CLONES = (
     ("xingren-plus-text-aihub-codex", "plus", "xingren-discount-text-aihub", 25),
     ("xingren-default-text-wangwang-codex", "default", "xingren-plus-text-wangwang", 100),
     ("xingren-default-text-aihub-codex", "default", "xingren-discount-text-aihub", 80),
+    ("xingren-plus-text-wangwang-fallback", "plus", "xingren-discount-text-wangwang", 35),
+    ("xingren-default-text-wangwang-fallback", "default", "xingren-discount-text-wangwang", 95),
 )
 q = sync.sql_quote
 
@@ -45,7 +48,7 @@ def load_sources() -> dict[str, dict]:
     return sources
 
 
-def verify_sources(sources: dict[str, dict]) -> list[dict]:
+def verify_sources(sources: dict[str, dict], *, require_all: bool = True) -> list[dict]:
     def probe_source(tag):
         source = sources[tag]
         results = []
@@ -56,14 +59,16 @@ def verify_sources(sources: dict[str, dict]) -> list[dict]:
     # Serial within one credential to avoid manufacturing concurrency errors.
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         results = [result for batch in pool.map(probe_source, SOURCE_MODELS) for result in batch]
-    if not all(result["ok"] for result in results):
+    if require_all and not all(result["ok"] for result in results):
         print(json.dumps({"verified": False, "probes": results}), flush=True)
         raise RuntimeError("required route did not complete its Responses probe; no changes applied")
     return results
 
 
-def build_sql(sources: dict[str, dict]) -> str:
+def build_sql(sources: dict[str, dict], verified: set[tuple[str, str]] | None = None) -> str:
     """Use source SELECTs so neither SQL nor logs contain an upstream secret."""
+    if verified is None:
+        verified = {(tag, model) for tag, models in SOURCE_MODELS.items() for model in models}
     statements = ["START TRANSACTION;"]
     for index, (tag, group, source_tag, priority) in enumerate(CLONES):
         source_id = int(sources[source_tag]["id"])
@@ -80,17 +85,19 @@ def build_sql(sources: dict[str, dict]) -> str:
             f"UPDATE abilities SET enabled=0 WHERE channel_id={variable} AND (`group`<>{q(group)} OR model NOT IN ({','.join(q(m) for m in SOURCE_MODELS[source_tag])}));",
         ])
         for model in SOURCE_MODELS[source_tag]:
-            statements.append(f"INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES ({q(group)},{q(model)},{variable},1,{priority},100,{q(tag)}) ON DUPLICATE KEY UPDATE enabled=1,priority=VALUES(priority),weight=100,tag=VALUES(tag);")
+            enabled = int((source_tag, model) in verified)
+            statements.append(f"INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES ({q(group)},{q(model)},{variable},{enabled},{priority},100,{q(tag)}) ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),priority=VALUES(priority),weight=100,tag=VALUES(tag);")
     # Adopt only successfully tested models on existing routes. Other model
     # mappings/abilities are left to their current owners.
     for tag, models in SOURCE_MODELS.items():
         source_id = int(sources[tag]["id"])
         group = "plus" if tag == "xingren-plus-text-wangwang" else "discount"
-        priority = 40
+        priority = 30 if tag == "xingren-discount-text-wangwang" else 40
         statements.append(f"UPDATE channels SET status=1,priority={priority} WHERE id={source_id} AND tag={q(tag)} AND `group`={q(group)};")
         for model in models:
+            enabled = int((tag, model) in verified)
             statements.append(f"UPDATE channels SET models=IF(FIND_IN_SET({q(model)},models)>0,models,CONCAT_WS(',',NULLIF(models,''),{q(model)})) WHERE id={source_id} AND tag={q(tag)};")
-            statements.append(f"INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES ({q(group)},{q(model)},{source_id},1,{priority},100,{q(tag)}) ON DUPLICATE KEY UPDATE enabled=1,priority=VALUES(priority),weight=100,tag=VALUES(tag);")
+            statements.append(f"INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES ({q(group)},{q(model)},{source_id},{enabled},{priority},100,{q(tag)}) ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),priority=VALUES(priority),weight=100,tag=VALUES(tag);")
     statements.append("COMMIT;")
     return "\n".join(statements)
 
@@ -119,6 +126,7 @@ def backfill_monthly_tokens() -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--apply-verified", action="store_true", help="enable only passing models; provision failed pairs as monitor-owned open circuits")
     args = parser.parse_args()
     with locks.model_sync_lock():
         sources = load_sources()
@@ -126,12 +134,15 @@ def main() -> int:
         duplicates = sync.mysql("SELECT tag,COUNT(*) FROM channels WHERE tag IN (" + ",".join(q(tag) for tag in tags) + ") GROUP BY tag HAVING COUNT(*)>1")
         if duplicates:
             raise RuntimeError("duplicate managed route identity")
-        results = verify_sources(sources)
-        report = {"verified": True, "applied": args.apply, "probes": results}
-        if args.apply:
+        results = verify_sources(sources, require_all=not args.apply_verified)
+        verified = {(r["source"], r["model"]) for r in results if r["ok"]}
+        if not verified:
+            raise RuntimeError("no model passed; no changes applied")
+        report = {"verified": all(r["ok"] for r in results), "applied": args.apply or args.apply_verified, "probes": results}
+        if args.apply or args.apply_verified:
             if load_sources() != sources:
                 raise RuntimeError("source identity changed during probing; retry without applying")
-            sync.mysql_exec(build_sql(sources))
+            sync.mysql_exec(build_sql(sources, verified))
             # Release only circuits whose exact source/model just completed a
             # probe. Do not erase other providers' failure history.
             state = monitor.load_state()
@@ -139,7 +150,13 @@ def main() -> int:
                 family = "plus_text" if tag == "xingren-plus-text-wangwang" else "discount_text"
                 for model in models:
                     circuit = monitor.managed_ability_state(state, family, model, sources[tag]["id"])
-                    circuit.update(auto_disabled=False, disabled_at=0, last_action="verified_codex_repair")
+                    circuit.update(auto_disabled=(tag, model) not in verified, disabled_at=0, last_action="codex_repair_probe")
+            for tag, group, source_tag, _priority in CLONES:
+                channel_id = int(sync.mysql("SELECT id FROM channels WHERE tag=" + q(tag))[0][0])
+                family = {"discount": "discount_text", "plus": "plus_text", "default": "default_codex_text"}[group]
+                for model in SOURCE_MODELS[source_tag]:
+                    monitor.managed_ability_state(state, family, model, channel_id).update(
+                        auto_disabled=(source_tag, model) not in verified, disabled_at=0, last_action="codex_repair_probe")
             monitor.save_state(state)
             report.update(backfill_monthly_tokens())
             sync.sync_user_codex_tokens()

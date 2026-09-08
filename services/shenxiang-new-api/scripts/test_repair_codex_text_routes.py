@@ -36,7 +36,13 @@ class RepairCodexRoutesTests(unittest.TestCase):
         with mock.patch.object(repair.monitor, "request_responses", return_value={"ok": True}) as request:
             report = repair.verify_sources(self.sources)
         self.assertEqual({r["model"] for r in report}, set(repair.MODELS))
-        self.assertEqual(request.call_count, 6)
+        self.assertEqual(request.call_count, 9)
+
+    def test_partial_apply_never_enables_a_failed_model(self):
+        sql = repair.build_sql(self.sources, {("xingren-plus-text-wangwang", "gpt-5.4-mini")})
+        self.assertIn("'discount','gpt-5.4-mini',@codex_repair_0,1", sql)
+        self.assertIn("'discount','gpt-5.5',@codex_repair_0,0", sql)
+        self.assertIn("'plus','gpt-5.6',@codex_repair_1,0", sql)
 
 
 if __name__ == "__main__":
