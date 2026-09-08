@@ -26,12 +26,12 @@ SOURCE_CHANNEL_TAGS = (
     "xingren-discount-text-wangwang",
     "xingren-plus-text-pdhlzy",
 )
-# Only the public 0.25x tier uses AiHub as its Astra primary.  Every other
-# managed group keeps the established source order above.
+# Only the public 0.25x tier uses the verified Pdhlzy source as its Astra
+# primary. Every other managed group keeps the established source order above.
 GROUP_SOURCE_TAG_ORDER_OVERRIDES = {
     "discount": (
-        "xingren-discount-text-aihub",
         "xingren-plus-text-pdhlzy",
+        "xingren-discount-text-aihub",
         LEGACY_CHANNEL_TAG,
         "xingren-discount-text-wangwang",
     ),

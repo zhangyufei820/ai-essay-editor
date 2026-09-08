@@ -31,7 +31,7 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         self.assertEqual(len(set(self.module.managed_tags())), 32)
         self.assertEqual(self.module.managed_tag("discount", 0), "xingren-gpt6-astra-discount-1")
 
-    def test_discount_uses_aihub_first_without_reordering_other_groups(self) -> None:
+    def test_discount_uses_pdhlzy_first_without_reordering_other_groups(self) -> None:
         sources = tuple(
             self.module.SourceChannel(tag, "test-astra-key-123456", f"https://{index}.example", index)
             for index, tag in enumerate(self.module.SOURCE_CHANNEL_TAGS, start=1)
@@ -40,8 +40,8 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         self.assertEqual(
             tuple(source.tag for source in self.module.sources_for_group("discount", sources)),
             (
-                "xingren-discount-text-aihub",
                 "xingren-plus-text-pdhlzy",
+                "xingren-discount-text-aihub",
                 "xingren-gpt6-astra",
                 "xingren-discount-text-wangwang",
             ),
