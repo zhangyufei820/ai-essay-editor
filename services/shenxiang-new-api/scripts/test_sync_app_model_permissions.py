@@ -141,6 +141,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(
             self.module.DISCOUNT_TEXT_ALLOWED_MODELS,
             (
+                "gpt-5.6",
+                "gpt-5.4-mini",
                 "gpt-5.5",
                 "gpt-5.6-sol",
                 "gpt-5.6-terra",
@@ -149,6 +151,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(
             self.module.DISCOUNT_TEXT_CHANNEL_TAGS,
             (
+                "xingren-discount-text-wangwang-codex",
                 "xingren-discount-text-pdhlzy",
                 "xingren-discount-text-geek2api",
                 "xingren-discount-text-aihub",
@@ -572,6 +575,31 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertTrue(self.module.is_disabled_ability_pair("12", "gpt-image-2-4K"))
         self.assertTrue(self.module.is_disabled_ability_pair("21", "gpt-image-2"))
         self.assertFalse(self.module.is_disabled_ability_pair("8", "gpt-image-2-4K"))
+
+    def test_sync_preserves_open_model_circuits_and_default_clone_isolation(self) -> None:
+        captured = []
+        def query(sql):
+            if "FROM channels" in sql:
+                return [["201", "gpt-5.6-sol", "100", "100", "xingren-default-text-wangwang-codex", "default"],
+                        ["202", "gpt-5.5", "50", "100", "xingren-discount-text-wangwang-codex", "discount"]]
+            if "SELECT model_name FROM models" in sql:
+                return [["gpt-5.6-sol"], ["gpt-5.5"]]
+            return []
+        self.module.mysql = query
+        self.module.mysql_exec = captured.append
+        self.module.active_groups = lambda: ["default", "plus", "discount", "standard", "special"]
+        self.module.monitor_disabled_ability_pairs = lambda: {("202", "gpt-5.5")}
+        self.module.sync_abilities()
+        inserts = [line for line in captured[0].splitlines() if line.startswith("INSERT INTO abilities")]
+        self.assertEqual(len(inserts), 2)
+        self.assertIn("SELECT 'default', 'gpt-5.6-sol', 201, 1", inserts[0])
+        self.assertIn("SELECT 'discount', 'gpt-5.5', 202, 0", inserts[1])
+        self.assertIn("ON DUPLICATE KEY UPDATE enabled = 0", inserts[1])
+
+    def test_monitor_state_read_does_not_clear_disabled_circuit(self) -> None:
+        payload = '{"managed_abilities":{"discount_text:gpt-5.5:42":{"auto_disabled":true},"plus_text:gpt-5.5:44":{"auto_disabled":false}}}'
+        with mock.patch.object(self.module.Path, "exists", return_value=True), mock.patch.object(self.module.Path, "read_text", return_value=payload):
+            self.assertEqual(self.module.monitor_disabled_ability_pairs(), {("42", "gpt-5.5")})
 
     def test_sync_abilities_allows_primary_discount_image2_model(self) -> None:
         captured: list[str] = []

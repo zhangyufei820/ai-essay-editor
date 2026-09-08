@@ -237,3 +237,26 @@ func TestMonthlyCardTokenForUserReplacesWhitespaceOnlyKey(t *testing.T) {
 	require.NotEmpty(t, strings.TrimSpace(token.Key))
 	require.NotEqual(t, existing.Key, token.Key)
 }
+
+func TestMonthlyCardTokenRepairPreservesSelectedPublicGroupChain(t *testing.T) {
+	for _, group := range []string{"default", "discount", "plus", "discount,plus,default"} {
+		t.Run(group, func(t *testing.T) {
+			setupMonthlyCardTokenTestDB(t)
+			createMonthlyCardTokenTestUser(t, 511, 611, 711)
+			existing := BuildMonthlyCardToken(511, "existing-monthly-card-group-key")
+			existing.ModelLimits = "gpt-5.5"
+			existing.Group = group
+			require.NoError(t, model.DB.Create(&existing).Error)
+			for attempt := 0; attempt < 2; attempt++ {
+				token, created, err := EnsureMonthlyCardTokenForUser(context.Background(), 511)
+				require.NoError(t, err)
+				require.False(t, created)
+				require.Equal(t, existing.Key, token.Key)
+				require.Equal(t, group, token.Group)
+				require.Contains(t, strings.Split(token.ModelLimits, ","), "gpt-6-astra")
+				require.Contains(t, strings.Split(token.ModelLimits, ","), "gpt-5.6")
+				require.False(t, token.CrossGroupRetry)
+			}
+		})
+	}
+}

@@ -72,6 +72,7 @@ class TextFamily:
     managed_tag_fallback: tuple[tuple[str, int, int], ...] = ()
     probe_models_by_tag: dict[str, tuple[str, ...]] | None = None
     request_formats_by_channel: dict[int, str] | None = None
+    optional_managed_tags: tuple[str, ...] = ()
 
 
 TEXT_FAMILIES = (
@@ -83,7 +84,8 @@ TEXT_FAMILIES = (
     ),
     TextFamily(
         name="discount_text",
-        models=("gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
+        optional_managed_tags=("xingren-discount-text-wangwang-codex",),
+        models=("gpt-5.6", "gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
         channel_ids=(),
         baseline_priorities={},
         allow_disable=False,
@@ -92,6 +94,7 @@ TEXT_FAMILIES = (
         ability_group="discount",
         manage_model_abilities=True,
         managed_tag_priorities=(
+            ("xingren-discount-text-wangwang-codex", 50),
             ("xingren-discount-text-wangwang", 40),
             ("xingren-discount-text-aihub", 30),
             ("xingren-discount-text-pdhlzy", 20),
@@ -105,11 +108,12 @@ TEXT_FAMILIES = (
     ),
     TextFamily(
         name="plus_text",
+        optional_managed_tags=("xingren-plus-text-aihub-codex",),
         models=(
             "gpt-5.4",
             "gpt-5.4-mini",
             "gpt-5.5",
-            "gpt-5.6-luna",
+            "gpt-5.6",
             "gpt-5.6-sol",
             "gpt-5.6-terra",
             "codex-auto-review",
@@ -122,13 +126,22 @@ TEXT_FAMILIES = (
         ability_group="plus",
         manage_model_abilities=True,
         managed_tag_priorities=(
+            ("xingren-plus-text-aihub-codex", 25),
             ("xingren-plus-text-aihub", 30),
             ("xingren-plus-text-pdhlzy", 20),
             ("xingren-plus-text-wangwang", 10),
         ),
-        probe_models_by_tag={
-            "xingren-plus-text-aihub": ("gpt-5.6-sol",),
-        },
+    ),
+    TextFamily(
+        name="default_codex_text",
+        optional_managed_tags=("xingren-default-text-wangwang-codex", "xingren-default-text-aihub-codex"),
+        models=("gpt-5.6", "gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
+        channel_ids=(), baseline_priorities={}, allow_disable=False, standalone=True,
+        request_format="responses", ability_group="default", manage_model_abilities=True,
+        managed_tag_priorities=(
+            ("xingren-default-text-wangwang-codex", 100),
+            ("xingren-default-text-aihub-codex", 80),
+        ),
     ),
     TextFamily(
         name="claude_kiro_text",
@@ -428,6 +441,12 @@ def resolve_dynamic_text_families(
 
     resolved: list[TextFamily] = []
     for family in families:
+        # New repair routes are adopted when explicitly provisioned. Their
+        # absence before a migration must not stop unrelated monitoring.
+        family = replace(family, managed_tag_priorities=tuple(
+            (tag, priority) for tag, priority in family.managed_tag_priorities
+            if tag not in family.optional_managed_tags or tag in channel_ids_by_tag
+        ))
         if not family.managed_tag_priorities:
             resolved.append(family)
             continue
@@ -788,7 +807,8 @@ def request_responses(base_url: str, api_key: str, model: str) -> dict[str, Any]
             "input": "Reply with OK only.",
             "stream": True,
             "store": False,
-            "max_output_tokens": 8,
+            "max_output_tokens": 256,
+            "reasoning": {"effort": "low"},
         },
         ensure_ascii=False,
     ).encode("utf-8")

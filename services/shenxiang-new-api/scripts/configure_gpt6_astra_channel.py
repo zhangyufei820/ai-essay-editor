@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import concurrent.futures
 import fcntl
 import json
 import os
@@ -17,24 +18,27 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import sync_app_model_permissions as sync
+import provider_monitor
 
 MODEL_NAME = "gpt-6-astra"
 LEGACY_CHANNEL_TAG = "xingren-gpt6-astra"
 SOURCE_CHANNEL_TAGS = (
     LEGACY_CHANNEL_TAG,
     "xingren-discount-text-aihub",
-    "xingren-discount-text-wangwang",
+    "xingren-plus-text-wangwang",
     "xingren-plus-text-pdhlzy",
 )
-# Only the public 0.25x tier uses the verified Pdhlzy source as its Astra
-# primary. Every other managed group keeps the established source order above.
+# Public tiers prefer their configured sources, but only completed probes can
+# enable them. Legacy tiers retain their established order above.
 GROUP_SOURCE_TAG_ORDER_OVERRIDES = {
     "discount": (
         "xingren-plus-text-pdhlzy",
+        "xingren-plus-text-wangwang",
         "xingren-discount-text-aihub",
         LEGACY_CHANNEL_TAG,
-        "xingren-discount-text-wangwang",
     ),
+    "plus": ("xingren-plus-text-wangwang", "xingren-plus-text-pdhlzy", "xingren-discount-text-aihub", LEGACY_CHANNEL_TAG),
+    "default": ("xingren-plus-text-wangwang", "xingren-plus-text-pdhlzy", "xingren-discount-text-aihub", LEGACY_CHANNEL_TAG),
 }
 MANAGED_GROUPS = ("default", "standard", "pro", "code", "internal", "plus", "discount", "special")
 MANAGED_TAG_PREFIX = "xingren-gpt6-astra-"
@@ -171,17 +175,13 @@ def probe_source(source: SourceChannel) -> dict[str, object]:
     )
     if not has_model:
         raise ConfigurationError(f"{source.tag} does not expose {MODEL_NAME}")
-    response = fetch_json(
-        source.base_url + "/v1/responses",
-        source.api_key,
-        {"model": MODEL_NAME, "input": "Reply with exactly OK.", "max_output_tokens": 16, "stream": False},
-    )
+    response = provider_monitor.request_responses(source.base_url, source.api_key, MODEL_NAME)
     completion = fetch_json(
         source.base_url + "/v1/chat/completions",
         source.api_key,
-        {"model": MODEL_NAME, "messages": [{"role": "user", "content": "Reply with exactly OK."}], "max_completion_tokens": 16, "stream": False},
+        {"model": MODEL_NAME, "messages": [{"role": "user", "content": "Reply with exactly OK."}], "reasoning_effort": "low", "max_completion_tokens": 256, "stream": False},
     )
-    if not response_ok(response) or not chat_ok(completion):
+    if not response.get("ok") or not chat_ok(completion):
         raise ConfigurationError(f"{source.tag} failed Responses or Chat Completions verification")
     return {"tag": source.tag, "channel_id": source.channel_id, "models": True, "responses": True, "chat": True}
 
@@ -222,6 +222,18 @@ def sources_for_group(group: str, sources: tuple[SourceChannel, ...]) -> tuple[S
         return sources
     ordered_tags = GROUP_SOURCE_TAG_ORDER_OVERRIDES.get(group, SOURCE_CHANNEL_TAGS)
     return tuple(source_by_tag[tag] for tag in ordered_tags)
+
+
+def independent_enabled_sources(sources: tuple[SourceChannel, ...], verified: set[str]) -> set[str]:
+    """One enabled hop per origin; different keys on one host are not failover."""
+    enabled = set()
+    origins = set()
+    for source in sources:
+        origin = urllib.parse.urlsplit(source.base_url).hostname
+        if source.tag in verified and origin not in origins:
+            enabled.add(source.tag)
+            origins.add(origin)
+    return enabled
 
 
 def validate_group_options() -> None:
@@ -270,10 +282,11 @@ def build_apply_sql(
     ]
     for group in MANAGED_GROUPS:
         group_sources = sources_for_group(group, sources)
+        group_enabled = independent_enabled_sources(group_sources, enabled_source_tags)
         for index, source in enumerate(group_sources):
             tag = managed_tag(group, index)
             variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
-            channel_status = "1" if source.tag in enabled_source_tags else "2"
+            channel_status = "1" if source.tag in group_enabled else "2"
             target_vars.append(variable)
             mapping = json.dumps({MODEL_NAME: MODEL_NAME}, separators=(",", ":"))
             name = "GPT-6 Astra " + group + " 链路 " + chr(65 + index)
@@ -294,10 +307,11 @@ def build_apply_sql(
     )
     for group in MANAGED_GROUPS:
         group_sources = sources_for_group(group, sources)
+        group_enabled = independent_enabled_sources(group_sources, enabled_source_tags)
         for index, source in enumerate(group_sources):
             tag = managed_tag(group, index)
             variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
-            ability_enabled = "1" if source.tag in enabled_source_tags else "0"
+            ability_enabled = "1" if source.tag in group_enabled else "0"
             statements.append(
                 "INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES (" + ",".join([sql_quote(group), sql_quote(MODEL_NAME), variable, ability_enabled, str(CHAIN_PRIORITIES[index]), "100", sql_quote(tag)]) + ") ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),priority=VALUES(priority),weight=100,tag=VALUES(tag);"
             )
@@ -314,11 +328,13 @@ def apply_sources(sources: tuple[SourceChannel, ...], enabled_source_tags: set[s
 def probe_sources(sources: tuple[SourceChannel, ...]) -> tuple[list[dict[str, object]], list[str]]:
     results: list[dict[str, object]] = []
     unavailable_tags: list[str] = []
-    for source in sources:
-        try:
-            results.append(probe_source(source))
-        except ConfigurationError:
-            unavailable_tags.append(source.tag)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [(source, pool.submit(probe_source, source)) for source in sources]
+        for source, future in futures:
+            try:
+                results.append(future.result())
+            except ConfigurationError:
+                unavailable_tags.append(source.tag)
     return results, unavailable_tags
 
 

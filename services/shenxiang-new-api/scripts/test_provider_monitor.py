@@ -118,11 +118,12 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(families["discount_text"].channel_ids, ())
         self.assertEqual(
             families["discount_text"].models,
-            ("gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
+            ("gpt-5.6", "gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
         )
         self.assertEqual(
             families["discount_text"].managed_tag_priorities,
             (
+                ("xingren-discount-text-wangwang-codex", 50),
                 ("xingren-discount-text-wangwang", 40),
                 ("xingren-discount-text-aihub", 30),
                 ("xingren-discount-text-pdhlzy", 20),
@@ -144,6 +145,7 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(
             families["plus_text"].managed_tag_priorities,
             (
+                ("xingren-plus-text-aihub-codex", 25),
                 ("xingren-plus-text-aihub", 30),
                 ("xingren-plus-text-pdhlzy", 20),
                 ("xingren-plus-text-wangwang", 10),
@@ -151,10 +153,7 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         )
         self.assertEqual(families["plus_text"].ability_group, "plus")
         self.assertEqual(families["plus_text"].request_format, "responses")
-        self.assertEqual(
-            families["plus_text"].probe_models_by_tag,
-            {"xingren-plus-text-aihub": ("gpt-5.6-sol",)},
-        )
+        self.assertIsNone(families["plus_text"].probe_models_by_tag)
         self.assertTrue(families["discount_text"].manage_model_abilities)
         self.assertTrue(families["plus_text"].manage_model_abilities)
 
@@ -246,7 +245,7 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(resolved.expected_tags[143], "xingren-plus-text-aihub")
         self.assertEqual(
             self.module.probe_models_for_channel(resolved, 143),
-            ("gpt-5.6-sol",),
+            resolved.models,
         )
         self.assertEqual(
             self.module.probe_models_for_channel(resolved, 43),
@@ -287,6 +286,8 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(body["input"], "Reply with OK only.")
         self.assertTrue(body["stream"])
         self.assertFalse(body["store"])
+        self.assertGreaterEqual(body["max_output_tokens"], 256)
+        self.assertEqual(body["reasoning"], {"effort": "low"})
         self.assertTrue(result["ok"])
 
     def test_responses_probe_accepts_large_completed_event(self) -> None:

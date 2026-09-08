@@ -31,7 +31,7 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         self.assertEqual(len(set(self.module.managed_tags())), 32)
         self.assertEqual(self.module.managed_tag("discount", 0), "xingren-gpt6-astra-discount-1")
 
-    def test_discount_uses_pdhlzy_first_without_reordering_other_groups(self) -> None:
+    def test_public_groups_use_verified_order_without_reordering_legacy_groups(self) -> None:
         sources = tuple(
             self.module.SourceChannel(tag, "test-astra-key-123456", f"https://{index}.example", index)
             for index, tag in enumerate(self.module.SOURCE_CHANNEL_TAGS, start=1)
@@ -41,13 +41,13 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
             tuple(source.tag for source in self.module.sources_for_group("discount", sources)),
             (
                 "xingren-plus-text-pdhlzy",
+                "xingren-plus-text-wangwang",
                 "xingren-discount-text-aihub",
                 "xingren-gpt6-astra",
-                "xingren-discount-text-wangwang",
             ),
         )
         self.assertEqual(
-            tuple(source.tag for source in self.module.sources_for_group("default", sources)),
+            tuple(source.tag for source in self.module.sources_for_group("standard", sources)),
             self.module.SOURCE_CHANNEL_TAGS,
         )
 
@@ -56,7 +56,7 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         models = {"data": [{"id": "gpt-6-astra"}]}
         response = {"status": "completed", "output": [{"content": [{"text": "OK"}]}]}
         completion = {"choices": [{"message": {"content": "OK"}}]}
-        with mock.patch.object(self.module, "fetch_json", side_effect=[models, response, completion]):
+        with mock.patch.object(self.module, "fetch_json", side_effect=[models, completion]), mock.patch.object(self.module.provider_monitor, "request_responses", return_value={"ok": True}):
             result = self.module.probe_source(source)
         self.assertEqual(result["tag"], "source-a")
         self.assertTrue(result["responses"])
@@ -106,7 +106,7 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         models = {"data": [{"id": "gpt-6-astra"}]}
         response = {"status": "completed", "output": [{"content": [{"text": "OK"}]}]}
         completion = {"choices": [{"message": {"content": "OK"}}]}
-        with mock.patch.object(self.module, "fetch_json", side_effect=[models, response, completion]):
+        with mock.patch.object(self.module, "fetch_json", side_effect=[models, completion]), mock.patch.object(self.module.provider_monitor, "request_responses", return_value={"ok": True}):
             result = self.module.probe_source(source)
         self.assertNotIn(secret, json.dumps(result))
 
@@ -122,6 +122,20 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
             with self.assertRaisesRegex(self.module.ConfigurationError, "duplicated"):
                 self.module.apply_sources(())
             sync_module.mysql_exec.assert_not_called()
+
+    def test_same_origin_is_not_counted_as_two_enabled_fallbacks(self) -> None:
+        sources = (
+            self.module.SourceChannel("one", "test-key-123456789", "https://same.example", 1),
+            self.module.SourceChannel("two", "test-key-987654321", "https://same.example", 2),
+            self.module.SourceChannel("three", "test-key-333333333", "https://other.example", 3),
+        )
+        self.assertEqual(self.module.independent_enabled_sources(sources, {"one", "two", "three"}), {"one", "three"})
+
+    def test_probe_rejects_stream_that_did_not_complete(self) -> None:
+        source = self.module.SourceChannel("one", "test-key-123456789", "https://one.example", 1)
+        with mock.patch.object(self.module, "fetch_json", side_effect=[{"data": [{"id": "gpt-6-astra"}]}, {"choices": [{"message": {"content": "OK"}}]}]), mock.patch.object(self.module.provider_monitor, "request_responses", return_value={"ok": False}):
+            with self.assertRaises(self.module.ConfigurationError):
+                self.module.probe_source(source)
 
 
 if __name__ == "__main__":

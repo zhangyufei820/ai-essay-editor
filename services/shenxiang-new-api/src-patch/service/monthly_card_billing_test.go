@@ -152,6 +152,48 @@ func TestMonthlyCardTextBillingQuotaUsesOnePointEightEquivalent(t *testing.T) {
 	assert.Equal(t, 164_228, MonthlyCardTextBillingQuota(295_609))
 }
 
+func TestMonthlyCardAstraAlwaysUsesFullMarketplaceQuota(t *testing.T) {
+	require.True(t, MonthlyCardChannelSupportsModel("gpt-6-astra"))
+	require.False(t, MonthlyCardTextSupportsModel("gpt-6-astra"))
+	for _, group := range []string{"discount", "plus", "default"} {
+		info := &relaycommon.RelayInfo{
+			BillingSource: BillingSourceSubscription, OriginModelName: "gpt-6-astra",
+			SubscriptionPlanId: 4, SubscriptionPlanTitle: "¥300 月卡", UsingGroup: group,
+		}
+		require.Equal(t, 180, EffectiveMonthlyCardTextBillingQuota(info, 180), group)
+	}
+}
+
+func TestMonthlyCardCodexModelsAndWalletAcrossPublicGroups(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, group := range []string{"discount", "plus", "default"} {
+		for _, modelName := range []string{"gpt-6-astra", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4-mini"} {
+			for _, monthly := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/monthly=%t", group, modelName, monthly), func(t *testing.T) {
+					truncate(t)
+					seedUser(t, 1105, 1000)
+					if monthly {
+						require.NoError(t, model.DB.Create(&model.SubscriptionPlan{Id: 4, Title: "¥300 月卡", Currency: "CNY", PriceAmount: 300, Enabled: true, TotalAmount: 10000}).Error)
+						require.NoError(t, model.DB.Create(&model.UserSubscription{Id: 1305, UserId: 1105, PlanId: 4, Status: "active", AmountTotal: 10000, StartTime: time.Now().Add(-time.Hour).Unix(), EndTime: time.Now().Add(time.Hour).Unix()}).Error)
+					}
+					info := &relaycommon.RelayInfo{UserId: 1105, RequestId: t.Name(), OriginModelName: modelName, UsingGroup: group, TokenGroup: group, IsPlayground: true}
+					info.UserSetting.BillingPreference = "wallet_only"
+					wantSource := BillingSourceWallet
+					if monthly {
+						info.UserSetting.BillingPreference = "subscription_only"
+						wantSource = BillingSourceSubscription
+					}
+					ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+					session, apiErr := NewBillingSession(ctx, info, 100)
+					require.Nil(t, apiErr)
+					require.NotNil(t, session)
+					require.Equal(t, wantSource, info.BillingSource)
+				})
+			}
+		}
+	}
+}
+
 func TestMonthlyCardTextBillingQuotaUsesPlanSpecificTiers(t *testing.T) {
 	assert.Equal(t, 100, MonthlyCardTextBillingQuotaForPlan(180, 2, "¥100 月卡"))
 	assert.Equal(t, 100, MonthlyCardTextBillingQuotaForPlan(190, 3, "¥200 月卡"))

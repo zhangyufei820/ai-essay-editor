@@ -34,6 +34,8 @@ var monthlyCardTextTiersByPlanId = map[int]monthlyCardTextTier{
 
 var monthlyCardAllowedModels = []string{
 	model.ImageBenefitModelName,
+	"gpt-6-astra",
+	"gpt-5.6",
 	"gpt-5.5",
 	"gpt-5.4-mini",
 	"gpt-5.4",
@@ -44,6 +46,8 @@ var monthlyCardAllowedModels = []string{
 }
 
 var monthlyCardTextDiscountModels = []string{
+	// Astra is subscription-eligible but always billed at its marketplace price.
+	"gpt-5.6",
 	"gpt-5.5",
 	"gpt-5.4-mini",
 	"gpt-5.4",

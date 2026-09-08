@@ -117,8 +117,11 @@ func EnsureMonthlyCardTokenForUser(ctx context.Context, userID int) (*model.Toke
 		if token.ExpiredTime != -1 {
 			updates["expired_time"] = -1
 		}
-		if token.Group != "default" {
+		groupChain, primaryGroup, validGroup := model.NormalizeTextPricingGroupChain(token.Group)
+		if !validGroup || primaryGroup == model.TextPricingGroupSpecial {
 			updates["group"] = "default"
+		} else if groupChain != token.Group {
+			updates["group"] = groupChain
 		}
 		if token.CrossGroupRetry {
 			updates["cross_group_retry"] = false

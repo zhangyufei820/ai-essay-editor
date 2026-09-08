@@ -110,12 +110,15 @@ PUBLIC_ALIAS_BACKING_MODELS = {
 }
 DISCOUNT_TEXT_GROUP = "discount"
 DISCOUNT_TEXT_CHANNEL_TAGS = (
+    "xingren-discount-text-wangwang-codex",
     "xingren-discount-text-pdhlzy",
     "xingren-discount-text-geek2api",
     "xingren-discount-text-aihub",
     "xingren-discount-text-wangwang",
 )
 DISCOUNT_TEXT_ALLOWED_MODELS = (
+    "gpt-5.6",
+    "gpt-5.4-mini",
     "gpt-5.5",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
@@ -154,11 +157,13 @@ SPECIAL_TEXT_MODELS_REGEX = (
 )
 PLUS_TEXT_GROUP = "plus"
 PLUS_TEXT_CHANNEL_TAGS = (
+    "xingren-plus-text-aihub-codex",
     "xingren-plus-text-aihub",
     "xingren-plus-text-wangwang",
     "xingren-plus-text-pdhlzy",
 )
 PLUS_TEXT_ALLOWED_MODELS = (
+    "gpt-5.6",
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.5",
@@ -179,6 +184,10 @@ KIMI_K3_MODEL = "kimi-k3"
 KIMI_K3_GROUP = "kimi"
 KIMI_K3_CHANNEL_TAG = "xingren-kimi-k3"
 GPT6_ASTRA_MODEL = "gpt-6-astra"
+DEFAULT_CODEX_CHANNEL_TAGS = (
+    "xingren-default-text-wangwang-codex",
+    "xingren-default-text-aihub-codex",
+)
 GPT6_ASTRA_GROUP = "astra"
 GPT6_ASTRA_CHANNEL_TAG = "xingren-gpt6-astra"
 GPT6_ASTRA_MANAGED_GROUPS = (
@@ -864,6 +873,20 @@ def supplier_exposed_model_name_predicate(column: str = "model", *, exclude_publ
 
 def is_disabled_ability_pair(channel_id: str, model: str) -> bool:
     return (str(channel_id).strip(), model.strip()) in DISABLED_ABILITY_PAIRS
+
+
+def monitor_disabled_ability_pairs() -> set[tuple[str, str]]:
+    """Read only the monitor's circuit ownership; never clear or rewrite it."""
+    path = Path(os.environ.get("SHENXIANG_NEW_API_ROOT", "/opt/shenxiang-new-api")) / "data/provider-monitor-state.json"
+    if not path.exists():
+        return set()
+    state = json.loads(path.read_text(encoding="utf-8"))
+    result = set()
+    for key, value in state.get("managed_abilities", {}).items():
+        family, model, channel_id = key.rsplit(":", 2)
+        if family in {"discount_text", "plus_text", "default_codex_text"} and value.get("auto_disabled"):
+            result.add((str(int(channel_id)), model))
+    return result
 
 
 def option_value(key: str) -> str | None:
@@ -2571,6 +2594,7 @@ def sync_user_image_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
 
 def sync_abilities() -> None:
     groups = active_groups()
+    monitor_disabled = monitor_disabled_ability_pairs()
     channel_rows = mysql(
         """
         SELECT id, COALESCE(models, ''), COALESCE(priority, 0), COALESCE(weight, 0),
@@ -2608,6 +2632,7 @@ def sync_abilities() -> None:
             *DISCOUNT_TEXT_CHANNEL_TAGS,
             *SPECIAL_TEXT_CHANNEL_TAGS,
             *PLUS_TEXT_CHANNEL_TAGS,
+            *DEFAULT_CODEX_CHANNEL_TAGS,
             *GROK_CHANNEL_TAGS,
             *GROK46_MEDIA_CHANNEL_MODEL_BY_TAG,
             KIMI_K3_CHANNEL_TAG,
@@ -2943,6 +2968,8 @@ def sync_abilities() -> None:
             else:
                 invalid_gemini_ddpapi_channels.append(channel_id)
                 sync_groups = []
+        elif tag in DEFAULT_CODEX_CHANNEL_TAGS:
+            sync_groups = ["default"] if channel_groups == ["default"] else []
         elif tag in CLAUDE_CHANNEL_GROUPS:
             expected_group = CLAUDE_CHANNEL_GROUPS[tag]
             if channel_groups != [expected_group]:
@@ -3028,7 +3055,7 @@ def sync_abilities() -> None:
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
                     )
-                elif tag in CLAUDE_CHANNEL_GROUPS or tag in {KIMI_K3_CHANNEL_TAG, GPT6_ASTRA_CHANNEL_TAG, *GPT6_ASTRA_CHANNEL_TAGS} or tag in grok46_media_channel_tags:
+                elif tag in CLAUDE_CHANNEL_GROUPS or tag in DEFAULT_CODEX_CHANNEL_TAGS or tag in {KIMI_K3_CHANNEL_TAG, GPT6_ASTRA_CHANNEL_TAG, *GPT6_ASTRA_CHANNEL_TAGS} or tag in grok46_media_channel_tags:
                     pass
                 elif tag not in grok_channel_tags:
                     current_channel_conditions.extend(
@@ -3051,11 +3078,13 @@ def sync_abilities() -> None:
                         ]
                     )
                 duplicate_update = "enabled = 1, priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag)"
-                # Discount and Plus are fully managed tiers: a valid, active
-                # channel must recover its ability after an incidental disable.
-                # Special remains deliberately operator-controlled.
+                # Repair incidental drift, but leave monitor-owned open circuits
+                # to the monitor's successful-probe/cooldown recovery gate.
                 if tag in special_channel_tags:
                     duplicate_update = "priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag)"
+                circuit_open = (str(channel_id), model) in monitor_disabled
+                if circuit_open:
+                    duplicate_update = "enabled = 0, priority = VALUES(priority), weight = VALUES(weight), tag = VALUES(tag)"
                 statements.append(
                     "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) SELECT "
                     + ", ".join(
@@ -3063,7 +3092,7 @@ def sync_abilities() -> None:
                             sql_quote(group),
                             sql_quote(model),
                             normalized_channel_id,
-                            "1",
+                            "0" if circuit_open else "1",
                             "COALESCE(current_channel.priority, 0)",
                             "COALESCE(current_channel.weight, 100)",
                             "COALESCE(NULLIF(current_channel.tag, ''), 'xingren-auto')",
@@ -3077,6 +3106,9 @@ def sync_abilities() -> None:
                 )
     statements.extend(
         [
+            "UPDATE abilities AS a JOIN channels AS c ON c.id=a.channel_id SET a.enabled=0 WHERE c.tag IN ("
+            + ",".join(sql_quote(tag) for tag in DEFAULT_CODEX_CHANNEL_TAGS)
+            + ") AND (a.`group`<>'default' OR c.`group`<>'default' OR c.status<>1 OR FIND_IN_SET(a.model,c.models)=0);",
             "UPDATE abilities SET enabled = 0 WHERE `group` = "
             + sql_quote(DISCOUNT_TEXT_GROUP)
             + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag IN ("
