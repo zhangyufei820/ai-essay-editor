@@ -25,6 +25,8 @@ def load_sync_module():
 class SyncAppModelPermissionsTest(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_sync_module()
+        self.monitor_state_reader = self.module.monitor_disabled_ability_pairs
+        self.module.monitor_disabled_ability_pairs = lambda: set()
 
     def test_sanitize_model_limits_replaces_raw_gpt_image2(self) -> None:
         raw = "gpt-5.5,gpt-image-2,gpt-image-2-4K,gpt-image-2,geek2api-image-2,internal-image2-stable-v1,gpt-5.3-codex-spark,gpt-5.3-spark"
@@ -599,7 +601,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
     def test_monitor_state_read_does_not_clear_disabled_circuit(self) -> None:
         payload = '{"managed_abilities":{"discount_text:gpt-5.5:42":{"auto_disabled":true},"plus_text:gpt-5.5:44":{"auto_disabled":false}}}'
         with mock.patch.object(self.module.Path, "exists", return_value=True), mock.patch.object(self.module.Path, "read_text", return_value=payload):
-            self.assertEqual(self.module.monitor_disabled_ability_pairs(), {("42", "gpt-5.5")})
+            self.assertEqual(self.monitor_state_reader(), {("42", "gpt-5.5")})
 
     def test_sync_abilities_allows_primary_discount_image2_model(self) -> None:
         captured: list[str] = []
