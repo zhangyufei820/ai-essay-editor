@@ -162,6 +162,10 @@ function isGptImage2Model(model: string) {
   )
 }
 
+function isGptImage25Model(model: string) {
+  return model === 'gpt-image-2.5-flare' || model === 'gpt-image-2.5-sunburst'
+}
+
 function clampCount(value: number, model: ModelCapability) {
   const max = Math.max(1, model.maxCount ?? 1)
   return Math.min(Math.max(1, Number(value) || 1), max)
@@ -519,7 +523,7 @@ export function MediaPlayground() {
       if (isGptImage2 && resolution && resolution !== 'auto') {
         payload.resolution = resolution
       }
-      if (quality) payload.quality = quality
+      if (!isGptImage25Model(imageModel) && quality) payload.quality = quality
       if (outputFormat && outputFormat !== 'url') {
         payload.output_format = outputFormat
       }

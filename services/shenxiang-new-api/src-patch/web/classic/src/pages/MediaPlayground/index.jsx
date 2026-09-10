@@ -313,6 +313,52 @@ const IMAGE_MODELS = [
     hint: '高阶 Gemini 图像生成与编辑线路，支持 1K / 2K / 4K 和多种画面比例，人民币固定 ¥0.15/张。',
   },
   {
+    value: 'gpt-image-2.5-flare',
+    label: 'GPT Image 2.5 Flare',
+    badge: '1K',
+    vendor: '星人图像',
+    sizes: ['1024x1024'],
+    aspectRatios: ['1:1'],
+    resolutions: ['auto'],
+    qualities: ['auto'],
+    formats: ['url'],
+    defaultSize: '1024x1024',
+    defaultAspectRatio: '1:1',
+    defaultResolution: 'auto',
+    defaultQuality: 'auto',
+    maxCount: 1,
+    countParam: 'n',
+    sizeParam: 'size',
+    backgroundOptions: [],
+    edit: false,
+    priceLabel: '¥0.17/张',
+    billingLabel: '按张计费',
+    hint: '仅开放已验证的 1024×1024 单张文生图；不发送未确认的质量或编辑参数，人民币固定 ¥0.17/张。',
+  },
+  {
+    value: 'gpt-image-2.5-sunburst',
+    label: 'GPT Image 2.5 Sunburst',
+    badge: '1K',
+    vendor: '星人图像',
+    sizes: ['1024x1024'],
+    aspectRatios: ['1:1'],
+    resolutions: ['auto'],
+    qualities: ['auto'],
+    formats: ['url'],
+    defaultSize: '1024x1024',
+    defaultAspectRatio: '1:1',
+    defaultResolution: 'auto',
+    defaultQuality: 'auto',
+    maxCount: 1,
+    countParam: 'n',
+    sizeParam: 'size',
+    backgroundOptions: [],
+    edit: false,
+    priceLabel: '¥0.17/张',
+    billingLabel: '按张计费',
+    hint: '仅开放已验证的 1024×1024 单张文生图；不发送未确认的质量或编辑参数，人民币固定 ¥0.17/张。',
+  },
+  {
     value: 'image 2电商商品图快速通道(1.5K)',
     label: 'image 2电商商品图快速通道(1.5K)',
     badge: '1.5K',
@@ -604,6 +650,10 @@ function isGptImage2Model(model) {
     model === '特价 image-2' ||
     model === 'image 2电商商品图快速通道(1.5K)'
   );
+}
+
+function isGptImage25Model(model) {
+  return model === 'gpt-image-2.5-flare' || model === 'gpt-image-2.5-sunburst';
 }
 
 function imageModelConfig(modelValue) {
@@ -3543,7 +3593,7 @@ const MediaPlayground = () => {
         : size;
       if (isGptImage2 && resolution && resolution !== 'auto' && resolution !== 'custom')
         payload.resolution = resolution;
-      if (quality) payload.quality = quality;
+      if (!isGptImage25Model(imageModel) && quality) payload.quality = quality;
       if (format && format !== 'url') payload.output_format = format;
       if (activeImageModel.sizeParam === 'size' && format !== 'png' && format !== 'url')
         payload.output_compression = compression;

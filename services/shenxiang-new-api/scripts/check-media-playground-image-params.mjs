@@ -71,6 +71,8 @@ async function main() {
   const grokRatioBlock = arrayBlock(classic, 'XAI_GROK_IMAGE_ASPECT_RATIOS')
   const grok46Block = modelBlock(classic, 'grok 4.6图片')
   const grok46RatioBlock = arrayBlock(classic, 'XAI_GROK_46_IMAGE_ASPECT_RATIOS')
+  const gptImage25FlareBlock = modelBlock(classic, 'gpt-image-2.5-flare')
+  const gptImage25SunburstBlock = modelBlock(classic, 'gpt-image-2.5-sunburst')
   const errors = []
 
   for (const [referenceRatio, supportedRatios, expectedRatio] of [
@@ -233,6 +235,33 @@ async function main() {
 
   if (!gptImage2Block.includes('resolutions: GPT_IMAGE_2_RESOLUTIONS')) {
     errors.push('gpt-image-2-4K must use GPT_IMAGE_2_RESOLUTIONS')
+  }
+
+  for (const [label, block] of [
+    ['gpt-image-2.5-flare', gptImage25FlareBlock],
+    ['gpt-image-2.5-sunburst', gptImage25SunburstBlock],
+  ]) {
+    if (!block) {
+      errors.push(`classic media playground must expose ${label}`)
+      continue
+    }
+    for (const marker of [
+      "sizes: ['1024x1024']",
+      "resolutions: ['auto']",
+      "qualities: ['auto']",
+      'maxCount: 1',
+      'edit: false',
+      "priceLabel: '¥0.17/张'",
+      '仅开放已验证的 1024×1024 单张文生图',
+    ]) {
+      if (!block.includes(marker)) errors.push(`${label} missing verified contract marker: ${marker}`)
+    }
+  }
+  for (const marker of [
+    'function isGptImage25Model(model)',
+    'if (!isGptImage25Model(imageModel) && quality) payload.quality = quality',
+  ]) {
+    if (!classic.includes(marker)) errors.push(`GPT Image 2.5 payload guard missing marker: ${marker}`)
   }
   if (!gptImage2Block.includes('maxCount: 1')) {
     errors.push('gpt-image-2-4K must limit image generations to one')

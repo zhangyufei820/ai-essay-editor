@@ -188,6 +188,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.grok15_1080_video_release_state = lambda: "staged"
         self.module.discount_image2_release_state = lambda: "unavailable"
         self.module.gemini_ddpapi_release_state = lambda: "unavailable"
+        self.module.gpt_image25_release_state = lambda: "unavailable"
         profiles = {
             "codex": ["gpt-5.5"],
             "claude": ["claude-opus-4-8"],
@@ -286,6 +287,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         ]
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.gemini_ddpapi_release_state = lambda: "unavailable"
+        self.module.gpt_image25_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "unavailable"
         self.module.mysql = lambda _query: rows
 
@@ -371,6 +373,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "staged"
         self.module.gemini_ddpapi_release_state = lambda: "unavailable"
+        self.module.gpt_image25_release_state = lambda: "unavailable"
         profiles = {
             "codex": ["gpt-5.5"],
             "claude": ["claude-opus-4-8"],
@@ -406,6 +409,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "unavailable"
         self.module.gemini_ddpapi_release_state = lambda: "staged"
+        self.module.gpt_image25_release_state = lambda: "unavailable"
         profiles = {
             "codex": ["gpt-5.5"],
             "claude": ["claude-opus-4-8"],
@@ -416,6 +420,36 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         system_profiles = self.module.system_token_profiles(profiles)
 
         for model in self.module.GEMINI_DDPAPI_MODELS:
+            self.assertNotIn(model, profiles["image"])
+            self.assertIn(model, system_profiles["image"])
+
+    def test_gpt_image25_release_state_requires_exact_channel_contract(self) -> None:
+        models = "gpt-image-2.5-flare,gpt-image-2.5-sunburst"
+        for rows, expected in (
+            ([], "unavailable"),
+            ([["1", "internal", models, "40", "https://moonapix.com"]], "staged"),
+            ([["1", "default,standard,pro,code,internal", models, "40", "https://moonapix.com"]], "published"),
+            ([["1", "default,internal", models, "40", "https://moonapix.com"]], "invalid"),
+            ([["1", "internal", "gpt-image-2.5-flare", "40", "https://moonapix.com"]], "invalid"),
+        ):
+            self.module.mysql = lambda _query, rows=rows: rows
+            self.assertEqual(self.module.gpt_image25_release_state(), expected)
+
+    def test_staged_gpt_image25_models_are_admin_only_until_published(self) -> None:
+        self.module.grok15_1080_video_release_state = lambda: "unavailable"
+        self.module.discount_image2_release_state = lambda: "unavailable"
+        self.module.gemini_ddpapi_release_state = lambda: "unavailable"
+        self.module.gpt_image25_release_state = lambda: "staged"
+        profiles = {
+            "codex": ["gpt-5.5"],
+            "claude": ["claude-opus-4-8"],
+            "image": ["gpt-image-2-4K"],
+            "video": ["grok-video-1.5"],
+        }
+
+        system_profiles = self.module.system_token_profiles(profiles)
+
+        for model in self.module.GPT_IMAGE25_MODELS:
             self.assertNotIn(model, profiles["image"])
             self.assertIn(model, system_profiles["image"])
 
@@ -1996,6 +2030,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             ensure_stable_image2_backing_model=no_result,
             ensure_stable_image2_channel_order=no_result,
             ensure_gemini_ddpapi_image_models=no_result,
+            ensure_gpt_image25_models=no_result,
             sync_grok_image_metadata=no_result,
             ensure_public_openai_text_models=no_result,
             sync_public_video_pricing=no_result,
@@ -2048,6 +2083,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             ensure_stable_image2_backing_model=no_result,
             ensure_stable_image2_channel_order=no_result,
             ensure_gemini_ddpapi_image_models=no_result,
+            ensure_gpt_image25_models=no_result,
             sync_grok_image_metadata=no_result,
             ensure_public_openai_text_models=no_result,
             sync_public_video_pricing=no_result,

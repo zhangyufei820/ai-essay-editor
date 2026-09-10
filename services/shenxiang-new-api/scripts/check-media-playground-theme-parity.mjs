@@ -10,6 +10,8 @@ const requiredImageModels = [
   'image 2电商商品图快速通道(1.5K)',
   'ecommerce-banana-2',
   'grok-imagine-image',
+  'gpt-image-2.5-flare',
+  'gpt-image-2.5-sunburst',
 ]
 
 const requiredVideoModels = [
@@ -53,6 +55,7 @@ const requiredImagePriceLabels = [
   '¥0.238/张',
   '¥0.055/张',
   '¥0.085/张',
+  '¥0.17/张',
 ]
 
 function sourceRootFromArgs() {
