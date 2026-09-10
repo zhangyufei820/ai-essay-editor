@@ -56,7 +56,7 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         models = {"data": [{"id": "gpt-6-astra"}]}
         response = {"status": "completed", "output": [{"content": [{"text": "OK"}]}]}
         completion = {"choices": [{"message": {"content": "OK"}}]}
-        with mock.patch.object(self.module, "fetch_json", side_effect=[models, completion]), mock.patch.object(self.module.provider_monitor, "request_responses", return_value={"ok": True}):
+        with mock.patch.object(self.module, "fetch_json", side_effect=[models, completion]), mock.patch.object(self.module.provider_monitor, "request_responses", return_value={"ok": True}), mock.patch.object(self.module, "probe_discount_codex", return_value={"discount_healthy": False}):
             result = self.module.probe_source(source)
         self.assertEqual(result["tag"], "source-a")
         self.assertTrue(result["responses"])
@@ -106,7 +106,7 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         models = {"data": [{"id": "gpt-6-astra"}]}
         response = {"status": "completed", "output": [{"content": [{"text": "OK"}]}]}
         completion = {"choices": [{"message": {"content": "OK"}}]}
-        with mock.patch.object(self.module, "fetch_json", side_effect=[models, completion]), mock.patch.object(self.module.provider_monitor, "request_responses", return_value={"ok": True}):
+        with mock.patch.object(self.module, "fetch_json", side_effect=[models, completion]), mock.patch.object(self.module.provider_monitor, "request_responses", return_value={"ok": True}), mock.patch.object(self.module, "probe_discount_codex", return_value={"discount_healthy": False}):
             result = self.module.probe_source(source)
         self.assertNotIn(secret, json.dumps(result))
 
@@ -136,6 +136,75 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         with mock.patch.object(self.module, "fetch_json", side_effect=[{"data": [{"id": "gpt-6-astra"}]}, {"choices": [{"message": {"content": "OK"}}]}]), mock.patch.object(self.module.provider_monitor, "request_responses", return_value={"ok": False}):
             with self.assertRaises(self.module.ConfigurationError):
                 self.module.probe_source(source)
+
+    def policy_fixture(self):
+        sources = tuple(self.module.SourceChannel(tag, "test-secret-key-123456", f"https://source-{i}.example", i)
+                        for i, tag in enumerate(self.module.SOURCE_CHANNEL_TAGS, 1))
+        reports = [{"tag": s.tag, "discount_healthy": True, "discount_ttft_ms": ms}
+                   for s, ms in zip(sources, [9000, 1000, 5000, 3000])]
+        return sources, reports
+
+    def test_discount_pins_requested_primary_and_sorts_all_healthy_fallbacks(self):
+        sources, reports = self.policy_fixture()
+        priorities, healthy = self.module.discount_route_policy(sources, reports, {s.tag for s in sources})
+        self.assertEqual(priorities, {"xingren-plus-text-wangwang": 40, "xingren-discount-text-aihub": 30,
+                                     "xingren-plus-text-pdhlzy": 20, "xingren-gpt6-astra": 10})
+        self.assertEqual(healthy, {s.tag for s in sources})
+
+    def test_tool_unhealthy_only_disables_discount_not_other_groups(self):
+        sources, reports = self.policy_fixture()
+        reports[1]["discount_healthy"] = False
+        sql = self.module.build_apply_sql(sources, {s.tag for s in sources}, probe_results=reports)
+        self.assertIn("'discount','gpt-6-astra',@astra_discount_3,0,10", sql)
+        self.assertIn("'plus','gpt-6-astra',@astra_plus_3,1,20", sql)
+        self.assertIn("'discount','gpt-6-astra',@astra_discount_2,1,40", sql)
+
+    def test_discount_only_sql_does_not_rewrite_other_groups_or_prices(self):
+        sources, reports = self.policy_fixture()
+        sql = self.module.build_apply_sql(sources, {s.tag for s in sources}, groups=("discount",), probe_results=reports)
+        self.assertIn("AND `group` IN ('discount') AND channel_id NOT IN", sql)
+        self.assertNotIn("@astra_plus_", sql)
+        self.assertNotIn("@astra_default_", sql)
+        self.assertNotIn("UPDATE channels SET status=2 WHERE tag='xingren-gpt6-astra'", sql)
+        self.assertNotIn("UPDATE options", sql)
+        self.assertNotIn("UPDATE tokens", sql)
+        self.assertEqual(sql, self.module.build_apply_sql(sources, {s.tag for s in sources}, groups=("discount",), probe_results=reports))
+
+    def test_discount_failure_cannot_be_turned_into_health_by_fast_latency(self):
+        sources, reports = self.policy_fixture()
+        reports[1].update(discount_healthy=False, discount_ttft_ms=1)
+        priorities, healthy = self.module.discount_route_policy(sources, reports, {s.tag for s in sources})
+        self.assertNotIn(sources[1].tag, healthy)
+        self.assertEqual(priorities[sources[1].tag], 10)
+
+    def test_codex_health_requires_three_successes_and_two_tool_roundtrips(self):
+        source = self.policy_fixture()[0][0]
+        with mock.patch.object(self.module.provider_monitor, "request_responses", side_effect=[{"ok": True,"first_token_ms":3000},{"ok":True,"first_token_ms":1000}]), mock.patch.object(self.module,"probe_codex_tool_roundtrip",side_effect=[True,False]) as tool:
+            result = self.module.probe_discount_codex(source,{"ok":True,"first_token_ms":2000})
+        self.assertFalse(result["discount_healthy"])
+        self.assertEqual(result["discount_ttft_ms"],2000)
+        self.assertEqual(tool.call_count,2)
+
+    def test_codex_roundtrip_requires_tool_result_continuation(self):
+        source = self.policy_fixture()[0][0]
+        first = {"status":"completed","output":[{"type":"function_call","name":"audit_sum","call_id":"test-call","arguments":'{"a":1,"b":1}'}]}
+        with mock.patch.object(self.module,"codex_completed_response",side_effect=[first,None]):
+            self.assertFalse(self.module.probe_codex_tool_roundtrip(source))
+        with mock.patch.object(self.module,"codex_completed_response",side_effect=[first,{"status":"completed","output":[{"content":[{"text":"2"}]}]}]) as request:
+            self.assertTrue(self.module.probe_codex_tool_roundtrip(source))
+            followup = request.call_args_list[1].args[1]
+            self.assertEqual(followup["input"][-1],{"type":"function_call_output","call_id":"test-call","output":"2"})
+            self.assertFalse(followup["store"])
+
+    def test_codex_terminal_parser_does_not_accept_done_or_error_as_success(self):
+        source = self.policy_fixture()[0][0]
+        for lines in ([b'data: [DONE]\n',b''],[b'data: {"type":"error"}\n']):
+            conn=mock.MagicMock()
+            conn.getresponse.return_value.status=200
+            conn.getresponse.return_value.readline.side_effect=lines
+            with mock.patch.object(self.module.http.client,"HTTPSConnection",return_value=conn):
+                self.assertIsNone(self.module.codex_completed_response(source,{}))
+            conn.close.assert_called_once()
 
 
 if __name__ == "__main__":

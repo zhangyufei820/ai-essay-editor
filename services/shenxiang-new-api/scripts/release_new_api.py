@@ -444,6 +444,10 @@ class Release:
         if not permission_sync_test.is_file():
             raise ReleaseError("candidate is missing model permission sync tests")
         run(["python3", str(permission_sync_test)])
+        astra_test = self.checkout / "services/shenxiang-new-api/scripts/test_configure_gpt6_astra_channel.py"
+        if not astra_test.is_file():
+            raise ReleaseError("candidate is missing Astra routing policy tests")
+        run(["python3", str(astra_test)])
 
     def build_image(self) -> None:
         labels = self.image_labels(self.image)

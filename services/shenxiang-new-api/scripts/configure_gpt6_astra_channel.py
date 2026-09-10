@@ -6,8 +6,11 @@ import argparse
 import contextlib
 import concurrent.futures
 import fcntl
+import http.client
 import json
+import math
 import os
+import statistics
 import sys
 import time
 import urllib.error
@@ -43,6 +46,7 @@ GROUP_SOURCE_TAG_ORDER_OVERRIDES = {
 MANAGED_GROUPS = ("default", "standard", "pro", "code", "internal", "plus", "discount", "special")
 MANAGED_TAG_PREFIX = "xingren-gpt6-astra-"
 CHAIN_PRIORITIES = (40, 30, 20, 10)
+DISCOUNT_PRIMARY_SOURCE_TAG = "xingren-plus-text-wangwang"
 LOCK_PATH = "/tmp/shenxiang-new-api-gpt6-astra-channel.lock"
 LOCK_HELD_ENV = "GPT6_ASTRA_CHANNEL_SYNC_LOCK_HELD"
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -167,6 +171,99 @@ def chat_ok(payload: dict[str, object]) -> bool:
     return isinstance(message, dict) and str(message.get("content") or "").strip() == "OK"
 
 
+def codex_completed_response(source: SourceChannel, body: dict) -> dict | None:
+    """Require the terminal event Codex consumes; never follow credential redirects."""
+    parsed = urllib.parse.urlsplit(normalize_base_url(source.base_url))
+    connection = http.client.HTTPSConnection(parsed.hostname, timeout=60)
+    deadline = time.monotonic() + 60
+    size = 0
+    try:
+        connection.request("POST", "/v1/responses", json.dumps(body).encode(), {
+            "Authorization": "Bearer " + source.api_key,
+            "Content-Type": "application/json", "Accept": "text/event-stream",
+            "User-Agent": "codex_cli_rs/0.114.0",
+        })
+        response = connection.getresponse()
+        if response.status != 200:
+            return None
+        while time.monotonic() < deadline:
+            if connection.sock:
+                connection.sock.settimeout(max(0.1, deadline - time.monotonic()))
+            line = response.readline(MAX_RESPONSE_BYTES + 1)
+            size += len(line)
+            if not line or size > MAX_RESPONSE_BYTES:
+                return None
+            if not line.startswith(b"data:"):
+                continue
+            try:
+                event = json.loads(line[5:].strip())
+            except ValueError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            if event.get("type") == "response.completed":
+                payload = event.get("response")
+                return payload if isinstance(payload, dict) and payload.get("status") == "completed" else None
+            if event.get("type") in {"error", "response.error", "response.failed", "response.incomplete"}:
+                return None
+    except Exception:
+        # Errors may embed an upstream address or key; return only a verdict.
+        return None
+    finally:
+        connection.close()
+    return None
+
+
+def probe_codex_tool_roundtrip(source: SourceChannel) -> bool:
+    body = {
+        "model": MODEL_NAME, "stream": True, "store": False,
+        "reasoning": {"effort": "low"}, "max_output_tokens": 256,
+        "include": ["reasoning.encrypted_content"],
+        "instructions": "Call audit_sum with 1 and 1. After the tool output reply only 2.",
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": "1+1?"}]}],
+        "tools": [{"type": "function", "name": "audit_sum", "description": "Add two integers.",
+                   "parameters": {"type": "object", "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
+                                  "required": ["a", "b"], "additionalProperties": False}, "strict": True}],
+        "tool_choice": {"type": "function", "name": "audit_sum"},
+    }
+    first = codex_completed_response(source, body)
+    output = (first or {}).get("output")
+    if not isinstance(output, list):
+        return False
+    calls = [item for item in output if isinstance(item, dict) and item.get("type") == "function_call"]
+    if len(calls) != 1 or calls[0].get("name") != "audit_sum" or not calls[0].get("call_id"):
+        return False
+    try:
+        if json.loads(calls[0].get("arguments", "")) != {"a": 1, "b": 1}:
+            return False
+    except (TypeError, ValueError):
+        return False
+    body["input"] += output + [{"type": "function_call_output", "call_id": calls[0]["call_id"], "output": "2"}]
+    body.pop("tool_choice")
+    second = codex_completed_response(source, body)
+    if not isinstance((second or {}).get("output"), list):
+        return False
+    text_parts = []
+    for item in second["output"]:
+        if not isinstance(item, dict) or not isinstance(item.get("content"), list):
+            continue
+        text_parts.extend(str(content.get("text") or "") for content in item["content"] if isinstance(content, dict))
+    text = "".join(text_parts)
+    return text.strip() == "2"
+
+
+def probe_discount_codex(source: SourceChannel, initial: dict) -> dict:
+    samples = [initial]
+    for _ in range(2):
+        samples.append(provider_monitor.request_responses(source.base_url, source.api_key, MODEL_NAME))
+    text_ok = all(sample.get("ok") and isinstance(sample.get("first_token_ms"), (int, float))
+                  and math.isfinite(sample["first_token_ms"]) and sample["first_token_ms"] > 0 for sample in samples)
+    tools_ok = text_ok and all(probe_codex_tool_roundtrip(source) for _ in range(2))
+    return {"discount_healthy": bool(tools_ok), "discount_text_successes": sum(bool(s.get("ok")) for s in samples),
+            "discount_ttft_ms": statistics.median([s["first_token_ms"] for s in samples]) if text_ok else None,
+            "discount_tools": bool(tools_ok)}
+
+
 def probe_source(source: SourceChannel) -> dict[str, object]:
     models = fetch_json(source.base_url + "/v1/models", source.api_key)
     data = models.get("data")
@@ -183,7 +280,8 @@ def probe_source(source: SourceChannel) -> dict[str, object]:
     )
     if not response.get("ok") or not chat_ok(completion):
         raise ConfigurationError(f"{source.tag} failed Responses or Chat Completions verification")
-    return {"tag": source.tag, "channel_id": source.channel_id, "models": True, "responses": True, "chat": True}
+    return {"tag": source.tag, "channel_id": source.channel_id, "models": True, "responses": True, "chat": True,
+            **probe_discount_codex(source, response)}
 
 
 def load_sources() -> tuple[SourceChannel, ...]:
@@ -261,13 +359,17 @@ def validate_managed_channel_tags() -> None:
 def build_apply_sql(
     sources: tuple[SourceChannel, ...],
     enabled_source_tags: set[str] | None = None,
+    *, groups: tuple[str, ...] = MANAGED_GROUPS,
+    probe_results: list[dict] | None = None,
 ) -> str:
+    if not groups or len(set(groups)) != len(groups) or not set(groups).issubset(MANAGED_GROUPS):
+        raise ConfigurationError("invalid Astra target groups")
     if enabled_source_tags is None:
         enabled_source_tags = {source.tag for source in sources}
     unknown_tags = enabled_source_tags.difference(source.tag for source in sources)
     if unknown_tags:
         raise ConfigurationError("enabled Astra source set contains an unknown source")
-    tags = managed_tags()
+    tags = tuple(managed_tag(group, index) for group in groups for index in range(len(SOURCE_CHANNEL_TAGS)))
     all_tags = (LEGACY_CHANNEL_TAG, *tags)
     tag_sql = ",".join(sql_quote(tag) for tag in all_tags)
     target_vars: list[str] = []
@@ -278,12 +380,16 @@ def build_apply_sql(
         "SET @astra_ratio_ok := (JSON_VALID((SELECT `value` FROM options WHERE `key`='GroupRatio')) AND " + " AND ".join("JSON_EXTRACT((SELECT `value` FROM options WHERE `key`='GroupRatio'), '$." + group + "') IS NOT NULL" for group in MANAGED_GROUPS) + ");",
         "SET @astra_apply_status := CASE WHEN @astra_duplicate_count > 0 THEN 'duplicate_channels' WHEN @astra_ratio_ok <> 1 THEN 'group_options_invalid' ELSE 'ok' END;",
         "SET @astra_apply_allowed := IF(@astra_apply_status='ok',1,0);",
-        "UPDATE channels SET status=2 WHERE tag=" + sql_quote(LEGACY_CHANNEL_TAG) + " AND @astra_apply_allowed=1;",
     ]
-    for group in MANAGED_GROUPS:
+    if groups == MANAGED_GROUPS:
+        statements.append("UPDATE channels SET status=2 WHERE tag=" + sql_quote(LEGACY_CHANNEL_TAG) + " AND @astra_apply_allowed=1;")
+    discount_priorities, discount_verified = discount_route_policy(sources, probe_results, enabled_source_tags)
+    for group in groups:
         group_sources = sources_for_group(group, sources)
-        group_enabled = independent_enabled_sources(group_sources, enabled_source_tags)
+        ranking = sorted(group_sources, key=lambda source: -discount_priorities[source.tag]) if group == "discount" and probe_results is not None else group_sources
+        group_enabled = independent_enabled_sources(ranking, discount_verified if group == "discount" and probe_results is not None else enabled_source_tags)
         for index, source in enumerate(group_sources):
+            priority = discount_priorities[source.tag] if group == "discount" and probe_results is not None else CHAIN_PRIORITIES[index]
             tag = managed_tag(group, index)
             variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
             channel_status = "1" if source.tag in group_enabled else "2"
@@ -293,36 +399,51 @@ def build_apply_sql(
             statements.extend(
                 [
                     "SET " + variable + " := IF(@astra_apply_allowed=1,(SELECT MIN(id) FROM channels WHERE tag=" + sql_quote(tag) + "),NULL);",
-                    "INSERT INTO channels (type,`key`,status,name,weight,created_time,test_time,response_time,base_url,models,`group`,model_mapping,priority,auto_ban,tag,remark,settings) SELECT 1," + sql_quote(source.api_key) + "," + channel_status + "," + sql_quote(name) + ",100,UNIX_TIMESTAMP(),0,0," + sql_quote(source.base_url) + "," + sql_quote(MODEL_NAME) + "," + sql_quote(group) + "," + sql_quote(mapping) + "," + str(CHAIN_PRIORITIES[index]) + ",1," + sql_quote(tag) + ",'独立分组计费链路','{}' WHERE " + variable + " IS NULL AND @astra_apply_allowed=1;",
+                    "INSERT INTO channels (type,`key`,status,name,weight,created_time,test_time,response_time,base_url,models,`group`,model_mapping,priority,auto_ban,tag,remark,settings) SELECT 1," + sql_quote(source.api_key) + "," + channel_status + "," + sql_quote(name) + ",100,UNIX_TIMESTAMP(),0,0," + sql_quote(source.base_url) + "," + sql_quote(MODEL_NAME) + "," + sql_quote(group) + "," + sql_quote(mapping) + "," + str(priority) + ",1," + sql_quote(tag) + ",'独立分组计费链路','{}' WHERE " + variable + " IS NULL AND @astra_apply_allowed=1;",
                     "SET " + variable + " := IF(@astra_apply_allowed=1,IFNULL(" + variable + ",LAST_INSERT_ID()),NULL);",
-                    "UPDATE channels SET type=1, `key`=" + sql_quote(source.api_key) + ", status=" + channel_status + ", name=" + sql_quote(name) + ", weight=100, base_url=" + sql_quote(source.base_url) + ", models=" + sql_quote(MODEL_NAME) + ", `group`=" + sql_quote(group) + ", model_mapping=" + sql_quote(mapping) + ", priority=" + str(CHAIN_PRIORITIES[index]) + ", auto_ban=1, tag=" + sql_quote(tag) + ", remark='独立分组计费链路', settings='{}' WHERE id=" + variable + " AND @astra_apply_allowed=1;",
+                    "UPDATE channels SET type=1, `key`=" + sql_quote(source.api_key) + ", status=" + channel_status + ", name=" + sql_quote(name) + ", weight=100, base_url=" + sql_quote(source.base_url) + ", models=" + sql_quote(MODEL_NAME) + ", `group`=" + sql_quote(group) + ", model_mapping=" + sql_quote(mapping) + ", priority=" + str(priority) + ", auto_ban=1, tag=" + sql_quote(tag) + ", remark='独立分组计费链路', settings='{}' WHERE id=" + variable + " AND @astra_apply_allowed=1;",
                 ]
             )
     id_list = ",".join(target_vars)
     statements.extend(
         [
-            "UPDATE abilities SET enabled=0 WHERE model=" + sql_quote(MODEL_NAME) + " AND channel_id NOT IN (" + id_list + ") AND @astra_apply_allowed=1;",
+            "UPDATE abilities SET enabled=0 WHERE model=" + sql_quote(MODEL_NAME) + " AND `group` IN (" + ",".join(sql_quote(g) for g in groups) + ") AND channel_id NOT IN (" + id_list + ") AND @astra_apply_allowed=1;",
             "UPDATE abilities AS ability JOIN channels AS channel ON channel.id=ability.channel_id SET ability.enabled=0 WHERE channel.tag IN (" + ",".join(sql_quote(tag) for tag in tags) + ") AND (ability.model<>" + sql_quote(MODEL_NAME) + " OR ability.`group`<>channel.`group` OR ability.tag<>channel.tag) AND @astra_apply_allowed=1;",
         ]
     )
-    for group in MANAGED_GROUPS:
+    for group in groups:
         group_sources = sources_for_group(group, sources)
-        group_enabled = independent_enabled_sources(group_sources, enabled_source_tags)
+        ranking = sorted(group_sources, key=lambda source: -discount_priorities[source.tag]) if group == "discount" and probe_results is not None else group_sources
+        group_enabled = independent_enabled_sources(ranking, discount_verified if group == "discount" and probe_results is not None else enabled_source_tags)
         for index, source in enumerate(group_sources):
+            priority = discount_priorities[source.tag] if group == "discount" and probe_results is not None else CHAIN_PRIORITIES[index]
             tag = managed_tag(group, index)
             variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
             ability_enabled = "1" if source.tag in group_enabled else "0"
             statements.append(
-                "INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES (" + ",".join([sql_quote(group), sql_quote(MODEL_NAME), variable, ability_enabled, str(CHAIN_PRIORITIES[index]), "100", sql_quote(tag)]) + ") ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),priority=VALUES(priority),weight=100,tag=VALUES(tag);"
+                "INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES (" + ",".join([sql_quote(group), sql_quote(MODEL_NAME), variable, ability_enabled, str(priority), "100", sql_quote(tag)]) + ") ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),priority=VALUES(priority),weight=100,tag=VALUES(tag);"
             )
     statements.append("COMMIT;")
     return "\n".join(statements)
 
 
-def apply_sources(sources: tuple[SourceChannel, ...], enabled_source_tags: set[str] | None = None) -> None:
+def discount_route_policy(sources, probe_results, enabled_source_tags):
+    reports = {r["tag"]: r for r in (probe_results or [])}
+    healthy = {tag for tag, report in reports.items() if tag in enabled_source_tags
+               and report.get("discount_healthy") is True and isinstance(report.get("discount_ttft_ms"), (int, float))
+               and math.isfinite(report["discount_ttft_ms"]) and report["discount_ttft_ms"] > 0}
+    ranked = sorted(sources, key=lambda source: (
+        source.tag != DISCOUNT_PRIMARY_SOURCE_TAG,
+        source.tag not in healthy,
+        reports.get(source.tag, {}).get("discount_ttft_ms") or float("inf"), source.tag))
+    return {source.tag: CHAIN_PRIORITIES[i] for i, source in enumerate(ranked)}, healthy
+
+
+def apply_sources(sources: tuple[SourceChannel, ...], enabled_source_tags: set[str] | None = None,
+                  *, groups: tuple[str, ...] = MANAGED_GROUPS, probe_results: list[dict] | None = None) -> None:
     validate_group_options()
     validate_managed_channel_tags()
-    sync.mysql_exec(build_apply_sql(sources, enabled_source_tags))
+    sync.mysql_exec(build_apply_sql(sources, enabled_source_tags, groups=groups, probe_results=probe_results))
 
 
 def probe_sources(sources: tuple[SourceChannel, ...]) -> tuple[list[dict[str, object]], list[str]]:
@@ -343,6 +464,7 @@ def main() -> int:
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--apply", action="store_true")
     action.add_argument("--reconcile-if-configured", action="store_true")
+    parser.add_argument("--discount-only", action="store_true", help="change only the public 0.25x Astra chain")
     args = parser.parse_args()
     with channel_lock():
         sources = load_sources()
@@ -356,9 +478,13 @@ def main() -> int:
             print(json.dumps({"ok": True, "action": "not_configured", "model": MODEL_NAME, "sources": probe_results}, ensure_ascii=False, separators=(",", ":")))
             return 0
         if args.apply or args.reconcile_if_configured:
-            apply_sources(sources, {str(result["tag"]) for result in probe_results})
+            if load_sources() != sources:
+                raise ConfigurationError("source identity changed while probing; no changes applied")
+            apply_sources(sources, {str(result["tag"]) for result in probe_results},
+                          groups=("discount",) if args.discount_only else MANAGED_GROUPS, probe_results=probe_results)
     action_name = "applied" if args.apply else "reconciled" if args.reconcile_if_configured else "probe"
-    print(json.dumps({"ok": True, "action": action_name, "model": MODEL_NAME, "groups": MANAGED_GROUPS, "sources": probe_results, "unavailable_sources": unavailable_tags}, ensure_ascii=False, separators=(",", ":")))
+    selected_groups = ("discount",) if args.discount_only else MANAGED_GROUPS
+    print(json.dumps({"ok": True, "action": action_name, "model": MODEL_NAME, "groups": selected_groups, "sources": probe_results, "unavailable_sources": unavailable_tags}, ensure_ascii=False, separators=(",", ":")))
     return 0
 
 
