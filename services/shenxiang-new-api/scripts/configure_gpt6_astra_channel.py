@@ -440,7 +440,7 @@ def discount_route_policy(sources, probe_results, enabled_source_tags):
     # Responses and Chat checks pass. The stricter repeated Codex round-trip
     # gate decides only whether an optional fallback is safe to add.
     routable = set(healthy)
-    if DISCOUNT_PRIMARY_SOURCE_TAG in enabled_source_tags:
+    if any(source.tag == DISCOUNT_PRIMARY_SOURCE_TAG for source in sources):
         routable.add(DISCOUNT_PRIMARY_SOURCE_TAG)
     return {source.tag: CHAIN_PRIORITIES[i] for i, source in enumerate(ranked)}, routable
 
