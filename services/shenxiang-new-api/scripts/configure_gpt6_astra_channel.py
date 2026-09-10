@@ -436,7 +436,13 @@ def discount_route_policy(sources, probe_results, enabled_source_tags):
         source.tag != DISCOUNT_PRIMARY_SOURCE_TAG,
         source.tag not in healthy,
         reports.get(source.tag, {}).get("discount_ttft_ms") or float("inf"), source.tag))
-    return {source.tag: CHAIN_PRIORITIES[i] for i, source in enumerate(ranked)}, healthy
+    # The requested primary remains routable after the baseline Models,
+    # Responses and Chat checks pass. The stricter repeated Codex round-trip
+    # gate decides only whether an optional fallback is safe to add.
+    routable = set(healthy)
+    if DISCOUNT_PRIMARY_SOURCE_TAG in enabled_source_tags:
+        routable.add(DISCOUNT_PRIMARY_SOURCE_TAG)
+    return {source.tag: CHAIN_PRIORITIES[i] for i, source in enumerate(ranked)}, routable
 
 
 def apply_sources(sources: tuple[SourceChannel, ...], enabled_source_tags: set[str] | None = None,

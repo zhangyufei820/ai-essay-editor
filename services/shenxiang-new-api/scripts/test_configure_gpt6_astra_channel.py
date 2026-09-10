@@ -177,6 +177,16 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         self.assertNotIn(sources[1].tag, healthy)
         self.assertEqual(priorities[sources[1].tag], 10)
 
+    def test_verified_primary_stays_routable_after_one_deep_probe_flakes(self):
+        sources, reports = self.policy_fixture()
+        primary = next(source for source in sources if source.tag == self.module.DISCOUNT_PRIMARY_SOURCE_TAG)
+        next(report for report in reports if report["tag"] == primary.tag).update(
+            discount_healthy=False, discount_ttft_ms=None
+        )
+        priorities, routable = self.module.discount_route_policy(sources, reports, {s.tag for s in sources})
+        self.assertEqual(priorities[primary.tag], 40)
+        self.assertIn(primary.tag, routable)
+
     def test_codex_health_requires_three_successes_and_two_tool_roundtrips(self):
         source = self.policy_fixture()[0][0]
         with mock.patch.object(self.module.provider_monitor, "request_responses", side_effect=[{"ok": True,"first_token_ms":3000},{"ok":True,"first_token_ms":1000}]), mock.patch.object(self.module,"probe_codex_tool_roundtrip",side_effect=[True,False]) as tool:
