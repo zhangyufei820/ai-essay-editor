@@ -50,7 +50,7 @@ const requiredBundlePatterns = [
   },
   {
     label: 'automatic input fidelity is omitted upstream',
-    pattern: /supportsInputFidelity&&[\s\S]{0,120}?inputFidelity!==["']auto["'][\s\S]{0,120}?input_fidelity/,
+    pattern: /supportsInputFidelity&&["']auto["']!==[\w$]+&&\([\w$]+\.input_fidelity=[\w$]+\)/,
   },
   {
     label: 'stable Image 2 editing enabled',
