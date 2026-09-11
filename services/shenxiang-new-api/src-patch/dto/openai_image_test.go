@@ -53,7 +53,8 @@ func TestImageRequestPreservesGPTImage25OutputParameters(t *testing.T) {
 		"quality":"max",
 		"output_format":"webp",
 		"output_compression":72,
-		"background":"transparent"
+		"background":"transparent",
+		"input_fidelity":"high"
 	}`)
 
 	var request ImageRequest
@@ -72,6 +73,7 @@ func TestImageRequestPreservesGPTImage25OutputParameters(t *testing.T) {
 	require.Equal(t, "webp", payload["output_format"])
 	require.Equal(t, float64(72), payload["output_compression"])
 	require.Equal(t, "transparent", payload["background"])
+	require.Equal(t, "high", payload["input_fidelity"])
 	require.NotContains(t, payload, "resolution")
 }
 

@@ -41,6 +41,18 @@ const requiredBundleMarkers = [
 
 const requiredBundlePatterns = [
   {
+    label: 'GPT Image 2.5 Flare editing enabled',
+    pattern: /value:\s*["']gpt-image-2\.5-flare["'][\s\S]{0,1500}?supportsInputFidelity:\s*(?:true|!0)[\s\S]{0,300}?edit:\s*(?:true|!0)/,
+  },
+  {
+    label: 'GPT Image 2.5 Sunburst editing enabled',
+    pattern: /value:\s*["']gpt-image-2\.5-sunburst["'][\s\S]{0,1500}?supportsInputFidelity:\s*(?:true|!0)[\s\S]{0,300}?edit:\s*(?:true|!0)/,
+  },
+  {
+    label: 'automatic input fidelity is omitted upstream',
+    pattern: /supportsInputFidelity&&[\s\S]{0,120}?inputFidelity!==["']auto["'][\s\S]{0,120}?input_fidelity/,
+  },
+  {
     label: 'stable Image 2 editing enabled',
     pattern: /value:\s*["']官转image 2稳定["'][\s\S]{0,1200}?edit:\s*(?:true|!0)/,
   },

@@ -334,11 +334,12 @@ const IMAGE_MODELS = [
     countParam: 'n',
     sizeParam: 'size',
     backgroundOptions: ['auto', 'opaque', 'transparent'],
+    supportsInputFidelity: true,
     supportsOutputCompression: true,
-    edit: false,
+    edit: true,
     priceLabel: '¥0.17/张',
     billingLabel: '按张计费',
-    hint: '官方定位为最快的高质量日常图像生成；支持 1K / 2K / 4K、合法自定义 WxH、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.17/张。',
+    hint: '官方定位为最快的高质量日常图像生成；支持文生图与参考图编辑，支持 1K / 2K / 4K、合法自定义 WxH、参考图保真度、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.17/张。',
   },
   {
     value: 'gpt-image-2.5-sunburst',
@@ -358,11 +359,12 @@ const IMAGE_MODELS = [
     countParam: 'n',
     sizeParam: 'size',
     backgroundOptions: ['auto', 'opaque', 'transparent'],
+    supportsInputFidelity: true,
     supportsOutputCompression: true,
-    edit: false,
+    edit: true,
     priceLabel: '¥0.17/张',
     billingLabel: '按张计费',
-    hint: '官方定位为最强图像生成与编辑模型，适合重视编辑精度与细节控制的工作流；媒体工坊当前开放文生图，支持 1K / 2K / 4K、合法自定义 WxH、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.17/张。',
+    hint: '官方定位为最强图像生成与编辑模型，适合重视编辑精度与细节控制的工作流；支持文生图与参考图编辑，支持 1K / 2K / 4K、合法自定义 WxH、参考图保真度、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.17/张。',
   },
   {
     value: 'image 2电商商品图快速通道(1.5K)',
@@ -3659,7 +3661,11 @@ const MediaPlayground = () => {
         background !== 'auto'
       )
         payload.background = background;
-      if (imageWorkflow === 'edit' && activeImageModel.supportsInputFidelity)
+      if (
+        imageWorkflow === 'edit' &&
+        activeImageModel.supportsInputFidelity &&
+        inputFidelity !== 'auto'
+      )
         payload.input_fidelity = inputFidelity;
       if (activeNegativePrompt)
         payload.extra_fields = { negative_prompt: activeNegativePrompt };

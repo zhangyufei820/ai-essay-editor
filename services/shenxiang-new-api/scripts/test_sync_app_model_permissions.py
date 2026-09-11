@@ -439,9 +439,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         flare = self.module.GPT_IMAGE25_MODEL_CONFIGS["gpt-image-2.5-flare"]["description"]
         sunburst = self.module.GPT_IMAGE25_MODEL_CONFIGS["gpt-image-2.5-sunburst"]["description"]
 
-        for expected in ("快速生成", "最快的高质量日常图像生成", "¥0.17/张"):
+        self.assertEqual(
+            self.module.GPT_IMAGE25_ENDPOINTS,
+            '{"image-generation":"/v1/images/generations","image-edit":"/v1/images/edits"}',
+        )
+        for expected in ("快速生成", "最快的高质量日常图像生成", "单图编辑", "¥0.17/张"):
             self.assertIn(expected, flare)
-        for expected in ("精细编辑", "编辑精度与细节控制", "¥0.17/张"):
+        for expected in ("精细编辑", "编辑精度与细节控制", "单图编辑", "¥0.17/张"):
             self.assertIn(expected, sunburst)
 
     def test_staged_gpt_image25_models_are_admin_only_until_published(self) -> None:

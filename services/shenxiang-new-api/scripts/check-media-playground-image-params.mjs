@@ -252,11 +252,13 @@ async function main() {
       "qualities: ['auto', 'low', 'medium', 'high', 'xhigh', 'max']",
       "formats: ['png', 'jpeg', 'webp']",
       "backgroundOptions: ['auto', 'opaque', 'transparent']",
+      'supportsInputFidelity: true',
       'supportsOutputCompression: true',
       'maxCount: 1',
-      'edit: false',
+      'edit: true',
       "priceLabel: '¥0.17/张'",
       '支持 1K / 2K / 4K、合法自定义 WxH',
+      '参考图编辑',
     ]) {
       if (!block.includes(marker)) errors.push(`${label} missing official contract marker: ${marker}`)
     }
@@ -276,6 +278,8 @@ async function main() {
     'flexibleGptImageSizeFor(',
     'if (quality) payload.quality = quality',
     "payload.output_format = format",
+    "inputFidelity !== 'auto'",
+    'payload.input_fidelity = inputFidelity',
     "background === 'transparent'",
     '透明背景仅支持 PNG 或 WebP 输出格式。',
   ]) {
@@ -289,6 +293,9 @@ async function main() {
   }
   if (classic.includes('if (isFlexibleGptImageSize && resolution')) {
     errors.push('classic must not send the UI-only resolution field for GPT Image 2.5')
+  }
+  if (classic.includes("supportsInputFidelity)\n        payload.input_fidelity")) {
+    errors.push('classic must omit the UI-only auto input_fidelity value')
   }
   if (!gptImage2Block.includes('maxCount: 1')) {
     errors.push('gpt-image-2-4K must limit image generations to one')
