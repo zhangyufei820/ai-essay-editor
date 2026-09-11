@@ -72,6 +72,10 @@ const OPENAI_IMAGE_ASPECT_RATIOS = [
 ];
 
 const GPT_IMAGE_2_RESOLUTIONS = ['auto', '1K', '2K', '4K', 'custom'];
+const GPT_IMAGE_25_ASPECT_RATIOS = [
+  '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3',
+  '5:4', '4:5', '21:9', '9:21', '2:1', '1:2',
+];
 const DISCOUNT_IMAGE_2_RESOLUTIONS = ['1K', '2K', '4K'];
 
 const GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS = [
@@ -317,46 +321,48 @@ const IMAGE_MODELS = [
     label: 'GPT Image 2.5 Flare',
     badge: '快速生成',
     vendor: '星人图像',
-    sizes: ['1024x1024'],
-    aspectRatios: ['1:1'],
-    resolutions: ['auto'],
-    qualities: ['auto'],
-    formats: ['url'],
-    defaultSize: '1024x1024',
+    sizes: GPT_IMAGE_25_ASPECT_RATIOS,
+    aspectRatios: GPT_IMAGE_25_ASPECT_RATIOS,
+    resolutions: GPT_IMAGE_2_RESOLUTIONS,
+    qualities: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'],
+    formats: ['png', 'jpeg', 'webp'],
+    defaultSize: '1:1',
     defaultAspectRatio: '1:1',
-    defaultResolution: 'auto',
+    defaultResolution: '1K',
     defaultQuality: 'auto',
     maxCount: 1,
     countParam: 'n',
     sizeParam: 'size',
-    backgroundOptions: [],
+    backgroundOptions: ['auto', 'opaque', 'transparent'],
+    supportsOutputCompression: true,
     edit: false,
     priceLabel: '¥0.17/张',
     billingLabel: '按张计费',
-    hint: '官方定位为最快的高质量日常图像生成，适合快速原型与批量创作；仅开放已验证的 1024×1024 单张文生图，人民币固定 ¥0.17/张。',
+    hint: '官方定位为最快的高质量日常图像生成；支持 1K / 2K / 4K、合法自定义 WxH、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.17/张。',
   },
   {
     value: 'gpt-image-2.5-sunburst',
     label: 'GPT Image 2.5 Sunburst',
     badge: '精细编辑',
     vendor: '星人图像',
-    sizes: ['1024x1024'],
-    aspectRatios: ['1:1'],
-    resolutions: ['auto'],
-    qualities: ['auto'],
-    formats: ['url'],
-    defaultSize: '1024x1024',
+    sizes: GPT_IMAGE_25_ASPECT_RATIOS,
+    aspectRatios: GPT_IMAGE_25_ASPECT_RATIOS,
+    resolutions: GPT_IMAGE_2_RESOLUTIONS,
+    qualities: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'],
+    formats: ['png', 'jpeg', 'webp'],
+    defaultSize: '1:1',
     defaultAspectRatio: '1:1',
-    defaultResolution: 'auto',
+    defaultResolution: '1K',
     defaultQuality: 'auto',
     maxCount: 1,
     countParam: 'n',
     sizeParam: 'size',
-    backgroundOptions: [],
+    backgroundOptions: ['auto', 'opaque', 'transparent'],
+    supportsOutputCompression: true,
     edit: false,
     priceLabel: '¥0.17/张',
     billingLabel: '按张计费',
-    hint: '官方定位为重视编辑精度与细节控制的高端创作工作流；当前仅开放已验证的 1024×1024 单张文生图，上传编辑待实测后开放，人民币固定 ¥0.17/张。',
+    hint: '官方定位为最强图像生成与编辑模型，适合重视编辑精度与细节控制的工作流；媒体工坊当前开放文生图，支持 1K / 2K / 4K、合法自定义 WxH、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.17/张。',
   },
   {
     value: 'image 2电商商品图快速通道(1.5K)',
@@ -529,6 +535,29 @@ const GPT_IMAGE_2_SIZE_BY_RESOLUTION = {
   },
 };
 
+// Translate UI resolution tiers to the upstream's documented pixel values.
+// Extreme 1:3 / 3:1 sizes remain available through the custom WxH input.
+const GPT_IMAGE_25_SIZE_BY_RESOLUTION = {
+  '1K': {
+    '1:1': '1024x1024', '16:9': '1280x720', '9:16': '720x1280',
+    '4:3': '1152x864', '3:4': '864x1152', '3:2': '1536x1024',
+    '2:3': '1024x1536', '5:4': '1120x896', '4:5': '896x1120',
+    '21:9': '1456x624', '9:21': '624x1456', '2:1': '1536x768', '1:2': '768x1536',
+  },
+  '2K': {
+    '1:1': '2048x2048', '16:9': '2048x1152', '9:16': '1152x2048',
+    '4:3': '2304x1728', '3:4': '1728x2304', '3:2': '2048x1360',
+    '2:3': '1360x2048', '5:4': '2240x1792', '4:5': '1792x2240',
+    '21:9': '2912x1248', '9:21': '1248x2912', '2:1': '3072x1536', '1:2': '1536x3072',
+  },
+  '4K': {
+    '1:1': '2880x2880', '16:9': '3840x2160', '9:16': '2160x3840',
+    '4:3': '3264x2448', '3:4': '2448x3264', '3:2': '3504x2336',
+    '2:3': '2336x3504', '5:4': '3200x2560', '4:5': '2560x3200',
+    '21:9': '3840x1648', '9:21': '1648x3840', '2:1': '3840x1920', '1:2': '1920x3840',
+  },
+};
+
 const GPT_IMAGE_2_MIN_PIXELS = 655360;
 const GPT_IMAGE_2_MAX_PIXELS = 8294400;
 const GPT_IMAGE_2_MAX_SIDE = 3840;
@@ -654,6 +683,10 @@ function isGptImage2Model(model) {
 
 function isGptImage25Model(model) {
   return model === 'gpt-image-2.5-flare' || model === 'gpt-image-2.5-sunburst';
+}
+
+function isFlexibleGptImageSizeModel(model) {
+  return isGptImage2Model(model) || isGptImage25Model(model);
 }
 
 function imageModelConfig(modelValue) {
@@ -836,16 +869,16 @@ function gptImage2CustomSizeError(value) {
     return '尺寸边长不能小于 16px。';
   }
   if (width > GPT_IMAGE_2_MAX_SIDE || height > GPT_IMAGE_2_MAX_SIDE) {
-    return 'gpt-image-2 最大边不能超过 3840px。';
+    return 'GPT Image 最大边不能超过 3840px。';
   }
   if (width % 16 !== 0 || height % 16 !== 0) {
-    return 'gpt-image-2 的宽高都必须是 16px 的倍数。';
+    return 'GPT Image 的宽高都必须是 16px 的倍数。';
   }
   if (Math.max(width, height) / Math.min(width, height) > GPT_IMAGE_2_MAX_RATIO) {
-    return 'gpt-image-2 的长短边比例不能超过 3:1。';
+    return 'GPT Image 的长短边比例不能超过 3:1。';
   }
   if (pixels < GPT_IMAGE_2_MIN_PIXELS || pixels > GPT_IMAGE_2_MAX_PIXELS) {
-    return 'gpt-image-2 总像素必须在 655,360 到 8,294,400 之间。';
+    return 'GPT Image 总像素必须在 655,360 到 8,294,400 之间。';
   }
   return '';
 }
@@ -869,6 +902,23 @@ function gptImage2SizeFor(aspectRatio, imageSize, customSize = '') {
   );
 }
 
+function gptImage25SizeFor(aspectRatio, imageSize, customSize = '') {
+  if (imageSize === 'custom') return gptImage2CustomSizeFor(customSize);
+  if (imageSize === 'auto') return 'auto';
+  const normalizedResolution = imageSize || '1K';
+  return (
+    GPT_IMAGE_25_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ||
+    GPT_IMAGE_25_SIZE_BY_RESOLUTION[normalizedResolution]?.['1:1'] ||
+    '1024x1024'
+  );
+}
+
+function flexibleGptImageSizeFor(modelValue, aspectRatio, imageSize, customSize = '') {
+  return isGptImage25Model(modelValue)
+    ? gptImage25SizeFor(aspectRatio, imageSize, customSize)
+    : gptImage2SizeFor(aspectRatio, imageSize, customSize);
+}
+
 function geminiProImageSizeFor(aspectRatio, imageSize) {
   const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K';
   return GOOGLE_GEMINI_PRO_IMAGE_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] || '';
@@ -883,8 +933,10 @@ function grokImageOutputSizeFor(aspectRatio) {
 }
 
 function imagePixelSizeForModel(modelValue, aspectRatio, imageSize, customSize = '') {
-  if (isGptImage2Model(modelValue)) {
-    const pixelSize = gptImage2SizeFor(aspectRatio, imageSize, customSize);
+  if (isFlexibleGptImageSizeModel(modelValue)) {
+    const pixelSize = flexibleGptImageSizeFor(
+      modelValue, aspectRatio, imageSize, customSize,
+    );
     if (pixelSize === 'auto') return '';
     return pixelSize || '自定义尺寸待输入';
   }
@@ -3169,7 +3221,7 @@ const MediaPlayground = () => {
     imagePixelLabel;
   const imageDisplayRatio =
     mode === 'image' &&
-    isGptImage2Model(imageModel) &&
+    isFlexibleGptImageSizeModel(imageModel) &&
     resolution === 'custom' &&
     imagePixelLabel &&
     imagePixelLabel !== '自定义尺寸待输入'
@@ -3178,9 +3230,11 @@ const MediaPlayground = () => {
   const showImageRatioOptions =
     mode === 'image' &&
     imageRatioSelectOptions.length > 0 &&
-    !(isGptImage2Model(imageModel) && resolution === 'custom');
+    !(isFlexibleGptImageSizeModel(imageModel) && resolution === 'custom');
   const showGptImage2CustomSize =
-    mode === 'image' && isGptImage2Model(imageModel) && resolution === 'custom';
+    mode === 'image' &&
+    isFlexibleGptImageSizeModel(imageModel) &&
+    resolution === 'custom';
 
   function promptTextarea() {
     const current = promptTextareaRef.current;
@@ -3342,7 +3396,7 @@ const MediaPlayground = () => {
           activeImageModel.resolutions?.[0] ||
           'auto',
       );
-      if (isGptImage2Model(activeImageModel.value)) {
+      if (isFlexibleGptImageSizeModel(activeImageModel.value)) {
         setCustomImageSize('3840x2160');
       }
     } else {
@@ -3587,13 +3641,16 @@ const MediaPlayground = () => {
         return payload;
       }
       const isGptImage2 = isGptImage2Model(imageModel);
+      const isFlexibleGptImageSize = isFlexibleGptImageSizeModel(imageModel);
       payload.n = effectiveCount;
-      payload.size = isGptImage2
-        ? gptImage2SizeFor(effectiveAspectRatio, resolution, customImageSize)
+      payload.size = isFlexibleGptImageSize
+        ? flexibleGptImageSizeFor(
+            imageModel, effectiveAspectRatio, resolution, customImageSize,
+          )
         : size;
       if (isGptImage2 && resolution && resolution !== 'auto' && resolution !== 'custom')
         payload.resolution = resolution;
-      if (!isGptImage25Model(imageModel) && quality) payload.quality = quality;
+      if (quality) payload.quality = quality;
       if (format && format !== 'url') payload.output_format = format;
       if (activeImageModel.sizeParam === 'size' && format !== 'png' && format !== 'url')
         payload.output_compression = compression;
@@ -4008,8 +4065,9 @@ const MediaPlayground = () => {
       if (!automaticEditAspectRatio) return basePayload;
 
       const payload = { ...basePayload };
-      if (isGptImage2Model(payload.model)) {
-        payload.size = gptImage2SizeFor(
+      if (isFlexibleGptImageSizeModel(payload.model)) {
+        payload.size = flexibleGptImageSizeFor(
+          payload.model,
           automaticEditAspectRatio,
           resolution,
           customImageSize,
@@ -4489,9 +4547,21 @@ const MediaPlayground = () => {
       return Toast.warning('当前模型仅支持文生图，请切换到文生图或更换支持图片编辑的模型。');
     }
     if (!prompt.trim()) return Toast.error('请先写一句你想生成什么。');
-    if (mode === 'image' && isGptImage2Model(imageModel) && resolution === 'custom') {
+    if (
+      mode === 'image' &&
+      isFlexibleGptImageSizeModel(imageModel) &&
+      resolution === 'custom'
+    ) {
       const sizeError = gptImage2CustomSizeError(customImageSize);
       if (sizeError) return Toast.error(sizeError);
+    }
+    if (
+      mode === 'image' &&
+      background === 'transparent' &&
+      format !== 'png' &&
+      format !== 'webp'
+    ) {
+      return Toast.error('透明背景仅支持 PNG 或 WebP 输出格式。');
     }
     if (mode === 'image' && imageWorkflow === 'edit' && referenceFiles.length === 0)
       return Toast.error('图像修改需要先上传参考图。');

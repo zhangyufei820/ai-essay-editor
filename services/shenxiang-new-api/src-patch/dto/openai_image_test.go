@@ -44,6 +44,37 @@ func TestImageRequestPreservesMediaWorkshopImageConfig(t *testing.T) {
 	require.Contains(t, payload, "extra_body")
 }
 
+func TestImageRequestPreservesGPTImage25OutputParameters(t *testing.T) {
+	raw := []byte(`{
+		"model":"gpt-image-2.5-sunburst",
+		"prompt":"test image",
+		"n":1,
+		"size":"3840x2160",
+		"quality":"max",
+		"output_format":"webp",
+		"output_compression":72,
+		"background":"transparent"
+	}`)
+
+	var request ImageRequest
+	require.NoError(t, json.Unmarshal(raw, &request))
+	require.Equal(t, "3840x2160", request.Size)
+	require.Equal(t, "max", request.Quality)
+	require.Empty(t, request.Resolution, "UI-only resolution labels must not be sent upstream")
+
+	marshaled, err := json.Marshal(request)
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(marshaled, &payload))
+	require.Equal(t, "3840x2160", payload["size"])
+	require.Equal(t, "max", payload["quality"])
+	require.Equal(t, "webp", payload["output_format"])
+	require.Equal(t, float64(72), payload["output_compression"])
+	require.Equal(t, "transparent", payload["background"])
+	require.NotContains(t, payload, "resolution")
+}
+
 func TestImageRequestDiscountImage2UsesCNYTierPrice(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -246,15 +246,19 @@ async function main() {
       continue
     }
     for (const marker of [
-      "sizes: ['1024x1024']",
-      "resolutions: ['auto']",
-      "qualities: ['auto']",
+      'sizes: GPT_IMAGE_25_ASPECT_RATIOS',
+      'aspectRatios: GPT_IMAGE_25_ASPECT_RATIOS',
+      'resolutions: GPT_IMAGE_2_RESOLUTIONS',
+      "qualities: ['auto', 'low', 'medium', 'high', 'xhigh', 'max']",
+      "formats: ['png', 'jpeg', 'webp']",
+      "backgroundOptions: ['auto', 'opaque', 'transparent']",
+      'supportsOutputCompression: true',
       'maxCount: 1',
       'edit: false',
       "priceLabel: '¥0.17/张'",
-      '仅开放已验证的 1024×1024 单张文生图',
+      '支持 1K / 2K / 4K、合法自定义 WxH',
     ]) {
-      if (!block.includes(marker)) errors.push(`${label} missing verified contract marker: ${marker}`)
+      if (!block.includes(marker)) errors.push(`${label} missing official contract marker: ${marker}`)
     }
   }
   for (const [label, block, badge, positioning] of [
@@ -267,9 +271,24 @@ async function main() {
   }
   for (const marker of [
     'function isGptImage25Model(model)',
-    'if (!isGptImage25Model(imageModel) && quality) payload.quality = quality',
+    'function isFlexibleGptImageSizeModel(model)',
+    'const GPT_IMAGE_25_SIZE_BY_RESOLUTION = {',
+    'flexibleGptImageSizeFor(',
+    'if (quality) payload.quality = quality',
+    "payload.output_format = format",
+    "background === 'transparent'",
+    '透明背景仅支持 PNG 或 WebP 输出格式。',
   ]) {
-    if (!classic.includes(marker)) errors.push(`GPT Image 2.5 payload guard missing marker: ${marker}`)
+    if (!classic.includes(marker)) errors.push(`GPT Image 2.5 parameter contract missing marker: ${marker}`)
+  }
+  if (classic.includes('if (!isGptImage25Model(imageModel) && quality)')) {
+    errors.push('GPT Image 2.5 quality must not be suppressed')
+  }
+  if (!classic.includes("if (isGptImage2 && resolution && resolution !== 'auto'")) {
+    errors.push('classic must restrict the UI-only resolution field to legacy Image 2')
+  }
+  if (classic.includes('if (isFlexibleGptImageSize && resolution')) {
+    errors.push('classic must not send the UI-only resolution field for GPT Image 2.5')
   }
   if (!gptImage2Block.includes('maxCount: 1')) {
     errors.push('gpt-image-2-4K must limit image generations to one')
