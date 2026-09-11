@@ -36,6 +36,8 @@ const requiredMarkers = {
   geminiImageSize: 'image_size',
   outputCompression: 'output_compression',
   inputFidelity: 'input_fidelity',
+  gptImage25FlarePositioning: '最快的高质量日常图像生成',
+  gptImage25SunburstPositioning: '编辑精度与细节控制',
   videoPublicReference: 'public_reference',
   videoUpstreamReferenceUrl: 'upstream_url ||',
 }

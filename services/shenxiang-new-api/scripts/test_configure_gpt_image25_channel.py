@@ -78,6 +78,11 @@ class ConfigureGPTImage25ChannelTest(unittest.TestCase):
         self.assertIn("banana-2,gpt-image-2.5-flare,gpt-image-2.5-sunburst", sql)
         self.assertNotIn("default,standard,pro,code,internal", sql)
 
+    def test_channel_remark_distinguishes_fast_and_precision_models(self) -> None:
+        self.assertIn("Flare 快速生成", self.module.CHANNEL_REMARK)
+        self.assertIn("Sunburst 精细编辑", self.module.CHANNEL_REMARK)
+        self.assertIn("¥0.17/张", self.module.CHANNEL_REMARK)
+
     def test_publish_requires_stage_and_syncs_image_tokens(self) -> None:
         calls: list[str] = []
         self.module.validate_channel_isolation = lambda: calls.append("isolation")

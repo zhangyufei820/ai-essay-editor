@@ -257,6 +257,14 @@ async function main() {
       if (!block.includes(marker)) errors.push(`${label} missing verified contract marker: ${marker}`)
     }
   }
+  for (const [label, block, badge, positioning] of [
+    ['gpt-image-2.5-flare', gptImage25FlareBlock, "badge: '快速生成'", '最快的高质量日常图像生成'],
+    ['gpt-image-2.5-sunburst', gptImage25SunburstBlock, "badge: '精细编辑'", '编辑精度与细节控制'],
+  ]) {
+    for (const marker of [badge, positioning]) {
+      if (!block.includes(marker)) errors.push(`${label} missing official positioning marker: ${marker}`)
+    }
+  }
   for (const marker of [
     'function isGptImage25Model(model)',
     'if (!isGptImage25Model(imageModel) && quality) payload.quality = quality',

@@ -20,7 +20,7 @@ STAGING_GROUP = "internal"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_MODELS_RESPONSE_BYTES = 2 * 1024 * 1024
 CHANNEL_NAME = "星人 GPT Image 2.5 图像通道"
-CHANNEL_REMARK = "GPT Image 2.5 图像线路；人民币 ¥0.17/张"
+CHANNEL_REMARK = "GPT Image 2.5 图像线路；Flare 快速生成，Sunburst 精细编辑；人民币 ¥0.17/张"
 
 
 class ConfigurationError(RuntimeError):

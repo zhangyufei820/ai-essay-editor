@@ -435,6 +435,15 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.module.mysql = lambda _query, rows=rows: rows
             self.assertEqual(self.module.gpt_image25_release_state(), expected)
 
+    def test_gpt_image25_catalog_describes_official_model_positioning(self) -> None:
+        flare = self.module.GPT_IMAGE25_MODEL_CONFIGS["gpt-image-2.5-flare"]["description"]
+        sunburst = self.module.GPT_IMAGE25_MODEL_CONFIGS["gpt-image-2.5-sunburst"]["description"]
+
+        for expected in ("快速生成", "最快的高质量日常图像生成", "¥0.17/张"):
+            self.assertIn(expected, flare)
+        for expected in ("精细编辑", "编辑精度与细节控制", "¥0.17/张"):
+            self.assertIn(expected, sunburst)
+
     def test_staged_gpt_image25_models_are_admin_only_until_published(self) -> None:
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "unavailable"

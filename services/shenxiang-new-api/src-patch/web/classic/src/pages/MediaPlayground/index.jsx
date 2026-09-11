@@ -315,7 +315,7 @@ const IMAGE_MODELS = [
   {
     value: 'gpt-image-2.5-flare',
     label: 'GPT Image 2.5 Flare',
-    badge: '1K',
+    badge: '快速生成',
     vendor: '星人图像',
     sizes: ['1024x1024'],
     aspectRatios: ['1:1'],
@@ -333,12 +333,12 @@ const IMAGE_MODELS = [
     edit: false,
     priceLabel: '¥0.17/张',
     billingLabel: '按张计费',
-    hint: '仅开放已验证的 1024×1024 单张文生图；不发送未确认的质量或编辑参数，人民币固定 ¥0.17/张。',
+    hint: '官方定位为最快的高质量日常图像生成，适合快速原型与批量创作；仅开放已验证的 1024×1024 单张文生图，人民币固定 ¥0.17/张。',
   },
   {
     value: 'gpt-image-2.5-sunburst',
     label: 'GPT Image 2.5 Sunburst',
-    badge: '1K',
+    badge: '精细编辑',
     vendor: '星人图像',
     sizes: ['1024x1024'],
     aspectRatios: ['1:1'],
@@ -356,7 +356,7 @@ const IMAGE_MODELS = [
     edit: false,
     priceLabel: '¥0.17/张',
     billingLabel: '按张计费',
-    hint: '仅开放已验证的 1024×1024 单张文生图；不发送未确认的质量或编辑参数，人民币固定 ¥0.17/张。',
+    hint: '官方定位为重视编辑精度与细节控制的高端创作工作流；当前仅开放已验证的 1024×1024 单张文生图，上传编辑待实测后开放，人民币固定 ¥0.17/张。',
   },
   {
     value: 'image 2电商商品图快速通道(1.5K)',
