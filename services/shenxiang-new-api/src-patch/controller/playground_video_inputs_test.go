@@ -1,9 +1,39 @@
 package controller
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/QuantumNous/new-api/common"
+	"github.com/gin-gonic/gin"
 )
+
+func TestPlaygroundMoon25PromptLimitMatchesModelContract(t *testing.T) {
+	for _, tc := range []struct {
+		model    string
+		length   int
+		rejected bool
+	}{
+		{"moon-video-2.5-480p", 15000, false},
+		{"moon-video-2.5-480p", 15001, true},
+		{"grok-video-1.5", 10000, false},
+		{"grok-video-1.5", 10001, true},
+	} {
+		body, _ := json.Marshal(map[string]interface{}{"model": tc.model, "prompt": strings.Repeat("字", tc.length)})
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Request = httptest.NewRequest(http.MethodPost, "/pg/videos", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		err := validatePlaygroundVideoPromptLimit(c)
+		common.CleanupBodyStorage(c)
+		if (err != nil) != tc.rejected {
+			t.Fatalf("model=%s length=%d error=%v", tc.model, tc.length, err)
+		}
+	}
+}
 
 func TestSummarizePlaygroundVideoInputsCountsMetadataContentReferences(t *testing.T) {
 	inputs := summarizePlaygroundVideoInputs(map[string]interface{}{

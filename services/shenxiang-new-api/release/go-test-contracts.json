@@ -1,5 +1,9 @@
 [
   {
+    "package": "./controller",
+    "run": "^TestPlaygroundMoon25PromptLimitMatchesModelContract$"
+  },
+  {
     "package": "./.",
     "run": "^(TestBuildXingrenCodexTokenResponse.*|TestXingrenCodexTokenNameIncludesAccountID|TestXingrenOnboardingCodexTokenHandler.*|TestXingrenCodexModelAcceptsAstra|TestXingrenCodexFrontendRejectsInvalidPayloadBeforeConfiguration|TestXingrenHomeChatResponseSafetyContract)$"
   },

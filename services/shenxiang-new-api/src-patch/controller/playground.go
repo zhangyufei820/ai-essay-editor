@@ -231,11 +231,16 @@ func validatePlaygroundVideoPromptLimit(c *gin.Context) *types.NewAPIError {
 	}
 	var payload struct {
 		Prompt string `json:"prompt"`
+		Model  string `json:"model"`
 	}
 	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
 		return nil
 	}
-	if playgroundPromptTooLong(payload.Prompt) {
+	maxRunes := playgroundPromptMaxRunes
+	if payload.Model == "moon-video-2.5-480p" {
+		maxRunes = 15000
+	}
+	if len([]rune(strings.TrimSpace(payload.Prompt))) > maxRunes {
 		return types.NewErrorWithStatusCode(errors.New("prompt is too long"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
 	return nil
