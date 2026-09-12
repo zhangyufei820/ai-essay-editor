@@ -21,6 +21,7 @@ func TestSystemTokenProfilesIncludesCallablePublicVideoModels(t *testing.T) {
 	}
 
 	require.Equal(t, []string{
+		"moon-video-2.5-480p",
 		"grok-video-super-720p",
 		"seedance-2.0-ld-17",
 		"seedance-sd2-fast-720p",

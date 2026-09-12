@@ -260,6 +260,9 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	if info.Action == constant.TaskActionRemix {
 		return validateRemixRequest(c)
 	}
+	if isMoon25VideoModel(info.OriginModelName) || isMoon25VideoModel(info.UpstreamModelName) {
+		return validateMoon25VideoRequest(c, info)
+	}
 	if isGrok46VideoModel(info.OriginModelName) || isGrok46VideoModel(info.UpstreamModelName) {
 		return validateGrok46VideoRequest(c, info)
 	}
@@ -610,7 +613,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		var bodyMap map[string]interface{}
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
 			bodyMap["model"] = info.UpstreamModelName
-			if isGrok46VideoModel(info.UpstreamModelName) {
+			if isMoon25VideoModel(info.UpstreamModelName) {
+				bodyMap = normalizeMoon25VideoRequestBody(bodyMap)
+			} else if isGrok46VideoModel(info.UpstreamModelName) {
 				bodyMap = normalizeGrok46VideoRequestBody(bodyMap)
 			} else if isGrok15Video1080Model(info.UpstreamModelName) {
 				bodyMap = normalizeGrok15Video1080RequestBody(bodyMap)

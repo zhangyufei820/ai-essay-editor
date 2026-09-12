@@ -23,6 +23,17 @@ def load_sync_module():
 
 
 class SyncAppModelPermissionsTest(unittest.TestCase):
+    def test_moon25_price_and_staging_permissions(self) -> None:
+        model = self.module.PUBLIC_MOON25_VIDEO_MODEL
+        self.assertEqual(self.module.PUBLIC_VIDEO_FIXED_PRICES_CNY[model], self.module.Decimal("0.50"))
+        for rows, expected in (([], "unavailable"), ([["1", "internal"]], "staged"), ([["1", "default,standard,pro,code,internal"]], "published"), ([["2", "default,standard,pro,code,internal"]], "unavailable")):
+            with mock.patch.object(self.module, "mysql", return_value=rows):
+                self.assertEqual(self.module.moon25_video_release_state(), expected)
+        profiles = {"codex": [], "claude": [], "image": [], "video": []}
+        with mock.patch.object(self.module, "mysql", return_value=[]), mock.patch.object(self.module, "moon25_video_release_state", return_value="staged"):
+            self.assertIn(model, self.module.system_token_profiles(profiles)["video"])
+            self.assertEqual(profiles["video"], [])
+
     def setUp(self) -> None:
         self.module = load_sync_module()
         self.monitor_state_reader = self.module.monitor_disabled_ability_pairs
@@ -165,6 +176,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(
             self.module.PUBLIC_VIDEO_MODELS,
             (
+                "moon-video-2.5-480p",
                 "grok-video-super-720p",
                 "seedance-2.0-ld-17",
                 "seedance-sd2-fast-720p",
@@ -185,6 +197,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("grok-imagine-1.5-video", self.module.PUBLIC_VIDEO_MODELS)
 
     def test_staged_grok1080_is_admin_only_until_published(self) -> None:
+        self.module.moon25_video_release_state = lambda: "unavailable"
         self.module.grok15_1080_video_release_state = lambda: "staged"
         self.module.discount_image2_release_state = lambda: "unavailable"
         self.module.gemini_ddpapi_release_state = lambda: "unavailable"
@@ -370,6 +383,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertEqual(3, sql.count("remark = 'Image 2 特价线路；人民币 1K ¥0.06、2K ¥0.09、4K ¥0.13/张'"))
 
     def test_staged_discount_image2_is_admin_only_until_published(self) -> None:
+        self.module.moon25_video_release_state = lambda: "unavailable"
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "staged"
         self.module.gemini_ddpapi_release_state = lambda: "unavailable"
@@ -406,6 +420,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertEqual(self.module.gemini_ddpapi_release_state(), expected)
 
     def test_staged_gemini_ddpapi_models_are_admin_only_until_published(self) -> None:
+        self.module.moon25_video_release_state = lambda: "unavailable"
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "unavailable"
         self.module.gemini_ddpapi_release_state = lambda: "staged"
@@ -449,6 +464,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn(expected, sunburst)
 
     def test_staged_gpt_image25_models_are_admin_only_until_published(self) -> None:
+        self.module.moon25_video_release_state = lambda: "unavailable"
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "unavailable"
         self.module.gemini_ddpapi_release_state = lambda: "unavailable"

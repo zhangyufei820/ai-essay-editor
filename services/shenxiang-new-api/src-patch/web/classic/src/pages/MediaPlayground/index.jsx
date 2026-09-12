@@ -475,6 +475,8 @@ function imageModelSupportsWorkflow(modelConfig, workflow) {
 }
 
 const SIZE_TO_ASPECT_RATIO = {
+  '854x480': '16:9',
+  '480x854': '9:16',
   '960x960': '1:1',
   '720x1280': '9:16',
   '1280x720': '16:9',
@@ -985,6 +987,28 @@ function googleImageEditSizeFor(aspectRatio, imageSize, modelValue) {
 }
 
 const VIDEO_MODELS = [
+  {
+    value: 'moon-video-2.5-480p',
+    label: 'Moon Video 2.5 480P',
+    badge: '30图 · 真人',
+    sizes: ['854x480', '480x854'],
+    durations: Array.from({ length: 27 }, (_, index) => index + 4),
+    defaultSize: '854x480',
+    defaultDuration: 4,
+    defaultFps: 24,
+    resolutions: ['480P'],
+    defaultResolution: '480P',
+    workflows: ['text', 'image'],
+    referenceLimits: { image: 30, video: 0, audio: 0 },
+    referenceMaxFiles: 30,
+    officialSeedanceReferences: true,
+    supportsAdvancedVideoParams: false,
+    promptMaxLength: 15000,
+    supportsFace: true,
+    billingLabel: '按秒计费',
+    priceLabel: '¥0.50/秒',
+    hint: '¥0.50/秒；480P，4-30秒；最多30图，参考图片支持2K，标注不卡真人；提示词最多15000字。原标注10音频（每段≤15秒），当前接口不支持，暂未开放。',
+  },
   {
     value: 'grok-video-super-720p',
     label: 'Grok Video',
@@ -1741,11 +1765,11 @@ function promptWithReferenceAliases(value, aliases) {
   return clampPromptText(`${missing.join(' ')} ${value || ''}`.trim());
 }
 
-function clampPromptText(value) {
+function clampPromptText(value, maxLength = MEDIA_PROMPT_MAX_LENGTH) {
   const text = String(value || '');
   const chars = Array.from(text);
-  if (chars.length <= MEDIA_PROMPT_MAX_LENGTH) return text;
-  return chars.slice(0, MEDIA_PROMPT_MAX_LENGTH).join('');
+  if (chars.length <= maxLength) return text;
+  return chars.slice(0, maxLength).join('');
 }
 
 function normalizeURL(url) {
@@ -3283,7 +3307,7 @@ const MediaPlayground = () => {
     const needsLeadingSpace = before && !/\s$/.test(before);
     const needsTrailingSpace = after && !/^\s/.test(after);
     const insertion = `${needsLeadingSpace ? ' ' : ''}${text}${needsTrailingSpace ? ' ' : ''}`;
-    const nextPrompt = clampPromptText(`${before}${insertion}${after}`);
+    const nextPrompt = clampPromptText(`${before}${insertion}${after}`, mode === 'video' ? activeVideoModel.promptMaxLength : undefined);
     const nextCursor = Math.min(before.length + insertion.length, nextPrompt.length);
     setPrompt(nextPrompt);
     closeMentionMenu();
@@ -3304,7 +3328,7 @@ const MediaPlayground = () => {
   }
 
   function handlePromptChange(value) {
-    const nextPrompt = clampPromptText(value);
+    const nextPrompt = clampPromptText(value, mode === 'video' ? activeVideoModel.promptMaxLength : undefined);
     setPrompt(nextPrompt);
     window.requestAnimationFrame(() => syncMentionAtCursor(nextPrompt));
   }
@@ -3672,6 +3696,16 @@ const MediaPlayground = () => {
       return payload;
     }
 
+    if (videoModel === 'moon-video-2.5-480p') {
+      return {
+        model: videoModel,
+        group: effectiveGroup,
+        prompt,
+        duration,
+        resolution: '480P',
+        ratio: SIZE_TO_ASPECT_RATIO[size],
+      };
+    }
     const [width, height] = size.split('x').map((value) => Number(value));
     const payload = {
       model: videoModel,
@@ -3990,7 +4024,9 @@ const MediaPlayground = () => {
       return {
         ...payload,
         references: officialReferences,
-        prompt: shouldForwardReferenceAliases
+        prompt: videoModel === 'moon-video-2.5-480p'
+          ? payload.prompt || ''
+          : shouldForwardReferenceAliases
           ? promptWithReferenceAliases(payload.prompt || '', referenceAliases)
           : payload.prompt || '',
         metadata: {
@@ -5252,7 +5288,7 @@ const MediaPlayground = () => {
               <PromptComposer
                 prompt={prompt}
                 onPromptChange={handlePromptChange}
-                promptMaxLength={MEDIA_PROMPT_MAX_LENGTH}
+                promptMaxLength={mode === 'video' ? activeVideoModel.promptMaxLength || MEDIA_PROMPT_MAX_LENGTH : MEDIA_PROMPT_MAX_LENGTH}
                 negativePrompt={negativePrompt}
                 onNegativePromptChange={setNegativePrompt}
                 negativePromptEnabled={negativePromptEnabled}

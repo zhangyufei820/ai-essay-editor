@@ -44,7 +44,8 @@ const requiredMarkers = {
 
 const requiredClassicOnlyMarkers = {
   mediaPromptLimitConstant: 'MEDIA_PROMPT_MAX_LENGTH = 10000',
-  mediaPromptLimitProp: 'promptMaxLength={MEDIA_PROMPT_MAX_LENGTH}',
+  mediaPromptLimitProp: 'activeVideoModel.promptMaxLength || MEDIA_PROMPT_MAX_LENGTH',
+  moon25Video: "value: 'moon-video-2.5-480p'",
   promptTextareaMaxLength: 'maxLength={promptLimit}',
   discountImage2StableLabel: "statusLabel: '稳定'",
   discountImage2TierPriceLabel: '1K ¥0.06 / 2K ¥0.09 / 4K ¥0.13',

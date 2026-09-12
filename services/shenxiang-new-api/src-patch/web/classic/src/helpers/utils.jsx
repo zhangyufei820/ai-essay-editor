@@ -143,6 +143,15 @@ const PRICING_DISPLAY_OVERRIDES = {
     billing_label: '按秒计费',
     icon: 'Doubao',
   },
+  'moon-video-2.5-480p': {
+    display_name: 'Moon Video 2.5 480P',
+    description: '人民币 ¥0.50/秒；480P，4-30秒；最多30图，参考图片支持2K，标注不卡真人；提示词最多15000字。原标注10音频（每段≤15秒），当前接口不支持，暂未开放。',
+    fixed_price_label: '¥0.50',
+    price_unit_label: '秒',
+    billing_label: '按秒计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
+  },
   'grok-video-1.5': {
     display_name: 'Grok Video 1.5',
     description: '固定人民币 ¥0.20/次，按次计费；固定 720P，支持 6/10 秒文生视频和图生视频；图生模式可上传 1 张图片（最大 20MB），不支持视频或音频参考；人脸能力未承诺，不保证。',

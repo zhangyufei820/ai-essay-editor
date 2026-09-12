@@ -362,7 +362,16 @@ PUBLIC_GROK15_1080_VIDEO_CHANNEL_GROUPS = "default,standard,pro,code,internal"
 PUBLIC_GROK46_VIDEO_MODEL = "grok4.6视频"
 UPSTREAM_GROK46_VIDEO_MODEL = "grok-imagine-video"
 PUBLIC_GROK46_VIDEO_CHANNEL_TAG = "xingren-grok46-video"
+PUBLIC_MOON25_VIDEO_MODEL = "moon-video-2.5-480p"
+UPSTREAM_MOON25_VIDEO_MODEL = "moon-2.5-ac-a-480p"
+PUBLIC_MOON25_VIDEO_CHANNEL_TAG = "xingren-moon25-video-480p"
 PUBLIC_VIDEO_MODEL_CONFIGS = {
+    PUBLIC_MOON25_VIDEO_MODEL: {
+        "description": "Moon Video 2.5 480P｜人民币 ¥0.50/秒｜4-30秒，最多30图，参考图片支持2K，标注不卡真人，提示词最多15000字｜原标注10音频（每段≤15秒），当前接口不支持，暂未开放",
+        "icon": "",
+        "tags": "video,moon",
+        "vendor_id": 0,
+    },
     "grok-video-super-720p": {
         "description": "星人 Grok 视频生成｜人民币 ¥6.50/次｜固定按次计费，支持 5/10/15 秒，生成后请及时下载",
         "icon": "Grok",
@@ -425,6 +434,12 @@ PUBLIC_LD17_CHANNEL_MODELS = [
 PUBLIC_LD17_MODEL_MAPPING = '{"seedance-2.0-ld-17":"seedance-2.0-wc-b-720p"}'
 PUBLIC_VIDEO_CHANNEL_CONFIGS = (
     (
+        "tag",
+        PUBLIC_MOON25_VIDEO_CHANNEL_TAG,
+        [PUBLIC_MOON25_VIDEO_MODEL],
+        json.dumps({PUBLIC_MOON25_VIDEO_MODEL: UPSTREAM_MOON25_VIDEO_MODEL}, separators=(",", ":")),
+    ),
+    (
         "id",
         PUBLIC_GROK_VIDEO_CHANNEL_ID,
         PUBLIC_GROK_VIDEO_CHANNEL_MODELS,
@@ -479,6 +494,7 @@ CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
 RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact", "gpt-5.6-luna")
 PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M: dict[str, dict[str, Decimal]] = {}
 PUBLIC_VIDEO_FIXED_PRICES_CNY = {
+    PUBLIC_MOON25_VIDEO_MODEL: Decimal("0.50"),
     "grok-video-super-720p": Decimal("6.50"),
     "seedance-2.0-ld-17": Decimal("6.48"),
     PUBLIC_SD2_FAST_MODEL: Decimal("0.25"),
@@ -1474,6 +1490,7 @@ def sync_supplier_safe_public_metadata() -> dict[str, int]:
 
 
 def model_lists() -> dict[str, list[str]]:
+    moon25_state = moon25_video_release_state()
     grok1080_state = grok15_1080_video_release_state()
     grok46_image_state = grok46_media_release_state("image")
     grok46_video_state = grok46_media_release_state("video")
@@ -1506,6 +1523,8 @@ def model_lists() -> dict[str, list[str]]:
         if "internal-hidden" in tags:
             continue
         if "video" in tags:
+            if model == PUBLIC_MOON25_VIDEO_MODEL and moon25_state != "published":
+                continue
             if model in PRIVATE_VIDEO_MODELS:
                 continue
             if model == PUBLIC_GROK15_1080_VIDEO_MODEL and grok1080_state != "published":
@@ -1541,6 +1560,8 @@ def model_lists() -> dict[str, list[str]]:
         if public_image_model not in profiles["image"]:
             profiles["image"].append(public_image_model)
     for model in PUBLIC_VIDEO_MODELS:
+        if model == PUBLIC_MOON25_VIDEO_MODEL and moon25_state != "published":
+            continue
         if model == PUBLIC_GROK15_1080_VIDEO_MODEL and grok1080_state != "published":
             continue
         if model == PUBLIC_GROK46_VIDEO_MODEL and grok46_video_state != "published":
@@ -1548,6 +1569,19 @@ def model_lists() -> dict[str, list[str]]:
         if model not in profiles["video"]:
             profiles["video"].append(model)
     return profiles
+
+
+def moon25_video_release_state() -> str:
+    rows = mysql(
+        "SELECT status, REPLACE(COALESCE(`group`, ''), ' ', '') FROM channels WHERE tag = "
+        + sql_quote(PUBLIC_MOON25_VIDEO_CHANNEL_TAG)
+        + " ORDER BY id"
+    )
+    if len(rows) != 1 or len(rows[0]) != 2 or rows[0][0] != "1":
+        return "unavailable"
+    if rows[0][1] == "internal":
+        return "staged"
+    return "published" if rows[0][1] == "default,standard,pro,code,internal" else "invalid"
 
 
 def grok15_1080_video_release_state() -> str:
@@ -1706,6 +1740,8 @@ def gpt_image25_release_state() -> str:
 
 def system_token_profiles(profiles: dict[str, list[str]]) -> dict[str, list[str]]:
     result = {name: list(models) for name, models in profiles.items()}
+    if moon25_video_release_state() == "staged" and PUBLIC_MOON25_VIDEO_MODEL not in result["video"]:
+        result["video"].append(PUBLIC_MOON25_VIDEO_MODEL)
     if grok15_1080_video_release_state() == "staged" and PUBLIC_GROK15_1080_VIDEO_MODEL not in result["video"]:
         result["video"].append(PUBLIC_GROK15_1080_VIDEO_MODEL)
     if discount_image2_release_state() == "staged" and DISCOUNT_IMAGE2_PUBLIC_MODEL not in result["image"]:
