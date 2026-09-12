@@ -121,6 +121,7 @@ class ReleaseNewApiTest(unittest.TestCase):
 
         release_core = MODULE_PATH.read_text(encoding="utf-8")
         self.assertIn('test_codex_entry_guard_runner.py', release_core)
+        self.assertIn('test_codex_permission_writer_consistency.py', release_core)
         self.assertIn('test_release_new_api.py', release_core)
 
     def test_release_installs_manifest_pinned_provider_monitor(self) -> None:

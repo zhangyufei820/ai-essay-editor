@@ -450,6 +450,13 @@ class Release:
         if not codex_guard_runner_test.is_file():
             raise ReleaseError("candidate is missing Codex guard runner tests")
         run(["python3", str(codex_guard_runner_test)])
+        codex_writer_consistency_test = (
+            self.checkout
+            / "services/shenxiang-new-api/scripts/test_codex_permission_writer_consistency.py"
+        )
+        if not codex_writer_consistency_test.is_file():
+            raise ReleaseError("candidate is missing Codex permission writer consistency tests")
+        run(["python3", str(codex_writer_consistency_test)])
         release_governance_test = (
             self.checkout / "services/shenxiang-new-api/scripts/test_release_new_api.py"
         )
