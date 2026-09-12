@@ -444,6 +444,18 @@ class Release:
         if not permission_sync_test.is_file():
             raise ReleaseError("candidate is missing model permission sync tests")
         run(["python3", str(permission_sync_test)])
+        codex_guard_runner_test = (
+            self.checkout / "services/shenxiang-new-api/scripts/test_codex_entry_guard_runner.py"
+        )
+        if not codex_guard_runner_test.is_file():
+            raise ReleaseError("candidate is missing Codex guard runner tests")
+        run(["python3", str(codex_guard_runner_test)])
+        release_governance_test = (
+            self.checkout / "services/shenxiang-new-api/scripts/test_release_new_api.py"
+        )
+        if not release_governance_test.is_file():
+            raise ReleaseError("candidate is missing release governance tests")
+        run(["python3", str(release_governance_test)])
         astra_test = self.checkout / "services/shenxiang-new-api/scripts/test_configure_gpt6_astra_channel.py"
         if not astra_test.is_file():
             raise ReleaseError("candidate is missing Astra routing policy tests")

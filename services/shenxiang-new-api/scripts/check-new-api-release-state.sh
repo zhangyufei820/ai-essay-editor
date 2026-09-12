@@ -13,6 +13,7 @@ expected_commit="$(jq -er '.repo_commit' "$MANIFEST")"
 expected_upstream="$(jq -er '.upstream_commit' "$MANIFEST")"
 expected_patch="$(jq -er '.patch_sha256' "$MANIFEST")"
 expected_policy="$(jq -er '.policy_sha256' "$MANIFEST")"
+expected_codex_entry_guard_runner="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/codex_entry_guard.sh"
 expected_model_sync_runner="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/sync_app_model_permissions.sh"
 expected_release_tool="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/release_new_api.py"
 expected_provider_monitor_runner="${APP_DIR}/release-state/checkouts/${expected_commit}/services/shenxiang-new-api/scripts/provider_monitor.sh"
@@ -34,6 +35,11 @@ label_policy="$(docker image inspect "$actual_image" --format '{{index .Config.L
 [ "$label_upstream" = "$expected_upstream" ] || { printf 'release upstream label drift\n' >&2; exit 1; }
 [ "$label_patch" = "$expected_patch" ] || { printf 'release patch label drift\n' >&2; exit 1; }
 [ "$label_policy" = "$expected_policy" ] || { printf 'release policy label drift\n' >&2; exit 1; }
+[ -r "$expected_codex_entry_guard_runner" ] || { printf 'release codex-entry guard runner missing\n' >&2; exit 1; }
+cmp -s "${APP_DIR}/scripts/codex_entry_guard.sh" "$expected_codex_entry_guard_runner" || {
+  printf 'release codex-entry guard runner drift\n' >&2
+  exit 1
+}
 [ -r "$expected_model_sync_runner" ] || { printf 'release model-permission runner missing\n' >&2; exit 1; }
 cmp -s "${APP_DIR}/scripts/sync_app_model_permissions.sh" "$expected_model_sync_runner" || {
   printf 'release model-permission runner drift\n' >&2

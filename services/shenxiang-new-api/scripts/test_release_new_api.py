@@ -102,6 +102,27 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertIn("release model-permission runner drift", release_guard)
         self.assertIn('cmp -s "${APP_DIR}/scripts/sync_app_model_permissions.sh"', release_guard)
 
+    def test_release_syncs_manifest_pinned_codex_entry_guard(self) -> None:
+        self.assertIn("scripts/codex_entry_guard.sh", MODULE.GOVERNANCE_FILES)
+
+        runner = MODULE_PATH.with_name("codex_entry_guard.sh").read_text(encoding="utf-8")
+        self.assertIn('MANIFEST="${NEW_API_RELEASE_MANIFEST:-${APP_DIR}/release-manifest.json}"', runner)
+        self.assertIn('CHECKOUT="${APP_DIR}/release-state/checkouts/${RELEASE_COMMIT}"', runner)
+        self.assertIn(
+            'GUARD_SCRIPT="${CHECKOUT}/services/shenxiang-new-api/scripts/ensure_codex_entry.py"',
+            runner,
+        )
+        self.assertIn('python3 "${GUARD_SCRIPT}"', runner)
+        self.assertNotIn('python3 "${APP_DIR}/scripts/ensure_codex_entry.py"', runner)
+
+        release_guard = MODULE_PATH.with_name("check-new-api-release-state.sh").read_text(encoding="utf-8")
+        self.assertIn("release codex-entry guard runner drift", release_guard)
+        self.assertIn('cmp -s "${APP_DIR}/scripts/codex_entry_guard.sh"', release_guard)
+
+        release_core = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn('test_codex_entry_guard_runner.py', release_core)
+        self.assertIn('test_release_new_api.py', release_core)
+
     def test_release_installs_manifest_pinned_provider_monitor(self) -> None:
         self.assertIn("scripts/provider_monitor.py", MODULE.GOVERNANCE_FILES)
         self.assertIn("scripts/provider_monitor.sh", MODULE.GOVERNANCE_FILES)
