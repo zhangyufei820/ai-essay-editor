@@ -1,3 +1,4 @@
+import { ensureCreditAccount } from "@/lib/credit-account"
 import { NextRequest, NextResponse } from "next/server"
 import { createHmac, timingSafeEqual } from "crypto"
 import { createClient } from "@supabase/supabase-js"
@@ -3464,12 +3465,13 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} workflowSkill=${workflowSkillId || "none"} files=${difyFileIds.length} urls=${fileUrls.length}`)
     
     const userId = auth.user!.id
+    const creditAccount = await ensureCreditAccount(getSupabaseAdmin(), userId)
     const entitlement = await getUserEntitlementSummary(userId, {
       email: auth.user!.email || null,
       phone: auth.user!.phone || null,
       metadata: auth.user!.metadata || null,
     })
-    const realCreditUserId = entitlement?.entitlementUserId || userId
+    const realCreditUserId = creditAccount.credit_user_id
     if (model === "open-claw" && !isConfiguredAdminUser(userId)) {
       const guard = evaluateOpenClawRuntimeRequest({ query: effectiveQuery, inputs })
       if (!guard.allowed) {
@@ -3671,45 +3673,13 @@ export async function POST(request: NextRequest) {
     console.log("🔍 [积分查询] 开始查询")
     
     // 🔥 修复：只查询存在的字段 credits 和 user_id（移除不存在的 total_spent）
-    let { data: userCredits, error: creditsError } = await getSupabaseAdmin()
+    const { data: userCredits, error: creditsError } = await getSupabaseAdmin()
       .from("user_credits")
       .select("credits, user_id, is_pro")
       .eq("user_id", realCreditUserId)
       .single()
     
-    // 🔥 关键修复：如果用户不存在，先创建积分记录（赠送 1000 积分，与注册逻辑一致）
-    // 🔥 移除 total_spent 字段（数据库中不存在）
-    if (creditsError?.code === "PGRST116") {
-      console.log("🆕 [新用户] user_credits 表中不存在，自动创建积分记录，赠送 1000 积分")
-      
-      const { data: newCredits, error: insertError } = await getSupabaseAdmin()
-        .from("user_credits")
-        .insert({ user_id: realCreditUserId, credits: 1000, is_pro: false })
-        .select()
-        .single()
-      
-      if (insertError) {
-        console.error(`❌ [新用户] 创建积分记录失败:`, insertError)
-        // 尝试 upsert
-        const { data: upsertData, error: upsertError } = await getSupabaseAdmin()
-          .from("user_credits")
-          .upsert({ user_id: realCreditUserId, credits: 1000, is_pro: false })
-          .select()
-          .single()
-        
-        if (upsertError) {
-          console.error(`❌ [新用户] Upsert 也失败:`, upsertError)
-        } else {
-          userCredits = upsertData
-          creditsError = null
-          console.log(`✅ [新用户] Upsert 成功，赠送 1000 积分:`, upsertData)
-        }
-      } else {
-        userCredits = newCredits
-        creditsError = null
-        console.log(`✅ [新用户] 积分记录创建成功，赠送 1000 积分:`, newCredits)
-      }
-    } else if (creditsError) {
+    if (creditsError) {
       console.error(`❌ [积分查询] 查询失败:`, creditsError)
       console.log(`📋 [调试] 错误代码: ${creditsError.code}, 错误信息: ${creditsError.message}`)
     } else {

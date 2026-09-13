@@ -50,10 +50,7 @@ describe('credits helpers', () => {
   })
 
   it('reads credits without requesting a missing total_earned column and derives totals from transactions', async () => {
-    const userCreditsQuery = makeChain({
-      data: { credits: 880, is_pro: true },
-      error: null,
-    })
+    const rpc = jest.fn(async () => ({ data: [{ credit_user_id: 'user-1', credits: 880, is_pro: true, initialized: false }], error: null }))
     const txQuery = makeChain({
       data: [
         { amount: 1000 },
@@ -63,8 +60,8 @@ describe('credits helpers', () => {
       error: null,
     })
     const supabaseMock = {
+      rpc,
       from: jest.fn((table: string) => {
-        if (table === 'user_credits') return userCreditsQuery
         if (table === 'credit_transactions') return txQuery
         throw new Error(`Unexpected table: ${table}`)
       }),
@@ -74,8 +71,7 @@ describe('credits helpers', () => {
 
     const credits = await getUserCredits('user-1', { includeTotals: true })
 
-    expect(userCreditsQuery.select).toHaveBeenCalledWith('credits, is_pro')
-    expect(userCreditsQuery.select.mock.calls[0][0]).not.toContain('total_earned')
+    expect(rpc).toHaveBeenCalledWith('ensure_credit_account', { p_user_id: 'user-1' })
     expect(txQuery.select).toHaveBeenCalledWith('amount')
     expect(credits).toEqual({
       credits: 880,

@@ -15,21 +15,8 @@ describe("critical API timeout guards", () => {
     expect(source).toContain("timer.unref?.()")
   })
 
-  it("bounds /api/user/credits slow auth, base credits, and optional entitlement reads", () => {
-    const source = read("app/api/user/credits/route.ts")
-
-    expect(source).toContain("withTimeout(requireUser(request), AUTH_TIMEOUT_MS")
-    expect(source).toContain("BASE_CREDITS_TIMEOUT_MS")
-    expect(source).toContain("OPTIONAL_STATUS_TIMEOUT_MS")
-    expect(source).toContain("const entitlementPromise = withTimeout")
-    expect(source).toContain("const baseCreditsPromise = withTimeout")
-    expect(source).toContain("权益合并降级")
-    expect(source).toContain("createSafeCreditsDegradedResponse")
-    expect(source).toContain("creditStatus: \"unavailable\"")
-    expect(source).toContain("CREDITS_TIMEOUT")
-    expect(source).not.toContain("{ status: isOperationTimeoutError(baseCredits.error) ? 503 : 500 }")
-    expect(source).not.toMatch(/const entitlement = await getUserEntitlementSummary/)
-  })
+  // Credit account and membership timeout behavior is exercised with fake
+  // timers in canonical-credit-account.test.ts.
 
   it("lets /api/chat-session degrade persistence and list reads without blocking chat", () => {
     const source = read("app/api/chat-session/route.ts")

@@ -1,3 +1,4 @@
+import { ensureCreditAccount } from "@/lib/credit-account"
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireUser } from '@/lib/auth/verified-user'
@@ -50,117 +51,30 @@ export async function GET(request: NextRequest) {
     if (auth.response) return auth.response
     const userId = auth.user!.id
 
-    console.log("🔍 [积分API] 查询用户积分")
-
-    // 使用 Service Role Key 创建超级管理员客户端
-    const supabaseAdmin = getSupabaseAdmin()
-    const entitlementPromise = withTimeout(
-      getUserEntitlementSummary(userId, {
+    const account = await withTimeout(
+      ensureCreditAccount(getSupabaseAdmin(), userId),
+      BASE_CREDITS_TIMEOUT_MS,
+      "user-credits.account",
+    )
+    // The account RPC finishes any pending transfer before the read-only
+    // membership resolver runs, so both calls observe the canonical balance.
+    const entitlement = await withTimeout(
+      getUserEntitlementSummary(account.credit_user_id, {
         email: auth.user!.email || null,
         phone: auth.user!.phone || null,
-        metadata: auth.user!.metadata || null,
       }),
       OPTIONAL_STATUS_TIMEOUT_MS,
       "user-credits.entitlement",
-    ).catch((error) => {
-      console.warn("[积分API] 权益合并降级:", error)
-      return null
-    })
+    ).catch(() => null)
 
-    const baseCreditsPromise = withTimeout(
-      Promise.resolve(
-        supabaseAdmin
-          .from('user_credits')
-          .select('credits, is_pro')
-          .eq('user_id', userId)
-          .maybeSingle(),
-      ),
-      BASE_CREDITS_TIMEOUT_MS,
-      "user-credits.base-credits",
-    )
-      .then((result) => ({ ok: true as const, result }))
-      .catch((error) => ({ ok: false as const, error }))
-
-    const [entitlement, baseCredits] = await Promise.all([
-      entitlementPromise,
-      baseCreditsPromise,
-    ])
-
-    if (entitlement) {
-      return NextResponse.json({
-        userId,
-        credits: entitlement.credits,
-        is_pro: entitlement.isPro,
-        membership_status: entitlement.membershipStatus,
-        entitlementUserId: entitlement.entitlementUserId,
-        relatedUserIds: entitlement.relatedUserIds,
-      })
-    }
-
-    if (!baseCredits.ok) {
-      console.error("[积分API] 基础积分查询超时或失败:", baseCredits.error)
-      return createSafeCreditsDegradedResponse({
-        userId,
-        code: isOperationTimeoutError(baseCredits.error) ? "CREDITS_TIMEOUT" : "CREDITS_QUERY_FAILED",
-      })
-    }
-
-    // 查询积分
-    const { data: creditData, error } = baseCredits.result
-
-    if (error) {
-      console.error(`❌ [积分API] 查询失败:`, error)
-      return createSafeCreditsDegradedResponse({
-        userId,
-        code: "CREDITS_QUERY_FAILED",
-      })
-    }
-
-    // 如果没有记录，自动创建
-    if (!creditData) {
-      console.log("🆕 [积分API] 用户无积分记录，自动创建...")
-      
-      const { data: newData, error: insertError } = await withTimeout(
-        Promise.resolve(
-          supabaseAdmin
-            .from('user_credits')
-            .upsert({
-              user_id: userId,
-              credits: 1000,
-              is_pro: false
-            })
-            .select('credits, is_pro')
-            .single(),
-        ),
-        BASE_CREDITS_TIMEOUT_MS,
-        "user-credits.create-default",
-      )
-
-      if (insertError) {
-        console.error(`❌ [积分API] 创建积分记录失败:`, insertError)
-        // 即使创建失败，也返回默认值
-        return NextResponse.json({
-          userId,
-          credits: 1000,
-          is_pro: false,
-          isNew: true,
-        })
-      }
-
-      console.log(`✅ [积分API] 新用户积分初始化成功:`, newData)
-      return NextResponse.json({
-        userId,
-        credits: newData?.credits || 1000,
-        is_pro: newData?.is_pro || false,
-        isNew: true,
-      })
-    }
-
-    console.log(`✅ [积分API] 查询成功: credits=${creditData.credits}`)
     return NextResponse.json({
       userId,
-      credits: creditData.credits,
-      is_pro: creditData.is_pro,
+      credits: account.credits,
+      is_pro: entitlement?.isPro ?? account.is_pro,
+      membership_status: entitlement?.membershipStatus ?? null,
+      entitlementUserId: account.credit_user_id,
+      relatedUserIds: entitlement?.relatedUserIds ?? [account.credit_user_id],
+      isNew: account.initialized,
     })
 
   } catch (error) {

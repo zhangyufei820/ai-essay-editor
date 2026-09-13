@@ -1,3 +1,4 @@
+import { ensureCreditAccount } from "@/lib/credit-account"
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from '@/lib/rate-limit'
@@ -66,11 +67,13 @@ export async function POST(request: NextRequest) {
 
     // 3. 以 canonical 积分账户判断是否已完成权益初始化。
     // Authing 身份桥接会先写入 user_profiles，不能再用 profile 是否存在判断新用户。
-    const { data: existingCreditAccount } = await supabaseAdmin
+    const { data: existingCreditAccount, error: existingCreditError } = await supabaseAdmin
       .from('user_credits')
       .select('user_id')
       .eq('user_id', verifiedUserId)
-      .single()
+      .maybeSingle()
+
+    if (existingCreditError) throw existingCreditError
 
     // 4. 如果是新用户，执行初始化
     if (!existingCreditAccount) {
@@ -100,21 +103,7 @@ export async function POST(request: NextRequest) {
         // 如果这里报错，通常是因为数据库没有 phone 列，或者字段类型不对
       }
 
-      // B. ✨ 赠送初始积分 (1000 分) ✨
-      // 🔥 只使用数据库中存在的字段：user_id, credits, is_pro
-      const { error: creditError } = await supabaseAdmin
-        .from('user_credits')
-        .insert({
-          user_id: verifiedUserId,
-          credits: 1000, 
-          is_pro: false
-        })
-
-      if (creditError) {
-        console.error('赠送积分失败:', creditError)
-      } else {
-        console.log("✅ [Sync] 用户赠送 1000 积分成功")
-      }
+      await ensureCreditAccount(supabaseAdmin, verifiedUserId)
 
       const resolvedReferralCode =
         referralCode ||
@@ -122,7 +111,7 @@ export async function POST(request: NextRequest) {
           ? auth.auth.user.metadata.referral_code
           : null)
 
-      if (!creditError && resolvedReferralCode) {
+      if (resolvedReferralCode) {
         try {
           const referralSuccess = await handleReferralSignup(verifiedUserId, resolvedReferralCode)
           if (referralSuccess) {
@@ -138,7 +127,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'New user initialized' })
     }
 
-    // 老用户登录，什么都不做
+    // Existing accounts retain their completed signup state.
     return NextResponse.json({ success: true, message: 'User already exists' })
 
   } catch (error) {

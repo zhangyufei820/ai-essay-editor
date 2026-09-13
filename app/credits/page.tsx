@@ -29,6 +29,7 @@ export default function CreditsPage() {
   const [isAuthed, setIsAuthed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [credits, setCredits] = useState(0)
+  const [loadError, setLoadError] = useState(false)
   const [isPro, setIsPro] = useState(false)
   const [transactions, setTransactions] = useState<CreditTransaction[]>([])
 
@@ -63,8 +64,14 @@ export default function CreditsPage() {
       setIsAuthed(true)
       if (creditsResponse.ok) {
         const data = await creditsResponse.json()
-        setCredits(data.credits || 0)
-        setIsPro(Boolean(data.is_pro))
+        if (data.degraded || typeof data.credits !== "number") {
+          setLoadError(true)
+        } else {
+          setCredits(data.credits)
+          setIsPro(Boolean(data.is_pro))
+        }
+      } else {
+        setLoadError(true)
       }
       if (transactionsResponse.ok) {
         const data = await transactionsResponse.json()
@@ -75,7 +82,7 @@ export default function CreditsPage() {
 
     loadCredits().catch((error) => {
       console.error("[CreditsPage] 加载积分失败:", error)
-      if (mounted) setLoading(false)
+      if (mounted) { setLoadError(true); setLoading(false) }
     })
 
     return () => {
@@ -96,6 +103,16 @@ export default function CreditsPage() {
     return (
       <div className="min-h-screen bg-[var(--paper-50)] px-4 py-10 font-[var(--font-sans-v2)]">
         <div className="mx-auto max-w-4xl text-sm text-[var(--ink-500)]">正在读取积分...</div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-10" role="alert">
+        <h1 className="text-xl font-semibold">积分暂时无法读取</h1>
+        <p className="my-4 text-sm">请稍后重试，账户积分以实际记录为准。</p>
+        <Button onClick={() => window.location.reload()}>重新加载</Button>
       </div>
     )
   }

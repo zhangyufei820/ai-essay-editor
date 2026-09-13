@@ -1,7 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { getProductById, getProductCredits, getProductPriceInCents, isMembershipProduct } from "@/lib/products"
 
-const MAX_CREDITS = 10_000_000
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium"] as const
 
 type PaidOrder = {
@@ -106,72 +105,36 @@ function buildGrantCandidates(order: PaidOrder, now: Date): GrantCandidate[] {
 
 async function hasExistingGrant(supabase: SupabaseClient, candidate: GrantCandidate) {
   const { data, error } = await supabase
-    .from("credit_transactions")
-    .select("id")
-    .eq("user_id", candidate.order.user_id)
-    .eq("reference_id", candidate.referenceId)
+    .from("membership_credit_grants")
+    .select("order_id")
+    .eq("order_id", candidate.order.id)
+    .eq("period", candidate.period)
     .maybeSingle()
-
   if (error) throw error
   return Boolean(data)
 }
 
 async function applyGrant(supabase: SupabaseClient, candidate: GrantCandidate) {
-  const { data: currentCredits, error: readError } = await supabase
-    .from("user_credits")
-    .select("credits, is_pro")
-    .eq("user_id", candidate.order.user_id)
-    .maybeSingle()
-
-  if (readError) throw readError
-
-  const balanceBefore = Number(currentCredits?.credits || 0)
-  const balanceAfter = balanceBefore + candidate.credits
-  if (balanceAfter > MAX_CREDITS) {
-    throw new Error(`积分超限: ${balanceAfter} > ${MAX_CREDITS}`)
-  }
-
-  if (currentCredits) {
-    const { data: updatedCredits, error: updateError } = await supabase
-      .from("user_credits")
-      .update({
-        credits: balanceAfter,
-        is_pro: true,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", candidate.order.user_id)
-      .eq("credits", balanceBefore)
-      .select("credits")
-      .maybeSingle()
-
-    if (updateError) throw updateError
-    if (!updatedCredits || Number(updatedCredits.credits) !== balanceAfter) {
-      throw new Error("积分更新冲突，请稍后重试")
-    }
-  } else {
-    const { error: insertError } = await supabase
-      .from("user_credits")
-      .insert({
-        user_id: candidate.order.user_id,
-        credits: balanceAfter,
-        is_pro: true,
-      })
-
-    if (insertError) throw insertError
-  }
-
-  const { error: txError } = await supabase.from("credit_transactions").insert({
-    user_id: candidate.order.user_id,
-    amount: candidate.credits,
-    type: "membership_grant",
-    description: candidate.description,
-    reference_id: candidate.referenceId,
-    balance_before: balanceBefore,
-    balance_after: balanceAfter,
-    order_id: candidate.order.id,
+  const { data, error } = await supabase.rpc("grant_membership_credits_once", {
+    p_order_id: candidate.order.id,
+    p_period: candidate.period,
+    p_credits: candidate.credits,
+    p_description: candidate.description,
   })
+  if (error) throw error
+  const result = Array.isArray(data) ? data[0] : data
+  if (!result || typeof result.applied !== "boolean" || typeof result.credit_user_id !== "string") {
+    throw new Error("会员积分发放返回无效数据")
+  }
+  return result as { applied: boolean; credit_user_id: string }
+}
 
-  if (txError) throw txError
+function describeGrantError(error: unknown) {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return error.message
+  }
+  return "会员积分发放失败"
 }
 
 export async function grantDueAnnualMembershipCredits(options: {
@@ -223,14 +186,18 @@ export async function grantDueAnnualMembershipCredits(options: {
           dryRun: Boolean(options.dryRun),
         })
 
-        if (!options.dryRun) {
-          await applyGrant(supabase, candidate)
+        if (options.dryRun) {
+          result.granted += 1
+        } else {
+          const grant = await applyGrant(supabase, candidate)
+          result.grants[result.grants.length - 1].userId = grant.credit_user_id
+          if (grant.applied) result.granted += 1
+          else result.skipped += 1
         }
-        result.granted += 1
       } catch (error) {
         result.errors.push({
           referenceId: candidate.referenceId,
-          error: error instanceof Error ? error.message : String(error),
+          error: describeGrantError(error),
         })
       }
     }

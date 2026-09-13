@@ -1,10 +1,11 @@
+import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { ensureCreditAccount } from "@/lib/credit-account"
 import { type NextRequest, NextResponse } from "next/server"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { createBillingAuditMetadata } from "@/lib/credits"
 import { chargeCreditsSafely } from "@/lib/billing"
 import { getMaxOutputTokensForModel, getMinimumRequiredCredits, type ModelType } from "@/lib/pricing"
 import { requireUser } from "@/lib/auth/verified-user"
-import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 
 export const maxDuration = 300
 
@@ -22,12 +23,8 @@ export async function POST(req: NextRequest) {
     const auth = await requireUser(req)
     if (auth.response) return auth.response
     const userId = auth.user!.id
-    const entitlement = await getUserEntitlementSummary(userId, {
-      email: auth.user!.email || null,
-      phone: auth.user!.phone || null,
-      metadata: auth.user!.metadata || null,
-    })
-    const realCreditUserId = entitlement?.entitlementUserId || userId
+    const creditAccount = await ensureCreditAccount(getSupabaseAdmin(), userId)
+    const realCreditUserId = creditAccount.credit_user_id
     // ==========================================
     // 限流检查
     // ==========================================

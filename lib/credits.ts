@@ -1,3 +1,4 @@
+import { ensureCreditAccount } from "@/lib/credit-account"
 import { createClient } from "@supabase/supabase-js"
 import {
   createBillingAuditMetadata,
@@ -86,46 +87,17 @@ export async function getUserCredits(
   const supabase = getSupabaseAdmin()
   const includeTotals = options.includeTotals ?? false
 
-  const { data, error } = await supabase
-    .from("user_credits")
-    .select("credits, is_pro")
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (error) {
-    console.error("[积分系统] 获取用户积分失败:", error)
+  let account
+  try {
+    account = await ensureCreditAccount(supabase, userId)
+  } catch (error) {
+    console.error("[积分系统] 获取积分账户失败:", error)
     return null
   }
+  const data = { credits: account.credits, is_pro: account.is_pro }
+  if (!includeTotals) return data
 
-  if (!data) {
-    console.log(`[积分系统] 用户 ${userId} 无积分记录，自动初始化 1000 积分`)
-    const { data: created, error: createError } = await supabase
-      .from("user_credits")
-      .upsert({ user_id: userId, credits: 1000, is_pro: false })
-      .select("credits, is_pro")
-      .single()
-
-    if (createError) {
-      console.error("[积分系统] 初始化用户积分失败:", createError)
-      return null
-    }
-
-    if (!includeTotals) {
-      return created
-    }
-
-    return {
-      ...created,
-      total_earned: 1000,
-      total_spent: 0,
-    }
-  }
-
-  if (!includeTotals) {
-    return data
-  }
-
-  const summary = await loadCreditSummary(userId, data.credits || 0)
+  const summary = await loadCreditSummary(account.credit_user_id, data.credits)
   return {
     ...data,
     ...summary,
@@ -269,34 +241,15 @@ export async function addCredits(
     console.log(`[积分系统] 入账参考ID: ${referenceId}`)
   }
 
-  let credits = await getUserCredits(userId)
-  let balanceBefore = 0
-  
-  // 如果用户积分记录不存在，先创建一条记录
-  if (!credits) {
-    console.log(`[积分系统] 用户 ${userId} 积分记录不存在，正在创建...`)
-    
-    // 🔥 直接尝试创建积分记录（使用 upsert 避免冲突）
-    const { error: insertError } = await supabase
-      .from("user_credits")
-      .upsert({
-        user_id: userId,
-        credits: 0,
-        is_pro: type === "purchase", // 购买时标记为 Pro
-      }, { onConflict: 'user_id' })
-    
-    if (insertError) {
-      console.error("[积分系统] 创建积分记录失败:", insertError)
-      return false
-    }
-    
-    // 重新获取积分记录
-    credits = await getUserCredits(userId)
-    if (!credits) {
-      console.error("[积分系统] 创建后仍无法获取积分记录")
-      return false
-    }
+  try {
+    userId = (await ensureCreditAccount(supabase, userId)).credit_user_id
+  } catch (error) {
+    console.error("[积分系统] 无法解析入账账户:", error)
+    return false
   }
+  const credits = await getUserCredits(userId)
+  if (!credits) return false
+  let balanceBefore = 0
 
   balanceBefore = credits.credits
   const balanceAfter = credits.credits + amount
