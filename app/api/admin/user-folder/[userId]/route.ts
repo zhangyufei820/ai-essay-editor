@@ -43,7 +43,7 @@ async function canViewUserFolder(verifiedViewerId: string, learningViewerId: str
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ userId: string }> | { userId: string } },
+  context: { params: Promise<{ userId: string }> },
 ) {
   try {
     const auth = await requireLearningUserId(request)

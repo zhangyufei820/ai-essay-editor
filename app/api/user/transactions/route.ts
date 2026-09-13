@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireUser } from '@/lib/auth/verified-user'
+import { resolveExactAuthingBridge } from '@/lib/user-entitlements'
 
 // 使用 Service Role Key 绕过 RLS - 延迟创建避免构建时错误
 function getSupabaseAdmin() {
@@ -44,6 +45,13 @@ export async function GET(request: NextRequest) {
     // 🔥 先检查 credit_transactions 表是否存在
     let tableExists = true
     const supabaseAdmin = getSupabaseAdmin()
+    const bridge = await resolveExactAuthingBridge(userId, supabaseAdmin)
+    const creditUserIds = bridge
+      ? [bridge.provider_user_id, bridge.supabase_user_id]
+      : [userId]
+    const transferReference = bridge
+      ? `identity-merge:${bridge.provider_user_id}:${bridge.supabase_user_id}`
+      : null
     try {
       const { error: checkError } = await supabaseAdmin
         .from('credit_transactions')
@@ -64,14 +72,18 @@ export async function GET(request: NextRequest) {
       const { data: txData, error: txError } = await supabaseAdmin
         .from('credit_transactions')
         .select('*')
-        .eq('user_id', userId)
+        .in('user_id', creditUserIds)
         .order('created_at', { ascending: false })
         .limit(50)
 
       if (!txError && txData && txData.length > 0) {
         console.log('✅ [积分记录] 从 credit_transactions 获取到', txData.length, '条记录')
         return NextResponse.json({
-          transactions: txData.map((t: any) => ({
+          // 统一账户内部划转不算新收入或消费，避免把迁移显示为积分用尽。
+          transactions: txData.filter((t: any) => !(
+            t.type === 'manual' && transferReference &&
+            (t.reference_id === `${transferReference}:in` || t.reference_id === `${transferReference}:out`)
+          )).map((t: any) => ({
             id: t.id,
             description: t.description || t.reason || '-',
             amount: t.amount,
@@ -93,7 +105,7 @@ export async function GET(request: NextRequest) {
     const { data: orders, error: _ordersError } = await supabaseAdmin
       .from('orders')
       .select('id, user_id, product_name, amount, credits_amount, status, created_at, updated_at, order_no')
-      .eq('user_id', userId)
+      .in('user_id', creditUserIds)
       .eq('status', 'paid')
       .order('created_at', { ascending: false })
       .limit(20)
@@ -133,7 +145,7 @@ export async function GET(request: NextRequest) {
       const { data: userCredits } = await supabaseAdmin
       .from('user_credits')
       .select('credits, updated_at')
-      .eq('user_id', userId)
+      .eq('user_id', bridge?.supabase_user_id || userId)
       .single()
       
       if (userCredits) {

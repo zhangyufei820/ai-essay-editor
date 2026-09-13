@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js"
 import { isSubscribedUser, resolveMembershipStatus } from "@/lib/products"
 
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
+const AUTHING_PROVIDER = "authing"
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export type EntitlementIdentity = {
   email?: string | null
@@ -34,6 +36,11 @@ export type UserEntitlementSummary = {
 
 type SupabaseAdminClient = any
 
+type AuthUserBridge = {
+  provider_user_id: string
+  supabase_user_id: string
+}
+
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -61,6 +68,27 @@ function collectIdentityContacts(identity?: EntitlementIdentity | null) {
   if (phone) phones.add(phone)
 
   return { emails, phones }
+}
+
+export async function resolveExactAuthingBridge(
+  userId: string,
+  supabase: SupabaseAdminClient,
+): Promise<AuthUserBridge | null> {
+  let query = supabase
+    .from("auth_user_bridges")
+    .select("provider_user_id, supabase_user_id")
+    .eq("provider", AUTHING_PROVIDER)
+
+  query = UUID_PATTERN.test(userId)
+    ? query.eq("supabase_user_id", userId)
+    : query.eq("provider_user_id", userId)
+
+  const { data, error } = await query.maybeSingle()
+  if (error) throw error
+
+  return typeof data?.provider_user_id === "string" && typeof data?.supabase_user_id === "string"
+    ? data
+    : null
 }
 
 export async function resolveRelatedUserIds(
@@ -111,25 +139,37 @@ export async function getUserEntitlementSummary(
   identity?: EntitlementIdentity | null,
 ): Promise<UserEntitlementSummary | null> {
   const supabase = getSupabaseAdmin()
-  const related = await resolveRelatedUserIds(userId, identity, supabase)
+  const [related, bridge] = await Promise.all([
+    resolveRelatedUserIds(userId, identity, supabase),
+    resolveExactAuthingBridge(userId, supabase),
+  ])
+  const relatedUserIds = new Set(related.userIds)
+  if (bridge) {
+    relatedUserIds.add(bridge.provider_user_id)
+    relatedUserIds.add(bridge.supabase_user_id)
+  }
+  const resolvedUserIds = Array.from(relatedUserIds)
 
-  const { data: orders, error: orderError } = await supabase
-    .from("orders")
-    .select("id, user_id, product_id, product_name, amount, created_at")
-    .in("user_id", related.userIds)
-    .eq("status", "paid")
-    .gt("amount", 0)
-    .in("product_id", MEMBERSHIP_PRODUCT_IDS)
-    .order("created_at", { ascending: false })
-    .limit(1)
+  const [orderResult, creditResult] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("id, user_id, product_id, product_name, amount, created_at")
+      .in("user_id", resolvedUserIds)
+      .eq("status", "paid")
+      .gt("amount", 0)
+      .in("product_id", MEMBERSHIP_PRODUCT_IDS)
+      .order("created_at", { ascending: false })
+      .limit(1),
+    supabase
+      .from("user_credits")
+      .select("user_id, credits, is_pro")
+      .in("user_id", resolvedUserIds),
+  ])
+
+  const { data: orders, error: orderError } = orderResult
+  const { data: creditRows, error: creditError } = creditResult
 
   if (orderError) throw orderError
-
-  const { data: creditRows, error: creditError } = await supabase
-    .from("user_credits")
-    .select("user_id, credits, is_pro")
-    .in("user_id", related.userIds)
-
   if (creditError) throw creditError
 
   const latestMembershipOrder = orders?.[0] || null
@@ -139,9 +179,21 @@ export async function getUserEntitlementSummary(
   const orderCreditRow = latestMembershipOrder
     ? creditRows?.find((row) => row.user_id === latestMembershipOrder.user_id)
     : null
+  const bridgeSourceCreditRow = bridge
+    ? creditRows?.find((row) => row.user_id === bridge.provider_user_id)
+    : null
+  const bridgedCreditRow = bridge
+    ? creditRows?.find((row) => row.user_id === bridge.supabase_user_id)
+    : null
+  const migratedBridgeCreditRow = bridgedCreditRow && (
+    !bridgeSourceCreditRow ||
+    (Number(bridgeSourceCreditRow.credits || 0) === 0 && !bridgeSourceCreditRow.is_pro)
+  )
+    ? bridgedCreditRow
+    : null
   const currentCreditRow = creditRows?.find((row) => row.user_id === userId)
   const proCreditRow = creditRows?.find((row) => resolveMembershipStatus({ is_pro: row?.is_pro }))
-  const selectedCreditRow = orderCreditRow || proCreditRow || currentCreditRow || creditRows?.[0] || null
+  const selectedCreditRow = migratedBridgeCreditRow || orderCreditRow || proCreditRow || currentCreditRow || creditRows?.[0] || null
   const membershipStatus = orderMembershipStatus || resolveMembershipStatus({ is_pro: proCreditRow?.is_pro }) || null
 
   if (!selectedCreditRow && !latestMembershipOrder) return null
@@ -149,7 +201,7 @@ export async function getUserEntitlementSummary(
   return {
     userId,
     entitlementUserId: selectedCreditRow?.user_id || latestMembershipOrder?.user_id || userId,
-    relatedUserIds: related.userIds,
+    relatedUserIds: resolvedUserIds,
     credits: Number(selectedCreditRow?.credits || 0),
     isPro: Boolean(membershipStatus || selectedCreditRow?.is_pro),
     membershipStatus,

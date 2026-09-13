@@ -31,7 +31,7 @@ async function loadOwnedAgent(agentId: string, teacherId: string) {
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ agentId: string }> | { agentId: string } },
+  context: { params: Promise<{ agentId: string }> },
 ) {
   try {
     const auth = await requireLearningUserId(request)
@@ -53,7 +53,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  context: { params: Promise<{ agentId: string }> | { agentId: string } },
+  context: { params: Promise<{ agentId: string }> },
 ) {
   try {
     const auth = await requireLearningUserId(request)
@@ -124,7 +124,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: Promise<{ agentId: string }> | { agentId: string } },
+  context: { params: Promise<{ agentId: string }> },
 ) {
   try {
     const auth = await requireLearningUserId(request)

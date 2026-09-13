@@ -1,3 +1,5 @@
+"use client"
+
 import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 /**
@@ -6,8 +8,6 @@ import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
  * 聊天输入区域的封装组件，整合输入框、附件上传、发送按钮等功能。
  * 支持多行输入、文件上传、模型选择等交互。
  */
-
-"use client"
 
 import {
   useRef,
