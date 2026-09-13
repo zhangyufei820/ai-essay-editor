@@ -61,6 +61,9 @@ export function ModelSelector({
             {currentModel.priceLabel && (
               <span className="mp-meta-tag">{currentModel.priceLabel}</span>
             )}
+            {currentModel.upstreamMarkers?.map((marker) => (
+              <span key={marker} className="mp-meta-tag">{marker}</span>
+            ))}
             {currentModel.sizes?.length && (
               <span className="mp-meta-tag">{currentModel.sizes.length} 规格</span>
             )}
@@ -123,6 +126,9 @@ export function ModelSelector({
                 {model.priceLabel && (
                   <span className="mp-model-option-tag">{model.priceLabel}</span>
                 )}
+                {model.upstreamMarkers?.map((marker) => (
+                  <span key={marker} className="mp-model-option-tag">{marker}</span>
+                ))}
                 {model.supportsFace === true && (
                   <span className="mp-model-option-tag">可过人脸</span>
                 )}

@@ -152,6 +152,15 @@ const PRICING_DISPLAY_OVERRIDES = {
     visible_vendor_name: '星人媒体',
     icon: null,
   },
+  'moon-video-2.5-720p': {
+    display_name: 'Moon Video 2.5 720P',
+    description: '人民币 ¥0.55/秒；720P，4-30秒；支持最多30张图片、10个视频、10个音频参考，满血视频生成。',
+    fixed_price_label: '¥0.55',
+    price_unit_label: '秒',
+    billing_label: '按秒计费',
+    visible_vendor_name: '星人媒体',
+    icon: null,
+  },
   'grok-video-1.5': {
     display_name: 'Grok Video 1.5',
     description: '固定人民币 ¥0.20/次，按次计费；固定 720P，支持 6/10 秒文生视频和图生视频；图生模式可上传 1 张图片（最大 20MB），不支持视频或音频参考；人脸能力未承诺，不保证。',

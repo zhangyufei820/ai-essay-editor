@@ -34,6 +34,17 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn(model, self.module.system_token_profiles(profiles)["video"])
             self.assertEqual(profiles["video"], [])
 
+    def test_moon25_b720_price_release_state_and_staging_permissions(self) -> None:
+        model = self.module.PUBLIC_MOON25_B720_VIDEO_MODEL
+        self.assertEqual(self.module.PUBLIC_VIDEO_FIXED_PRICES_CNY[model], self.module.Decimal("0.55"))
+        for rows, expected in (([], "unavailable"), ([['1', 'internal']], "staged"), ([['1', 'default,standard,pro,code,internal']], "published"), ([['2', 'default,standard,pro,code,internal']], "unavailable")):
+            with mock.patch.object(self.module, "mysql", return_value=rows):
+                self.assertEqual(self.module.moon25_b720_video_release_state(), expected)
+        profiles = {"codex": [], "claude": [], "image": [], "video": []}
+        with mock.patch.object(self.module, "mysql", return_value=[]), mock.patch.object(self.module, "moon25_b720_video_release_state", return_value="staged"):
+            self.assertIn(model, self.module.system_token_profiles(profiles)["video"])
+            self.assertEqual(profiles["video"], [])
+
     def setUp(self) -> None:
         self.module = load_sync_module()
         self.monitor_state_reader = self.module.monitor_disabled_ability_pairs
@@ -177,6 +188,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.module.PUBLIC_VIDEO_MODELS,
             (
                 "moon-video-2.5-480p",
+                "moon-video-2.5-720p",
                 "grok-video-super-720p",
                 "seedance-2.0-ld-17",
                 "seedance-sd2-fast-720p",
@@ -198,6 +210,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
     def test_staged_grok1080_is_admin_only_until_published(self) -> None:
         self.module.moon25_video_release_state = lambda: "unavailable"
+        self.module.moon25_b720_video_release_state = lambda: "unavailable"
         self.module.grok15_1080_video_release_state = lambda: "staged"
         self.module.discount_image2_release_state = lambda: "unavailable"
         self.module.gemini_ddpapi_release_state = lambda: "unavailable"
@@ -384,6 +397,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
     def test_staged_discount_image2_is_admin_only_until_published(self) -> None:
         self.module.moon25_video_release_state = lambda: "unavailable"
+        self.module.moon25_b720_video_release_state = lambda: "unavailable"
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "staged"
         self.module.gemini_ddpapi_release_state = lambda: "unavailable"
@@ -421,6 +435,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
     def test_staged_gemini_ddpapi_models_are_admin_only_until_published(self) -> None:
         self.module.moon25_video_release_state = lambda: "unavailable"
+        self.module.moon25_b720_video_release_state = lambda: "unavailable"
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "unavailable"
         self.module.gemini_ddpapi_release_state = lambda: "staged"
@@ -465,6 +480,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
     def test_staged_gpt_image25_models_are_admin_only_until_published(self) -> None:
         self.module.moon25_video_release_state = lambda: "unavailable"
+        self.module.moon25_b720_video_release_state = lambda: "unavailable"
         self.module.grok15_1080_video_release_state = lambda: "unavailable"
         self.module.discount_image2_release_state = lambda: "unavailable"
         self.module.gemini_ddpapi_release_state = lambda: "unavailable"
@@ -977,6 +993,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("models = 'seedance-sd2-fast-720p'", sql)
         self.assertIn("model_mapping = '{\"seedance-sd2-fast-720p\":\"sd2-fast-720p\"}'", sql)
         self.assertIn("models = 'grok-video-1.5'", sql)
+        self.assertIn("models = 'moon-video-2.5-720p'", sql)
+        self.assertIn("model_mapping = '{\"moon-video-2.5-720p\":\"moon-2.5-ac-b-720p\"}'", sql)
         self.assertIn("model_mapping = '{\"grok-video-1.5\":\"grok-imagine-1.5-video\"}'", sql)
         self.assertIn("models = 'grok-video-1.5-1080p'", sql)
         self.assertIn("model_mapping = '{\"grok-video-1.5-1080p\":\"grok-imagine-video-1.5\"}'", sql)

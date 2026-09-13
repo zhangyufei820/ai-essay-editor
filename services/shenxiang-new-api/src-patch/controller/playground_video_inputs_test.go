@@ -20,6 +20,8 @@ func TestPlaygroundMoon25PromptLimitMatchesModelContract(t *testing.T) {
 	}{
 		{"moon-video-2.5-480p", 15000, false},
 		{"moon-video-2.5-480p", 15001, true},
+		{"moon-video-2.5-720p", 15000, false},
+		{"moon-video-2.5-720p", 15001, true},
 		{"grok-video-1.5", 10000, false},
 		{"grok-video-1.5", 10001, true},
 	} {

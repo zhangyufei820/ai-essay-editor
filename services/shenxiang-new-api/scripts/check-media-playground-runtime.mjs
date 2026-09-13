@@ -21,6 +21,7 @@ const requiredBundleMarkers = [
   '当前模型仅支持文生图，请切换到文生图或更换支持图片编辑的模型。',
   'imageTaskTerminal',
   'grok-video-super-720p',
+  'moon-video-2.5-720p',
   'grok-video-1.5',
   'grok-video-1.5-1080p',
   'grok 4.6图片',
@@ -63,6 +64,10 @@ const requiredBundlePatterns = [
   {
     label: 'Grok Video 1.5 text and image workflows',
     pattern: /value:\s*["']grok-video-1\.5["'][\s\S]{0,1200}?workflows:\s*\[["']text["'],["']image["']\]/,
+  },
+  {
+    label: 'Moon Video 2.5 720P multimodal workflow',
+    pattern: /value:\s*["']moon-video-2\.5-720p["'][\s\S]{0,1800}?workflows:\s*\[["']text["'],["']image["']\][\s\S]{0,500}?referenceLimits:\s*\{\s*image:\s*30,\s*video:\s*10,\s*audio:\s*10\s*\}/,
   },
   {
     label: 'Grok Video 1.5 1080P official image workflow',
@@ -126,6 +131,13 @@ const expectedChannels = [
     upstream: 'grok-imagine-video-1.5',
     optionalUntilStaged: true,
     baseUrlPattern: /^https:\/\//i,
+  },
+  {
+    label: 'Moon Video 2.5 720P channel',
+    model: 'moon-video-2.5-720p',
+    upstream: 'moon-2.5-ac-b-720p',
+    optionalUntilStaged: true,
+    baseUrlPattern: /moonapix\.com/i,
   },
 ]
 

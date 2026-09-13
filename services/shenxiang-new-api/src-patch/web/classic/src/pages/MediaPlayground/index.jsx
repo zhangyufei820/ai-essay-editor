@@ -645,6 +645,7 @@ const SEEDANCE_SD2_FAST_PRICE_PER_SECOND = 0.25;
 const GROK_VIDEO_15_PRICE_PER_CALL = 0.2;
 const GROK_VIDEO_15_1080_PRICE_PER_CALL = 0.4;
 const GROK_46_VIDEO_PRICE_PER_SECOND = 0.1;
+const MOON25_B720_PRICE_PER_SECOND = 0.55;
 const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1';
 const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -987,6 +988,28 @@ function googleImageEditSizeFor(aspectRatio, imageSize, modelValue) {
 }
 
 const VIDEO_MODELS = [
+  {
+    value: 'moon-video-2.5-720p',
+    label: 'Moon Video 2.5 720P',
+    badge: '720P · 全模态',
+    sizes: ['1280x720', '720x1280'],
+    durations: Array.from({ length: 27 }, (_, index) => index + 4),
+    defaultSize: '1280x720',
+    defaultDuration: 4,
+    defaultFps: 24,
+    resolutions: ['720P'],
+    defaultResolution: '720P',
+    workflows: ['text', 'image'],
+    referenceLimits: { image: 30, video: 10, audio: 10 },
+    referenceMaxFiles: 50,
+    officialSeedanceReferences: true,
+    supportsAdvancedVideoParams: false,
+    promptMaxLength: 15000,
+    billingLabel: '按秒计费',
+    priceLabel: `¥${MOON25_B720_PRICE_PER_SECOND.toFixed(2)}/秒`,
+    upstreamMarkers: ['default', '按秒', 'openai-video'],
+    hint: '¥0.55/秒；720P，4-30秒；支持最多 30 张图片、10 个视频、10 个音频参考，满血视频生成。',
+  },
   {
     value: 'moon-video-2.5-480p',
     label: 'Moon Video 2.5 480P',
@@ -3696,13 +3719,13 @@ const MediaPlayground = () => {
       return payload;
     }
 
-    if (videoModel === 'moon-video-2.5-480p') {
+    if (videoModel === 'moon-video-2.5-720p' || videoModel === 'moon-video-2.5-480p') {
       return {
         model: videoModel,
         group: effectiveGroup,
         prompt,
         duration,
-        resolution: '480P',
+        resolution: videoModel === 'moon-video-2.5-720p' ? '720P' : '480P',
         ratio: SIZE_TO_ASPECT_RATIO[size],
       };
     }
@@ -4024,7 +4047,7 @@ const MediaPlayground = () => {
       return {
         ...payload,
         references: officialReferences,
-        prompt: videoModel === 'moon-video-2.5-480p'
+        prompt: videoModel === 'moon-video-2.5-720p' || videoModel === 'moon-video-2.5-480p'
           ? payload.prompt || ''
           : shouldForwardReferenceAliases
           ? promptWithReferenceAliases(payload.prompt || '', referenceAliases)

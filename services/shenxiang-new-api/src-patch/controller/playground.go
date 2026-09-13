@@ -237,7 +237,7 @@ func validatePlaygroundVideoPromptLimit(c *gin.Context) *types.NewAPIError {
 		return nil
 	}
 	maxRunes := playgroundPromptMaxRunes
-	if payload.Model == "moon-video-2.5-480p" {
+	if payload.Model == "moon-video-2.5-480p" || payload.Model == "moon-video-2.5-720p" {
 		maxRunes = 15000
 	}
 	if len([]rune(strings.TrimSpace(payload.Prompt))) > maxRunes {

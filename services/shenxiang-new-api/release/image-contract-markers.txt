@@ -1,5 +1,6 @@
 grok-video-1.5
 moon-video-2.5-480p
+moon-video-2.5-720p
 grok-video-1.5-1080p
 grok 4.6图片
 grok4.6视频
