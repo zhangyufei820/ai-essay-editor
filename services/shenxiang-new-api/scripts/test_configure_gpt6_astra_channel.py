@@ -147,8 +147,8 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
     def test_discount_pins_requested_primary_and_sorts_all_healthy_fallbacks(self):
         sources, reports = self.policy_fixture()
         priorities, healthy = self.module.discount_route_policy(sources, reports, {s.tag for s in sources})
-        self.assertEqual(priorities, {"xingren-plus-text-wangwang": 40, "xingren-discount-text-aihub": 30,
-                                     "xingren-plus-text-pdhlzy": 20, "xingren-gpt6-astra": 10})
+        self.assertEqual(priorities, {"xingren-gpt6-astra": 40, "xingren-discount-text-aihub": 30,
+                                     "xingren-plus-text-pdhlzy": 20, "xingren-plus-text-wangwang": 10})
         self.assertEqual(healthy, {s.tag for s in sources})
 
     def test_tool_unhealthy_only_disables_discount_not_other_groups(self):
@@ -157,7 +157,7 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
         sql = self.module.build_apply_sql(sources, {s.tag for s in sources}, probe_results=reports)
         self.assertIn("'discount','gpt-6-astra',@astra_discount_3,0,10", sql)
         self.assertIn("'plus','gpt-6-astra',@astra_plus_3,1,20", sql)
-        self.assertIn("'discount','gpt-6-astra',@astra_discount_2,1,40", sql)
+        self.assertIn("'discount','gpt-6-astra',@astra_discount_4,1,40", sql)
 
     def test_discount_only_sql_does_not_rewrite_other_groups_or_prices(self):
         sources, reports = self.policy_fixture()
