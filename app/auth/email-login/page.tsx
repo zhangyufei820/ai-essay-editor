@@ -31,6 +31,7 @@ export default function EmailLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [otpSent, setOtpSent] = useState(false)
+  const [magicLinkSent, setMagicLinkSent] = useState(false)
   const [countdown, setCountdown] = useState(0)
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export default function EmailLoginPage() {
       const response = await fetch("/api/auth/send-email-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, referralCode }),
       })
 
       const data = await response.json()
@@ -64,7 +65,11 @@ export default function EmailLoginPage() {
         throw new Error(data.error || "发送失败")
       }
 
-      setOtpSent(true)
+      if (data.verificationType === "link") {
+        setMagicLinkSent(true)
+      } else {
+        setOtpSent(true)
+      }
       setCountdown(60)
     } catch (err: any) {
       setError(err.message || "发送失败，请重试")
@@ -102,6 +107,56 @@ export default function EmailLoginPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (magicLinkSent) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center p-4 bg-gradient-to-br from-green-50 to-blue-50">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center space-y-4">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--ink-100)]">
+              <IconMember className="h-10 w-10 text-[var(--ink-600)]" />
+            </div>
+            <CardTitle className="text-2xl">登录链接已发送</CardTitle>
+            <CardDescription className="text-base">
+              请打开 <strong className="text-[var(--ink-900)]">{email}</strong> 中的邮件并点击登录链接
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert className="bg-blue-50 border-blue-200">
+              <IconInkDot className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-sm text-blue-800">
+                邮件可能需要 1-2 分钟送达，请同时检查垃圾邮件箱。链接使用后会自动返回沈翔智学。
+              </AlertDescription>
+            </Alert>
+
+            {error && (
+              <div className="rounded-[var(--radius-soft)] bg-red-50 border border-red-200 p-3 text-sm text-[var(--seal-600)]">{error}</div>
+            )}
+
+            {countdown > 0 ? (
+              <p className="text-center text-sm text-[var(--ink-500)]">{countdown}秒后可重新发送</p>
+            ) : (
+              <Button type="button" onClick={handleSendOtp} disabled={loading} className="w-full">
+                {loading ? "发送中..." : "重新发送登录链接"}
+              </Button>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full bg-transparent"
+              onClick={() => {
+                setMagicLinkSent(false)
+                setError("")
+              }}
+            >
+              修改邮箱
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   if (otpSent) {
@@ -194,8 +249,8 @@ export default function EmailLoginPage() {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--ink-100)]">
               <IconInvite className="h-7 w-7 text-[var(--ink-600)]" />
             </div>
-            <CardTitle className="text-2xl">邮箱验证码登录</CardTitle>
-            <CardDescription>输入邮箱获取验证码，无需密码</CardDescription>
+            <CardTitle className="text-2xl">邮箱登录</CardTitle>
+            <CardDescription>输入邮箱获取安全登录邮件，无需密码</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSendOtp} className="space-y-4">
@@ -216,7 +271,7 @@ export default function EmailLoginPage() {
               <Alert className="bg-[var(--ink-50)] border-[var(--ink-200)]">
                 <IconInkDot className="h-4 w-4 text-[var(--ink-600)]" />
                 <AlertDescription className="text-xs text-[var(--ink-800)]">
-                  我们会向您的邮箱发送6位数字验证码，输入验证码即可完成登录。
+                  我们会根据当前邮件服务发送验证码或安全登录链接。
                 </AlertDescription>
               </Alert>
 

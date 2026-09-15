@@ -15,6 +15,7 @@ import {
 import type React from "react"
 
 import { createClient } from "@/lib/supabase/client"
+import { getPublicAppUrl } from "@/lib/public-app-url"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
@@ -72,7 +73,7 @@ export default function SignUpPage() {
         metadata.referral_code = referralCode
       }
 
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://shenxiang.school"
+      const baseUrl = getPublicAppUrl()
       const fullRedirectUrl = `${baseUrl}/auth/callback?next=${encodeURIComponent(redirect)}`
 
       const { data, error } = await supabase.auth.signUp({

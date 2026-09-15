@@ -3,6 +3,8 @@ import { randomInt } from "crypto"
 import { emailOTPStore } from "@/lib/email-otp-store"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { logger } from "@/lib/logger"
+import { getPublicAppUrl } from "@/lib/public-app-url"
+import { createServerClient } from "@/lib/supabase/server"
 
 const RESEND_TIMEOUT_MS = 15_000
 
@@ -57,6 +59,30 @@ async function sendOTPEmail(email: string, code: string): Promise<boolean> {
   }
 }
 
+async function sendSupabaseLoginLink(email: string, referralCode: string): Promise<boolean> {
+  try {
+    const supabase = await createServerClient()
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${getPublicAppUrl()}/auth/callback`,
+        shouldCreateUser: true,
+        ...(referralCode ? { data: { referral_code: referralCode } } : {}),
+      },
+    })
+
+    if (error) {
+      logger.error("[email-login] Supabase link delivery failed", { code: error.code })
+      return false
+    }
+
+    return true
+  } catch {
+    logger.error("[email-login] Supabase link delivery failed")
+    return false
+  }
+}
+
 export async function POST(request: NextRequest) {
   // IP 限流：10次/分钟
   const ip = getClientIP(request)
@@ -71,9 +97,28 @@ export async function POST(request: NextRequest) {
       ? (body as { email?: unknown }).email
       : undefined
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
+    const referralCodeValue = typeof body === "object" && body !== null && "referralCode" in body
+      ? (body as { referralCode?: unknown }).referralCode
+      : undefined
+    const referralCode = typeof referralCodeValue === "string" && referralCodeValue.length <= 100
+      ? referralCodeValue.trim()
+      : ""
 
     if (!normalizedEmail || normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return NextResponse.json({ error: "邮箱格式不正确" }, { status: 400 })
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      const linkSent = await sendSupabaseLoginLink(normalizedEmail, referralCode)
+      if (!linkSent) {
+        return NextResponse.json({ error: "邮件发送失败" }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        verificationType: "link",
+        message: "登录链接已发送到您的邮箱",
+      })
     }
 
     // 生成验证码
@@ -104,6 +149,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      verificationType: "code",
       message: "验证码已发送到您的邮箱",
     })
   } catch {

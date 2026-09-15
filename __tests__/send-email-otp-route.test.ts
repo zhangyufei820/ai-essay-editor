@@ -3,6 +3,7 @@ import { NextRequest } from "next/server"
 const otpSet = jest.fn(() => true)
 const otpDelete = jest.fn()
 const otpCanSend = jest.fn(() => true)
+const signInWithOtpMock = jest.fn()
 
 jest.mock("@/lib/email-otp-store", () => ({
   emailOTPStore: {
@@ -16,6 +17,12 @@ jest.mock("@/lib/rate-limit", () => ({
   checkIpRateLimit: jest.fn(() => ({ allowed: true })),
   createRateLimitResponse: jest.fn(() => new Response(null, { status: 429 })),
   getClientIP: jest.fn(() => "127.0.0.1"),
+}))
+
+jest.mock("@/lib/supabase/server", () => ({
+  createServerClient: jest.fn(async () => ({
+    auth: { signInWithOtp: signInWithOtpMock },
+  })),
 }))
 
 function post(email: unknown = "student@example.com") {
@@ -32,6 +39,8 @@ describe("POST /api/auth/send-email-otp", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     process.env.RESEND_API_KEY = "test-resend-key"
+    process.env.NEXT_PUBLIC_APP_URL = "https://www.shenxiang.school"
+    signInWithOtpMock.mockResolvedValue({ error: null })
   })
 
   afterEach(() => {
@@ -74,7 +83,7 @@ describe("POST /api/auth/send-email-otp", () => {
     const requestInit = fetchSpy.mock.calls[0]?.[1]
 
     expect(response.status).toBe(200)
-    expect(json).toEqual({ success: true, message: "验证码已发送到您的邮箱" })
+    expect(json).toEqual({ success: true, verificationType: "code", message: "验证码已发送到您的邮箱" })
     expect(JSON.stringify(json)).not.toMatch(/devCode|\b\d{6}\b/)
     expect(requestInit?.signal).toBeInstanceOf(AbortSignal)
     expect(otpDelete).not.toHaveBeenCalled()
@@ -93,5 +102,27 @@ describe("POST /api/auth/send-email-otp", () => {
 
     expect(otpSet).not.toHaveBeenCalled()
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it("falls back to the Supabase login link when Resend is not configured", async () => {
+    delete process.env.RESEND_API_KEY
+    const { POST } = await import("@/app/api/auth/send-email-otp/route")
+
+    const response = await POST(post("Student@Example.com"))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      success: true,
+      verificationType: "link",
+      message: "登录链接已发送到您的邮箱",
+    })
+    expect(signInWithOtpMock).toHaveBeenCalledWith({
+      email: "student@example.com",
+      options: {
+        emailRedirectTo: "https://www.shenxiang.school/auth/callback",
+        shouldCreateUser: true,
+      },
+    })
+    expect(otpSet).not.toHaveBeenCalled()
   })
 })

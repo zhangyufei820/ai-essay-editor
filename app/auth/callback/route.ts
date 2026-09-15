@@ -1,10 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { handleReferralSignup } from "@/lib/credits"
+import { getPublicAppUrl } from "@/lib/public-app-url"
 import { safeInternalRedirectPath } from "@/lib/security/redirect"
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
+  const publicAppUrl = getPublicAppUrl()
   const code = searchParams.get("code")
   const next = safeInternalRedirectPath(searchParams.get("next"), "/chat")
   const error = searchParams.get("error")
@@ -13,7 +15,7 @@ export async function GET(request: Request) {
   // If Supabase returned an error
   if (error) {
     return NextResponse.redirect(
-      `${origin}/auth/error?error=${encodeURIComponent(error)}&description=${encodeURIComponent(error_description || "")}`,
+      `${publicAppUrl}/auth/error?error=${encodeURIComponent(error)}&description=${encodeURIComponent(error_description || "")}`,
     )
   }
 
@@ -39,15 +41,15 @@ export async function GET(request: Request) {
         console.error("[Auth Callback] 推荐注册奖励处理异常:", referralError)
       }
 
-      return NextResponse.redirect(`${origin}${next}`)
+      return NextResponse.redirect(`${publicAppUrl}${next}`)
     }
 
     // Code exchange failed
     return NextResponse.redirect(
-      `${origin}/auth/error?error=auth_callback_error&description=${encodeURIComponent(exchangeError.message)}`,
+      `${publicAppUrl}/auth/error?error=auth_callback_error&description=${encodeURIComponent(exchangeError.message)}`,
     )
   }
 
   // No code provided
-  return NextResponse.redirect(`${origin}/auth/error?error=missing_code`)
+  return NextResponse.redirect(`${publicAppUrl}/auth/error?error=missing_code`)
 }

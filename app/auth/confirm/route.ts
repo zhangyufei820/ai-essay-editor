@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
 import { handleReferralSignup } from "@/lib/credits"
+import { getPublicAppUrl } from "@/lib/public-app-url"
 import { createClient } from "@/lib/supabase/server"
 import { safeInternalRedirectPath } from "@/lib/security/redirect"
 
@@ -10,8 +11,7 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as EmailOtpType | null
   const next = safeInternalRedirectPath(searchParams.get("next"), "/chat")
 
-  const redirectTo = request.nextUrl.clone()
-  redirectTo.pathname = next
+  const redirectTo = new URL(next, getPublicAppUrl())
   redirectTo.searchParams.delete("token_hash")
   redirectTo.searchParams.delete("type")
 
