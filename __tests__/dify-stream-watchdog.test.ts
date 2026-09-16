@@ -158,4 +158,16 @@ describe("Dify stream route lifecycle", () => {
     expect(route).toContain('status: "failed"')
     expect(route).toContain('failure_phase: "response_body"')
   })
+
+  it("does not let terminal task tracing hold the user response open indefinitely", () => {
+    const route = readSource("app/api/dify-chat/route.ts")
+    const trace = readSource("lib/ai-task-trace.ts")
+
+    expect(route).toContain("TASK_TRACE_FINALIZE_TIMEOUT_MS = 4_000")
+    expect(route).toContain("await withTimeout(")
+    expect(route).toContain('"dify-chat.final-task-trace"')
+    expect(route).toContain("nodeEvents: bufferedNodeEvents")
+    expect(route).not.toContain("await replaceTaskNodeEvents(taskRun.id, bufferedNodeEvents)")
+    expect(trace).toContain("patch.node_events = input.nodeEvents.slice(-80)")
+  })
 })

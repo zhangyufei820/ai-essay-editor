@@ -30,6 +30,7 @@ import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 import { requireUser } from "@/lib/auth/verified-user"
 import { getUserEntitlementSummary, resolveRelatedUserIds } from "@/lib/user-entitlements"
 import { isConfiguredAdminUser } from "@/lib/admin-auth"
+import { withTimeout } from "@/lib/server-timeout"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { hasUsefulOpenClawResult, sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
@@ -67,7 +68,6 @@ import {
   createTaskRun,
   extractArtifactsFromText,
   extractArtifactsFromUnknown,
-  replaceTaskNodeEvents,
   sanitizeForTrace,
   updateTaskRun,
 } from "@/lib/ai-task-trace"
@@ -713,6 +713,7 @@ const DEFAULT_DIFY_STREAM_IDLE_TIMEOUT_MS = readPositiveTimeoutMs(process.env.DI
 const LONG_DIFY_STREAM_IDLE_TIMEOUT_MS = readPositiveTimeoutMs(process.env.DIFY_LONG_STREAM_IDLE_TIMEOUT_MS, 600_000)
 const DEFAULT_DIFY_STREAM_MAX_DURATION_MS = readPositiveTimeoutMs(process.env.DIFY_STREAM_MAX_DURATION_MS, 600_000)
 const LONG_DIFY_STREAM_MAX_DURATION_MS = readPositiveTimeoutMs(process.env.DIFY_LONG_STREAM_MAX_DURATION_MS, 840_000)
+const TASK_TRACE_FINALIZE_TIMEOUT_MS = 4_000
 const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
 const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
 const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000
@@ -4806,28 +4807,34 @@ export async function POST(request: NextRequest) {
       }
 
       const finalFailed = Boolean(workflowNodeFailure) || !hasReceivedContent
-      if (bufferedNodeEvents.length > 0) {
-        await replaceTaskNodeEvents(taskRun.id, bufferedNodeEvents)
-      }
       taskCompleted = true
-      await updateTaskRun(taskRun.id, {
-        status: finalFailed ? "failed" : "succeeded",
-        stage: workflowNodeFailure ? "任务处理失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
-        progress: 100,
-        conversationId: conversationId || undefined,
-        artifacts: extractArtifactsFromText(fullResponseText),
-        errorMessage: workflowNodeFailure?.message || (hasReceivedContent ? null : "流结束但没有返回内容"),
-        errorCode: workflowNodeFailure?.code || (hasReceivedContent ? null : "EMPTY_STREAM"),
-        metadata: {
-          total_tokens: totalTokens,
-          prompt_tokens: promptTokens,
-          completion_tokens: completionTokens,
-          response_length: fullResponseText.length,
-          has_received_content: hasReceivedContent,
-          node_failure: workflowNodeFailure,
-          dify_response_mode: actualDifyResponseMode,
-        },
-      })
+      try {
+        await withTimeout(
+          updateTaskRun(taskRun.id, {
+            status: finalFailed ? "failed" : "succeeded",
+            stage: workflowNodeFailure ? "任务处理失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
+            progress: 100,
+            conversationId: conversationId || undefined,
+            artifacts: extractArtifactsFromText(fullResponseText),
+            errorMessage: workflowNodeFailure?.message || (hasReceivedContent ? null : "流结束但没有返回内容"),
+            errorCode: workflowNodeFailure?.code || (hasReceivedContent ? null : "EMPTY_STREAM"),
+            nodeEvents: bufferedNodeEvents,
+            metadata: {
+              total_tokens: totalTokens,
+              prompt_tokens: promptTokens,
+              completion_tokens: completionTokens,
+              response_length: fullResponseText.length,
+              has_received_content: hasReceivedContent,
+              node_failure: workflowNodeFailure,
+              dify_response_mode: actualDifyResponseMode,
+            },
+          }),
+          TASK_TRACE_FINALIZE_TIMEOUT_MS,
+          "dify-chat.final-task-trace",
+        )
+      } catch (error) {
+        console.warn("[AI Task Trace] terminal update timed out or failed:", error instanceof Error ? error.message : String(error))
+      }
       logPerf(taskRun.requestId, "stream_end", apiStartedAt, {
         responseLength: fullResponseText.length,
         nodeEvents: bufferedNodeEvents.length,

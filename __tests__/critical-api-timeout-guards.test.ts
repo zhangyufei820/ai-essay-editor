@@ -1,5 +1,6 @@
 import { readFileSync } from "fs"
 import path from "path"
+import { OperationTimeoutError, withTimeout } from "@/lib/server-timeout"
 
 const root = process.cwd()
 const read = (relativePath: string) => readFileSync(path.join(root, relativePath), "utf8")
@@ -13,6 +14,24 @@ describe("critical API timeout guards", () => {
     expect(source).toContain("export async function withTimeout")
     expect(source).toContain("Promise.race")
     expect(source).toContain("timer.unref?.()")
+  })
+
+  it("releases callers when a persistence promise never settles", async () => {
+    jest.useFakeTimers()
+    try {
+      const pending = withTimeout(new Promise<never>(() => undefined), 4_000, "dify-chat.final-task-trace")
+      const rejected = expect(pending).rejects.toEqual(expect.objectContaining({
+        name: "OperationTimeoutError",
+        code: "OPERATION_TIMEOUT",
+        operation: "dify-chat.final-task-trace",
+        timeoutMs: 4_000,
+      } satisfies Partial<OperationTimeoutError>))
+
+      await jest.advanceTimersByTimeAsync(4_000)
+      await rejected
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   // Credit account and membership timeout behavior is exercised with fake

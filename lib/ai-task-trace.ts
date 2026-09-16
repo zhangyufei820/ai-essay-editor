@@ -104,6 +104,7 @@ type UpdateTaskRunInput = {
   errorCode?: string | null
   sanitizedError?: Record<string, unknown> | null
   metadata?: Record<string, unknown>
+  nodeEvents?: Array<Omit<TaskNodeEvent, "created_at">>
 }
 
 const SECRET_PATTERNS = [
@@ -380,6 +381,12 @@ export async function updateTaskRun(id: string, input: UpdateTaskRunInput) {
   if (input.sanitizedError !== undefined) patch.sanitized_error = sanitizeForTrace(input.sanitizedError)
   if (input.metadata !== undefined) patch.metadata = sanitizeForTrace(input.metadata)
   if (input.artifacts !== undefined) patch.artifacts = sanitizeForTrace(input.artifacts)
+  if (input.nodeEvents !== undefined) {
+    patch.node_events = input.nodeEvents.slice(-80).map((event) => sanitizeForTrace({
+      ...event,
+      created_at: now,
+    }))
+  }
 
   const { error } = await supabase.from("ai_task_runs").update(patch).eq("id", id)
   if (error) {
