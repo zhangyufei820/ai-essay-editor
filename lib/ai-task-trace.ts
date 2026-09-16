@@ -388,7 +388,12 @@ export async function updateTaskRun(id: string, input: UpdateTaskRunInput) {
     }))
   }
 
-  const { error } = await supabase.from("ai_task_runs").update(patch).eq("id", id)
+  let updateQuery = supabase.from("ai_task_runs").update(patch).eq("id", id)
+  if (input.status === "queued" || input.status === "running") {
+    updateQuery = updateQuery.is("completed_at", null)
+  }
+
+  const { error } = await updateQuery
   if (error) {
     if (error.code === "42P01") taskTableAvailable = false
     console.warn("[AI Task Trace] update skipped:", error.message)

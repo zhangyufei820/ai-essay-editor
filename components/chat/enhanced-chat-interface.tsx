@@ -594,11 +594,14 @@ function normalizeChatTaskFailureMessage(message: string, model?: string) {
   return sanitizePublicAiError(getSafeUpstreamErrorMessage(message, fallback) || message, fallback)
 }
 
+const TASK_STATUS_LOOKUP_TIMEOUT_MS = 4_000
+
 async function getTaskFailureMessage(requestId: string, model: string): Promise<{ message: string; status?: string } | null> {
   if (!requestId) return null
   try {
     const res = await fetch(`/api/task-status?requestId=${encodeURIComponent(requestId)}&limit=1`, {
       headers: await getVerifiedAuthHeaders(),
+      signal: AbortSignal.timeout(TASK_STATUS_LOOKUP_TIMEOUT_MS),
     })
     if (!res.ok) return null
     const payload = await res.json()
@@ -615,10 +618,7 @@ async function getTaskFailureMessage(requestId: string, model: string): Promise<
       return { message: `${modelLabel} 任务没有正常完成。`, status }
     }
     if (["queued", "running"].includes(task.status)) {
-      return {
-        message: stage ? `${modelLabel} 任务仍在处理中：${stage}` : `${modelLabel} 任务仍在处理中，请稍后刷新会话查看结果。`,
-        status,
-      }
+      return null
     }
     if (task.status === "succeeded") {
       return {

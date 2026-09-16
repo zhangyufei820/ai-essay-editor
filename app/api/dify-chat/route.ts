@@ -4808,33 +4808,36 @@ export async function POST(request: NextRequest) {
 
       const finalFailed = Boolean(workflowNodeFailure) || !hasReceivedContent
       taskCompleted = true
-      try {
-        await withTimeout(
-          updateTaskRun(taskRun.id, {
-            status: finalFailed ? "failed" : "succeeded",
-            stage: workflowNodeFailure ? "任务处理失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
-            progress: 100,
-            conversationId: conversationId || undefined,
-            artifacts: extractArtifactsFromText(fullResponseText),
-            errorMessage: workflowNodeFailure?.message || (hasReceivedContent ? null : "流结束但没有返回内容"),
-            errorCode: workflowNodeFailure?.code || (hasReceivedContent ? null : "EMPTY_STREAM"),
-            nodeEvents: bufferedNodeEvents,
-            metadata: {
-              total_tokens: totalTokens,
-              prompt_tokens: promptTokens,
-              completion_tokens: completionTokens,
-              response_length: fullResponseText.length,
-              has_received_content: hasReceivedContent,
-              node_failure: workflowNodeFailure,
-              dify_response_mode: actualDifyResponseMode,
-            },
-          }),
-          TASK_TRACE_FINALIZE_TIMEOUT_MS,
-          "dify-chat.final-task-trace",
-        )
-      } catch (error) {
-        console.warn("[AI Task Trace] terminal update timed out or failed:", error instanceof Error ? error.message : String(error))
-      }
+      fireAndForget(
+        "AI Task Trace terminal",
+        taskRunCreatePromise
+          .catch((error) => {
+            console.warn("[AI Task Trace] create before terminal update failed:", error instanceof Error ? error.message : String(error))
+          })
+          .then(() => withTimeout(
+            updateTaskRun(taskRun.id, {
+              status: finalFailed ? "failed" : "succeeded",
+              stage: workflowNodeFailure ? "任务处理失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
+              progress: 100,
+              conversationId: conversationId || undefined,
+              artifacts: extractArtifactsFromText(fullResponseText),
+              errorMessage: workflowNodeFailure?.message || (hasReceivedContent ? null : "流结束但没有返回内容"),
+              errorCode: workflowNodeFailure?.code || (hasReceivedContent ? null : "EMPTY_STREAM"),
+              nodeEvents: bufferedNodeEvents,
+              metadata: {
+                total_tokens: totalTokens,
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+                response_length: fullResponseText.length,
+                has_received_content: hasReceivedContent,
+                node_failure: workflowNodeFailure,
+                dify_response_mode: actualDifyResponseMode,
+              },
+            }),
+            TASK_TRACE_FINALIZE_TIMEOUT_MS,
+            "dify-chat.final-task-trace",
+          )),
+      )
       logPerf(taskRun.requestId, "stream_end", apiStartedAt, {
         responseLength: fullResponseText.length,
         nodeEvents: bufferedNodeEvents.length,

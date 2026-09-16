@@ -69,6 +69,26 @@ describe("critical API timeout guards", () => {
     expect(source).not.toContain("for (const file of files) {\n        try {")
   })
 
+  it("bounds task status reads so chat error handling can always finish", () => {
+    const route = read("app/api/task-status/route.ts")
+    const chat = read("components/chat/enhanced-chat-interface.tsx")
+
+    expect(route).toContain("withTimeout(requireUser(request), AUTH_TIMEOUT_MS")
+    expect(route).toContain("TASK_STATUS_QUERY_TIMEOUT_MS = 4_000")
+    expect(route).toContain('"task-status.query"')
+    expect(route).toContain('code: "TASK_STATUS_UNAVAILABLE"')
+    expect(chat).toContain("TASK_STATUS_LOOKUP_TIMEOUT_MS = 4_000")
+    expect(chat).toContain("signal: AbortSignal.timeout(TASK_STATUS_LOOKUP_TIMEOUT_MS)")
+    expect(chat).toContain('if (["queued", "running"].includes(task.status)) {\n      return null')
+  })
+
+  it("prevents late non-terminal trace writes from reopening completed tasks", () => {
+    const trace = read("lib/ai-task-trace.ts")
+
+    expect(trace).toContain('input.status === "queued" || input.status === "running"')
+    expect(trace).toContain('updateQuery = updateQuery.is("completed_at", null)')
+  })
+
   it("bounds remaining server-side HTTP calls without changing their business flow", () => {
     const cases = [
       ["lib/image-task-refunds.ts", "IMAGE_TASK_QUERY_TIMEOUT_MS"],

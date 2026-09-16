@@ -164,7 +164,10 @@ describe("Dify stream route lifecycle", () => {
     const trace = readSource("lib/ai-task-trace.ts")
 
     expect(route).toContain("TASK_TRACE_FINALIZE_TIMEOUT_MS = 4_000")
-    expect(route).toContain("await withTimeout(")
+    expect(route).toContain('fireAndForget(\n        "AI Task Trace terminal",')
+    expect(route).toContain("taskRunCreatePromise\n          .catch")
+    expect(route).toContain("create before terminal update failed")
+    expect(route).toContain("withTimeout(")
     expect(route).toContain('"dify-chat.final-task-trace"')
     expect(route).toContain("nodeEvents: bufferedNodeEvents")
     expect(route).not.toContain("await replaceTaskNodeEvents(taskRun.id, bufferedNodeEvents)")
