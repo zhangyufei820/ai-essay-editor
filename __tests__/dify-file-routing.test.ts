@@ -123,6 +123,62 @@ describe("Dify terminal failures", () => {
       message: "Invalid upload file",
     })?.code).toBe("DIFY_INVALID_UPLOAD_FILE")
   })
+
+  it("detects provider failures nested in a workflow marked succeeded", () => {
+    const failure = getDifyTerminalFailure({
+      event: "workflow_finished",
+      data: {
+        status: "succeeded",
+        outputs: {
+          error: "sx-image-vision returned 503; fallback user quota is not enough",
+        },
+      },
+    })
+
+    expect(failure).toEqual(expect.objectContaining({
+      code: "DIFY_UPSTREAM_UNAVAILABLE",
+      publicMessage: "作文批改服务暂时不可用，请稍后重试。本次未扣费。",
+    }))
+  })
+
+  it("keeps ordinary successful workflow output out of terminal failure handling", () => {
+    expect(getDifyTerminalFailure({
+      event: "workflow_finished",
+      data: {
+        status: "succeeded",
+        outputs: { result: "作文批改报告：文章结构清晰，建议补充细节。" },
+      },
+    })).toBeNull()
+  })
+
+  it("leaves partial success available for caller-specific output validation", () => {
+    const event = {
+      event: "workflow_finished",
+      data: {
+        status: "partial-succeeded",
+        outputs: { answer: "optional audio failed but the word card is usable" },
+      },
+    }
+
+    expect(getDifyTerminalFailure(event)).toBeNull()
+  })
+
+  it("detects an explicit failure attached to message_end", () => {
+    expect(getDifyTerminalFailure({
+      event: "message_end",
+      status: "failed",
+      error: "provider error: status code 503",
+    })).toEqual(expect.objectContaining({ code: "DIFY_UPSTREAM_UNAVAILABLE" }))
+  })
+
+  it("uses caller-specific public copy for non-essay routes", () => {
+    expect(getDifyTerminalFailure({
+      event: "error",
+      message: "provider error: status code 503",
+    }, {
+      publicMessage: "服务暂时不可用，请稍后重试。本次未扣费。",
+    })?.publicMessage).toBe("服务暂时不可用，请稍后重试。本次未扣费。")
+  })
 })
 
 describe("Workflow document extraction", () => {
@@ -159,7 +215,14 @@ describe("Dify file routing integration", () => {
     expect(route).toContain("hasCompleteDifyFileMetadata(difyFileIds, fileAttachments)")
     expect(route).toContain("hasCompleteWorkflowDocumentText(difyFileIds, fileAttachments)")
     expect(route).toContain("buildWorkflowSkillQuery(effectiveQuery, workflowSkillId")
-    expect(route).toContain("const terminalFailure = getDifyTerminalFailure(json)")
+    expect(route).toContain("const terminalFailure = getDifyTerminalFailure(json, {")
     expect(route).toContain("controller.terminate()")
+    expect(route).toContain("shouldBufferEssayCorrection")
+    expect(route).toContain('code: "DIFY_INVALID_ESSAY_RESULT"')
+    expect(route).toContain("isValidEssayCorrectionResult(responseText)")
+    expect(route.match(/await processDifyTerminalEvent\(json, controller\)/g)).toHaveLength(2)
+    expect(route).toContain("[terminalEssayText]")
+    expect(route).toContain('const nodeFailed = ["failed", "error"].includes(nodeStatus)')
+    expect(route).toContain('(shouldBufferEssayCorrection && ["exception", "cancelled", "canceled", "stopped"].includes(nodeStatus))')
   })
 })

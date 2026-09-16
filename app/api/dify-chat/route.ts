@@ -43,7 +43,16 @@ import {
   hasCompleteWorkflowDocumentText,
 } from "@/lib/dify-file-routing"
 import { getDifyTerminalFailure } from "@/lib/dify-stream-failure"
+import {
+  DifyStreamTimeoutError,
+  withDifyStreamWatchdog,
+  type DifyStreamTimeoutReason,
+} from "@/lib/dify-stream-watchdog"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
+import {
+  canRecoverPartialEssayCorrection,
+  isValidEssayCorrectionResult,
+} from "@/lib/essay-correction-result"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
 import { evaluateOpenClawRuntimeRequest } from "@/lib/openclaw-runtime-guard"
@@ -693,9 +702,17 @@ function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {
 const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
   || "https://api.dify.ai/v1"
+function readPositiveTimeoutMs(value: string | undefined, fallback: number) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
 const DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS = 120_000
-const DEFAULT_DIFY_BLOCKING_RESPONSE_TIMEOUT_MS = Number(process.env.DIFY_BLOCKING_RESPONSE_TIMEOUT_MS || 600_000)
+const DEFAULT_DIFY_BLOCKING_RESPONSE_TIMEOUT_MS = readPositiveTimeoutMs(process.env.DIFY_BLOCKING_RESPONSE_TIMEOUT_MS, 600_000)
 const OPENCLAW_FIRST_BYTE_TIMEOUT_MS = 900_000
+const DEFAULT_DIFY_STREAM_IDLE_TIMEOUT_MS = readPositiveTimeoutMs(process.env.DIFY_STREAM_IDLE_TIMEOUT_MS, 180_000)
+const LONG_DIFY_STREAM_IDLE_TIMEOUT_MS = readPositiveTimeoutMs(process.env.DIFY_LONG_STREAM_IDLE_TIMEOUT_MS, 600_000)
+const DEFAULT_DIFY_STREAM_MAX_DURATION_MS = readPositiveTimeoutMs(process.env.DIFY_STREAM_MAX_DURATION_MS, 600_000)
+const LONG_DIFY_STREAM_MAX_DURATION_MS = readPositiveTimeoutMs(process.env.DIFY_LONG_STREAM_MAX_DURATION_MS, 840_000)
 const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
 const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
 const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000
@@ -849,120 +866,8 @@ function getSupabaseAdmin() {
  * @returns true = 有效响应，应该扣费；false = 无效响应，不扣费
  */
 function validateEssayCorrectionResponse(responseText: string, modelType: ModelType): boolean {
-  // 如果响应为空或太短，不扣费
-  if (!responseText || responseText.length < 100) {
-    console.log(`⚠️ [验证] 响应内容过短 (${responseText?.length || 0} 字符)，不扣费`)
-    return false
-  }
-  
-  // 🔥 检测无效响应的关键词（AI没有识别到文档时的常见回复）
-  const invalidPatterns = [
-    /没有.*?提供.*?文本/i,
-    /没有.*?识别.*?内容/i,
-    /无法.*?识别.*?文档/i,
-    /请.*?提供.*?作文/i,
-    /请.*?上传.*?文档/i,
-    /没有.*?收到.*?作文/i,
-    /未.*?检测到.*?内容/i,
-    /没有.*?找到.*?文本/i,
-    /请.*?输入.*?作文/i,
-    /无法.*?读取.*?文件/i,
-    /文档.*?为空/i,
-    /内容.*?为空/i,
-    /没有.*?文字/i,
-    /图片.*?无法.*?识别/i,
-    /OCR.*?失败/i,
-    /不显示.*?提供.*?文本/i,
-    // 🔥 新增：检测"评分全为0"的无效响应
-    /您尚未提供.*?作文/i,
-    /尚未提供.*?内容/i,
-    /无法评价/i,
-    /无法统计/i,
-    /无法进行.*?分析/i,
-    /无法判定/i,
-    /未提供.*?作文/i,
-    /未提供.*?内容/i,
-    /需要.*?作文.*?文本/i,
-    /缺少.*?作文/i,
-  ]
-  
-  // 检查是否匹配无效模式
-  for (const pattern of invalidPatterns) {
-    if (pattern.test(responseText)) {
-      console.log(`⚠️ [验证] 检测到无效响应模式: ${pattern}`)
-      return false
-    }
-  }
-  
-  // 🔥 新增：检测"综合总分为0"的情况
-  // 匹配类似 "综合总分 100% 0" 或 "得分 0" 的模式
-  const zeroScorePatterns = [
-    /综合总分.*?100%.*?0[^\d]/,
-    /综合.*?得分.*?[：:]\s*0[^\d]/,
-    /总分.*?[：:]\s*0[^\d]/,
-    /等级判定.*?无法判定/,
-  ]
-  
-  let zeroScoreCount = 0
-  for (const pattern of zeroScorePatterns) {
-    if (pattern.test(responseText)) {
-      zeroScoreCount++
-    }
-  }
-  
-  // 如果检测到多个"0分"指标，说明是无效响应
-  if (zeroScoreCount >= 2) {
-    console.log(`⚠️ [验证] 检测到评分全为0的无效响应 (${zeroScoreCount}个0分指标)`)
-    return false
-  }
-  
-  // 🔥 检测有效响应的关键词（作文批改应该包含的内容）
-  const validIndicators = [
-    /批改/,
-    /评分/,
-    /得分/,
-    /分数/,
-    /优点/,
-    /缺点/,
-    /建议/,
-    /修改/,
-    /润色/,
-    /原文/,
-    /总评/,
-    /点评/,
-    /结构/,
-    /语言/,
-    /内容/,
-    /主题/,
-    /开头/,
-    /结尾/,
-    /段落/,
-  ]
-  
-  // 至少要匹配3个有效指标才认为是有效的批改结果
-  let validCount = 0
-  for (const indicator of validIndicators) {
-    if (indicator.test(responseText)) {
-      validCount++
-    }
-  }
-  
-  if (validCount < 3) {
-    console.log(`⚠️ [验证] 有效指标不足 (${validCount}/3)，可能不是有效的批改结果`)
-    return false
-  }
-  
-  // 🔥 新增：检查是否有实际的分数（非0分）
-  // 匹配类似 "得分 15" 或 "分数：18" 的模式
-  const hasRealScore = /得分.*?[1-9]\d*|分数.*?[1-9]\d*|[1-9]\d*\s*分/.test(responseText)
-  
-  if (!hasRealScore) {
-    console.log(`⚠️ [验证] 未检测到有效分数，可能是无效批改`)
-    return false
-  }
-  
-  console.log(`✅ [验证] 响应有效，包含 ${validCount} 个批改指标，且有实际分数`)
-  return true
+  if (modelType !== "standard") return true
+  return isValidEssayCorrectionResult(responseText)
 }
 
 const WORKFLOW_TERMINAL_STATUSES = new Set([
@@ -3454,6 +3359,13 @@ export async function POST(request: NextRequest) {
       : []
     const difyFiles = buildDifyLocalFileObjects(difyFileIds, fileAttachments)
     const fileUrls = pickUrlStrings(body.fileUrls)
+    // Image/file essay requests need an all-or-nothing result. Buffer their
+    // answer until the workflow finishes so a provider fallback placeholder
+    // cannot be shown or charged as a grading report.
+    const shouldBufferEssayCorrection = model === "standard" && (difyFileIds.length > 0 || fileUrls.length > 0)
+    const difyFailurePublicMessage = model === "standard"
+      ? "作文批改服务暂时不可用，请稍后重试。本次未扣费。"
+      : "服务暂时不可用，请稍后重试。本次未扣费。"
 
     const modelPrefix = workflowSkillId || model || "general-chat"
     const requestedModelType = (model || "general-chat") as ModelType
@@ -4035,7 +3947,17 @@ export async function POST(request: NextRequest) {
       firstByteReceived: boolean
       timeoutId: ReturnType<typeof setTimeout> | null
       controller: AbortController | null
-    } = { firstByteReceived: false, timeoutId: null, controller: null }
+      timeoutReason: "first_byte" | DifyStreamTimeoutReason | null
+      timeoutCode: string | null
+      timeoutMessage: string | null
+    } = {
+      firstByteReceived: false,
+      timeoutId: null,
+      controller: null,
+      timeoutReason: null,
+      timeoutCode: null,
+      timeoutMessage: null,
+    }
     const useBlockingDifyChat =
       (process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true" ||
         (model === "open-claw" && process.env.DIFY_OPENCLAW_FORCE_BLOCKING_MODE === "true") ||
@@ -4187,11 +4109,14 @@ export async function POST(request: NextRequest) {
         const timeoutMessage = useBlockingDifyChat
           ? `请求超时：Dify 服务在 ${Math.round(firstByteTimeoutMs / 1000)} 秒内未完成响应`
           : `请求超时：Dify 服务在 ${Math.round(firstByteTimeoutMs / 1000)} 秒内未响应`
+        streamStatus.timeoutCode = timeoutCode
+        streamStatus.timeoutMessage = timeoutMessage
 
         // GPT Image 与 OpenClaw 大型 PPT 任务经常超过 120 秒才返回首字节。
         streamStatus.controller = new AbortController()
         streamStatus.timeoutId = setTimeout(() => {
             if (!streamStatus.firstByteReceived) {
+                streamStatus.timeoutReason = "first_byte"
                 console.warn(`⏰ [Dify超时] ${Math.round(firstByteTimeoutMs / 1000)}秒内未完成${useBlockingDifyChat ? "blocking响应" : "首字节"}，中断请求 model=${model}`)
                 streamStatus.controller?.abort()
             }
@@ -4514,6 +4439,7 @@ export async function POST(request: NextRequest) {
     let clientAborted = false
     let taskCompleted = false
     let workflowNodeFailure: { message: string; code: string } | null = null
+    let essayDisplaySent = false
     let allInOneDisplaySent = false
     let allInOneStreamedAnswer = false
     let finalNodeOutputText = ""
@@ -4527,6 +4453,13 @@ export async function POST(request: NextRequest) {
       status?: string
       workflow_run_id?: string
     }> = []
+
+    const clearFirstByteTimeout = () => {
+      if (streamStatus.timeoutId) {
+        clearTimeout(streamStatus.timeoutId)
+        streamStatus.timeoutId = null
+      }
+    }
 
     const cleanOpenClawAnswerForDisplay = (rawValue: string) =>
       rewriteOpenClawMediaReferencesWithSignedUrls(sanitizeDifyAnswerForModel(rawValue, model), undefined, userId)
@@ -4721,6 +4654,31 @@ export async function POST(request: NextRequest) {
 
     const applyBlockingDifyPayload = async (payload: unknown, controller: SseByteController) => {
       const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+      const rawAnswer = sanitizeDifyAnswerForModel(extractDifyTextOutput(payload), model)
+      const answer = model === "open-claw"
+        ? rewriteOpenClawMediaReferencesWithSignedUrls(rawAnswer, undefined, userId)
+        : isAllInOneAgent
+          ? normalizeAllInOneAgentDisplay(rawAnswer)
+          : rawAnswer
+      const terminalFailure = getDifyTerminalFailure(
+        { event: "workflow_finished", data: record },
+        {
+          publicMessage: difyFailurePublicMessage,
+        },
+      )
+      const hasValidEssayFallback = shouldBufferEssayCorrection && canRecoverPartialEssayCorrection(
+        { event: "workflow_finished", data: record },
+        [answer],
+      )
+      if (terminalFailure && !hasValidEssayFallback) {
+        workflowNodeFailure = {
+          message: terminalFailure.publicMessage,
+          code: terminalFailure.code,
+        }
+        enqueueSseError(controller, terminalFailure.publicMessage, terminalFailure.code)
+        return
+      }
+
       const parsedUsage = parseDifyUsage(payload)
       latestParsedUsage = parsedUsage
       totalTokens = parsedUsage.totalTokens
@@ -4734,13 +4692,6 @@ export async function POST(request: NextRequest) {
           : ""
       if (rawConversationId) conversationId = rawConversationId
 
-      const rawAnswer = sanitizeDifyAnswerForModel(extractDifyTextOutput(payload), model)
-      const answer = model === "open-claw"
-        ? rewriteOpenClawMediaReferencesWithSignedUrls(rawAnswer, undefined, userId)
-        : isAllInOneAgent
-          ? normalizeAllInOneAgentDisplay(rawAnswer)
-          : rawAnswer
-
       if (conversationId) {
         enqueueSseEvent(controller, {
           event: "conversation",
@@ -4749,7 +4700,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (answer.trim()) {
-        enqueueSseAnswer(controller, answer)
+        if (!shouldBufferEssayCorrection) {
+          enqueueSseAnswer(controller, answer)
+        }
         fullResponseText = answer
         hasReceivedContent = true
       }
@@ -4784,6 +4737,30 @@ export async function POST(request: NextRequest) {
     }
 
     const finalizeDifyChatResponse = async (controller: SseByteController, stagePrefix = "任务完成") => {
+      if (taskCompleted) return
+      clearFirstByteTimeout()
+
+      if (shouldBufferEssayCorrection && !workflowNodeFailure) {
+        // A workflow may expose its final answer only on node_finished. Fold
+        // that fallback into the same validation path as streamed chunks.
+        if (!hasReceivedContent && finalNodeOutputText.trim()) {
+          fullResponseText = finalNodeOutputText
+          hasReceivedContent = true
+        }
+
+        if (!validateEssayCorrectionResponse(fullResponseText, "standard")) {
+          const message = "作文批改本次没有返回有效结果，请重新提交。本次未扣费。"
+          workflowNodeFailure = {
+            message,
+            code: "DIFY_INVALID_ESSAY_RESULT",
+          }
+          enqueueSseError(controller, message, workflowNodeFailure.code)
+        } else if (fullResponseText.trim() && !essayDisplaySent) {
+          enqueueSseAnswer(controller, fullResponseText)
+          essayDisplaySent = true
+        }
+      }
+
       if (actualDifyResponseMode === "streaming") {
         if (shouldBufferForDisplay && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
           enqueueAllInOneDisplayOnce(controller, fullResponseText)
@@ -4793,7 +4770,7 @@ export async function POST(request: NextRequest) {
           if (openClawDisplayText) {
             console.log(`🎨 [OpenClaw] ${stagePrefix}前展示内容:`, { length: openClawDisplayText.length })
           }
-        } else if (!hasReceivedContent && finalNodeOutputText.trim()) {
+        } else if (!shouldBufferEssayCorrection && !hasReceivedContent && finalNodeOutputText.trim()) {
           const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
           enqueueSseAnswer(controller, displayText)
           fullResponseText = displayText
@@ -4807,6 +4784,17 @@ export async function POST(request: NextRequest) {
           }
           enqueueSseError(controller, message, workflowNodeFailure.code)
         }
+      }
+
+      if (!hasReceivedContent && !workflowNodeFailure) {
+        const message = model === "standard"
+          ? "作文批改本次没有返回可展示内容，请重新提交。本次未扣费。"
+          : "服务本次没有返回可展示内容，请重新提交。本次未扣费。"
+        workflowNodeFailure = {
+          message,
+          code: "DIFY_EMPTY_RESPONSE",
+        }
+        enqueueSseError(controller, message, workflowNodeFailure.code)
       }
 
       const shouldCharge = !workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)
@@ -4916,22 +4904,198 @@ export async function POST(request: NextRequest) {
 	      })
     }
 
+    const getDifyStreamTimeoutFailure = (reason: "first_byte" | DifyStreamTimeoutReason) => {
+      if (reason === "first_byte") {
+        return {
+          code: streamStatus.timeoutCode || "DIFY_FIRST_BYTE_TIMEOUT",
+          message: streamStatus.timeoutMessage || "服务响应超时，请稍后重试。",
+          stage: "服务响应超时",
+        }
+      }
+      return reason === "idle"
+        ? {
+            code: "DIFY_STREAM_IDLE_TIMEOUT",
+            message: model === "standard"
+              ? "作文批改服务长时间没有返回新内容，请稍后重试。本次未扣费。"
+              : "服务长时间没有返回新内容，请稍后重试。本次未扣费。",
+            stage: "上游响应长时间无进展",
+          }
+        : {
+            code: "DIFY_STREAM_MAX_DURATION",
+            message: model === "standard"
+              ? "作文批改处理时间过长，请稍后重试。本次未扣费。"
+              : "任务处理时间过长，请稍后重试。本次未扣费。",
+            stage: "任务处理超过时限",
+          }
+    }
+
+    const handleDifyStreamTimeout = (reason: "first_byte" | DifyStreamTimeoutReason) => {
+      if (taskCompleted) return
+      clearFirstByteTimeout()
+      const failure = getDifyStreamTimeoutFailure(reason)
+      streamStatus.timeoutReason = reason
+      streamStatus.timeoutCode = failure.code
+      streamStatus.timeoutMessage = failure.message
+      taskCompleted = true
+      workflowNodeFailure = { message: failure.message, code: failure.code }
+      streamStatus.controller?.abort()
+      console.error(`[Dify Stream] ${failure.code} model=${model} requestId=${taskRun.requestId}`)
+      logPerf(taskRun.requestId, "stream_timeout", apiStartedAt, {
+        reason,
+        responseLength: fullResponseText.length,
+      })
+      void taskRunCreatePromise
+        .catch((error) => {
+          console.warn("[AI Task Trace] create before stream timeout failed:", error instanceof Error ? error.message : String(error))
+        })
+        .then(() => updateTaskRun(taskRun.id, {
+          status: "timeout",
+          stage: failure.stage,
+          progress: 100,
+          conversationId: conversationId || undefined,
+          errorMessage: failure.message,
+          errorCode: failure.code,
+          metadata: {
+            failure_phase: "stream",
+            timeout_reason: reason,
+            response_length: fullResponseText.length,
+            has_received_content: hasReceivedContent,
+            total_tokens: totalTokens,
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            dify_response_mode: actualDifyResponseMode,
+          },
+        }))
+        .catch((error) => console.warn("[AI Task Trace] stream timeout update failed:", error))
+    }
+
+    type DifyTerminalStreamEvent = {
+      event?: string
+      data?: {
+        outputs?: unknown
+        status?: string
+        workflow_run_id?: string
+      }
+      outputs?: unknown
+      status?: string
+      workflow_run_id?: string
+    }
+
+    const processDifyTerminalEvent = async (
+      json: DifyTerminalStreamEvent,
+      controller: SseByteController & { terminate(): void },
+    ) => {
+      if (!["workflow_finished", "message_end", "error"].includes(json.event || "")) return false
+
+      const terminalFailure = getDifyTerminalFailure(json, {
+        publicMessage: difyFailurePublicMessage,
+      })
+      const terminalEssayText = shouldBufferEssayCorrection
+        ? sanitizeDifyAnswerForModel(extractDifyTextOutput(json.data?.outputs || json.outputs || json), model)
+        : ""
+      const hasValidEssayFallback = shouldBufferEssayCorrection && canRecoverPartialEssayCorrection(
+        json,
+        [terminalEssayText],
+      )
+
+      if (terminalFailure && !hasValidEssayFallback) {
+        const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
+        workflowNodeFailure = {
+          message: terminalFailure.publicMessage,
+          code: terminalFailure.code,
+        }
+        taskCompleted = true
+        enqueueSseError(controller, terminalFailure.publicMessage, terminalFailure.code)
+        controller.terminate()
+        await taskRunCreatePromise.catch((error) => {
+          console.warn("[AI Task Trace] create before stream failure failed:", error instanceof Error ? error.message : String(error))
+        })
+        await updateTaskRun(taskRun.id, {
+          status: "failed",
+          stage: "任务处理失败",
+          progress: 100,
+          workflowRunId,
+          errorMessage: terminalFailure.publicMessage,
+          errorCode: terminalFailure.code,
+          sanitizedError: sanitizeForTrace({ error: terminalFailure.rawMessage }) as Record<string, unknown>,
+          metadata: {
+            ...initialTaskMetadata,
+            failure_phase: "stream",
+          },
+        })
+        return true
+      }
+
+      if (json.event !== "workflow_finished") return false
+
+      const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
+      if (json.data?.outputs) {
+        const outputs = json.data.outputs
+        if (model === "vocab-card") {
+          const safeOutputs = sanitizeVocabCardOutputs(outputs)
+          fullResponseText += JSON.stringify({ outputs: safeOutputs })
+          hasReceivedContent = true
+          console.log("📚 [VocabCard] 收集到结构化 outputs")
+          enqueueSseEvent(controller, buildPublicVocabWorkflowEvent(safeOutputs, conversationId))
+        } else {
+          const rawOutputText = sanitizeDifyAnswerForModel(extractDifyTextOutput(outputs), model)
+          const outputText = model === "open-claw"
+            ? rewriteOpenClawMediaReferencesWithSignedUrls(rawOutputText, undefined, userId)
+            : rawOutputText
+          if (outputText) {
+            if (shouldBufferEssayCorrection) {
+              if (!isValidEssayCorrectionResult(fullResponseText) && isValidEssayCorrectionResult(outputText)) {
+                fullResponseText = outputText
+              } else if (!fullResponseText.includes(outputText) && !outputText.includes(fullResponseText)) {
+                fullResponseText += outputText
+              }
+            } else {
+              fullResponseText += outputText
+            }
+            hasReceivedContent = true
+            console.log("🎨 [Workflow完成] 收集到输出文本:", { length: outputText.length })
+            if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
+              enqueueAllInOneDisplayOnce(controller, outputText)
+            } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !workflowNodeFailure) {
+              enqueueSseEvent(controller, {
+                event: "workflow_finished",
+                data: { outputs: { text: outputText } },
+              })
+            }
+          }
+        }
+      }
+
+      const parsedUsage = parseDifyUsage(json)
+      latestParsedUsage = parsedUsage
+      if (parsedUsage.totalTokens > 0) totalTokens = parsedUsage.totalTokens
+      if (parsedUsage.promptTokens > 0) promptTokens = parsedUsage.promptTokens
+      if (parsedUsage.completionTokens > 0) completionTokens = parsedUsage.completionTokens
+      updateTaskRun(taskRun.id, {
+        status: "running",
+        stage: "任务已完成，正在结算",
+        progress: 95,
+        workflowRunId,
+        artifacts: extractArtifactsFromUnknown(json.data?.outputs || json.outputs || fullResponseText),
+      }).catch((error) => console.warn("[AI Task Trace] workflow finish update failed:", error))
+
+      return false
+    }
+
+    const difyStreamDecoder = new TextDecoder()
     const transformStream = new TransformStream({
       async transform(chunk, controller) {
         // 🔥 首字节探测：当 transform 被调用时，说明流式数据已开始传输，取消 180s 超时
         if (!streamStatus.firstByteReceived) {
             streamStatus.firstByteReceived = true
-            if (streamStatus.timeoutId) {
-                clearTimeout(streamStatus.timeoutId)
-                streamStatus.timeoutId = null
-            }
+            clearFirstByteTimeout()
             console.warn(`✅ [首字节探测] Dify 流式数据开始传输，已取消首字节超时定时器`)
             logPerf(taskRun.requestId, "dify_first_byte", apiStartedAt)
         }
 
         // 解析 chunk 提取 token 信息
         try {
-          const text = new TextDecoder().decode(chunk)
+          const text = difyStreamDecoder.decode(chunk, { stream: true })
           const outputText = model === "open-claw" ? rewriteOpenClawMediaReferencesWithSignedUrls(text, undefined, userId) : text
 
 	          // 后端解析 Dify 原始 SSE 后只重发用户端需要的安全事件，避免节点、模型、工作流 ID 穿透到浏览器。
@@ -4984,7 +5148,9 @@ export async function POST(request: NextRequest) {
 	                    workflow_run_id: nodeData.workflow_run_id || json.workflow_run_id,
 	                  })
 	                }
-                  if (json.event === "node_finished" && ["failed", "error"].includes(nodeStatus)) {
+                  const nodeFailed = ["failed", "error"].includes(nodeStatus)
+                    || (shouldBufferEssayCorrection && ["exception", "cancelled", "canceled", "stopped"].includes(nodeStatus))
+                  if (json.event === "node_finished" && nodeFailed) {
                     const title = sanitizePublicAiLabel(nodeTitle || "", "任务处理")
                     const errorMessage = String(
                       nodeData.error ||
@@ -4993,20 +5159,39 @@ export async function POST(request: NextRequest) {
                       json.message ||
                       `${title}处理失败`
                     )
-                    workflowNodeFailure = {
-                      message: errorMessage,
-                      code: model === "open-claw" ? "OPENCLAW_NODE_FAILED" : "DIFY_NODE_FAILED",
-                    }
-                    enqueueSseError(controller, sanitizePublicAiError(errorMessage, "任务处理失败，请稍后重试。"), workflowNodeFailure.code)
-                    updateTaskRun(taskRun.id, {
-                      status: "running",
-                      stage: `${title}处理失败`,
-                      progress: 95,
-                      workflowRunId: nodeData.workflow_run_id || json.workflow_run_id || null,
-                      errorMessage: sanitizePublicAiError(errorMessage, "任务处理失败，请稍后重试。"),
-                      errorCode: workflowNodeFailure.code,
-                      sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
+                    if (shouldBufferEssayCorrection) {
+                      console.warn(`[Essay Grading] node ${nodeStatus}; waiting for validated fallback output`, {
+                        requestId: taskRun.requestId,
+                        node: title,
+                      })
+                      updateTaskRun(taskRun.id, {
+                        status: "running",
+                        stage: "作文识别遇到异常，正在检查备用结果",
+                        progress: 75,
+                        workflowRunId: nodeData.workflow_run_id || json.workflow_run_id || null,
+                        sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
+		                    }).catch((error) => console.warn("[AI Task Trace] essay node diagnostic update failed:", error))
+                    } else {
+                      const nodeFailure = getDifyTerminalFailure(
+                        { event: "error", message: errorMessage },
+                        { publicMessage: difyFailurePublicMessage },
+                      )
+                      const publicErrorMessage = nodeFailure?.publicMessage || "任务处理失败，请稍后重试。本次未扣费。"
+                      workflowNodeFailure = {
+                        message: publicErrorMessage,
+                        code: nodeFailure?.code || (model === "open-claw" ? "OPENCLAW_NODE_FAILED" : "DIFY_NODE_FAILED"),
+                      }
+                      enqueueSseError(controller, publicErrorMessage, workflowNodeFailure.code)
+                      updateTaskRun(taskRun.id, {
+                        status: "running",
+                        stage: `${title}处理失败`,
+                        progress: 95,
+                        workflowRunId: nodeData.workflow_run_id || json.workflow_run_id || null,
+                        errorMessage: publicErrorMessage,
+                        errorCode: workflowNodeFailure.code,
+                        sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
 		                    }).catch((error) => console.warn("[AI Task Trace] node failure update failed:", error))
+                    }
 	                  }
                     if (!hasReceivedContent) {
                       const finalNodeText = extractFinalNodeOutputText(json)
@@ -5064,7 +5249,7 @@ export async function POST(request: NextRequest) {
                   } else if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
                     allInOneStreamedAnswer = true
                     enqueueSseAnswer(controller, answerText)
-                  } else if (!shouldBufferForDisplay) {
+                  } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !workflowNodeFailure) {
                     enqueueSseAnswer(controller, answerText)
                   }
               }
@@ -5081,7 +5266,7 @@ export async function POST(request: NextRequest) {
                       if (model === "vocab-card") {
                         const cleanedAnswer = cleanVocabAnswer(text)
                         if (cleanedAnswer) enqueueSseAnswer(controller, cleanedAnswer)
-                      } else if (!shouldBufferForDisplay) {
+                      } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !workflowNodeFailure) {
                         enqueueSseEvent(controller, {
                           event: json.event,
                           text,
@@ -5100,81 +5285,9 @@ export async function POST(request: NextRequest) {
 	                }
 	              }
 
-	              // 🔥 收集 Workflow 完成事件的输出文本
-	              if (json.event === "workflow_finished" || json.event === "error") {
-	                const terminalFailure = getDifyTerminalFailure(json)
-	                if (terminalFailure) {
-	                  const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
-	                  workflowNodeFailure = {
-	                    message: terminalFailure.publicMessage,
-	                    code: terminalFailure.code,
-	                  }
-	                  taskCompleted = true
-	                  enqueueSseError(controller, terminalFailure.publicMessage, terminalFailure.code)
-	                  controller.terminate()
-	                  await taskRunCreatePromise.catch((error) => {
-	                    console.warn("[AI Task Trace] create before stream failure failed:", error instanceof Error ? error.message : String(error))
-	                  })
-	                  await updateTaskRun(taskRun.id, {
-	                    status: "failed",
-	                    stage: "任务处理失败",
-	                    progress: 100,
-	                    workflowRunId,
-	                    errorMessage: terminalFailure.publicMessage,
-	                    errorCode: terminalFailure.code,
-	                    sanitizedError: sanitizeForTrace({ error: terminalFailure.rawMessage }) as Record<string, unknown>,
-	                    metadata: {
-	                      ...initialTaskMetadata,
-	                      failure_phase: "stream",
-	                    },
-	                  })
-	                  return
-	                }
-	              }
-
-	              if (json.event === "workflow_finished") {
-	                const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
-	                if (json.data?.outputs) {
-                  const outputs = json.data.outputs
-                  if (model === "vocab-card") {
-                    const safeOutputs = sanitizeVocabCardOutputs(outputs)
-                    fullResponseText += JSON.stringify({ outputs: safeOutputs })
-                    hasReceivedContent = true
-                    console.log(`📚 [VocabCard] 收集到结构化 outputs`)
-	                    enqueueSseEvent(controller, buildPublicVocabWorkflowEvent(safeOutputs, conversationId))
-	                  } else {
-                      const rawOutputText = sanitizeDifyAnswerForModel(extractDifyTextOutput(outputs), model)
-                      const outputText = model === "open-claw"
-                        ? rewriteOpenClawMediaReferencesWithSignedUrls(rawOutputText, undefined, userId)
-                        : rawOutputText
-                      if (outputText) {
-	                    fullResponseText += outputText
-	                    hasReceivedContent = true
-	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: outputText.length })
-                      if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
-                        enqueueAllInOneDisplayOnce(controller, outputText)
-                      } else if (!shouldBufferForDisplay) {
-                        enqueueSseEvent(controller, {
-                          event: "workflow_finished",
-                          data: { outputs: { text: outputText } },
-                        })
-                      }
-                      }
-		                  }
-	                }
-	                const parsedUsage = parseDifyUsage(json)
-	                latestParsedUsage = parsedUsage
-	                if (parsedUsage.totalTokens > 0) totalTokens = parsedUsage.totalTokens
-	                if (parsedUsage.promptTokens > 0) promptTokens = parsedUsage.promptTokens
-	                if (parsedUsage.completionTokens > 0) completionTokens = parsedUsage.completionTokens
-	                updateTaskRun(taskRun.id, {
-	                  status: "running",
-	                  stage: "任务已完成，正在结算",
-	                  progress: 95,
-	                  workflowRunId,
-	                  artifacts: extractArtifactsFromUnknown(json.data?.outputs || json.outputs || fullResponseText),
-	                }).catch((error) => console.warn("[AI Task Trace] workflow finish update failed:", error))
-	              }
+	              // Handle all terminal events through one path so fatal errors
+	              // and final workflow outputs follow the same billing policy.
+              if (await processDifyTerminalEvent(json, controller)) return
 
               if (shouldBufferForDisplay && json.event === "message_end" && fullResponseText.trim() && !allInOneStreamedAnswer) {
                 enqueueAllInOneDisplayOnce(controller, fullResponseText)
@@ -5184,7 +5297,7 @@ export async function POST(request: NextRequest) {
                 if (openClawDisplayText) {
                   console.log(`🎨 [OpenClaw] 消息结束后展示内容:`, { length: openClawDisplayText.length })
                 }
-              } else if (json.event === "message_end" && !hasReceivedContent && finalNodeOutputText.trim()) {
+              } else if (json.event === "message_end" && !shouldBufferEssayCorrection && !hasReceivedContent && finalNodeOutputText.trim()) {
                 const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
                 enqueueSseAnswer(controller, displayText)
                 fullResponseText = displayText
@@ -5229,6 +5342,14 @@ export async function POST(request: NextRequest) {
                   metadata: { total_tokens: totalTokens, prompt_tokens: promptTokens, completion_tokens: completionTokens },
                 }).catch((error) => console.warn("[AI Task Trace] message_end update failed:", error))
               }
+
+              const reachedDifyTerminalSuccess = json.event === "message_end"
+                || (WORKFLOW_MODELS.has(model || "") && json.event === "workflow_finished")
+              if (reachedDifyTerminalSuccess) {
+                await finalizeDifyChatResponse(controller, `${json.event} 终态`)
+                controller.terminate()
+                return
+              }
             } catch (e) {
               // 🔥 只有真正 JSON 格式错误才记录（而不是被截断的数据）
               if (e instanceof SyntaxError) {
@@ -5250,6 +5371,12 @@ export async function POST(request: NextRequest) {
           console.warn("[Stream] 客户端连接已中断，跳过成功结算")
           return
         }
+        const trailingText = difyStreamDecoder.decode()
+        if (trailingText) {
+          jsonBuffer += model === "open-claw"
+            ? rewriteOpenClawMediaReferencesWithSignedUrls(trailingText, undefined, userId)
+            : trailingText
+        }
         // 🔥 处理缓冲区中剩余的未完成 JSON（流结束时的最后一条数据）
         if (jsonBuffer.trim().length > 0) {
           const line = jsonBuffer.trim()
@@ -5257,6 +5384,7 @@ export async function POST(request: NextRequest) {
             const data = line.slice(6).trim()
             try {
               const json = JSON.parse(data)
+              if (await processDifyTerminalEvent(json, controller)) return
               // 处理最后一条消息的文本收集
               if (json.event === "message" && json.answer) {
                 if (model === "open-claw") {
@@ -5278,7 +5406,7 @@ export async function POST(request: NextRequest) {
                   } else if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
                     allInOneStreamedAnswer = true
                     enqueueSseAnswer(controller, answerText)
-                  } else if (!shouldBufferForDisplay) {
+                  } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !workflowNodeFailure) {
                     enqueueSseAnswer(controller, answerText)
                   }
                 }
@@ -5293,6 +5421,12 @@ export async function POST(request: NextRequest) {
 	                promptTokens = parsedUsage.promptTokens
 	                completionTokens = parsedUsage.completionTokens
 	              }
+              const reachedDifyTerminalSuccess = json.event === "message_end"
+                || (WORKFLOW_MODELS.has(model || "") && json.event === "workflow_finished")
+              if (reachedDifyTerminalSuccess) {
+                await finalizeDifyChatResponse(controller, `${json.event} 尾部终态`)
+                return
+              }
             } catch (e) {
               // 流结束时的最后数据仍然不完整，静默忽略
               console.warn(`⚠️ [Flush] 缓冲区剩余数据解析失败:`, e)
@@ -5351,6 +5485,20 @@ export async function POST(request: NextRequest) {
               controller.close()
             } catch (error) {
               stopHeartbeat()
+              if (error instanceof DifyStreamTimeoutError || streamStatus.timeoutReason) {
+                const timeoutReason: "first_byte" | DifyStreamTimeoutReason = error instanceof DifyStreamTimeoutError
+                  ? error.reason
+                  : streamStatus.timeoutReason || "first_byte"
+                handleDifyStreamTimeout(timeoutReason)
+                const failure = getDifyStreamTimeoutFailure(timeoutReason)
+                try {
+                  enqueueSseError(controller, failure.message, failure.code)
+                  controller.close()
+                } catch {
+                  controller.error(error)
+                }
+                return
+              }
               controller.error(error)
             }
           })()
@@ -5363,10 +5511,50 @@ export async function POST(request: NextRequest) {
     }
 
     // 返回经过 transform 处理的流
-    const transformedBody = response.body?.pipeThrough(transformStream)
+    const isLongDifyStream = model === "open-claw" || isAllInOneAgent || model === BEIKE_PRO_MODEL
+    const streamIdleTimeoutMs = isLongDifyStream
+      ? LONG_DIFY_STREAM_IDLE_TIMEOUT_MS
+      : DEFAULT_DIFY_STREAM_IDLE_TIMEOUT_MS
+    const streamMaxDurationMs = isLongDifyStream
+      ? LONG_DIFY_STREAM_MAX_DURATION_MS
+      : DEFAULT_DIFY_STREAM_MAX_DURATION_MS
+    const watchedDifyBody = response.body
+      ? withDifyStreamWatchdog(response.body, {
+          idleTimeoutMs: streamIdleTimeoutMs,
+          maxDurationMs: streamMaxDurationMs,
+          onTimeout: handleDifyStreamTimeout,
+        })
+      : null
+    const transformedBody = watchedDifyBody?.pipeThrough(transformStream)
     if (!transformedBody) {
       console.error(`❌ [Stream错误] pipeThrough返回undefined! response.body=${response.body === null ? 'null' : 'not-null'}`)
-      return new Response(JSON.stringify({ error: "服务暂时没有返回可展示内容，请稍后重试。" }), { status: 502 })
+      clearFirstByteTimeout()
+      streamStatus.controller?.abort()
+      taskCompleted = true
+      const message = "服务暂时没有返回可展示内容，请稍后重试。本次未扣费。"
+      workflowNodeFailure = { message, code: "DIFY_EMPTY_RESPONSE_BODY" }
+      await taskRunCreatePromise.catch((error) => {
+        console.warn("[AI Task Trace] create before empty body failure failed:", error instanceof Error ? error.message : String(error))
+      })
+      await updateTaskRun(taskRun.id, {
+        status: "failed",
+        stage: "上游响应体为空",
+        progress: 100,
+        errorMessage: message,
+        errorCode: workflowNodeFailure.code,
+        metadata: {
+          failure_phase: "response_body",
+          dify_response_mode: actualDifyResponseMode,
+        },
+      }).catch((error) => console.warn("[AI Task Trace] empty body failure update failed:", error))
+      return Response.json({
+        error: message,
+        code: workflowNodeFailure.code,
+        requestId: taskRun.requestId,
+      }, {
+        status: 502,
+        headers: { "X-Request-Id": taskRun.requestId },
+      })
     }
     const responseBody = addLongTaskHeartbeat(transformedBody)
     request.signal.addEventListener("abort", () => {
@@ -5374,8 +5562,7 @@ export async function POST(request: NextRequest) {
       clientAborted = true
       const modelLabel = getTraceModelDisplayName(model)
       if (streamStatus.timeoutId) {
-        clearTimeout(streamStatus.timeoutId)
-        streamStatus.timeoutId = null
+        clearFirstByteTimeout()
       }
       streamStatus.controller?.abort()
       updateTaskRun(taskRun.id, {
