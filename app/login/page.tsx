@@ -96,15 +96,34 @@ function AuthingLoginComponent() {
       return
     }
 
+    const guardMount = document.querySelector<HTMLElement>('#authing-guard-container')
+    if (!guardMount) {
+      setLoadError('登录组件挂载点不可用，请刷新后重试')
+      setIsLoaded(true)
+      return
+    }
+
+    let disposed = false
+    let guard: any = null
+
     // 2. 动态加载 Authing 样式
     const link = document.createElement('link')
     link.rel = 'stylesheet'
     link.href = 'https://cdn.authing.co/packages/guard/latest/guard.min.css'
     document.head.appendChild(link)
 
+    const observer = new MutationObserver(() => {
+      if (disposed || guardMount.childElementCount === 0) return
+      clearTimeout(timeoutId)
+      setLoadError(null)
+      setIsLoaded(true)
+      observer.disconnect()
+    })
+    observer.observe(guardMount, { childList: true })
+
     // 3. 设置超时保护（10秒）
     const timeoutId = setTimeout(() => {
-      if (!isLoaded) {
+      if (!disposed && guardMount.childElementCount === 0) {
         setLoadError('登录组件加载超时，请检查网络后刷新重试')
         setIsLoaded(true)
       }
@@ -112,18 +131,19 @@ function AuthingLoginComponent() {
 
     // 4. 加载 Authing 组件
     import('@authing/guard').then((module) => {
-      clearTimeout(timeoutId)
+      if (disposed) return
       const Guard = module.Guard
       if (guardRef.current) return
 
       try {
-        const guard = new Guard({
+        guard = new Guard({
           appId,
           mode: 'normal', // Authing 标准登录模式，不强制跳转
         })
 
       // ✅ 登录成功的处理逻辑
       guard.on('login', async (userInfo: any) => {
+        if (disposed) return
         console.log('登录成功:', {
           hasData: Boolean(userInfo?.data),
           hasIdToken: Boolean(userInfo?.idToken || userInfo?.id_token || userInfo?.data?.idToken || userInfo?.data?.id_token),
@@ -159,6 +179,8 @@ function AuthingLoginComponent() {
           console.error('同步失败', e)
         }
 
+        if (disposed) return
+
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('pendingReferralCode')
         }
@@ -174,22 +196,40 @@ function AuthingLoginComponent() {
         }
       })
 
-        guard.start('#authing-guard-container')
         guardRef.current = guard
-        setIsLoaded(true)
+        void guard.start(guardMount).catch((error: any) => {
+          if (disposed || guardMount.childElementCount > 0) return
+          clearTimeout(timeoutId)
+          observer.disconnect()
+          console.error('Authing Guard 启动失败:', error)
+          setLoadError(`登录组件启动失败: ${error?.message || '请检查网络后刷新重试'}`)
+          setIsLoaded(true)
+        })
       } catch (error: any) {
+        if (disposed) return
         clearTimeout(timeoutId)
+        observer.disconnect()
         console.error('Authing Guard 初始化失败:', error)
         setLoadError(`登录组件初始化失败: ${error?.message || '未知错误'}`)
         setIsLoaded(true) // 即使失败也标记为已加载，避免无限等待
       }
     }).catch((error: any) => {
+      if (disposed) return
       clearTimeout(timeoutId)
+      observer.disconnect()
       console.error('加载 Authing 模块失败:', error)
       setLoadError(`加载登录模块失败: ${error?.message || '请检查网络后刷新重试'}`)
       setIsLoaded(true)
     })
-  }, [appId, router, searchParams, isLoaded, referralCode])
+    return () => {
+      disposed = true
+      clearTimeout(timeoutId)
+      observer.disconnect()
+      guard?.unmount?.()
+      if (guardRef.current === guard) guardRef.current = null
+      link.remove()
+    }
+  }, [appId, router, searchParams, referralCode])
 
   return (
     <>

@@ -51,10 +51,9 @@ export function LoginPageV2({ children, className }: LoginPageV2Props) {
               登录以继续使用沈翔智学
             </p>
 
-            {/* Authing Guard 挂载点 */}
-            <div id="authing-guard-container">
-              {children}
-            </div>
+            {/* Authing Guard owns this node through its own ReactDOM renderer. */}
+            <div id="authing-guard-container" />
+            {children}
           </CardV2Content>
         </CardV2>
 
