@@ -13,9 +13,8 @@ import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 const ESSAY_AI_SUITE_OCR_TIMEOUT_MS = 20_000
 const LLM_GATEWAY_OCR_TIMEOUT_MS = 25_000
 const ESSAY_AI_SUITE_GRADE_TIMEOUT_MS = 35_000
-const DIRECT_ESSAY_GRADE_TIMEOUT_MS = 30_000
-const DIRECT_ESSAY_GRADE_ATTEMPTS = 2
-const DIRECT_ESSAY_GRADE_MODEL = "gpt-5.5"
+const DIRECT_ESSAY_GRADE_TIMEOUT_MS = 40_000
+const DIRECT_ESSAY_GRADE_MODEL = "gpt-6-astra"
 const DIRECT_ESSAY_GRADE_PROMPT_VERSION = "direct-essay-grading-v1"
 const ESSAY_OCR_MODEL = "sx-chinese-text"
 const MAX_IMAGE_BASE64_LENGTH = 24 * 1024 * 1024
@@ -576,13 +575,11 @@ export async function gradeEssayWithFallback(
   }
 
   const gradeRequest = buildGradeRequest(params)
-  for (let attempt = 0; attempt < DIRECT_ESSAY_GRADE_ATTEMPTS; attempt += 1) {
-    const directResult = await callDirectEssayGrade(gradeRequest, params.signal)
-    if (params.signal?.aborted) {
-      throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_ABORTED")
-    }
-    if (directResult) return directResult
+  const directResult = await callDirectEssayGrade(gradeRequest, params.signal)
+  if (params.signal?.aborted) {
+    throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_ABORTED")
   }
+  if (directResult) return directResult
 
   let response: EssayAiSuiteResponse<EssayGradeResult>
   try {

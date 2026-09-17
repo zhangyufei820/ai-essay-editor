@@ -362,7 +362,7 @@ describe("essay image fallback", () => {
     process.env.SHENXIANG_NEW_API_BASE_URL = "http://new-api:3000/v1/"
     process.env.SHENXIANG_NEW_API_TEXT_API_KEY = "test-new-api-key"
     internalDifyFetchMock.mockResolvedValue(new Response(JSON.stringify({
-      model: "gpt-5.5",
+      model: "gpt-6-astra",
       choices: [{
         finish_reason: "stop",
         message: { content: validReport },
@@ -375,7 +375,7 @@ describe("essay image fallback", () => {
     })).resolves.toEqual({
       markdownReport: validReport,
       provider: "llm",
-      model: "gpt-5.5",
+      model: "gpt-6-astra",
       promptVersion: "direct-essay-grading-v1",
     })
     expect(internalDifyFetchMock).toHaveBeenCalledTimes(1)
@@ -384,33 +384,10 @@ describe("essay image fallback", () => {
     expect(init.headers.Authorization).toBe("Bearer test-new-api-key")
     expect(init.signal).toBeInstanceOf(AbortSignal)
     const body = JSON.parse(init.body)
-    expect(body.model).toBe("gpt-5.5")
+    expect(body.model).toBe("gpt-6-astra")
     expect(body.max_tokens).toBe(1_400)
     expect(body.messages[0].content).toContain("第一行必须严格使用")
     expect(body.messages[1].content).toContain("学段：初中")
-    expect(callEssayAiSuiteMock).not.toHaveBeenCalled()
-  })
-
-  it("retries the direct grader once when the first channel fails", async () => {
-    process.env.SHENXIANG_NEW_API_BASE_URL = "http://new-api:3000/v1"
-    process.env.SHENXIANG_NEW_API_TEXT_API_KEY = "test-new-api-key"
-    internalDifyFetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "unavailable" } }), {
-        status: 503,
-        headers: { "Content-Type": "application/json" },
-      }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        model: "gpt-5.5",
-        choices: [{ finish_reason: "stop", message: { content: validReport } }],
-      }), { status: 200, headers: { "Content-Type": "application/json" } }))
-
-    await expect(gradeEssayWithFallback({
-      text: "春天来了，我和同学一起去公园观察花草，记录了许多有趣的细节。",
-    })).resolves.toMatchObject({
-      markdownReport: validReport,
-      model: "gpt-5.5",
-    })
-    expect(internalDifyFetchMock).toHaveBeenCalledTimes(2)
     expect(callEssayAiSuiteMock).not.toHaveBeenCalled()
   })
 
@@ -438,7 +415,7 @@ describe("essay image fallback", () => {
       model: "sx-chinese-text",
       promptVersion: "essay-grading-v1",
     })
-    expect(internalDifyFetchMock).toHaveBeenCalledTimes(2)
+    expect(internalDifyFetchMock).toHaveBeenCalledTimes(1)
     expect(callEssayAiSuiteMock).toHaveBeenCalledTimes(1)
   })
 
