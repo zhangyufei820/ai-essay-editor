@@ -44,6 +44,10 @@ describe("Dify image essay fallback wiring", () => {
   it("emits the recovered report once and records a zero-credit success", () => {
     expect(route).toContain("!essayDisplaySent")
     expect(route).toContain("essayDisplaySent = true")
+    expect(route).toContain("essayFallbackUsed && !finalFailed && !essayFallbackTerminalSent")
+    expect(route).toContain('event: "message_end"')
+    expect(route).toContain("essay_fallback_used: true")
+    expect(route).toContain("essayFallbackTerminalSent = true")
     expect(route).toContain("const shouldCharge = !essayFallbackUsed")
     expect(route).toContain("essay_fallback_used: essayFallbackUsed")
     expect(route).toContain("charged_credits: essayFallbackUsed ? 0 : undefined")

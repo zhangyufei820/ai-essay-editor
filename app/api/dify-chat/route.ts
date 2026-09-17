@@ -4608,6 +4608,7 @@ export async function POST(request: NextRequest) {
     let workflowNodeFailure: { message: string; code: string } | null = null
     let pendingEssayNodeFailure: { message: string; code: string } | null = null
     let essayDisplaySent = false
+    let essayFallbackTerminalSent = false
     let allInOneDisplaySent = false
     let allInOneStreamedAnswer = false
     let finalNodeOutputText = ""
@@ -5081,6 +5082,17 @@ export async function POST(request: NextRequest) {
       }
 
       const finalFailed = Boolean(workflowNodeFailure) || !hasReceivedContent
+      if (essayFallbackUsed && !finalFailed && !essayFallbackTerminalSent) {
+        enqueueSseEvent(controller, {
+          event: "message_end",
+          conversation_id: conversationId || undefined,
+          metadata: {
+            essay_fallback_used: true,
+            charged_credits: 0,
+          },
+        })
+        essayFallbackTerminalSent = true
+      }
       taskCompleted = true
       fireAndForget(
         "AI Task Trace terminal",
