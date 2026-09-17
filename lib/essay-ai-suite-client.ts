@@ -51,9 +51,17 @@ export async function callEssayAiSuite<T>(
   path: string,
   body: JsonBody,
   timeoutMs = 120_000,
+  signal?: AbortSignal,
 ): Promise<EssayAiSuiteResponse<T>> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const abortFromCaller = () => controller.abort(signal?.reason)
+
+  if (signal?.aborted) {
+    abortFromCaller()
+  } else {
+    signal?.addEventListener("abort", abortFromCaller, { once: true })
+  }
 
   try {
     const response = await internalDifyFetch(`${getEssayAiSuiteUrl()}${path}`, {
@@ -83,6 +91,7 @@ export async function callEssayAiSuite<T>(
     }
   } finally {
     clearTimeout(timeout)
+    signal?.removeEventListener("abort", abortFromCaller)
   }
 }
 

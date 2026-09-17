@@ -320,7 +320,9 @@ type UploadedFile = {
   modelUrl?: string
   storageUrl?: string
   extractedText?: string
+  extractedTextToken?: string
 }
+const MAX_CHAT_UPLOAD_FILES = 4
 // 🔥 消息类型 - 支持 metadata 存储音乐等附加数据，支持 files 显示上传的文件
 type Message = {
   id: string
@@ -2174,6 +2176,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       return;
     }
 
+    const selectedFiles = Array.from(files)
+    const availableFileSlots = Math.max(0, MAX_CHAT_UPLOAD_FILES - uploadedFiles.length)
+    if (selectedFiles.length > availableFileSlots) {
+      toast.error(`最多上传 ${MAX_CHAT_UPLOAD_FILES} 个文件`)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+
     // 🔥 检查用户是否已登录
     if (!userId) {
       console.log("📎 [handleFileUpload] 用户未登录")
@@ -2188,9 +2198,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     setDynamicStatusMessage(getRandomStatusMessage("uploading", 0))
 
     try {
-        const totalFiles = files.length
-        const uploadPromises = Array.from(files).map(async (file, index) => {
-            const fileToUpload = file;
+        const totalFiles = selectedFiles.length
+        const results: UploadedFile[] = []
+        for (const [index, fileToUpload] of selectedFiles.entries()) {
 
             // ============================================
             // 🔥 前端安全校验
@@ -2236,13 +2246,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             const extractedText = typeof data.data?.extracted_text === "string"
               ? data.data.extracted_text
               : undefined
+            const extractedTextToken = typeof data.data?.extracted_text_token === "string"
+              ? data.data.extracted_text_token
+              : undefined
 
             // 🔥 更新进度
             setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
 
-            return new Promise<UploadedFile>((resolve) => {
-                if (isUploadedImageFile({ name: fileToUpload.name, type: fileToUpload.type })) {
-                    resolve({
+            if (isUploadedImageFile({ name: fileToUpload.name, type: fileToUpload.type })) {
+                results.push({
                         name: fileToUpload.name,
                         type: resolvedMimeType,
                         size: fileToUpload.size,
@@ -2252,10 +2264,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         modelUrl,
                         storageUrl: modelUrl || gatewayUrl || (data.id ? `dify-file://${data.id}` : ""),
                         extractedText,
+                        extractedTextToken,
                         preview: URL.createObjectURL(fileToUpload)
-                    });
-                } else {
-                    resolve({
+                })
+            } else {
+                results.push({
                         name: fileToUpload.name,
                         type: resolvedMimeType,
                         size: fileToUpload.size,
@@ -2265,13 +2278,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         modelUrl,
                         storageUrl: data.id ? `dify-file://${data.id}` : "",
                         extractedText,
+                        extractedTextToken,
                         preview: undefined
-                    })
-                }
-            })
-        });
+                })
+            }
+        }
 
-        const results = await Promise.all(uploadPromises);
         setUploadedFiles(p => [...p, ...results]);
         toast.success("文件上传成功")
         setFileProcessing({ status: "idle", progress: 100, message: "完成" })
@@ -2537,7 +2549,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             sessionId: sid,
             role: "user",
             content: userMsg.content,
-            files: activeFiles.map(({ extractedText: _extractedText, ...file }) => file),
+            files: activeFiles.map(({
+              extractedText: _extractedText,
+              extractedTextToken: _extractedTextToken,
+              ...file
+            }) => file),
             metadata: {
               requestId,
               clientMessageId: userMsg.id,
@@ -2621,6 +2637,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               mimeType: file.type,
               name: file.name,
               extractedText: file.extractedText,
+              extractedTextToken: file.extractedTextToken,
             }]
           : [])
         const fileIds = fileAttachments.map((file) => file.id)

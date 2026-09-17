@@ -31,6 +31,7 @@ const config = [
       ".claude/**",
       ".superpowers/**",
       ".cleanup-backups/**",
+      ".worktrees/**",
       "vendor/**",
       "**/.venv/**",
       "**/.local-source/**",

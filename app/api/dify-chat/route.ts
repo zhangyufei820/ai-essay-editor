@@ -54,6 +54,11 @@ import {
   canRecoverPartialEssayCorrection,
   isValidEssayCorrectionResult,
 } from "@/lib/essay-correction-result"
+import {
+  getVerifiedEssayOcrTextFromAttachments,
+} from "@/lib/essay-image-fallback"
+import { createEssayGradeFallbackRunner } from "@/lib/essay-grade-fallback-runner"
+import { shouldAttemptEssayFallbackForHttpStatus } from "@/lib/essay-fallback-policy"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
 import { evaluateOpenClawRuntimeRequest } from "@/lib/openclaw-runtime-guard"
@@ -1181,6 +1186,17 @@ function normalizeAllInOneAgentDisplay(rawText: string) {
 
 type SseByteController = {
   enqueue(chunk: Uint8Array): void
+}
+
+class DifyPreResponseTimeoutError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly stage: string,
+  ) {
+    super(message)
+    this.name = "DifyPreResponseTimeoutError"
+  }
 }
 
 function enqueueSseEvent(controller: SseByteController, payload: Record<string, unknown>) {
@@ -3378,6 +3394,13 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} workflowSkill=${workflowSkillId || "none"} files=${difyFileIds.length} urls=${fileUrls.length}`)
     
     const userId = auth.user!.id
+    const verifiedEssayOcr = shouldBufferEssayCorrection
+      ? getVerifiedEssayOcrTextFromAttachments({
+          userId,
+          fileIds: difyFileIds,
+          fileAttachments,
+        })
+      : null
     const creditAccount = await ensureCreditAccount(getSupabaseAdmin(), userId)
     const entitlement = await getUserEntitlementSummary(userId, {
       email: auth.user!.email || null,
@@ -3457,6 +3480,19 @@ export async function POST(request: NextRequest) {
     if (!usesPersistedTaskRun) {
       fireAndForget("AI Task Trace create", taskRunCreatePromise)
     }
+    let clientAborted = request.signal.aborted
+    let essayFallbackAttempted = false
+    let essayFallbackUsed = false
+    let essayFallbackReason: string | null = null
+    let essayFallbackProvider: string | null = null
+    let essayFallbackModel: string | null = null
+    let essayFallbackPromptVersion: string | null = null
+    const essayFallbackAbortController = new AbortController()
+    const essayFallbackRunner = createEssayGradeFallbackRunner({
+      verifiedOcr: verifiedEssayOcr,
+      requestId: taskRun.requestId,
+      signal: essayFallbackAbortController.signal,
+    })
     const initialTaskMetadata = createTaskRunInput.metadata
     const settlePreflightFailure = async (input: {
       stage: string
@@ -3479,6 +3515,76 @@ export async function POST(request: NextRequest) {
           ...initialTaskMetadata,
           failure_phase: "preflight",
           ...input.metadata,
+        },
+      })
+    }
+
+    const createEarlyEssayFallbackResponse = async (reason: string): Promise<Response | null> => {
+      if (!shouldBufferEssayCorrection || !verifiedEssayOcr || clientAborted) return null
+
+      essayFallbackAttempted = true
+      essayFallbackReason = reason
+      const result = await essayFallbackRunner.attempt(reason)
+      if (!result || clientAborted) return null
+
+      essayFallbackUsed = true
+      essayFallbackProvider = result.provider
+      essayFallbackModel = result.model
+      essayFallbackPromptVersion = result.promptVersion
+      fireAndForget(
+        "AI Task Trace early essay fallback",
+        taskRunCreatePromise
+          .catch((error) => {
+            console.warn("[Essay Fallback] task trace creation failed:", error instanceof Error ? error.message : String(error))
+          })
+          .then(() => withTimeout(
+            updateTaskRun(taskRun.id, {
+              status: "succeeded",
+              stage: "备用作文批改完成",
+              progress: 100,
+              artifacts: extractArtifactsFromText(result.markdownReport),
+              nodeEvents: [],
+              metadata: {
+                ...initialTaskMetadata,
+                response_length: result.markdownReport.length,
+                has_received_content: true,
+                essay_fallback_attempted: true,
+                essay_fallback_used: true,
+                essay_fallback_reason: reason,
+                essay_fallback_provider: result.provider,
+                essay_fallback_model: result.model,
+                essay_fallback_prompt_version: result.promptVersion,
+                charged_credits: 0,
+              },
+            }),
+            TASK_TRACE_FINALIZE_TIMEOUT_MS,
+            "dify-chat.early-essay-fallback-trace",
+          )),
+      )
+
+      const responseBody = new ReadableStream<Uint8Array>({
+        start(controller) {
+          enqueueSseStatus(controller, { stage: "备用作文批改完成", progress: 100 })
+          enqueueSseAnswer(controller, result.markdownReport)
+          enqueueSseEvent(controller, {
+            event: "message_end",
+            metadata: {
+              essay_fallback_used: true,
+              charged_credits: 0,
+            },
+          })
+          controller.close()
+        },
+      })
+
+      return new Response(responseBody, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+          "X-Accel-Buffering": "no",
+          "Content-Encoding": "none",
+          "X-Request-Id": taskRun.requestId,
         },
       })
     }
@@ -3959,6 +4065,16 @@ export async function POST(request: NextRequest) {
       timeoutCode: null,
       timeoutMessage: null,
     }
+    const abortActiveEssayRequests = () => {
+      clientAborted = true
+      essayFallbackAbortController.abort()
+      streamStatus.controller?.abort()
+    }
+    if (request.signal.aborted) {
+      abortActiveEssayRequests()
+    } else {
+      request.signal.addEventListener("abort", abortActiveEssayRequests, { once: true })
+    }
     const useBlockingDifyChat =
       (process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true" ||
         (model === "open-claw" && process.env.DIFY_OPENCLAW_FORCE_BLOCKING_MODE === "true") ||
@@ -4161,17 +4277,17 @@ export async function POST(request: NextRequest) {
 
             // 判断是否为 AbortError（超时中断）
             const err = error instanceof Error ? error : null
-	            if (err && (err.name === 'AbortError' || err.message.includes('abort'))) {
-	                console.error(`❌ [Dify请求] 请求被中断（超时）:`, err.message)
-	                await updateTaskRun(taskRun.id, {
-	                  status: "timeout",
-	                  stage: timeoutStage,
-	                  progress: 100,
-	                  errorMessage: err.message,
-	                  errorCode: timeoutCode,
-	                })
-	                throw new Error(timeoutMessage)
-	            }
+              if (err && (err.name === "AbortError" || err.message.includes("abort"))) {
+                if (streamStatus.timeoutReason === "first_byte") {
+                  console.error("❌ [Dify请求] 请求在响应头前超时", {
+                    model,
+                    requestId: taskRun.requestId,
+                    code: timeoutCode,
+                  })
+                  throw new DifyPreResponseTimeoutError(timeoutMessage, timeoutCode, timeoutStage)
+                }
+                throw error
+              }
 
             throw error
         }
@@ -4190,7 +4306,47 @@ export async function POST(request: NextRequest) {
             console.warn(`🔄 [Dify重试] 第 ${retryCount} 次重试 (isNewSession=true)`);
         }
 
-        response = await callDify(isRetry);
+        try {
+          response = await callDify(isRetry)
+        } catch (error) {
+          if (error instanceof DifyPreResponseTimeoutError) {
+            const fallbackResponse = await createEarlyEssayFallbackResponse("dify_pre_response_timeout")
+            if (fallbackResponse) return fallbackResponse
+
+            fireAndForget(
+              "AI Task Trace pre-response timeout",
+              taskRunCreatePromise
+                .catch((traceError) => {
+                  console.warn("[AI Task Trace] create before pre-response timeout failed:", traceError instanceof Error ? traceError.message : String(traceError))
+                })
+                .then(() => withTimeout(
+                  updateTaskRun(taskRun.id, {
+                    status: "timeout",
+                    stage: error.stage,
+                    progress: 100,
+                    errorMessage: error.message,
+                    errorCode: error.code,
+                    metadata: {
+                      ...initialTaskMetadata,
+                      failure_phase: "pre_response",
+                      essay_fallback_attempted: essayFallbackAttempted,
+                    },
+                  }),
+                  TASK_TRACE_FINALIZE_TIMEOUT_MS,
+                  "dify-chat.pre-response-timeout-trace",
+                )),
+            )
+            return Response.json({
+              error: error.message,
+              code: sanitizePublicAiErrorCode(error.code),
+              requestId: taskRun.requestId,
+            }, {
+              status: 504,
+              headers: { "X-Request-Id": taskRun.requestId },
+            })
+          }
+          throw error
+        }
         console.warn(`📡 [Dify响应] 状态码: ${response.status}`)
         console.warn(`📡 [Dify响应] body类型: ${typeof response.body} | body是否为null: ${response.body === null}`)
 
@@ -4210,6 +4366,8 @@ export async function POST(request: NextRequest) {
 
     // 防御：确保 response 已赋值
     if (!response) {
+        const fallbackResponse = await createEarlyEssayFallbackResponse("dify_no_response")
+        if (fallbackResponse) return fallbackResponse
         const message = "服务暂时没有响应，请稍后重试。"
         await updateTaskRun(taskRun.id, {
           status: "failed",
@@ -4222,6 +4380,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!response.ok) {
+        streamStatus.firstByteReceived = true
+        if (streamStatus.timeoutId) {
+          clearTimeout(streamStatus.timeoutId)
+          streamStatus.timeoutId = null
+        }
         const errorText = await response.text()
         const isDifyCredentialInvalid = isDifyCredentialInvalidResponse(response.status, errorText)
         const handledErrorCode = isDifyCredentialInvalid ? "DIFY_CREDENTIAL_INVALID" : `DIFY_${response.status}`
@@ -4234,6 +4397,10 @@ export async function POST(request: NextRequest) {
           sanitizedBody: sanitizeForTrace(errorText),
           errorCode: handledErrorCode,
         })
+        if (shouldAttemptEssayFallbackForHttpStatus(response.status)) {
+          const fallbackResponse = await createEarlyEssayFallbackResponse(`dify_http_${response.status}`)
+          if (fallbackResponse) return fallbackResponse
+        }
         await updateTaskRun(taskRun.id, {
           status: "failed",
           stage: "服务返回错误",
@@ -4437,9 +4604,9 @@ export async function POST(request: NextRequest) {
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
     let hasReceivedContent = false  // 🔥 标记是否收到了实际内容（用于判断是否扣费）
     let latestParsedUsage: ParsedDifyUsage | null = null
-    let clientAborted = false
     let taskCompleted = false
     let workflowNodeFailure: { message: string; code: string } | null = null
+    let pendingEssayNodeFailure: { message: string; code: string } | null = null
     let essayDisplaySent = false
     let allInOneDisplaySent = false
     let allInOneStreamedAnswer = false
@@ -4526,6 +4693,96 @@ export async function POST(request: NextRequest) {
       if (!shouldBufferForDisplay || allInOneDisplaySent || !rawValue.trim()) return
       allInOneDisplaySent = true
       enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(rawValue))
+    }
+
+    const tryEssayGradeFallback = (
+      reason: string,
+      controller?: SseByteController,
+    ): Promise<boolean> => {
+      if (!shouldBufferEssayCorrection || !verifiedEssayOcr || taskCompleted || clientAborted) {
+        return Promise.resolve(false)
+      }
+      const fallbackResultPromise = essayFallbackRunner.attempt(reason)
+      const fallbackState = essayFallbackRunner.getState()
+      if (!fallbackState.attempted) return Promise.resolve(false)
+
+      const shouldAnnounceAttempt = !essayFallbackAttempted
+      essayFallbackAttempted = true
+      essayFallbackReason = fallbackState.reason
+
+      return (async () => {
+        if (shouldAnnounceAttempt) {
+          try {
+            if (controller) {
+              enqueueSseStatus(controller, {
+                stage: "作文识别遇到异常，正在启用备用批改",
+                progress: 82,
+              })
+            }
+          } catch {
+            // A timeout may close the inner stream before the outer SSE fallback runs.
+          }
+          fireAndForget(
+            "Essay Fallback running trace",
+            taskRunCreatePromise
+              .catch((error) => {
+                console.warn("[Essay Fallback] task trace creation failed:", error instanceof Error ? error.message : String(error))
+              })
+              .then(() => withTimeout(
+                updateTaskRun(taskRun.id, {
+                  status: "running",
+                  stage: "正在执行备用作文批改",
+                  progress: 85,
+                  metadata: {
+                    essay_fallback_attempted: true,
+                    essay_fallback_reason: fallbackState.reason,
+                    verified_ocr_file_count: verifiedEssayOcr.fileIds.length,
+                  },
+                }),
+                TASK_TRACE_FINALIZE_TIMEOUT_MS,
+                "dify-chat.essay-fallback-running-trace",
+              )),
+          )
+        }
+
+        const result = await fallbackResultPromise
+        if (result && !clientAborted) {
+          fullResponseText = result.markdownReport
+          finalNodeOutputText = ""
+          hasReceivedContent = true
+          workflowNodeFailure = null
+          pendingEssayNodeFailure = null
+          essayFallbackUsed = true
+          essayFallbackProvider = result.provider
+          essayFallbackModel = result.model
+          essayFallbackPromptVersion = result.promptVersion
+
+          // Failed/invalid Dify usage must never be billed as the successful
+          // fallback. The suite response does not expose billable usage.
+          totalTokens = 0
+          promptTokens = 0
+          completionTokens = 0
+          latestParsedUsage = null
+
+          console.warn("[Essay Fallback] validated report recovered the request", {
+            requestId: taskRun.requestId,
+            reason,
+            fileCount: verifiedEssayOcr.fileIds.length,
+            model: result.model,
+          })
+          return true
+        }
+
+        const failedState = essayFallbackRunner.getState()
+        if (shouldAnnounceAttempt) {
+          console.warn("[Essay Fallback] grade attempt failed", {
+            requestId: taskRun.requestId,
+            reason: failedState.reason,
+            errorCode: failedState.errorCode || "ESSAY_FALLBACK_UNKNOWN",
+          })
+        }
+        return false
+      })()
     }
 
     // 🔥 扣费函数：流结束后根据实际 token 用量扣费
@@ -4672,6 +4929,9 @@ export async function POST(request: NextRequest) {
         [answer],
       )
       if (terminalFailure && !hasValidEssayFallback) {
+        if (await tryEssayGradeFallback("blocking_terminal_failure", controller)) {
+          return
+        }
         workflowNodeFailure = {
           message: terminalFailure.publicMessage,
           code: terminalFailure.code,
@@ -4722,23 +4982,30 @@ export async function POST(request: NextRequest) {
       })
 
       if (conversationId) {
-        await updateTaskRun(taskRun.id, {
-          status: "running",
-          stage: "消息生成完成，正在结算",
-          conversationId,
-          progress: 95,
-          metadata: {
-            dify_response_mode: "blocking",
-            total_tokens: totalTokens,
-            prompt_tokens: promptTokens,
-            completion_tokens: completionTokens,
-          },
-        })
+        fireAndForget(
+          "AI Task Trace blocking settlement",
+          withTimeout(
+            updateTaskRun(taskRun.id, {
+              status: "running",
+              stage: "消息生成完成，正在结算",
+              conversationId,
+              progress: 95,
+              metadata: {
+                dify_response_mode: "blocking",
+                total_tokens: totalTokens,
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+              },
+            }),
+            TASK_TRACE_FINALIZE_TIMEOUT_MS,
+            "dify-chat.blocking-settlement-trace",
+          ),
+        )
       }
     }
 
     const finalizeDifyChatResponse = async (controller: SseByteController, stagePrefix = "任务完成") => {
-      if (taskCompleted) return
+      if (taskCompleted || clientAborted) return
       clearFirstByteTimeout()
 
       if (shouldBufferEssayCorrection && !workflowNodeFailure) {
@@ -4750,13 +5017,17 @@ export async function POST(request: NextRequest) {
         }
 
         if (!validateEssayCorrectionResponse(fullResponseText, "standard")) {
-          const message = "作文批改本次没有返回有效结果，请重新提交。本次未扣费。"
-          workflowNodeFailure = {
-            message,
-            code: "DIFY_INVALID_ESSAY_RESULT",
+          const recovered = await tryEssayGradeFallback("invalid_or_empty_dify_report", controller)
+          if (!recovered) {
+            const fallbackFailure = pendingEssayNodeFailure || {
+              message: "作文批改本次没有返回有效结果，请重新提交。本次未扣费。",
+              code: "DIFY_INVALID_ESSAY_RESULT",
+            }
+            workflowNodeFailure = fallbackFailure
+            enqueueSseError(controller, fallbackFailure.message, fallbackFailure.code)
           }
-          enqueueSseError(controller, message, workflowNodeFailure.code)
-        } else if (fullResponseText.trim() && !essayDisplaySent) {
+        }
+        if (!workflowNodeFailure && fullResponseText.trim() && !essayDisplaySent) {
           enqueueSseAnswer(controller, fullResponseText)
           essayDisplaySent = true
         }
@@ -4798,7 +5069,10 @@ export async function POST(request: NextRequest) {
         enqueueSseError(controller, message, workflowNodeFailure.code)
       }
 
-      const shouldCharge = !workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)
+      const shouldCharge = !essayFallbackUsed
+        && !workflowNodeFailure
+        && hasReceivedContent
+        && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)
       console.log(`💰 [Billing] ${stagePrefix}，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
       if (shouldCharge) {
         await deductCredit()
@@ -4832,6 +5106,13 @@ export async function POST(request: NextRequest) {
                 has_received_content: hasReceivedContent,
                 node_failure: workflowNodeFailure,
                 dify_response_mode: actualDifyResponseMode,
+                essay_fallback_attempted: essayFallbackAttempted,
+                essay_fallback_used: essayFallbackUsed,
+                essay_fallback_reason: essayFallbackReason,
+                essay_fallback_provider: essayFallbackProvider,
+                essay_fallback_model: essayFallbackModel,
+                essay_fallback_prompt_version: essayFallbackPromptVersion,
+                charged_credits: essayFallbackUsed ? 0 : undefined,
               },
             }),
             TASK_TRACE_FINALIZE_TIMEOUT_MS,
@@ -4869,14 +5150,21 @@ export async function POST(request: NextRequest) {
             controller.close()
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            await updateTaskRun(taskRun.id, {
-              status: "failed",
-              stage: "blocking 响应处理失败",
-              progress: 100,
-              errorMessage: message,
-              errorCode: "DIFY_BLOCKING_RESPONSE_FAILED",
-              sanitizedError: sanitizeForTrace({ message }) as Record<string, unknown>,
-            }).catch((traceError) => console.warn("[AI Task Trace] blocking failure update failed:", traceError))
+            fireAndForget(
+              "AI Task Trace blocking failure",
+              withTimeout(
+                updateTaskRun(taskRun.id, {
+                  status: "failed",
+                  stage: "blocking 响应处理失败",
+                  progress: 100,
+                  errorMessage: message,
+                  errorCode: "DIFY_BLOCKING_RESPONSE_FAILED",
+                  sanitizedError: sanitizeForTrace({ message }) as Record<string, unknown>,
+                }),
+                TASK_TRACE_FINALIZE_TIMEOUT_MS,
+                "dify-chat.blocking-failure-trace",
+              ),
+            )
             enqueueSseError(controller, "服务响应处理失败，请稍后重试", "DIFY_BLOCKING_RESPONSE_FAILED")
             controller.close()
           }
@@ -4939,44 +5227,65 @@ export async function POST(request: NextRequest) {
           }
     }
 
-    const handleDifyStreamTimeout = (reason: "first_byte" | DifyStreamTimeoutReason) => {
-      if (taskCompleted) return
-      clearFirstByteTimeout()
+    const noteDifyStreamTimeout = (reason: "first_byte" | DifyStreamTimeoutReason) => {
       const failure = getDifyStreamTimeoutFailure(reason)
       streamStatus.timeoutReason = reason
       streamStatus.timeoutCode = failure.code
       streamStatus.timeoutMessage = failure.message
-      taskCompleted = true
-      workflowNodeFailure = { message: failure.message, code: failure.code }
+    }
+
+    const handleDifyStreamTimeout = async (
+      reason: "first_byte" | DifyStreamTimeoutReason,
+      controller: SseByteController,
+    ) => {
+      if (taskCompleted) return essayFallbackUsed
+      clearFirstByteTimeout()
+      noteDifyStreamTimeout(reason)
+      const failure = getDifyStreamTimeoutFailure(reason)
       streamStatus.controller?.abort()
       console.error(`[Dify Stream] ${failure.code} model=${model} requestId=${taskRun.requestId}`)
       logPerf(taskRun.requestId, "stream_timeout", apiStartedAt, {
         reason,
         responseLength: fullResponseText.length,
       })
-      void taskRunCreatePromise
-        .catch((error) => {
-          console.warn("[AI Task Trace] create before stream timeout failed:", error instanceof Error ? error.message : String(error))
-        })
-        .then(() => updateTaskRun(taskRun.id, {
-          status: "timeout",
-          stage: failure.stage,
-          progress: 100,
-          conversationId: conversationId || undefined,
-          errorMessage: failure.message,
-          errorCode: failure.code,
-          metadata: {
-            failure_phase: "stream",
-            timeout_reason: reason,
-            response_length: fullResponseText.length,
-            has_received_content: hasReceivedContent,
-            total_tokens: totalTokens,
-            prompt_tokens: promptTokens,
-            completion_tokens: completionTokens,
-            dify_response_mode: actualDifyResponseMode,
-          },
-        }))
-        .catch((error) => console.warn("[AI Task Trace] stream timeout update failed:", error))
+
+      if (await tryEssayGradeFallback(`dify_stream_${reason}_timeout`, controller)) {
+        await finalizeDifyChatResponse(controller, "上游超时后备用作文批改完成")
+        return true
+      }
+
+      taskCompleted = true
+      workflowNodeFailure = { message: failure.message, code: failure.code }
+      fireAndForget(
+        "AI Task Trace stream timeout",
+        taskRunCreatePromise
+          .catch((error) => {
+            console.warn("[AI Task Trace] create before stream timeout failed:", error instanceof Error ? error.message : String(error))
+          })
+          .then(() => withTimeout(
+            updateTaskRun(taskRun.id, {
+              status: "timeout",
+              stage: failure.stage,
+              progress: 100,
+              conversationId: conversationId || undefined,
+              errorMessage: failure.message,
+              errorCode: failure.code,
+              metadata: {
+                failure_phase: "stream",
+                timeout_reason: reason,
+                response_length: fullResponseText.length,
+                has_received_content: hasReceivedContent,
+                total_tokens: totalTokens,
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+                dify_response_mode: actualDifyResponseMode,
+              },
+            }),
+            TASK_TRACE_FINALIZE_TIMEOUT_MS,
+            "dify-chat.stream-timeout-trace",
+          )),
+      )
+      return false
     }
 
     type DifyTerminalStreamEvent = {
@@ -5010,6 +5319,11 @@ export async function POST(request: NextRequest) {
 
       if (terminalFailure && !hasValidEssayFallback) {
         const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
+        if (await tryEssayGradeFallback(`dify_${json.event || "terminal"}_failure`, controller)) {
+          await finalizeDifyChatResponse(controller, "备用作文批改完成")
+          controller.terminate()
+          return true
+        }
         workflowNodeFailure = {
           message: terminalFailure.publicMessage,
           code: terminalFailure.code,
@@ -5017,22 +5331,30 @@ export async function POST(request: NextRequest) {
         taskCompleted = true
         enqueueSseError(controller, terminalFailure.publicMessage, terminalFailure.code)
         controller.terminate()
-        await taskRunCreatePromise.catch((error) => {
-          console.warn("[AI Task Trace] create before stream failure failed:", error instanceof Error ? error.message : String(error))
-        })
-        await updateTaskRun(taskRun.id, {
-          status: "failed",
-          stage: "任务处理失败",
-          progress: 100,
-          workflowRunId,
-          errorMessage: terminalFailure.publicMessage,
-          errorCode: terminalFailure.code,
-          sanitizedError: sanitizeForTrace({ error: terminalFailure.rawMessage }) as Record<string, unknown>,
-          metadata: {
-            ...initialTaskMetadata,
-            failure_phase: "stream",
-          },
-        })
+        fireAndForget(
+          "AI Task Trace stream failure",
+          taskRunCreatePromise
+            .catch((error) => {
+              console.warn("[AI Task Trace] create before stream failure failed:", error instanceof Error ? error.message : String(error))
+            })
+            .then(() => withTimeout(
+              updateTaskRun(taskRun.id, {
+                status: "failed",
+                stage: "任务处理失败",
+                progress: 100,
+                workflowRunId,
+                errorMessage: terminalFailure.publicMessage,
+                errorCode: terminalFailure.code,
+                sanitizedError: sanitizeForTrace({ error: terminalFailure.rawMessage }) as Record<string, unknown>,
+                metadata: {
+                  ...initialTaskMetadata,
+                  failure_phase: "stream",
+                },
+              }),
+              TASK_TRACE_FINALIZE_TIMEOUT_MS,
+              "dify-chat.stream-failure-trace",
+            )),
+        )
         return true
       }
 
@@ -5160,37 +5482,54 @@ export async function POST(request: NextRequest) {
 	                }
                   const nodeFailed = ["failed", "error"].includes(nodeStatus)
                     || (shouldBufferEssayCorrection && ["exception", "cancelled", "canceled", "stopped"].includes(nodeStatus))
-                  if (json.event === "node_finished" && nodeFailed) {
-                    const title = sanitizePublicAiLabel(nodeTitle || "", "任务处理")
-                    const errorMessage = String(
+	                  if (json.event === "node_finished" && nodeFailed) {
+	                    const title = sanitizePublicAiLabel(nodeTitle || "", "任务处理")
+	                    const errorMessage = String(
                       nodeData.error ||
                       nodeData.error_message ||
                       json.error ||
-                      json.message ||
-                      `${title}处理失败`
-                    )
-                    if (shouldBufferEssayCorrection) {
-                      console.warn(`[Essay Grading] node ${nodeStatus}; waiting for validated fallback output`, {
-                        requestId: taskRun.requestId,
-                        node: title,
-                      })
-                      updateTaskRun(taskRun.id, {
-                        status: "running",
-                        stage: "作文识别遇到异常，正在检查备用结果",
-                        progress: 75,
-                        workflowRunId: nodeData.workflow_run_id || json.workflow_run_id || null,
-                        sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
-		                    }).catch((error) => console.warn("[AI Task Trace] essay node diagnostic update failed:", error))
-                    } else {
+	                      json.message ||
+	                      `${title}处理失败`
+	                    )
                       const nodeFailure = getDifyTerminalFailure(
                         { event: "error", message: errorMessage },
                         { publicMessage: difyFailurePublicMessage },
                       )
                       const publicErrorMessage = nodeFailure?.publicMessage || "任务处理失败，请稍后重试。本次未扣费。"
-                      workflowNodeFailure = {
-                        message: publicErrorMessage,
-                        code: nodeFailure?.code || (model === "open-claw" ? "OPENCLAW_NODE_FAILED" : "DIFY_NODE_FAILED"),
-                      }
+                      const publicErrorCode = nodeFailure?.code || (model === "open-claw" ? "OPENCLAW_NODE_FAILED" : "DIFY_NODE_FAILED")
+	                    if (shouldBufferEssayCorrection) {
+                        pendingEssayNodeFailure = {
+                          message: publicErrorMessage,
+                          code: publicErrorCode,
+                        }
+                        const isVisualNode = /(?:视觉|图像|图片|ocr|vision|image)/i.test(nodeTitle)
+	                      console.warn(`[Essay Grading] node ${nodeStatus}; checking validated fallback output`, {
+	                        requestId: taskRun.requestId,
+	                        node: title,
+                          isVisualNode,
+	                      })
+                        if (
+                          isVisualNode
+                          && await tryEssayGradeFallback("visual_node_failure", controller)
+                        ) {
+                          await finalizeDifyChatResponse(controller, "视觉节点失败后备用批改完成")
+                          controller.terminate()
+                          return
+                        }
+	                      updateTaskRun(taskRun.id, {
+	                        status: "running",
+	                        stage: isVisualNode ? "备用批改未返回结果，正在等待工作流终态" : "作文处理遇到异常，正在等待工作流终态",
+	                        progress: 75,
+	                        workflowRunId: nodeData.workflow_run_id || json.workflow_run_id || null,
+                          errorMessage: publicErrorMessage,
+                          errorCode: publicErrorCode,
+	                        sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
+			                    }).catch((error) => console.warn("[AI Task Trace] essay node diagnostic update failed:", error))
+	                    } else {
+	                      workflowNodeFailure = {
+	                        message: publicErrorMessage,
+	                        code: publicErrorCode,
+	                      }
                       enqueueSseError(controller, publicErrorMessage, workflowNodeFailure.code)
                       updateTaskRun(taskRun.id, {
                         status: "running",
@@ -5499,10 +5838,12 @@ export async function POST(request: NextRequest) {
                 const timeoutReason: "first_byte" | DifyStreamTimeoutReason = error instanceof DifyStreamTimeoutError
                   ? error.reason
                   : streamStatus.timeoutReason || "first_byte"
-                handleDifyStreamTimeout(timeoutReason)
                 const failure = getDifyStreamTimeoutFailure(timeoutReason)
                 try {
-                  enqueueSseError(controller, failure.message, failure.code)
+                  const recovered = await handleDifyStreamTimeout(timeoutReason, controller)
+                  if (!recovered) {
+                    enqueueSseError(controller, failure.message, failure.code)
+                  }
                   controller.close()
                 } catch {
                   controller.error(error)
@@ -5532,7 +5873,7 @@ export async function POST(request: NextRequest) {
       ? withDifyStreamWatchdog(response.body, {
           idleTimeoutMs: streamIdleTimeoutMs,
           maxDurationMs: streamMaxDurationMs,
-          onTimeout: handleDifyStreamTimeout,
+          onTimeout: noteDifyStreamTimeout,
         })
       : null
     const transformedBody = watchedDifyBody?.pipeThrough(transformStream)
@@ -5540,23 +5881,49 @@ export async function POST(request: NextRequest) {
       console.error(`❌ [Stream错误] pipeThrough返回undefined! response.body=${response.body === null ? 'null' : 'not-null'}`)
       clearFirstByteTimeout()
       streamStatus.controller?.abort()
+      if (await tryEssayGradeFallback("empty_dify_response_body")) {
+        const fallbackBody = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            await finalizeDifyChatResponse(controller, "空响应体后备用作文批改完成")
+            controller.close()
+          },
+        })
+        return new Response(fallbackBody, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Encoding": "none",
+            "X-Request-Id": taskRun.requestId,
+          },
+        })
+      }
       taskCompleted = true
       const message = "服务暂时没有返回可展示内容，请稍后重试。本次未扣费。"
       workflowNodeFailure = { message, code: "DIFY_EMPTY_RESPONSE_BODY" }
-      await taskRunCreatePromise.catch((error) => {
-        console.warn("[AI Task Trace] create before empty body failure failed:", error instanceof Error ? error.message : String(error))
-      })
-      await updateTaskRun(taskRun.id, {
-        status: "failed",
-        stage: "上游响应体为空",
-        progress: 100,
-        errorMessage: message,
-        errorCode: workflowNodeFailure.code,
-        metadata: {
-          failure_phase: "response_body",
-          dify_response_mode: actualDifyResponseMode,
-        },
-      }).catch((error) => console.warn("[AI Task Trace] empty body failure update failed:", error))
+      fireAndForget(
+        "AI Task Trace empty response body",
+        taskRunCreatePromise
+          .catch((error) => {
+            console.warn("[AI Task Trace] create before empty body failure failed:", error instanceof Error ? error.message : String(error))
+          })
+          .then(() => withTimeout(
+            updateTaskRun(taskRun.id, {
+              status: "failed",
+              stage: "上游响应体为空",
+              progress: 100,
+              errorMessage: message,
+              errorCode: workflowNodeFailure?.code || "DIFY_EMPTY_RESPONSE_BODY",
+              metadata: {
+                failure_phase: "response_body",
+                dify_response_mode: actualDifyResponseMode,
+              },
+            }),
+            TASK_TRACE_FINALIZE_TIMEOUT_MS,
+            "dify-chat.empty-response-body-trace",
+          )),
+      )
       return Response.json({
         error: message,
         code: workflowNodeFailure.code,
@@ -5607,14 +5974,21 @@ export async function POST(request: NextRequest) {
         const publicMessage = sanitizePublicAiError(err.message, "服务暂时不可用，请稍后重试。")
 	    const fallbackRequestId = request.headers.get("X-Request-Id")
 	    if (fallbackRequestId) {
-	      await updateTaskRun(fallbackRequestId, {
-	        status: "failed",
-	        stage: "服务端致命错误",
-	        progress: 100,
-	        errorMessage: publicMessage,
-	        errorCode: "DIFY_FATAL",
-	        sanitizedError: sanitizeForTrace({ message: err.message, stack: err.stack }) as Record<string, unknown>,
-	      })
+	      fireAndForget(
+          "AI Task Trace fatal failure",
+          withTimeout(
+            updateTaskRun(fallbackRequestId, {
+	            status: "failed",
+	            stage: "服务端致命错误",
+	            progress: 100,
+	            errorMessage: publicMessage,
+	            errorCode: "DIFY_FATAL",
+	            sanitizedError: sanitizeForTrace({ message: err.message, stack: err.stack }) as Record<string, unknown>,
+	          }),
+            TASK_TRACE_FINALIZE_TIMEOUT_MS,
+            "dify-chat.fatal-failure-trace",
+          ),
+        )
 	    }
 	    return new Response(JSON.stringify({ error: publicMessage }), { status: 500 })
 	  }

@@ -10,6 +10,7 @@ import { getDifyFileTypeForMime, resolveDifyUploadRouting } from "@/lib/dify-fil
 import { createRequestId, sanitizeForTrace } from "@/lib/ai-task-trace"
 import { requireUser } from "@/lib/auth/verified-user"
 import { sanitizePublicAiErrorCode } from "@/lib/chat-error-sanitizer"
+import { extractEssayTextFromImage, signEssayOcrTextToken } from "@/lib/essay-image-fallback"
 import { extractWorkflowDocumentText, WorkflowDocumentError } from "@/lib/workflow-document-content"
 
 // ✅ 修改 1: 切换回 Node.js 运行时，以支持更大的文件和更稳定的上传
@@ -46,6 +47,12 @@ const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", "
 
 // ✅ 安全校验：docker-nginx-1 100M 上限
 const MAX_FILE_SIZE_VERCEL = 100 * 1024 * 1024
+const ESSAY_OCR_MAX_IMAGE_DIMENSION = 2048
+const ESSAY_OCR_JPEG_QUALITY = 88
+const ESSAY_OCR_MAX_SOURCE_BYTES = 16 * 1024 * 1024
+const ESSAY_OCR_MAX_SOURCE_PIXELS = 40_000_000
+const ESSAY_OCR_MAX_CONCURRENCY_PER_USER = 2
+const essayOcrInFlightByUser = new Map<string, number>()
 
 const DIFY_BASE_URL = (process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
@@ -216,6 +223,67 @@ async function normalizeUploadFile(file: File, safeExt: string) {
     file: new File([outputArrayBuffer], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" }),
     safeExt: ".jpg",
     convertedFrom: safeExt,
+  }
+}
+
+function tryAcquireEssayOcrSlot(userId: string) {
+  const current = essayOcrInFlightByUser.get(userId) || 0
+  if (current >= ESSAY_OCR_MAX_CONCURRENCY_PER_USER) return null
+
+  essayOcrInFlightByUser.set(userId, current + 1)
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    const remaining = (essayOcrInFlightByUser.get(userId) || 1) - 1
+    if (remaining > 0) essayOcrInFlightByUser.set(userId, remaining)
+    else essayOcrInFlightByUser.delete(userId)
+  }
+}
+
+async function extractStandardEssayImageText(file: File, fileId: string, userId: string) {
+  if (file.size > ESSAY_OCR_MAX_SOURCE_BYTES) return null
+
+  const releaseSlot = tryAcquireEssayOcrSlot(userId)
+  if (!releaseSlot) return null
+
+  try {
+    const inputBuffer = Buffer.from(await file.arrayBuffer())
+    let metadata: sharp.Metadata
+    try {
+      metadata = await sharp(inputBuffer, {
+        animated: false,
+        limitInputPixels: ESSAY_OCR_MAX_SOURCE_PIXELS,
+      }).metadata()
+    } catch {
+      return null
+    }
+
+    const sourcePixels = (metadata.width || 0) * (metadata.height || 0)
+    if (!sourcePixels || sourcePixels > ESSAY_OCR_MAX_SOURCE_PIXELS) return null
+
+    const ocrBuffer = await sharp(inputBuffer, {
+      animated: false,
+      limitInputPixels: ESSAY_OCR_MAX_SOURCE_PIXELS,
+    })
+      .rotate()
+      .resize({
+        width: ESSAY_OCR_MAX_IMAGE_DIMENSION,
+        height: ESSAY_OCR_MAX_IMAGE_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: ESSAY_OCR_JPEG_QUALITY, mozjpeg: true })
+      .toBuffer()
+
+    return await extractEssayTextFromImage({
+      fileId,
+      imageBase64: ocrBuffer.toString("base64"),
+      fileName: file.name.replace(/\.[^.]+$/, ".jpg"),
+      mimeType: "image/jpeg",
+    })
+  } finally {
+    releaseSlot()
   }
 }
 
@@ -408,15 +476,40 @@ export async function POST(request: NextRequest) {
     }
 
     const safeFile = new File([uploadFile], safeFileName, { type: uploadFile.type })
+    const shouldExtractEssayImageText = targetModel === "standard"
+      && getDifyFileTypeForMime(uploadFile.type) === "image"
+    const essayOcrPromise = shouldExtractEssayImageText
+      ? extractStandardEssayImageText(safeFile, `upload:${requestId}:${safeFileName}`, userId)
+          .catch((error) => {
+            console.warn("[Essay OCR] pre-extraction failed; continuing with Dify upload", {
+              requestId,
+              errorType: error instanceof Error ? error.name : "UnknownError",
+            })
+            return null
+          })
+      : Promise.resolve(null)
 
     // 非 GPT Image 工作台必须走 Dify 原生 upload_file_id。
     // OpenClaw、作文批改、教学模型等 Dify 应用不可靠支持 remote_url。
     if (!useImageGateway) {
       try {
-        const difyFileId = await uploadFileToDify(safeFile, userId, targetApiKey)
+        const [difyFileId, essayOcrResult] = await Promise.all([
+          uploadFileToDify(safeFile, userId, targetApiKey),
+          essayOcrPromise,
+        ])
         if (!difyFileId) {
           throw new Error("Dify upload succeeded but did not return an upload_file_id")
         }
+        if (essayOcrResult?.text) {
+          extractedText = essayOcrResult.text
+        }
+        const extractedTextToken = extractedText && essayOcrResult
+          ? signEssayOcrTextToken({
+              userId,
+              fileId: difyFileId,
+              text: extractedText,
+            }) || null
+          : null
 
         console.log("[Backend] Dify upload success:", {
           fileName: safeFileName,
@@ -440,6 +533,7 @@ export async function POST(request: NextRequest) {
             original_size: file.size,
             converted_from: normalizedUpload.convertedFrom,
             extracted_text: extractedText,
+            extracted_text_token: extractedTextToken,
             extracted_char_count: extractedText?.length || 0,
           },
         }), {
