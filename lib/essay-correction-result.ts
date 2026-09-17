@@ -63,7 +63,7 @@ const VALID_ESSAY_INDICATORS = [
 ] as const
 
 const SCORE_FIELD_PATTERN =
-  /(?:综合)?(?:总分|得分|分数|评分|score)\s*(?:为\s*)?[:：|]?\s*(\d+(?:\.\d+)?)(?=\s*(?:[/／]\s*\d+(?:\.\d+)?)?\s*(?:分|分数|$|[，,。；;\n]))/gi
+  /(?:综合)?(?:总分|得分|分数|评分|score)(?:\s*[*_`~]{1,3})?\s*(?:为\s*)?[:：|]?\s*(\d+(?:\.\d+)?)(?=\s*(?:[/／]\s*\d+(?:\.\d+)?)?\s*(?:[*_`~]{1,3}\s*)?(?:分|分数|$|[，,。；;\n]))/gi
 
 function extractScoreValues(text: string) {
   return Array.from(text.matchAll(SCORE_FIELD_PATTERN), (match) => Number(match[1]))

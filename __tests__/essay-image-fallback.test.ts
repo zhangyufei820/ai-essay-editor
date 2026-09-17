@@ -353,7 +353,7 @@ describe("essay image fallback", () => {
         essay_id: "essay-1",
         grade_level: "初中",
       }),
-      45_000,
+      35_000,
       undefined,
     )
   })
@@ -386,7 +386,31 @@ describe("essay image fallback", () => {
     const body = JSON.parse(init.body)
     expect(body.model).toBe("gpt-5.5")
     expect(body.max_tokens).toBe(1_400)
+    expect(body.messages[0].content).toContain("第一行必须严格使用")
     expect(body.messages[1].content).toContain("学段：初中")
+    expect(callEssayAiSuiteMock).not.toHaveBeenCalled()
+  })
+
+  it("retries the direct grader once when the first channel fails", async () => {
+    process.env.SHENXIANG_NEW_API_BASE_URL = "http://new-api:3000/v1"
+    process.env.SHENXIANG_NEW_API_TEXT_API_KEY = "test-new-api-key"
+    internalDifyFetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "unavailable" } }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        model: "gpt-5.5",
+        choices: [{ finish_reason: "stop", message: { content: validReport } }],
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+
+    await expect(gradeEssayWithFallback({
+      text: "春天来了，我和同学一起去公园观察花草，记录了许多有趣的细节。",
+    })).resolves.toMatchObject({
+      markdownReport: validReport,
+      model: "gpt-5.5",
+    })
+    expect(internalDifyFetchMock).toHaveBeenCalledTimes(2)
     expect(callEssayAiSuiteMock).not.toHaveBeenCalled()
   })
 
@@ -414,6 +438,7 @@ describe("essay image fallback", () => {
       model: "sx-chinese-text",
       promptVersion: "essay-grading-v1",
     })
+    expect(internalDifyFetchMock).toHaveBeenCalledTimes(2)
     expect(callEssayAiSuiteMock).toHaveBeenCalledTimes(1)
   })
 
@@ -437,11 +462,13 @@ describe("essay image fallback", () => {
       text: "春天来了，我和同学一起去公园观察花草，记录了许多有趣的细节。",
       signal: controller.signal,
     })
-    await Promise.resolve()
+    for (let attempt = 0; attempt < 5 && callEssayAiSuiteMock.mock.calls.length === 0; attempt += 1) {
+      await Promise.resolve()
+    }
     expect(callEssayAiSuiteMock).toHaveBeenCalledWith(
       "/api/essay/grade-single",
       expect.any(Object),
-      45_000,
+      35_000,
       controller.signal,
     )
 

@@ -30,6 +30,13 @@ describe("essay correction result validation", () => {
     expect(isValidEssayCorrectionResult(validReport)).toBe(true)
   })
 
+  it.each([
+    "**综合评分：86/100**",
+    "- **综合评分**：86/100",
+  ])("accepts a valid score wrapped in common Markdown emphasis: %s", (scoreLine) => {
+    expect(isValidEssayCorrectionResult(validReport.replace("综合总分：86/100", scoreLine))).toBe(true)
+  })
+
   it("rejects an all-zero report even when it contains grading headings", () => {
     const report = [
       "# 作文批改报告",

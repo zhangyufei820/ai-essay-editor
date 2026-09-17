@@ -12,8 +12,9 @@ import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 
 const ESSAY_AI_SUITE_OCR_TIMEOUT_MS = 20_000
 const LLM_GATEWAY_OCR_TIMEOUT_MS = 25_000
-const ESSAY_AI_SUITE_GRADE_TIMEOUT_MS = 45_000
-const DIRECT_ESSAY_GRADE_TIMEOUT_MS = 45_000
+const ESSAY_AI_SUITE_GRADE_TIMEOUT_MS = 35_000
+const DIRECT_ESSAY_GRADE_TIMEOUT_MS = 30_000
+const DIRECT_ESSAY_GRADE_ATTEMPTS = 2
 const DIRECT_ESSAY_GRADE_MODEL = "gpt-5.5"
 const DIRECT_ESSAY_GRADE_PROMPT_VERSION = "direct-essay-grading-v1"
 const ESSAY_OCR_MODEL = "sx-chinese-text"
@@ -521,6 +522,7 @@ async function callDirectEssayGrade(
               "你是中小学作文阅卷老师。",
               "仅输出简洁 Markdown 批改报告，不输出推理过程。",
               "必须包含综合评分（大于 0 且满分 100）、总评、主要优点、关键问题、修改建议和润色示范。",
+              "第一行必须严格使用“综合评分：XX/100分”，不要给这一行添加 Markdown 加粗标记。",
               "报告控制在 900 字以内，评价必须基于原文，不得声称未收到或无法识别作文。",
             ].join(""),
           },
@@ -574,11 +576,13 @@ export async function gradeEssayWithFallback(
   }
 
   const gradeRequest = buildGradeRequest(params)
-  const directResult = await callDirectEssayGrade(gradeRequest, params.signal)
-  if (params.signal?.aborted) {
-    throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_ABORTED")
+  for (let attempt = 0; attempt < DIRECT_ESSAY_GRADE_ATTEMPTS; attempt += 1) {
+    const directResult = await callDirectEssayGrade(gradeRequest, params.signal)
+    if (params.signal?.aborted) {
+      throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_ABORTED")
+    }
+    if (directResult) return directResult
   }
-  if (directResult) return directResult
 
   let response: EssayAiSuiteResponse<EssayGradeResult>
   try {
