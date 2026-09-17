@@ -13,6 +13,9 @@ import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 const ESSAY_AI_SUITE_OCR_TIMEOUT_MS = 20_000
 const LLM_GATEWAY_OCR_TIMEOUT_MS = 25_000
 const ESSAY_AI_SUITE_GRADE_TIMEOUT_MS = 45_000
+const DIRECT_ESSAY_GRADE_TIMEOUT_MS = 45_000
+const DIRECT_ESSAY_GRADE_MODEL = "gpt-5.5"
+const DIRECT_ESSAY_GRADE_PROMPT_VERSION = "direct-essay-grading-v1"
 const ESSAY_OCR_MODEL = "sx-chinese-text"
 const MAX_IMAGE_BASE64_LENGTH = 24 * 1024 * 1024
 const MIN_ESSAY_OCR_CONTENT_CHARS = 12
@@ -99,7 +102,8 @@ type EssayGradeResult = {
   prompt_version?: unknown
 }
 
-type OpenAiVisionResponse = {
+type OpenAiChatResponse = {
+  model?: unknown
   choices?: Array<{
     finish_reason?: unknown
     message?: {
@@ -269,7 +273,7 @@ async function callGatewayOcr(params: ReturnType<typeof parseImageInput>) {
     throw new EssayImageFallbackError("ESSAY_OCR_GATEWAY_FAILED")
   }
 
-  const payload = await response.json().catch(() => null) as OpenAiVisionResponse | null
+  const payload = await response.json().catch(() => null) as OpenAiChatResponse | null
   const choice = payload?.choices?.[0]
   const text = readUsableEssayOcrText(
     readOpenAiText(choice?.message?.content),
@@ -481,6 +485,87 @@ function buildGradeRequest(params: GradeEssayWithFallbackParams) {
   }
 }
 
+function getDirectEssayGradeConfig() {
+  const baseUrl = process.env.SHENXIANG_NEW_API_BASE_URL?.trim().replace(/\/+$/, "") || ""
+  const apiKey = process.env.SHENXIANG_NEW_API_TEXT_API_KEY?.trim() || ""
+  return { baseUrl, apiKey }
+}
+
+async function callDirectEssayGrade(
+  gradeRequest: ReturnType<typeof buildGradeRequest>,
+  signal?: AbortSignal,
+): Promise<EssayFallbackGradeResult | null> {
+  const { baseUrl, apiKey } = getDirectEssayGradeConfig()
+  if (!baseUrl || !apiKey) return null
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), DIRECT_ESSAY_GRADE_TIMEOUT_MS)
+  const abortFromCaller = () => controller.abort(signal?.reason)
+  if (signal?.aborted) abortFromCaller()
+  else signal?.addEventListener("abort", abortFromCaller, { once: true })
+
+  try {
+    const response = await internalDifyFetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: DIRECT_ESSAY_GRADE_MODEL,
+        max_tokens: 1_400,
+        messages: [
+          {
+            role: "system",
+            content: [
+              "你是中小学作文阅卷老师。",
+              "仅输出简洁 Markdown 批改报告，不输出推理过程。",
+              "必须包含综合评分（大于 0 且满分 100）、总评、主要优点、关键问题、修改建议和润色示范。",
+              "报告控制在 900 字以内，评价必须基于原文，不得声称未收到或无法识别作文。",
+            ].join(""),
+          },
+          {
+            role: "user",
+            content: [
+              "请批改以下作文。",
+              `学段：${gradeRequest.grade_level || "未指定"}`,
+              `文体：${gradeRequest.genre || "未指定"}`,
+              "",
+              gradeRequest.text,
+            ].join("\n"),
+          },
+        ],
+      }),
+      signal: controller.signal,
+    })
+    if (!response.ok || signal?.aborted) return null
+
+    const payload = await response.json().catch(() => null) as OpenAiChatResponse | null
+    const choice = payload?.choices?.[0]
+    const markdownReport = normalizeText(readOpenAiText(choice?.message?.content))
+    if (
+      String(choice?.finish_reason || "").toLowerCase() === "length"
+      || !isValidEssayCorrectionResult(markdownReport)
+    ) {
+      return null
+    }
+
+    return {
+      markdownReport,
+      provider: "llm",
+      model: typeof payload?.model === "string" && payload.model.trim()
+        ? payload.model.trim()
+        : DIRECT_ESSAY_GRADE_MODEL,
+      promptVersion: DIRECT_ESSAY_GRADE_PROMPT_VERSION,
+    }
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+    signal?.removeEventListener("abort", abortFromCaller)
+  }
+}
+
 export async function gradeEssayWithFallback(
   params: GradeEssayWithFallbackParams,
 ): Promise<EssayFallbackGradeResult> {
@@ -489,6 +574,12 @@ export async function gradeEssayWithFallback(
   }
 
   const gradeRequest = buildGradeRequest(params)
+  const directResult = await callDirectEssayGrade(gradeRequest, params.signal)
+  if (params.signal?.aborted) {
+    throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_ABORTED")
+  }
+  if (directResult) return directResult
+
   let response: EssayAiSuiteResponse<EssayGradeResult>
   try {
     response = await callEssayAiSuite<EssayGradeResult>(

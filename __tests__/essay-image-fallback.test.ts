@@ -40,6 +40,8 @@ describe("essay image fallback", () => {
     LITELLM_MASTER_KEY: process.env.LITELLM_MASTER_KEY,
     ESSAY_AI_SUITE_API_TOKEN: process.env.ESSAY_AI_SUITE_API_TOKEN,
     LLM_GATEWAY_BASE_URL: process.env.LLM_GATEWAY_BASE_URL,
+    SHENXIANG_NEW_API_BASE_URL: process.env.SHENXIANG_NEW_API_BASE_URL,
+    SHENXIANG_NEW_API_TEXT_API_KEY: process.env.SHENXIANG_NEW_API_TEXT_API_KEY,
   }
 
   beforeEach(() => {
@@ -47,6 +49,8 @@ describe("essay image fallback", () => {
     process.env.ESSAY_OCR_SIGNING_SECRET = "test-essay-ocr-signing-secret"
     process.env.LITELLM_MASTER_KEY = "test-gateway-key"
     process.env.LLM_GATEWAY_BASE_URL = "http://llm-gateway:4000/v1/"
+    delete process.env.SHENXIANG_NEW_API_BASE_URL
+    delete process.env.SHENXIANG_NEW_API_TEXT_API_KEY
   })
 
   afterAll(() => {
@@ -354,6 +358,65 @@ describe("essay image fallback", () => {
     )
   })
 
+  it("uses the configured direct text model before the slower suite grader", async () => {
+    process.env.SHENXIANG_NEW_API_BASE_URL = "http://new-api:3000/v1/"
+    process.env.SHENXIANG_NEW_API_TEXT_API_KEY = "test-new-api-key"
+    internalDifyFetchMock.mockResolvedValue(new Response(JSON.stringify({
+      model: "gpt-5.5",
+      choices: [{
+        finish_reason: "stop",
+        message: { content: validReport },
+      }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }))
+
+    await expect(gradeEssayWithFallback({
+      text: "春天来了，我和同学一起去公园观察花草，记录了许多有趣的细节。",
+      gradeLevel: "初中",
+    })).resolves.toEqual({
+      markdownReport: validReport,
+      provider: "llm",
+      model: "gpt-5.5",
+      promptVersion: "direct-essay-grading-v1",
+    })
+    expect(internalDifyFetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = internalDifyFetchMock.mock.calls[0]
+    expect(url).toBe("http://new-api:3000/v1/chat/completions")
+    expect(init.headers.Authorization).toBe("Bearer test-new-api-key")
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+    const body = JSON.parse(init.body)
+    expect(body.model).toBe("gpt-5.5")
+    expect(body.max_tokens).toBe(1_400)
+    expect(body.messages[1].content).toContain("学段：初中")
+    expect(callEssayAiSuiteMock).not.toHaveBeenCalled()
+  })
+
+  it("falls back to the suite when the direct text model is unavailable", async () => {
+    process.env.SHENXIANG_NEW_API_BASE_URL = "http://new-api:3000/v1"
+    process.env.SHENXIANG_NEW_API_TEXT_API_KEY = "test-new-api-key"
+    internalDifyFetchMock.mockResolvedValue(new Response(JSON.stringify({
+      error: { message: "unavailable" },
+    }), { status: 503, headers: { "Content-Type": "application/json" } }))
+    callEssayAiSuiteMock.mockResolvedValue({
+      ok: true,
+      result: {
+        status: "success",
+        provider: "llm",
+        markdown_report: validReport,
+        model: "sx-chinese-text",
+        prompt_version: "essay-grading-v1",
+      },
+    })
+
+    await expect(gradeEssayWithFallback({
+      text: "春天来了，我和同学一起去公园观察花草，记录了许多有趣的细节。",
+    })).resolves.toMatchObject({
+      markdownReport: validReport,
+      model: "sx-chinese-text",
+      promptVersion: "essay-grading-v1",
+    })
+    expect(callEssayAiSuiteMock).toHaveBeenCalledTimes(1)
+  })
+
   it("rejects unusable OCR text before calling the grading service", async () => {
     await expect(gradeEssayWithFallback({
       text: "抱歉，我无法识别图片中的作文内容，请重新上传。",
@@ -374,6 +437,7 @@ describe("essay image fallback", () => {
       text: "春天来了，我和同学一起去公园观察花草，记录了许多有趣的细节。",
       signal: controller.signal,
     })
+    await Promise.resolve()
     expect(callEssayAiSuiteMock).toHaveBeenCalledWith(
       "/api/essay/grade-single",
       expect.any(Object),
