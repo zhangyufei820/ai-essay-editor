@@ -10,8 +10,8 @@ import {
 } from "@/lib/essay-ai-suite-client"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 
-const ESSAY_AI_SUITE_OCR_TIMEOUT_MS = 20_000
-const LLM_GATEWAY_OCR_TIMEOUT_MS = 25_000
+const ESSAY_AI_SUITE_OCR_TIMEOUT_MS = 10_000
+const LLM_GATEWAY_OCR_TIMEOUT_MS = 80_000
 const ESSAY_AI_SUITE_GRADE_TIMEOUT_MS = 35_000
 const DIRECT_ESSAY_GRADE_TIMEOUT_MS = 35_000
 const DIRECT_ESSAY_GRADE_MODEL = "gpt-6-astra"
