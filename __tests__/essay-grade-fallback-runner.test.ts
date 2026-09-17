@@ -73,6 +73,26 @@ describe("essay grade fallback runner", () => {
     expect(runner.getState().attempted).toBe(false)
   })
 
+  it("accepts a validated app-owned local fallback report", async () => {
+    const grade = jest.fn().mockResolvedValue({
+      markdownReport: validReport,
+      provider: "local",
+      model: null,
+      promptVersion: "local-essay-grading-v1",
+    })
+    const runner = createEssayGradeFallbackRunner({
+      verifiedOcr: { text: "可信作文正文包含足够多的有效文字内容", fileIds: ["page-1"] },
+      requestId: "chat-local-fallback",
+      grade,
+    })
+
+    await expect(runner.attempt("visual_node_failure")).resolves.toMatchObject({
+      provider: "local",
+      markdownReport: validReport,
+    })
+    expect(runner.getState().errorCode).toBeNull()
+  })
+
   it("does not start grading when the request is already aborted", async () => {
     const controller = new AbortController()
     controller.abort()

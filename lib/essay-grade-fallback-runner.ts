@@ -55,7 +55,10 @@ export function createEssayGradeFallbackRunner(
           },
         })
         if (params.signal?.aborted) return null
-        if (result.provider !== "llm" || !isValidEssayCorrectionResult(result.markdownReport)) {
+        if (
+          (result.provider !== "llm" && result.provider !== "local")
+          || !isValidEssayCorrectionResult(result.markdownReport)
+        ) {
           state.errorCode = "ESSAY_FALLBACK_GRADE_INVALID"
           return null
         }

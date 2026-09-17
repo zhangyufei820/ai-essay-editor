@@ -7,6 +7,7 @@ jest.mock("@/lib/internal-dify-fetch", () => ({
 }))
 
 import { callEssayAiSuite } from "@/lib/essay-ai-suite-client"
+import { isValidEssayCorrectionResult } from "@/lib/essay-correction-result"
 import {
   ESSAY_OCR_TEXT_TOKEN_TTL_MS,
   EssayImageFallbackError,
@@ -391,7 +392,7 @@ describe("essay image fallback", () => {
     expect(callEssayAiSuiteMock).not.toHaveBeenCalled()
   })
 
-  it("falls back to the suite when the direct text model is unavailable", async () => {
+  it("returns a validated local report when the configured direct model is unavailable", async () => {
     process.env.SHENXIANG_NEW_API_BASE_URL = "http://new-api:3000/v1"
     process.env.SHENXIANG_NEW_API_TEXT_API_KEY = "test-new-api-key"
     internalDifyFetchMock.mockResolvedValue(new Response(JSON.stringify({
@@ -408,15 +409,18 @@ describe("essay image fallback", () => {
       },
     })
 
-    await expect(gradeEssayWithFallback({
+    const result = await gradeEssayWithFallback({
       text: "春天来了，我和同学一起去公园观察花草，记录了许多有趣的细节。",
-    })).resolves.toMatchObject({
-      markdownReport: validReport,
-      model: "sx-chinese-text",
-      promptVersion: "essay-grading-v1",
     })
+
+    expect(result).toMatchObject({
+      provider: "local",
+      model: null,
+      promptVersion: "local-essay-grading-v1",
+    })
+    expect(isValidEssayCorrectionResult(result.markdownReport)).toBe(true)
     expect(internalDifyFetchMock).toHaveBeenCalledTimes(1)
-    expect(callEssayAiSuiteMock).toHaveBeenCalledTimes(1)
+    expect(callEssayAiSuiteMock).not.toHaveBeenCalled()
   })
 
   it("rejects unusable OCR text before calling the grading service", async () => {
@@ -464,7 +468,7 @@ describe("essay image fallback", () => {
     }))
   })
 
-  it("rejects local-draft grading even when its report looks valid", async () => {
+  it("replaces an untrusted suite local draft with the app-owned local report", async () => {
     callEssayAiSuiteMock.mockResolvedValue({
       ok: true,
       result: {
@@ -474,10 +478,16 @@ describe("essay image fallback", () => {
       },
     })
 
-    await expect(gradeEssayWithFallback({
+    const result = await gradeEssayWithFallback({
       text: "这是一篇用于回退批改测试的完整作文正文。",
-    })).rejects.toEqual(expect.objectContaining<Partial<EssayImageFallbackError>>({
-      code: "ESSAY_FALLBACK_GRADE_INVALID",
-    }))
+    })
+
+    expect(result).toMatchObject({
+      provider: "local",
+      model: null,
+      promptVersion: "local-essay-grading-v1",
+    })
+    expect(result.markdownReport).not.toBe(validReport)
+    expect(isValidEssayCorrectionResult(result.markdownReport)).toBe(true)
   })
 })

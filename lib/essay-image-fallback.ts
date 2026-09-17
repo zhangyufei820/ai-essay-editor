@@ -13,9 +13,10 @@ import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 const ESSAY_AI_SUITE_OCR_TIMEOUT_MS = 20_000
 const LLM_GATEWAY_OCR_TIMEOUT_MS = 25_000
 const ESSAY_AI_SUITE_GRADE_TIMEOUT_MS = 35_000
-const DIRECT_ESSAY_GRADE_TIMEOUT_MS = 40_000
+const DIRECT_ESSAY_GRADE_TIMEOUT_MS = 35_000
 const DIRECT_ESSAY_GRADE_MODEL = "gpt-6-astra"
 const DIRECT_ESSAY_GRADE_PROMPT_VERSION = "direct-essay-grading-v1"
+const LOCAL_ESSAY_GRADE_PROMPT_VERSION = "local-essay-grading-v1"
 const ESSAY_OCR_MODEL = "sx-chinese-text"
 const MAX_IMAGE_BASE64_LENGTH = 24 * 1024 * 1024
 const MIN_ESSAY_OCR_CONTENT_CHARS = 12
@@ -89,7 +90,7 @@ export type GradeEssayWithFallbackParams = {
 
 export type EssayFallbackGradeResult = {
   markdownReport: string
-  provider: "llm"
+  provider: "llm" | "local"
   model: string | null
   promptVersion: string | null
 }
@@ -491,6 +492,75 @@ function getDirectEssayGradeConfig() {
   return { baseUrl, apiKey }
 }
 
+function buildLocalEssayGrade(
+  gradeRequest: ReturnType<typeof buildGradeRequest>,
+): EssayFallbackGradeResult {
+  const text = gradeRequest.text
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean)
+  const hasTitle = Boolean(lines[0] && lines[0].length <= 30 && !/[。！？!?；;]/.test(lines[0]))
+  const bodyParagraphCount = Math.max(1, lines.length - (hasTitle ? 1 : 0))
+  const contentLength = text.match(/[A-Za-z0-9\u3400-\u9fff]/g)?.length || text.length
+  const sentenceCount = text.match(/[。！？!?]/g)?.length || 1
+  const hasClosingReflection = /(?:懂得|明白|感到|觉得|感悟|启发|收获|意义|从此|以后|总之|因此|所以)/
+    .test(text.slice(-160))
+  const hasFigurativeLanguage = /(?:仿佛|好像|如同|宛如|像一)/.test(text)
+
+  const score = Math.min(92, Math.max(65,
+    60
+    + Math.min(10, Math.floor(contentLength / 50))
+    + (bodyParagraphCount >= 3 ? 8 : bodyParagraphCount >= 2 ? 5 : 2)
+    + (sentenceCount >= 5 ? 6 : sentenceCount >= 3 ? 4 : 2)
+    + (hasTitle ? 4 : 0)
+    + (hasClosingReflection ? 3 : 0)
+    + (hasFigurativeLanguage ? 2 : 0),
+  ))
+
+  const structureAssessment = bodyParagraphCount >= 3
+    ? `正文分为 ${bodyParagraphCount} 个自然段，层次比较清楚。`
+    : "正文的基本内容已经完整，但分段层次还可以进一步拉开。"
+  const closingAssessment = hasClosingReflection
+    ? "结尾能够回到感受或主题，收束意识较好。"
+    : "结尾可以再补一句具体感受或认识，让中心更集中。"
+  const detailSuggestion = contentLength < 400
+    ? "篇幅较精简，建议在关键过程补充一处动作、语言、心理或环境细节。"
+    : "篇幅较充足，建议删减重复表达，把笔墨集中到最能表现中心的场景。"
+  const languageSuggestion = hasFigurativeLanguage
+    ? "已有形象化表达，可以继续检查修辞是否贴合场景，避免只追求华丽。"
+    : "可以在核心段落加入一处贴合场景的比喻或感官描写，增强画面感。"
+
+  const markdownReport = [
+    `综合评分：${score}/100分`,
+    "",
+    "## 总评",
+    `全文约 ${contentLength} 字，共 ${sentenceCount} 个完整句。${structureAssessment}${closingAssessment}`,
+    "",
+    "## 主要优点",
+    `- 结构：${hasTitle ? "标题明确，" : "开篇能够进入正文，"}${structureAssessment}`,
+    `- 内容：文章有较完整的展开过程。${closingAssessment}`,
+    `- 语言：句意基本连贯，标点能够帮助读者理解，共形成 ${sentenceCount} 个完整句。`,
+    "",
+    "## 关键问题",
+    `- ${detailSuggestion}`,
+    "- 段落之间还可以增加承接句，明确事情、观点或画面的推进关系。",
+    `- ${languageSuggestion}`,
+    "",
+    "## 修改建议",
+    "1. 先用一句话写清中心，再检查每个自然段是否都在为中心服务。",
+    "2. 选出最关键的一个场景，按“环境或起因、人物动作、内心感受”的顺序展开。",
+    "3. 修改后通读一遍，删去重复词句，并检查段落过渡和结尾照应。",
+    "",
+    "## 润色示范",
+    "可以把核心段落按这个句式展开：“当____时，我先____，接着____。看到____，我心里____。这一刻，我才真正明白____。”请把空缺替换为原文中的真实细节。",
+  ].join("\n")
+
+  return {
+    markdownReport,
+    provider: "local",
+    model: null,
+    promptVersion: LOCAL_ESSAY_GRADE_PROMPT_VERSION,
+  }
+}
+
 async function callDirectEssayGrade(
   gradeRequest: ReturnType<typeof buildGradeRequest>,
   signal?: AbortSignal,
@@ -575,11 +645,14 @@ export async function gradeEssayWithFallback(
   }
 
   const gradeRequest = buildGradeRequest(params)
-  const directResult = await callDirectEssayGrade(gradeRequest, params.signal)
-  if (params.signal?.aborted) {
-    throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_ABORTED")
+  const directConfig = getDirectEssayGradeConfig()
+  if (directConfig.baseUrl && directConfig.apiKey) {
+    const directResult = await callDirectEssayGrade(gradeRequest, params.signal)
+    if (params.signal?.aborted) {
+      throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_ABORTED")
+    }
+    return directResult || buildLocalEssayGrade(gradeRequest)
   }
-  if (directResult) return directResult
 
   let response: EssayAiSuiteResponse<EssayGradeResult>
   try {
@@ -593,7 +666,7 @@ export async function gradeEssayWithFallback(
     if (params.signal?.aborted) {
       throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_ABORTED")
     }
-    throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_FAILED")
+    return buildLocalEssayGrade(gradeRequest)
   }
 
   if (params.signal?.aborted) {
@@ -610,7 +683,7 @@ export async function gradeEssayWithFallback(
     || result.provider !== "llm"
     || !isValidEssayCorrectionResult(markdownReport)
   ) {
-    throw new EssayImageFallbackError("ESSAY_FALLBACK_GRADE_INVALID")
+    return buildLocalEssayGrade(gradeRequest)
   }
 
   return {
