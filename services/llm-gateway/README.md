@@ -1,6 +1,6 @@
 # LLM Gateway
 
-Self-hosted OpenAI-compatible routing layer for realtime text and image-recognition calls. It keeps upstream keys server-side and exposes stable business aliases with one managed New API primary and one Viva fallback family.
+Self-hosted OpenAI-compatible routing layer for realtime text and image-recognition calls. It keeps upstream keys server-side and exposes stable business aliases. Text aliases use the managed New API primary with Viva fallbacks; `sx-image-vision` uses its own VecoAI OCR/vision chain.
 
 - `sx-fast-chat`
 - `sx-chinese-text`
@@ -20,9 +20,9 @@ Self-hosted OpenAI-compatible routing layer for realtime text and image-recognit
 
 Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps the primary healthy with background checks, and failover happens through explicit `router_settings.fallbacks` chains:
 
-- primary alias: the managed New API account requested for shenxiang.school
-- fallback alias chain: the matching Viva model only
-- no other direct supplier is present in the active gateway configuration
+- text aliases: the managed New API account requested for shenxiang.school, then the matching Viva fallback
+- `sx-image-vision`: VecoAI `gpt-5.4-mini`, then VecoAI `qwen-vl-max`, then VecoAI `gemini-3.8-flash`
+- only this visual-recognition alias uses VecoAI directly
 - provider retry count is `0`: a failed primary immediately moves to the fallback chain instead of spending another request on the same unhealthy route
 
 Deployment `model_info.id` values are shared across equivalent text aliases where the same provider/model pair is reused. This makes cooldown and circuit state follow the real upstream deployment instead of one alias only.
@@ -119,9 +119,11 @@ SHENXIANG_NEW_API_TEXT_API_KEY=replace-with-user-text-key
 SHENXIANG_NEW_API_CLAUDE_API_KEY=replace-with-user-claude-key
 VIVAAPI_LLM_BASE_URL=https://www.vivaapi.cn/v1
 VIVAAPI_LLM_API_KEY=replace-with-vivaapi-key
+VECOAI_LLM_BASE_URL=https://api.vecoai.cn/v1
+VECOAI_LLM_API_KEY=replace-with-vecoai-key
 ```
 
-`config.yaml` contains only those two upstream families. Remove retired supplier credentials from the production env after a recoverable, access-restricted snapshot is created.
+`config.yaml` contains the managed New API, Viva, and the dedicated VecoAI visual-recognition chain. Keep real credentials only in the server production environment.
 
 The managed public endpoint requires a descriptive service `User-Agent`; the text gateway sets `shenxiang-llm-gateway/1.0`, while direct image calls set `shenxiang-image-gateway/1.0`. The external durable image gateway applies the versioned patch in `deploy/patches/dify-image-gateway-user-agent.patch` for the same reason.
 

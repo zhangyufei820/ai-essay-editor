@@ -71,15 +71,14 @@ function fallbackMap(config: GatewayConfig) {
   return targets
 }
 
-describe("llm gateway New API primary policy", () => {
-  it("pins every production alias to one New API deployment", () => {
+describe("llm gateway provider routing policy", () => {
+  it("pins non-vision production aliases to one New API deployment", () => {
     const config = loadConfig()
     const productionAliases = [
       "sx-fast-chat",
       "sx-chinese-text",
       "sx-math-text",
       "sx-general-text",
-      "sx-image-vision",
       "sx-claude-sonnet-4-6",
       "sx-claude-opus-4-6-thinking",
       "sx-gemini-3.1-pro",
@@ -117,14 +116,37 @@ describe("llm gateway New API primary policy", () => {
     }
   })
 
+  it("pins sx-image-vision to the requested VecoAI primary", () => {
+    const config = loadConfig()
+    const deployment = modelsByName(config, "sx-image-vision")
+
+    expect(deployment).toHaveLength(1)
+    expect(deployment[0]?.litellm_params).toMatchObject({
+      model: "openai/gpt-5.4-mini",
+      api_base: "os.environ/VECOAI_LLM_BASE_URL",
+      api_key: "os.environ/VECOAI_LLM_API_KEY",
+      timeout: 20,
+    })
+    expect(deployment[0]?.model_info).toMatchObject({
+      id: "deploy-vecoai-gpt-5-4-mini",
+      mode: "chat",
+      health_check_timeout: 8,
+      health_check_max_tokens: 3,
+    })
+  })
+
   it("uses the dedicated user token family for OpenAI and Claude primaries", () => {
     const config = loadConfig()
 
-    for (const alias of ["sx-fast-chat", "sx-math-text", "sx-general-text", "sx-image-vision", "gpt-5.4", "gpt-5.5"]) {
+    for (const alias of ["sx-fast-chat", "sx-math-text", "sx-general-text", "gpt-5.4", "gpt-5.5"]) {
       expect(modelsByName(config, alias)[0]?.litellm_params?.api_key).toBe(
         "os.environ/SHENXIANG_NEW_API_TEXT_API_KEY",
       )
     }
+
+    expect(modelsByName(config, "sx-image-vision")[0]?.litellm_params?.api_key).toBe(
+      "os.environ/VECOAI_LLM_API_KEY",
+    )
 
     for (const alias of ["sx-chinese-text", "claude-sonnet-4-6", "claude-opus-4-7"]) {
       expect(modelsByName(config, alias)[0]?.litellm_params?.api_key).toBe(
@@ -133,11 +155,12 @@ describe("llm gateway New API primary policy", () => {
     }
   })
 
-  it("retains Viva as the only direct fallback supplier", () => {
+  it("keeps the requested VecoAI vision chain and Viva fallbacks for other aliases", () => {
     const config = loadConfig()
     const targets = fallbackMap(config)
-    const productionModels = config.model_list.filter((item) => !item.model_name.startsWith("fallback-viva-"))
+    const productionModels = config.model_list.filter((item) => !item.model_name.startsWith("fallback-"))
     const fallbackModels = config.model_list.filter((item) => item.model_name.startsWith("fallback-viva-"))
+    const visionFallbackModels = config.model_list.filter((item) => item.model_name.startsWith("fallback-vecoai-"))
 
     expect(fallbackModels.length).toBeGreaterThanOrEqual(10)
     for (const model of fallbackModels) {
@@ -145,16 +168,34 @@ describe("llm gateway New API primary policy", () => {
       expect(model.litellm_params?.api_key).toBe("os.environ/VIVAAPI_LLM_API_KEY")
     }
 
+    expect(visionFallbackModels).toHaveLength(2)
+    for (const model of visionFallbackModels) {
+      expect(model.litellm_params?.api_base).toBe("os.environ/VECOAI_LLM_BASE_URL")
+      expect(model.litellm_params?.api_key).toBe("os.environ/VECOAI_LLM_API_KEY")
+      expect(model.model_info?.disable_background_health_check).toBe(true)
+    }
+
     for (const model of productionModels) {
       const modelTargets = targets.get(model.model_name)
       expect(modelTargets?.length).toBeGreaterThan(0)
-      expect(modelTargets?.every((target) => target.startsWith("fallback-viva-"))).toBe(true)
+      if (model.model_name === "sx-image-vision") {
+        expect(modelTargets).toEqual([
+          "fallback-vecoai-qwen-vl-max",
+          "fallback-vecoai-gemini-3-8-flash",
+        ])
+      } else {
+        expect(modelTargets?.every((target) => target.startsWith("fallback-viva-"))).toBe(true)
+      }
     }
 
     const serialized = fs.readFileSync(configPath, "utf8")
     expect(serialized).not.toMatch(/TOKENFLUX|MOONAPIX/i)
     expect(new Set(config.model_list.map((item) => item.litellm_params?.api_base))).toEqual(
-      new Set(["os.environ/SHENXIANG_NEW_API_BASE_URL", "os.environ/VIVAAPI_LLM_BASE_URL"]),
+      new Set([
+        "os.environ/SHENXIANG_NEW_API_BASE_URL",
+        "os.environ/VIVAAPI_LLM_BASE_URL",
+        "os.environ/VECOAI_LLM_BASE_URL",
+      ]),
     )
   })
 

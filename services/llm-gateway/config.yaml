@@ -55,17 +55,16 @@ model_list:
       health_check_timeout: 8
       health_check_max_tokens: 3
 
-  # Multimodal chat/recognition; long-running image generation stays on the
-  # durable image task gateways and follows the same New API -> Viva policy.
+  # Multimodal chat/recognition uses the independently evaluated VecoAI route.
+  # Long-running image generation stays on the durable media task gateways.
   - model_name: sx-image-vision
     litellm_params:
       model: openai/gpt-5.4-mini
-      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
-      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
-      extra_headers: *managed_new_api_headers
+      api_base: os.environ/VECOAI_LLM_BASE_URL
+      api_key: os.environ/VECOAI_LLM_API_KEY
       timeout: 20
     model_info:
-      id: deploy-new-api-gpt-5-4-mini
+      id: deploy-vecoai-gpt-5-4-mini
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
@@ -460,6 +459,23 @@ model_list:
       timeout: 20
     model_info: { id: fallback-viva-grok-4-2, mode: chat, disable_background_health_check: true }
 
+  # The OCR/vision fallback order is intentional: Qwen-VL first, then Gemini Flash.
+  - model_name: fallback-vecoai-qwen-vl-max
+    litellm_params:
+      model: openai/qwen-vl-max
+      api_base: os.environ/VECOAI_LLM_BASE_URL
+      api_key: os.environ/VECOAI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-vecoai-qwen-vl-max, mode: chat, disable_background_health_check: true }
+
+  - model_name: fallback-vecoai-gemini-3-8-flash
+    litellm_params:
+      model: openai/gemini-3.8-flash
+      api_base: os.environ/VECOAI_LLM_BASE_URL
+      api_key: os.environ/VECOAI_LLM_API_KEY
+      timeout: 20
+    model_info: { id: fallback-vecoai-gemini-3-8-flash, mode: chat, disable_background_health_check: true }
+
 guardrails:
   - guardrail_name: sx-global-sensitive-content
     litellm_params:
@@ -478,7 +494,7 @@ router_settings:
     - sx-chinese-text: ["fallback-viva-claude-sonnet-4-6"]
     - sx-math-text: ["fallback-viva-gpt-5.5"]
     - sx-general-text: ["fallback-viva-gpt-5.4-mini"]
-    - sx-image-vision: ["fallback-viva-gpt-5.4-mini"]
+    - sx-image-vision: ["fallback-vecoai-qwen-vl-max", "fallback-vecoai-gemini-3-8-flash"]
     - sx-claude-sonnet-4-6: ["fallback-viva-claude-sonnet-4-6"]
     - sx-claude-opus-4-6-thinking: ["fallback-viva-claude-opus-4-6-thinking"]
     - sx-gemini-3.1-pro: ["fallback-viva-gemini-3.1-pro-preview"]

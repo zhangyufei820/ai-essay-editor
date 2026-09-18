@@ -70,7 +70,7 @@ The LLM gateway uses LiteLLM's background health checks and health-check-driven 
 
 This is true dynamic failover on the request path, not random load spreading. The product objective is fastest stable responses: hold the fastest healthy primary, then switch away quickly when it is unhealthy.
 
-As of 2026-08-12, all shenxiang.school GPT, Claude, and lightweight vision aliases use the designated managed New API account as the single primary. Each alias has one explicit Viva fallback; no other direct supplier participates in the production LiteLLM route.
+As of 2026-09-18, all shenxiang.school GPT and Claude aliases use the designated managed New API account as the single primary with one explicit Viva fallback. `sx-image-vision` is the exception: it uses VecoAI `gpt-5.4-mini` as primary, then VecoAI `qwen-vl-max`, then VecoAI `gemini-3.8-flash`. LiteLLM changes to the next route only on an upstream failure, timeout, or circuit event; it does not switch based on OCR quality.
 
 Long-running image generation stays on durable task gateways rather than the realtime LiteLLM process. Those gateways follow the same ownership rule: the designated New API image token is primary and Viva is the only fallback.
 
