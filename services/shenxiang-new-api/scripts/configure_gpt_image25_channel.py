@@ -13,14 +13,14 @@ import urllib.request
 import sync_app_model_permissions as permissions
 
 
-EXPECTED_BASE_URL = "https://moonapix.com"
+EXPECTED_BASE_URL = "https://api.smile-ai-studio.com"
 BASE_URL_ENV = "GPT_IMAGE25_BASE_URL"
 API_KEY_ENV = "GPT_IMAGE25_UPSTREAM_API_KEY"
 STAGING_GROUP = "internal"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
 MAX_MODELS_RESPONSE_BYTES = 2 * 1024 * 1024
 CHANNEL_NAME = "星人 GPT Image 2.5 图像通道"
-CHANNEL_REMARK = "GPT Image 2.5 图像线路；Flare 快速生成，Sunburst 精细编辑；人民币 ¥0.17/张"
+CHANNEL_REMARK = "GPT Image 2.5 图像线路；Flare 快速生成 ¥0.34992/张，Sunburst 精细编辑 ¥0.42768/张"
 
 
 class ConfigurationError(RuntimeError):

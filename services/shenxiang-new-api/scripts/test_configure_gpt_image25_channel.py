@@ -28,12 +28,12 @@ class ConfigureGPTImage25ChannelTest(unittest.TestCase):
         self.module = load_module()
 
     def test_normalize_base_url_only_accepts_allowlisted_origin(self) -> None:
-        self.assertEqual(self.module.normalize_base_url("https://moonapix.com/"), self.module.EXPECTED_BASE_URL)
+        self.assertEqual(self.module.normalize_base_url("https://api.smile-ai-studio.com/"), self.module.EXPECTED_BASE_URL)
         for value in (
-            "http://moonapix.com",
-            "https://moonapix.com/v1",
-            "https://moonapix.com:8443",
-            "https://user@moonapix.com",
+            "http://api.smile-ai-studio.com",
+            "https://api.smile-ai-studio.com/v1",
+            "https://api.smile-ai-studio.com:8443",
+            "https://user@api.smile-ai-studio.com",
             "https://example.com",
         ):
             with self.subTest(value=value):
@@ -61,7 +61,7 @@ class ConfigureGPTImage25ChannelTest(unittest.TestCase):
 
         self.assertEqual(models, {"gpt-image-2.5-flare"})
         request = opener.open.call_args.args[0]
-        self.assertEqual(request.full_url, "https://moonapix.com/v1/models")
+        self.assertEqual(request.full_url, "https://api.smile-ai-studio.com/v1/models")
         self.assertIsNone(request.data)
 
     def test_build_stage_sql_is_internal_and_contains_both_models(self) -> None:
@@ -81,7 +81,8 @@ class ConfigureGPTImage25ChannelTest(unittest.TestCase):
     def test_channel_remark_distinguishes_fast_and_precision_models(self) -> None:
         self.assertIn("Flare 快速生成", self.module.CHANNEL_REMARK)
         self.assertIn("Sunburst 精细编辑", self.module.CHANNEL_REMARK)
-        self.assertIn("¥0.17/张", self.module.CHANNEL_REMARK)
+        self.assertIn("¥0.34992/张", self.module.CHANNEL_REMARK)
+        self.assertIn("¥0.42768/张", self.module.CHANNEL_REMARK)
 
     def test_publish_requires_stage_and_syncs_image_tokens(self) -> None:
         calls: list[str] = []

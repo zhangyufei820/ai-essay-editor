@@ -237,9 +237,9 @@ async function main() {
     errors.push('gpt-image-2-4K must use GPT_IMAGE_2_RESOLUTIONS')
   }
 
-  for (const [label, block] of [
-    ['gpt-image-2.5-flare', gptImage25FlareBlock],
-    ['gpt-image-2.5-sunburst', gptImage25SunburstBlock],
+  for (const [label, block, priceLabel] of [
+    ['gpt-image-2.5-flare', gptImage25FlareBlock, "priceLabel: '¥0.34992/张'"],
+    ['gpt-image-2.5-sunburst', gptImage25SunburstBlock, "priceLabel: '¥0.42768/张'"],
   ]) {
     if (!block) {
       errors.push(`classic media playground must expose ${label}`)
@@ -256,7 +256,7 @@ async function main() {
       'supportsOutputCompression: true',
       'maxCount: 1',
       'edit: true',
-      "priceLabel: '¥0.17/张'",
+      priceLabel,
       '支持 1K / 2K / 4K、合法自定义 WxH',
       '参考图编辑',
     ]) {

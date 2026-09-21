@@ -337,9 +337,9 @@ const IMAGE_MODELS = [
     supportsInputFidelity: true,
     supportsOutputCompression: true,
     edit: true,
-    priceLabel: '¥0.17/张',
+    priceLabel: '¥0.34992/张',
     billingLabel: '按张计费',
-    hint: '官方定位为最快的高质量日常图像生成；支持文生图与参考图编辑，支持 1K / 2K / 4K、合法自定义 WxH、参考图保真度、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.17/张。',
+    hint: '官方定位为最快的高质量日常图像生成；支持文生图与参考图编辑，支持 1K / 2K / 4K、合法自定义 WxH、参考图保真度、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.34992/张。',
   },
   {
     value: 'gpt-image-2.5-sunburst',
@@ -362,9 +362,9 @@ const IMAGE_MODELS = [
     supportsInputFidelity: true,
     supportsOutputCompression: true,
     edit: true,
-    priceLabel: '¥0.17/张',
+    priceLabel: '¥0.42768/张',
     billingLabel: '按张计费',
-    hint: '官方定位为最强图像生成与编辑模型，适合重视编辑精度与细节控制的工作流；支持文生图与参考图编辑，支持 1K / 2K / 4K、合法自定义 WxH、参考图保真度、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.17/张。',
+    hint: '官方定位为最强图像生成与编辑模型，适合重视编辑精度与细节控制的工作流；支持文生图与参考图编辑，支持 1K / 2K / 4K、合法自定义 WxH、参考图保真度、六档清晰度与 PNG / JPEG / WebP，人民币固定 ¥0.42768/张。',
   },
   {
     value: 'image 2电商商品图快速通道(1.5K)',

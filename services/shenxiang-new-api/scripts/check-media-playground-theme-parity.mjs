@@ -60,6 +60,8 @@ const requiredImagePriceLabels = [
   '¥0.055/张',
   '¥0.085/张',
   '¥0.17/张',
+  '¥0.34992/张',
+  '¥0.42768/张',
 ]
 
 function sourceRootFromArgs() {

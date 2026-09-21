@@ -457,10 +457,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         models = "gpt-image-2.5-flare,gpt-image-2.5-sunburst"
         for rows, expected in (
             ([], "unavailable"),
-            ([["1", "internal", models, "40", "https://moonapix.com"]], "staged"),
-            ([["1", "default,standard,pro,code,internal", models, "40", "https://moonapix.com"]], "published"),
-            ([["1", "default,internal", models, "40", "https://moonapix.com"]], "invalid"),
-            ([["1", "internal", "gpt-image-2.5-flare", "40", "https://moonapix.com"]], "invalid"),
+            ([["1", "internal", models, "40", "https://api.smile-ai-studio.com"]], "staged"),
+            ([["1", "default,standard,pro,code,internal", models, "40", "https://api.smile-ai-studio.com"]], "published"),
+            ([["1", "default,internal", models, "40", "https://api.smile-ai-studio.com"]], "invalid"),
+            ([["1", "internal", "gpt-image-2.5-flare", "40", "https://api.smile-ai-studio.com"]], "invalid"),
         ):
             self.module.mysql = lambda _query, rows=rows: rows
             self.assertEqual(self.module.gpt_image25_release_state(), expected)
@@ -473,9 +473,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.module.GPT_IMAGE25_ENDPOINTS,
             '{"image-generation":"/v1/images/generations","image-edit":"/v1/images/edits"}',
         )
-        for expected in ("快速生成", "最快的高质量日常图像生成", "单图编辑", "¥0.17/张"):
+        for expected in ("快速生成", "最快的高质量日常图像生成", "单图编辑", "¥0.34992/张"):
             self.assertIn(expected, flare)
-        for expected in ("精细编辑", "编辑精度与细节控制", "单图编辑", "¥0.17/张"):
+        for expected in ("精细编辑", "编辑精度与细节控制", "单图编辑", "¥0.42768/张"):
             self.assertIn(expected, sunburst)
 
     def test_staged_gpt_image25_models_are_admin_only_until_published(self) -> None:
@@ -1224,6 +1224,20 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
         self.assertNotIn("grok-imagine-image", captured_options["ModelRatio"])
         self.assertNotIn("grok-imagine-image", captured_options["CompletionRatio"])
+        self.assertAlmostEqual(
+            captured_options["ModelPrice"]["gpt-image-2.5-flare"],
+            0.047934246575,
+            places=12,
+        )
+        self.assertAlmostEqual(
+            captured_options["ModelPrice"]["gpt-image-2.5-sunburst"],
+            0.058586301370,
+            places=12,
+        )
+        self.assertNotIn("gpt-image-2.5-flare", captured_options["ModelRatio"])
+        self.assertNotIn("gpt-image-2.5-sunburst", captured_options["ModelRatio"])
+        self.assertNotIn("gpt-image-2.5-flare", captured_options["CompletionRatio"])
+        self.assertNotIn("gpt-image-2.5-sunburst", captured_options["CompletionRatio"])
         self.assertAlmostEqual(
             captured_options["ModelPrice"]["grok 4.6图片"],
             0.013698630137,
