@@ -30,6 +30,14 @@ function modelBlock(text, model) {
   return end === -1 ? text.slice(start) : text.slice(start, end)
 }
 
+function typedModelBlock(text, model) {
+  const marker = `id: '${model}'`
+  const start = text.indexOf(marker)
+  if (start === -1) return ''
+  const end = text.indexOf('\n  },', start)
+  return end === -1 ? text.slice(start) : text.slice(start, end)
+}
+
 function arrayBlock(text, name) {
   const marker = `const ${name} = [`
   const start = text.indexOf(marker)
@@ -44,6 +52,8 @@ async function main() {
     ? path.join(sourceRoot, 'web')
     : sourceRoot
   const classicPath = path.join(root, 'classic/src/pages/MediaPlayground/index.jsx')
+  const defaultPagePath = path.join(root, 'default/src/features/media-playground/index.tsx')
+  const defaultConfigPath = path.join(root, 'default/src/features/media-playground/model-config.ts')
   const imageAspectRatioPath = path.join(
     root,
     'classic/src/pages/MediaPlayground/image-aspect-ratio.js',
@@ -55,8 +65,13 @@ async function main() {
   if (!fs.existsSync(imageAspectRatioPath)) {
     return fail([`missing required file: ${imageAspectRatioPath}`])
   }
+  if (!fs.existsSync(defaultPagePath) || !fs.existsSync(defaultConfigPath)) {
+    return fail(['missing default media playground implementation'])
+  }
 
   const classic = readText(classicPath)
+  const defaultPage = readText(defaultPagePath)
+  const defaultConfig = readText(defaultConfigPath)
   const { closestSupportedImageAspectRatio } = await import(
     `${pathToFileURL(imageAspectRatioPath).href}?mtime=${fs.statSync(imageAspectRatioPath).mtimeMs}`
   )
@@ -73,6 +88,8 @@ async function main() {
   const grok46RatioBlock = arrayBlock(classic, 'XAI_GROK_46_IMAGE_ASPECT_RATIOS')
   const gptImage25FlareBlock = modelBlock(classic, 'gpt-image-2.5-flare')
   const gptImage25SunburstBlock = modelBlock(classic, 'gpt-image-2.5-sunburst')
+  const defaultGptImage25FlareBlock = typedModelBlock(defaultConfig, 'gpt-image-2.5-flare')
+  const defaultGptImage25SunburstBlock = typedModelBlock(defaultConfig, 'gpt-image-2.5-sunburst')
   const errors = []
 
   for (const [referenceRatio, supportedRatios, expectedRatio] of [
@@ -288,11 +305,35 @@ async function main() {
   if (classic.includes('if (!isGptImage25Model(imageModel) && quality)')) {
     errors.push('GPT Image 2.5 quality must not be suppressed')
   }
-  if (!classic.includes("if (isGptImage2 && resolution && resolution !== 'auto'")) {
-    errors.push('classic must restrict the UI-only resolution field to legacy Image 2')
+  if (!classic.includes('if (isFlexibleGptImageSize && resolution')) {
+    errors.push('classic must send the selected resolution for GPT Image 2 and GPT Image 2.5')
   }
-  if (classic.includes('if (isFlexibleGptImageSize && resolution')) {
-    errors.push('classic must not send the UI-only resolution field for GPT Image 2.5')
+  if (!classic.includes("'1:1': '1920x1920', '16:9': '2048x1152'")) {
+    errors.push('classic GPT Image 2.5 2K square must use the verified 1920x1920 upstream size')
+  }
+  for (const [label, block] of [
+    ['default gpt-image-2.5-flare', defaultGptImage25FlareBlock],
+    ['default gpt-image-2.5-sunburst', defaultGptImage25SunburstBlock],
+  ]) {
+    for (const marker of [
+      'supportsEdit: true',
+      "resolutions: ['1K', '2K', '4K']",
+      "qualities: ['auto', 'low', 'medium', 'high', 'xhigh', 'max']",
+      "outputFormats: ['png', 'jpeg', 'webp']",
+    ]) {
+      if (!block.includes(marker)) errors.push(`${label} missing contract marker: ${marker}`)
+    }
+  }
+  for (const marker of [
+    'function isFlexibleGptImageSizeModel(model: string)',
+    'const GPT_IMAGE_25_SIZE_BY_RESOLUTION:',
+    'flexibleGptImageSizeFor(',
+    'if (isFlexibleGptImageSize && resolution',
+    'if (quality) payload.quality = quality',
+  ]) {
+    if (!defaultPage.includes(marker)) {
+      errors.push(`default GPT Image 2.5 request contract missing marker: ${marker}`)
+    }
   }
   if (classic.includes("supportsInputFidelity)\n        payload.input_fidelity")) {
     errors.push('classic must omit the UI-only auto input_fidelity value')

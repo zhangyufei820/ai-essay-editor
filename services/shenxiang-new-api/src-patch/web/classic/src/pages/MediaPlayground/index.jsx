@@ -539,7 +539,8 @@ const GPT_IMAGE_2_SIZE_BY_RESOLUTION = {
   },
 };
 
-// Translate UI resolution tiers to the upstream's documented pixel values.
+// Translate UI resolution tiers to upstream pixel values. The supplier rejects
+// 2048x2048 for 2K square requests, while 1920x1920 is verified working.
 // Extreme 1:3 / 3:1 sizes remain available through the custom WxH input.
 const GPT_IMAGE_25_SIZE_BY_RESOLUTION = {
   '1K': {
@@ -549,7 +550,7 @@ const GPT_IMAGE_25_SIZE_BY_RESOLUTION = {
     '21:9': '1456x624', '9:21': '624x1456', '2:1': '1536x768', '1:2': '768x1536',
   },
   '2K': {
-    '1:1': '2048x2048', '16:9': '2048x1152', '9:16': '1152x2048',
+    '1:1': '1920x1920', '16:9': '2048x1152', '9:16': '1152x2048',
     '4:3': '2304x1728', '3:4': '1728x2304', '3:2': '2048x1360',
     '2:3': '1360x2048', '5:4': '2240x1792', '4:5': '1792x2240',
     '21:9': '2912x1248', '9:21': '1248x2912', '2:1': '3072x1536', '1:2': '1536x3072',
@@ -3689,7 +3690,6 @@ const MediaPlayground = () => {
           payload.extra_fields = { negative_prompt: activeNegativePrompt };
         return payload;
       }
-      const isGptImage2 = isGptImage2Model(imageModel);
       const isFlexibleGptImageSize = isFlexibleGptImageSizeModel(imageModel);
       payload.n = effectiveCount;
       payload.size = isFlexibleGptImageSize
@@ -3697,7 +3697,7 @@ const MediaPlayground = () => {
             imageModel, effectiveAspectRatio, resolution, customImageSize,
           )
         : size;
-      if (isGptImage2 && resolution && resolution !== 'auto' && resolution !== 'custom')
+      if (isFlexibleGptImageSize && resolution && resolution !== 'auto' && resolution !== 'custom')
         payload.resolution = resolution;
       if (quality) payload.quality = quality;
       if (format && format !== 'url') payload.output_format = format;

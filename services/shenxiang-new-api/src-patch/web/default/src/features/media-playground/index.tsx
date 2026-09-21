@@ -129,6 +129,55 @@ const GPT_IMAGE_2_SIZE_BY_RESOLUTION: Record<string, Record<string, string>> = {
   },
 }
 
+// The supplier rejects 2048x2048 for 2K square requests; 1920x1920 is verified.
+const GPT_IMAGE_25_SIZE_BY_RESOLUTION: Record<string, Record<string, string>> = {
+  '1K': {
+    '1:1': '1024x1024',
+    '16:9': '1280x720',
+    '9:16': '720x1280',
+    '4:3': '1152x864',
+    '3:4': '864x1152',
+    '3:2': '1536x1024',
+    '2:3': '1024x1536',
+    '5:4': '1120x896',
+    '4:5': '896x1120',
+    '21:9': '1456x624',
+    '9:21': '624x1456',
+    '2:1': '1536x768',
+    '1:2': '768x1536',
+  },
+  '2K': {
+    '1:1': '1920x1920',
+    '16:9': '2048x1152',
+    '9:16': '1152x2048',
+    '4:3': '2304x1728',
+    '3:4': '1728x2304',
+    '3:2': '2048x1360',
+    '2:3': '1360x2048',
+    '5:4': '2240x1792',
+    '4:5': '1792x2240',
+    '21:9': '2912x1248',
+    '9:21': '1248x2912',
+    '2:1': '3072x1536',
+    '1:2': '1536x3072',
+  },
+  '4K': {
+    '1:1': '2880x2880',
+    '16:9': '3840x2160',
+    '9:16': '2160x3840',
+    '4:3': '3264x2448',
+    '3:4': '2448x3264',
+    '3:2': '3504x2336',
+    '2:3': '2336x3504',
+    '5:4': '3200x2560',
+    '4:5': '2560x3200',
+    '21:9': '3840x1648',
+    '9:21': '1648x3840',
+    '2:1': '3840x1920',
+    '1:2': '1920x3840',
+  },
+}
+
 const IMAGE_GENERATION_GROUP = {
   value: 'default',
   label: '图像生成分组',
@@ -164,6 +213,10 @@ function isGptImage2Model(model: string) {
 
 function isGptImage25Model(model: string) {
   return model === 'gpt-image-2.5-flare' || model === 'gpt-image-2.5-sunburst'
+}
+
+function isFlexibleGptImageSizeModel(model: string) {
+  return isGptImage2Model(model) || isGptImage25Model(model)
 }
 
 function clampCount(value: number, model: ModelCapability) {
@@ -217,6 +270,20 @@ function gptImage2SizeFor(aspectRatio: string, imageSize: string) {
   return (
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ??
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.['1:1'] ??
+    '1024x1024'
+  )
+}
+
+function flexibleGptImageSizeFor(
+  model: string,
+  aspectRatio: string,
+  imageSize: string
+) {
+  if (!isGptImage25Model(model)) return gptImage2SizeFor(aspectRatio, imageSize)
+  const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K'
+  return (
+    GPT_IMAGE_25_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ??
+    GPT_IMAGE_25_SIZE_BY_RESOLUTION[normalizedResolution]?.['1:1'] ??
     '1024x1024'
   )
 }
@@ -515,15 +582,15 @@ export function MediaPlayground() {
         }
         return payload
       }
-      const isGptImage2 = isGptImage2Model(imageModel)
+      const isFlexibleGptImageSize = isFlexibleGptImageSizeModel(imageModel)
       payload.n = effectiveCount
-      payload.size = isGptImage2
-        ? gptImage2SizeFor(effectiveAspectRatio, resolution)
+      payload.size = isFlexibleGptImageSize
+        ? flexibleGptImageSizeFor(imageModel, effectiveAspectRatio, resolution)
         : size
-      if (isGptImage2 && resolution && resolution !== 'auto') {
+      if (isFlexibleGptImageSize && resolution && resolution !== 'auto') {
         payload.resolution = resolution
       }
-      if (!isGptImage25Model(imageModel) && quality) payload.quality = quality
+      if (quality) payload.quality = quality
       if (outputFormat && outputFormat !== 'url') {
         payload.output_format = outputFormat
       }
