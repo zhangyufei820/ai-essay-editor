@@ -50,7 +50,7 @@ function parseScore(markdown: string): EssayReviewArtifact["score"] | undefined 
 }
 
 function parseDiagnosis(markdown: string) {
-  const block = sectionBlock(markdown, ["问题诊断", "问题分析", "主要问题", "诊断"])
+  const block = sectionBlock(markdown, ["问题诊断", "问题分析", "主要问题", "关键问题", "诊断"])
   const candidates = listItems(block).length ? listItems(block) : extractInlineItems(markdown, ["问题\\s*\\d*", "问题"])
 
   return candidates.map((item, index) => {
@@ -76,8 +76,8 @@ export function parseEssayReview(markdown: string): EssayReviewArtifact | null {
 
   const score = parseScore(text)
   const summary = firstMatch(text, [
-    /(?:总体评价|综合评价|评语|总结)\s*[：:]\s*([^\n]+)/,
-    /#{1,4}\s*(?:总体评价|综合评价|评语|总结)[^\n]*\n([^\n]+)/,
+    /(?:总体评价|综合评价|一句话总评|评语|总结)(?:\s|[*_`~])*[：:]\s*([^\n]+)/,
+    /#{1,4}\s*(?:总体评价|综合评价|一句话总评|评语|总结)[^\n]*\n([^\n]+)/,
   ])
 
   const diagnosis = parseDiagnosis(text)
@@ -92,7 +92,7 @@ export function parseEssayReview(markdown: string): EssayReviewArtifact | null {
     : extractInlineItems(text, ["训练"])
 
   const originalText = sectionBlock(text, ["原文", "学生原文", "作文原文"])
-  const finalDraft = sectionBlock(text, ["修改后定稿", "最终定稿", "升格范文", "范文"])
+  const finalDraft = sectionBlock(text, ["修改后定稿", "最终定稿", "升格范文", "润色示范", "范文"])
 
   if (!score && diagnosis.length === 0 && suggestions.length === 0 && trainingTasks.length === 0) {
     return null
