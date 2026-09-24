@@ -64,6 +64,10 @@ func TestConvertGPTImage25EditPreservesOfficialParameters(t *testing.T) {
 	require.NoError(t, writer.WriteField("output_format", "png"))
 	require.NoError(t, writer.WriteField("background", "opaque"))
 	require.NoError(t, writer.WriteField("input_fidelity", "high"))
+	require.NoError(t, writer.WriteField("resolution", "4K"))
+	require.NoError(t, writer.WriteField("image_size", "4K"))
+	require.NoError(t, writer.WriteField("aspect_ratio", "9:16"))
+	require.NoError(t, writer.WriteField("extra_fields", `{"negative_prompt":"blur"}`))
 	part, err := writer.CreateFormFile("image", "input.png")
 	require.NoError(t, err)
 	_, err = part.Write([]byte("fake image"))
@@ -92,7 +96,49 @@ func TestConvertGPTImage25EditPreservesOfficialParameters(t *testing.T) {
 	require.Equal(t, "png", replayed.PostForm.Get("output_format"))
 	require.Equal(t, "opaque", replayed.PostForm.Get("background"))
 	require.Equal(t, "high", replayed.PostForm.Get("input_fidelity"))
+	require.Empty(t, replayed.PostForm.Get("resolution"))
+	require.Empty(t, replayed.PostForm.Get("image_size"))
+	require.Empty(t, replayed.PostForm.Get("aspect_ratio"))
+	require.Empty(t, replayed.PostForm.Get("extra_fields"))
 	require.Len(t, replayed.MultipartForm.File["image"], 1)
+}
+
+func TestConvertGPTImage25GenerationStripsWorkshopOnlyFields(t *testing.T) {
+	converted, err := (&Adaptor{}).ConvertImageRequest(
+		nil,
+		&relaycommon.RelayInfo{
+			RelayMode:       relayconstant.RelayModeImagesGenerations,
+			OriginModelName: "gpt-image-2.5-flare",
+		},
+		dto.ImageRequest{
+			Model:             "gpt-image-2.5-flare",
+			Prompt:            "test image",
+			Size:              "2160x3840",
+			Quality:           "high",
+			Resolution:        "4K",
+			ImageSize:         "4K",
+			AspectRatio:       "9:16",
+			ResponseFormat:    "url",
+			ResponseFormatObj: []byte(`{"image":{"aspectRatio":"9:16"}}`),
+			GenerationConfig:  []byte(`{"imageConfig":{"imageSize":"4K"}}`),
+			ExtraBody:         []byte(`{"google":{"image_config":{"image_size":"4K"}}}`),
+			ExtraFields:       []byte(`{"negative_prompt":"blur"}`),
+		},
+	)
+	require.NoError(t, err)
+
+	request, ok := converted.(dto.ImageRequest)
+	require.True(t, ok)
+	require.Equal(t, "2160x3840", request.Size)
+	require.Equal(t, "high", request.Quality)
+	require.Empty(t, request.Resolution)
+	require.Empty(t, request.ImageSize)
+	require.Empty(t, request.AspectRatio)
+	require.Empty(t, request.ResponseFormat)
+	require.Empty(t, request.ResponseFormatObj)
+	require.Empty(t, request.GenerationConfig)
+	require.Empty(t, request.ExtraBody)
+	require.Empty(t, request.ExtraFields)
 }
 
 func TestConvertGrokImageGenerationMapsAspectRatioToVerifiedProviderSize(t *testing.T) {

@@ -46,11 +46,21 @@ func TestSystemTokenProfilesImageModelsDoNotExposeSupplierModel(t *testing.T) {
 		}
 	}
 
-	require.Contains(t, imageModels, "gpt-image-2-4K")
-	require.Contains(t, imageModels, "特价 image-2")
-	require.Contains(t, imageModels, "官转image 2稳定")
-	require.Contains(t, imageModels, "grok 4.6图片")
-	require.Contains(t, imageModels, "image 2电商商品图快速通道(1.5K)")
+	require.Equal(t, []string{
+		"gpt-image-2-4K",
+		"特价 image-2",
+		"官转image 2稳定",
+		"grok-imagine-image",
+		"grok 4.6图片",
+		"banana-2",
+		"gemini-3-pro-image-preview",
+		"gemini-3.1-flash-image",
+		"gemini-3-pro-image",
+		"gpt-image-2.5-flare",
+		"gpt-image-2.5-sunburst",
+		"ecommerce-banana-2",
+		"image 2电商商品图快速通道(1.5K)",
+	}, imageModels)
 	require.NotContains(t, imageModels, "geek2api-image-2")
 	require.NotContains(t, imageModels, InternalDiscountImage2ModelName)
 }

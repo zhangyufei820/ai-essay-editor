@@ -3697,7 +3697,15 @@ const MediaPlayground = () => {
             imageModel, effectiveAspectRatio, resolution, customImageSize,
           )
         : size;
-      if (isFlexibleGptImageSize && resolution && resolution !== 'auto' && resolution !== 'custom')
+      // `resolution` is a Media Workshop tier label, not an OpenAI Image API
+      // parameter. Image 2 provider routes still require it; Image 2.5 must
+      // receive only the concrete `size` selected above.
+      if (
+        isGptImage2Model(imageModel) &&
+        resolution &&
+        resolution !== 'auto' &&
+        resolution !== 'custom'
+      )
         payload.resolution = resolution;
       if (quality) payload.quality = quality;
       if (format && format !== 'url') payload.output_format = format;
@@ -3714,7 +3722,7 @@ const MediaPlayground = () => {
         inputFidelity !== 'auto'
       )
         payload.input_fidelity = inputFidelity;
-      if (activeNegativePrompt)
+      if (activeNegativePrompt && !isGptImage25Model(imageModel))
         payload.extra_fields = { negative_prompt: activeNegativePrompt };
       return payload;
     }

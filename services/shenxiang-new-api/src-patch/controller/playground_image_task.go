@@ -1468,6 +1468,9 @@ func playgroundImageTaskRetryFitsDeadline(payload *playgroundImageTaskPayload, n
 func shouldRetryPlaygroundImageTaskFailure(reason string, status int) bool {
 	normalized := strings.ToLower(strings.TrimSpace(reason))
 	if normalized != "" {
+		if isTransientPlaygroundImageProviderRoutingFailure(normalized) {
+			return true
+		}
 		if playgroundImageTaskFailureHasAny(normalized,
 			"content policy",
 			"content_policy",
@@ -1526,6 +1529,22 @@ func shouldRetryPlaygroundImageTaskFailure(reason string, status int) bool {
 	default:
 		return status >= 500 && status < 600
 	}
+}
+
+func isTransientPlaygroundImageProviderRoutingFailure(reason string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(reason))
+	if normalized == "" {
+		return false
+	}
+	if playgroundImageTaskFailureHasAny(normalized,
+		"no available compatible accounts",
+		"not supported model for image generation, only imagen models are supported",
+		"upstream rate limit exceeded",
+	) {
+		return true
+	}
+	return strings.Contains(normalized, "status_code=403") &&
+		strings.Contains(normalized, "预扣费额度失败")
 }
 
 func playgroundImageTaskFailureHasAny(value string, needles ...string) bool {
@@ -1946,6 +1965,9 @@ func sanitizePlaygroundImageTaskFailure(reason string) string {
 	if trimmed == "" {
 		return ""
 	}
+	if isTransientPlaygroundImageProviderRoutingFailure(trimmed) {
+		return "模型服务暂时不可用，请稍后重试。"
+	}
 	if looksLikeUpstreamImageBalanceError(trimmed) {
 		return "模型服务暂时不可用，请稍后重试。"
 	}
@@ -2016,6 +2038,9 @@ func publicPlaygroundTaskFailureReason(reason string) string {
 	const fallback = "本次生成暂时未完成，请稍后重试或切换模型。"
 	cleaned := truncatePlaygroundText(strings.TrimSpace(sanitizePlaygroundImageTaskFailure(reason)), 500)
 	classificationSource := strings.ToLower(reason + " " + cleaned)
+	if isTransientPlaygroundImageProviderRoutingFailure(classificationSource) {
+		return "模型服务暂时不可用，请稍后重试。"
+	}
 	if strings.HasPrefix(cleaned, "抱歉，我不能帮你生成") || playgroundFailureContainsAny(classificationSource,
 		"prompt_blocked", "content_policy", "content policy", "content moderation",
 		"moderation", "safety", "不能帮你生成", "审核未通过", "安全审核", "安全策略", "敏感内容", "违规内容",

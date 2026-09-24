@@ -39,11 +39,14 @@ GOVERNANCE_FILES = (
     "docs/PROVIDER-MODEL-CIRCUIT.md",
     "release/upstream-ref",
     "release/image-contract-markers.txt",
+    "release/image-model-contract.json",
     "release/go-test-contracts.json",
     "scripts/release-new-api.sh",
     "scripts/release_new_api.py",
     "scripts/new-api-task-start.sh",
     "scripts/check-new-api-release-state.sh",
+    "scripts/check-media-playground-image-params.mjs",
+    "scripts/check-media-playground-runtime.mjs",
     "scripts/deploy.sh",
     "scripts/codex_entry_guard.sh",
     "scripts/sync_app_model_permissions.sh",
@@ -406,6 +409,13 @@ class Release:
         build_cache.mkdir(parents=True, exist_ok=True)
         contracts_path = self.checkout / "services/shenxiang-new-api/release/go-test-contracts.json"
         contracts = load_test_contracts(contracts_path)
+        image_contract_check = (
+            self.checkout
+            / "services/shenxiang-new-api/scripts/check-media-playground-image-params.mjs"
+        )
+        if not image_contract_check.is_file():
+            raise ReleaseError("candidate is missing media image contract checks")
+        run(["node", str(image_contract_check), "--source-root", str(self.source_dir)])
         docker_go = [
             "docker",
             "run",

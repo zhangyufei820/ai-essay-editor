@@ -6,6 +6,9 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:3120'
 const DEFAULT_TIMEOUT_MS = 15000
 
 const requiredBundleMarkers = [
+  'gpt-image-2-4K',
+  '官转image 2稳定',
+  '特价 image-2',
   'banana-2',
   'gemini-3-pro-image-preview',
   'gemini-3.1-flash-image-preview',
@@ -28,6 +31,9 @@ const requiredBundleMarkers = [
   'grok4.6视频',
   'gpt-image-2.5-flare',
   'gpt-image-2.5-sunburst',
+  'image 2电商商品图快速通道(1.5K)',
+  'ecommerce-banana-2',
+  'grok-imagine-image',
   '透明背景仅支持 PNG 或 WebP 输出格式。',
   '3840x1648',
   '1648x3840',

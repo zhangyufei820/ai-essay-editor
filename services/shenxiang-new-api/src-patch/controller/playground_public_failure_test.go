@@ -51,6 +51,16 @@ func TestPublicPlaygroundTaskFailureReasonClassifiesInternalDetails(t *testing.T
 	require.NotContains(t, got, "test-secret-value")
 }
 
+func TestPublicPlaygroundTaskFailureReasonClassifiesProviderRoutingDriftAsUnavailable(t *testing.T) {
+	for _, reason := range []string{
+		"status_code=500, not supported model for image generation, only imagen models are supported",
+		"status_code=503, No available compatible accounts",
+		"status_code=403, 预扣费额度失败, upstream account balance unavailable",
+	} {
+		require.Equal(t, "模型服务暂时不可用，请稍后重试。", publicPlaygroundTaskFailureReason(reason))
+	}
+}
+
 func TestPlaygroundTaskResponsesExposeOnlyPublicFailureMessage(t *testing.T) {
 	task := &model.Task{
 		TaskID:     "task-public-failure",

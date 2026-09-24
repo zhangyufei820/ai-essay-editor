@@ -102,6 +102,18 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertIn("release model-permission runner drift", release_guard)
         self.assertIn('cmp -s "${APP_DIR}/scripts/sync_app_model_permissions.sh"', release_guard)
 
+    def test_release_enforces_media_image_model_contract(self) -> None:
+        for relative in (
+            "release/image-model-contract.json",
+            "scripts/check-media-playground-image-params.mjs",
+            "scripts/check-media-playground-runtime.mjs",
+        ):
+            self.assertIn(relative, MODULE.GOVERNANCE_FILES)
+
+        release_core = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn('"candidate is missing media image contract checks"', release_core)
+        self.assertIn('["node", str(image_contract_check), "--source-root", str(self.source_dir)]', release_core)
+
     def test_release_syncs_manifest_pinned_codex_entry_guard(self) -> None:
         self.assertIn("scripts/codex_entry_guard.sh", MODULE.GOVERNANCE_FILES)
 

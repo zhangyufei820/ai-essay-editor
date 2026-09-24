@@ -475,7 +475,7 @@ func TestSanitizePlaygroundImageTaskFailureKeepsChannelErrorReasons(t *testing.T
 		{
 			name:   "unsupported model",
 			raw:    "status_code=500, not supported model for image generation, only imagen models are supported (request id: req_123, upstream channel #18)",
-			expect: "not supported model for image generation, only imagen models are supported",
+			expect: "模型服务暂时不可用，请稍后重试。",
 		},
 		{
 			name:   "application not found",
@@ -500,6 +500,9 @@ func TestSanitizePlaygroundImageTaskFailureKeepsChannelErrorReasons(t *testing.T
 			require.NotContains(t, got, "request id")
 			require.NotContains(t, got, "upstream channel #")
 			require.NotContains(t, got, "status_code")
+			if tc.name == "unsupported model" {
+				require.NotContains(t, got, "not supported model")
+			}
 		})
 	}
 }
@@ -604,6 +607,24 @@ func TestShouldRetryPlaygroundImageTaskFailureOnlyForTransientErrors(t *testing.
 			reason: "not supported model for image generation",
 			status: http.StatusInternalServerError,
 			want:   false,
+		},
+		{
+			name:   "provider routed image model to incompatible account",
+			reason: "status_code=500, not supported model for image generation, only imagen models are supported",
+			status: http.StatusInternalServerError,
+			want:   true,
+		},
+		{
+			name:   "provider has no compatible image account",
+			reason: "status_code=503, No available compatible accounts",
+			status: http.StatusServiceUnavailable,
+			want:   true,
+		},
+		{
+			name:   "provider account precharge failed",
+			reason: "status_code=403, 预扣费额度失败, upstream account balance unavailable",
+			status: http.StatusForbidden,
+			want:   true,
 		},
 	}
 	for _, tc := range cases {

@@ -452,6 +452,9 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 			request.Size = verifiedSize
 		}
 	}
+	if isGPTImage25Request(info, request.Model) {
+		sanitizeGPTImage25Request(&request)
+	}
 
 	switch info.RelayMode {
 	case relayconstant.RelayModeImagesEdits:
@@ -478,7 +481,8 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 		// 写入所有非文件字段
 		if mf != nil {
 			for key, values := range mf.Value {
-				if key == "model" || key == "group" {
+				if key == "model" || key == "group" ||
+					(isGPTImage25Request(info, request.Model) && isGPTImage25WorkshopOnlyField(key)) {
 					continue
 				}
 				for _, value := range values {
@@ -584,6 +588,50 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 	default:
 		return request, nil
 	}
+}
+
+func isGPTImage25Request(info *relaycommon.RelayInfo, modelName string) bool {
+	candidates := []string{modelName}
+	if info != nil {
+		candidates = append(candidates, info.OriginModelName)
+	}
+	for _, candidate := range candidates {
+		normalized := strings.ToLower(strings.TrimSpace(candidate))
+		if normalized == "gpt-image-2.5-flare" || normalized == "gpt-image-2.5-sunburst" {
+			return true
+		}
+	}
+	return false
+}
+
+func isGPTImage25WorkshopOnlyField(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "resolution", "image_size", "aspect_ratio", "response_format",
+		"responseformat", "generationconfig", "extra_body", "extra_fields",
+		"style", "watermark", "watermark_enabled", "user_id", "images":
+		return true
+	default:
+		return false
+	}
+}
+
+func sanitizeGPTImage25Request(request *dto.ImageRequest) {
+	if request == nil {
+		return
+	}
+	request.Resolution = ""
+	request.ImageSize = ""
+	request.AspectRatio = ""
+	request.ResponseFormat = ""
+	request.ResponseFormatObj = nil
+	request.GenerationConfig = nil
+	request.ExtraBody = nil
+	request.ExtraFields = nil
+	request.Style = nil
+	request.Watermark = nil
+	request.WatermarkEnabled = nil
+	request.UserId = nil
+	request.Images = nil
 }
 
 func isJSONRequest(c *gin.Context) bool {

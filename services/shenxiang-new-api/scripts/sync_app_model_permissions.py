@@ -103,11 +103,11 @@ GPT_IMAGE25_BASE_URL = "https://api.smile-ai-studio.com"
 GPT_IMAGE25_CHANNEL_TAG = "xingren-gpt-image25"
 GPT_IMAGE25_MODEL_CONFIGS = {
     "gpt-image-2.5-flare": {
-        "description": "GPT Image 2.5 Flare（快速生成）：官方定位为最快的高质量日常图像生成，适合快速原型与批量创作；本站已验证 1024x1024 单张文生图与单图编辑，人民币 ¥0.34992/张。",
+        "description": "GPT Image 2.5 Flare（快速生成）：官方定位为最快的高质量日常图像生成，支持文生图与单图编辑；媒体工坊仅转发官方 Image API 参数，人民币 ¥0.34992/张。",
         "price_cny": Decimal("0.34992"),
     },
     "gpt-image-2.5-sunburst": {
-        "description": "GPT Image 2.5 Sunburst（精细编辑）：官方定位为重视编辑精度与细节控制的高端创作工作流；本站已验证 1024x1024 单张文生图与单图编辑，人民币 ¥0.42768/张。",
+        "description": "GPT Image 2.5 Sunburst（精细编辑）：官方定位为重视编辑精度与细节控制的高端创作工作流，支持文生图与单图编辑；媒体工坊仅转发官方 Image API 参数，人民币 ¥0.42768/张。",
         "price_cny": Decimal("0.42768"),
     },
 }
