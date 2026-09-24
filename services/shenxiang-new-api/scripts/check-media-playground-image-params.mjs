@@ -311,6 +311,9 @@ async function main() {
   if (!classic.includes("'1:1': '1920x1920', '16:9': '2048x1152'")) {
     errors.push('classic GPT Image 2.5 2K square must use the verified 1920x1920 upstream size')
   }
+  if (!classic.includes("'3:2': '3240x2160'") || !classic.includes("'2:3': '2160x3240'")) {
+    errors.push('classic GPT Image 2.5 4K 3:2 and 2:3 edits must use accepted Image 2 sizes')
+  }
   for (const [label, block] of [
     ['default gpt-image-2.5-flare', defaultGptImage25FlareBlock],
     ['default gpt-image-2.5-sunburst', defaultGptImage25SunburstBlock],
