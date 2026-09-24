@@ -66,6 +66,11 @@ STABLE_IMAGE2_CHANNEL_PRIORITIES = {
     STABLE_IMAGE2_PRIMARY_CHANNEL_TAG: 16,
     STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG: 0,
 }
+STABLE_IMAGE2_CHANNEL_TAGS = (
+    STABLE_IMAGE2_PRIMARY_CHANNEL_TAG,
+    STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG,
+)
+STABLE_IMAGE2_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
 STABLE_IMAGE2_CHANNEL_REMARK = "Image 2 稳定线路；人民币 ¥0.17/张"
 STABLE_IMAGE2_ENTERPRISE_FALLBACK_REMARK = "Image 2 稳定备用线路；人民币 ¥0.17/张"
 GROK_IMAGE_MODEL = "grok-imagine-image"
@@ -2305,6 +2310,8 @@ def ensure_stable_image2_channel_order() -> None:
         + str(STABLE_IMAGE2_CHANNEL_PRIORITIES[STABLE_IMAGE2_PRIMARY_CHANNEL_TAG])
         + ", weight = 100, models = "
         + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+        + ", `group` = "
+        + sql_quote(STABLE_IMAGE2_PUBLIC_CHANNEL_GROUPS)
         + ", model_mapping = "
         + sql_quote(mapping)
         + ", remark = "
@@ -2319,6 +2326,8 @@ def ensure_stable_image2_channel_order() -> None:
         + str(STABLE_IMAGE2_CHANNEL_PRIORITIES[STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG])
         + ", weight = 100, models = "
         + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+        + ", `group` = "
+        + sql_quote(STABLE_IMAGE2_PUBLIC_CHANNEL_GROUPS)
         + ", model_mapping = "
         + sql_quote(mapping)
         + ", remark = "
@@ -2810,6 +2819,7 @@ def sync_abilities() -> None:
             *GPT6_ASTRA_CHANNEL_TAGS,
             *CLAUDE_CHANNEL_GROUPS,
             *DISCOUNT_IMAGE2_CHANNEL_TAGS,
+            *STABLE_IMAGE2_CHANNEL_TAGS,
         )
     )
     discount_allowed_models = set(DISCOUNT_TEXT_ALLOWED_MODELS)
@@ -2955,6 +2965,14 @@ def sync_abilities() -> None:
         + ") OR REPLACE(COALESCE(models, ''), ' ', '') <> "
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
         + ");",
+        "UPDATE channels SET status = 2 WHERE tag IN ("
+        + ", ".join(sql_quote(tag) for tag in STABLE_IMAGE2_CHANNEL_TAGS)
+        + ")"
+        + " AND (REPLACE(COALESCE(`group`, ''), ' ', '') NOT IN ('internal', "
+        + sql_quote(STABLE_IMAGE2_PUBLIC_CHANNEL_GROUPS)
+        + ") OR REPLACE(COALESCE(models, ''), ' ', '') <> "
+        + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+        + ");",
     ]
     for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
         statements.append(
@@ -3000,6 +3018,7 @@ def sync_abilities() -> None:
     invalid_astra_channels: list[str] = []
     invalid_grok1080_channels: list[str] = []
     invalid_discount_image2_channels: list[str] = []
+    invalid_stable_image2_channels: list[str] = []
     invalid_gemini_ddpapi_channels: list[str] = []
     invalid_gpt_image25_channels: list[str] = []
     invalid_claude_channels: list[str] = []
@@ -3131,6 +3150,24 @@ def sync_abilities() -> None:
             else:
                 invalid_discount_image2_channels.append(channel_id)
                 sync_groups = []
+        elif tag in STABLE_IMAGE2_CHANNEL_TAGS:
+            normalized_groups = ",".join(channel_groups)
+            if channel_models != [INTERNAL_STABLE_IMAGE2_MODEL]:
+                invalid_stable_image2_channels.append(channel_id)
+                sync_groups = []
+            elif normalized_groups == "internal":
+                sync_groups = ["internal"]
+            elif normalized_groups == STABLE_IMAGE2_PUBLIC_CHANNEL_GROUPS:
+                sync_groups = [
+                    group
+                    for group in groups
+                    if group not in {DISCOUNT_TEXT_GROUP, SPECIAL_TEXT_GROUP, PLUS_TEXT_GROUP, GROK45_GROUP}
+                    and group != GPT6_ASTRA_GROUP
+                    and group not in ISOLATED_CLAUDE_GROUPS
+                ]
+            else:
+                invalid_stable_image2_channels.append(channel_id)
+                sync_groups = []
         elif tag in gemini_model_by_tag:
             expected_model = gemini_model_by_tag[tag]
             normalized_groups = ",".join(channel_groups)
@@ -3191,6 +3228,10 @@ def sync_abilities() -> None:
             if model == INTERNAL_DISCOUNT_IMAGE2_MODEL and tag not in DISCOUNT_IMAGE2_CHANNEL_TAGS:
                 continue
             if tag in DISCOUNT_IMAGE2_CHANNEL_TAGS and model != INTERNAL_DISCOUNT_IMAGE2_MODEL:
+                continue
+            if model == INTERNAL_STABLE_IMAGE2_MODEL and tag not in STABLE_IMAGE2_CHANNEL_TAGS:
+                continue
+            if tag in STABLE_IMAGE2_CHANNEL_TAGS and model != INTERNAL_STABLE_IMAGE2_MODEL:
                 continue
             if model in gemini_tag_by_model and tag != gemini_tag_by_model[model]:
                 continue
@@ -3257,6 +3298,11 @@ def sync_abilities() -> None:
                     current_channel_conditions.append(
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+                    )
+                elif tag in STABLE_IMAGE2_CHANNEL_TAGS:
+                    current_channel_conditions.append(
+                        "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
+                        + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
                     )
                 elif tag in CLAUDE_CHANNEL_GROUPS or tag in DEFAULT_CODEX_CHANNEL_TAGS or tag in {KIMI_K3_CHANNEL_TAG, GPT6_ASTRA_CHANNEL_TAG, *GPT6_ASTRA_CHANNEL_TAGS} or tag in grok46_media_channel_tags:
                     pass
@@ -3475,6 +3521,19 @@ def sync_abilities() -> None:
             + " AND channel_id NOT IN (SELECT id FROM channels WHERE status = 1 AND tag IN ("
             + ", ".join(sql_quote(tag) for tag in DISCOUNT_IMAGE2_CHANNEL_TAGS)
             + "));",
+            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "
+            "SET ability.enabled = 0 WHERE channel.tag IN ("
+            + ", ".join(sql_quote(tag) for tag in STABLE_IMAGE2_CHANNEL_TAGS)
+            + ")"
+            + " AND (ability.model <> "
+            + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+            + " OR (REPLACE(COALESCE(channel.`group`, ''), ' ', '') = 'internal' "
+            "AND ability.`group` <> 'internal'));",
+            "UPDATE abilities SET enabled = 0 WHERE model = "
+            + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
+            + " AND channel_id NOT IN (SELECT id FROM channels WHERE status = 1 AND tag IN ("
+            + ", ".join(sql_quote(tag) for tag in STABLE_IMAGE2_CHANNEL_TAGS)
+            + "));",
         ]
     )
     for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
@@ -3582,6 +3641,11 @@ def sync_abilities() -> None:
         raise RuntimeError(
             "discount Image 2 staging isolation violation; invalid channel count: "
             + str(len(invalid_discount_image2_channels))
+        )
+    if invalid_stable_image2_channels:
+        raise RuntimeError(
+            "stable Image 2 channel isolation violation; invalid channel count: "
+            + str(len(invalid_stable_image2_channels))
         )
     if invalid_gemini_ddpapi_channels:
         raise RuntimeError(

@@ -1187,6 +1187,10 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         for tag, priority in self.module.STABLE_IMAGE2_CHANNEL_PRIORITIES.items():
             self.assertIn("priority = " + str(priority), sql)
             self.assertIn("WHERE tag = '" + tag + "'", sql)
+        self.assertEqual(
+            sql.count("`group` = 'default,standard,pro,code,internal'"),
+            2,
+        )
         self.assertIn("Image 2 稳定备用线路；人民币 ¥0.17/张", sql)
         self.assertIn("UPDATE channels SET status = IF(status = 2, 2, 1)", sql)
 
@@ -1708,6 +1712,69 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("UPDATE channels SET status = 2", sql)
         self.assertNotIn("SELECT 'default', 'geek2api-image-2', 45", sql)
         self.assertNotIn("SELECT 'internal', 'geek2api-image-2', 45", sql)
+
+    def test_sync_abilities_publishes_stable_image2_to_public_groups(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "67",
+                    "internal-image2-stable-v1",
+                    "16",
+                    "100",
+                    "xingren-stable-image2",
+                    "default,standard,pro,code,internal",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["internal-image2-stable-v1"]]
+            return []
+
+        self.module.active_groups = lambda: [
+            "code", "default", "discount", "grok45", "internal", "pro", "standard"
+        ]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        for group in ("default", "standard", "pro", "code", "internal"):
+            self.assertIn(
+                f"SELECT '{group}', 'internal-image2-stable-v1', 67",
+                sql,
+            )
+        self.assertNotIn("SELECT 'discount', 'internal-image2-stable-v1', 67", sql)
+        self.assertNotIn("SELECT 'grok45', 'internal-image2-stable-v1', 67", sql)
+
+    def test_sync_abilities_disables_stable_image2_group_drift(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql(query: str) -> list[list[str]]:
+            if "FROM channels" in query:
+                return [[
+                    "67",
+                    "internal-image2-stable-v1",
+                    "16",
+                    "100",
+                    "xingren-stable-image2",
+                    "default",
+                ]]
+            if "SELECT model_name FROM models" in query:
+                return [["internal-image2-stable-v1"]]
+            return []
+
+        self.module.active_groups = lambda: ["default", "internal"]
+        self.module.mysql = fake_mysql
+        self.module.mysql_exec = captured.append
+
+        with self.assertRaisesRegex(RuntimeError, "stable Image 2 channel isolation"):
+            self.module.sync_abilities()
+
+        sql = "\n".join(captured)
+        self.assertIn("UPDATE channels SET status = 2", sql)
+        self.assertNotIn("SELECT 'default', 'internal-image2-stable-v1', 67", sql)
+        self.assertNotIn("SELECT 'internal', 'internal-image2-stable-v1', 67", sql)
 
     def test_sync_user_image_tokens_replaces_all_public_image_limits(self) -> None:
         captured: list[str] = []

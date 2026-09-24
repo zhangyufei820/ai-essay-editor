@@ -108,6 +108,24 @@ const requiredStylePatterns = [
 
 const expectedChannels = [
   {
+    label: 'stable Image 2 primary channel',
+    model: 'internal-image2-stable-v1',
+    upstream: 'gpt-image-2',
+    channelTag: 'xingren-stable-image2',
+    requiredGroups: 'default,standard,pro,code,internal',
+    baseUrlPattern: /^https:\/\//i,
+  },
+  {
+    label: 'stable Image 2 fallback channel',
+    model: 'internal-image2-stable-v1',
+    upstream: 'gpt-image-2',
+    channelTag: 'xingren-stable-image2-enterprise-fallback',
+    requiredGroups: 'default,standard,pro,code,internal',
+    optionalUntilStaged: true,
+    allowDisabled: true,
+    baseUrlPattern: /^https:\/\//i,
+  },
+  {
     label: 'Banana 2 MoonApiX channel',
     model: 'banana-2',
     upstream: 'gemini-3.1-flash-image-preview',
@@ -283,7 +301,7 @@ function parseRows(output) {
     .split('\n')
     .filter(Boolean)
     .map((line) => {
-      const [id, status, baseUrl, models, modelMapping] = line.split('\t')
+      const [id, status, baseUrl, models, modelMapping, tag, groups] = line.split('\t')
       let mapping = {}
       try {
         mapping = JSON.parse(modelMapping || '{}')
@@ -296,6 +314,8 @@ function parseRows(output) {
         baseUrl: baseUrl || '',
         models: models || '',
         mapping,
+        tag: tag || '',
+        groups: groups || '',
       }
     })
 }
@@ -303,7 +323,11 @@ function parseRows(output) {
 function checkChannelRows(rows) {
   const errors = []
   for (const expected of expectedChannels) {
-    const matchingRows = rows.filter((row) => row.models.split(',').map((item) => item.trim()).includes(expected.model))
+    const matchingRows = rows.filter(
+      (row) =>
+        row.models.split(',').map((item) => item.trim()).includes(expected.model) &&
+        (!expected.channelTag || row.tag === expected.channelTag),
+    )
     if (matchingRows.length === 0) {
       if (expected.optionalUntilStaged) continue
       errors.push(`${expected.label}: missing channel model ${expected.model}`)
@@ -314,9 +338,10 @@ function checkChannelRows(rows) {
       const upstream = row.mapping[expected.model] || expected.model
       const baseUrlPattern = expected.baseUrlPattern || /moonapix\.com/i
       return (
-        row.status === '1' &&
+        (expected.allowDisabled || row.status === '1') &&
         baseUrlPattern.test(row.baseUrl) &&
-        upstream === expected.upstream
+        upstream === expected.upstream &&
+        (!expected.requiredGroups || row.groups.replaceAll(' ', '') === expected.requiredGroups)
       )
     })
 
@@ -334,7 +359,7 @@ function checkDatabase(container) {
     .map((expected) => `models LIKE '%${expected.model}%' OR model_mapping LIKE '%${expected.model}%'`)
     .join(' OR ')
   const sql = `
-SELECT id, status, base_url, models, model_mapping
+SELECT id, status, base_url, models, model_mapping, COALESCE(tag, ''), COALESCE(\`group\`, '')
 FROM channels
 WHERE ${modelPatterns}
 ORDER BY id;

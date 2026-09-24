@@ -20,6 +20,7 @@ CHANNEL_NAME = "星人 Image 2 稳定通道"
 CHANNEL_TAG = "xingren-stable-image2"
 FALLBACK_CHANNEL_TAG = "xingren-stable-image2-enterprise-fallback"
 PRIMARY_PRIORITY = 16
+PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
 EXPECTED_BASE_URL = "https://moonapix.com"
 UPSTREAM_KEY_ENV = "STABLE_IMAGE2_UPSTREAM_API_KEY"
 MODEL_SYNC_LOCK_PATH = "/tmp/shenxiang-new-api-model-sync.lock"
@@ -245,7 +246,7 @@ def build_apply_sql(api_key: str, base_url: str) -> str:
                     "0",
                     sql_quote(normalize_base_url(base_url)),
                     sql_quote(INTERNAL_MODEL),
-                    sql_quote("default"),
+                    sql_quote(PUBLIC_CHANNEL_GROUPS),
                     sql_quote(mapping),
                     str(PRIMARY_PRIORITY),
                     "1",
@@ -263,7 +264,9 @@ def build_apply_sql(api_key: str, base_url: str) -> str:
             + sql_quote(normalize_base_url(base_url))
             + ", models = "
             + sql_quote(INTERNAL_MODEL)
-            + ", `group` = 'default', model_mapping = "
+            + ", `group` = "
+            + sql_quote(PUBLIC_CHANNEL_GROUPS)
+            + ", model_mapping = "
             + sql_quote(mapping)
             + ", priority = "
             + str(PRIMARY_PRIORITY)

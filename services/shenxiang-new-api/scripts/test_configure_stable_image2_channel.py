@@ -76,6 +76,10 @@ class StableImage2ChannelTest(unittest.TestCase):
         self.assertIn('{"internal-image2-stable-v1":"gpt-image-2"}', sql)
         self.assertIn("xingren-stable-image2", sql)
         self.assertIn("priority = 16", sql)
+        self.assertGreaterEqual(
+            sql.count("default,standard,pro,code,internal"),
+            2,
+        )
         self.assertNotIn("官转image 2稳定", sql)
 
     def test_uniqueness_allows_same_endpoint_for_other_models(self) -> None:

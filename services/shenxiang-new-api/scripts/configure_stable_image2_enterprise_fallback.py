@@ -72,7 +72,7 @@ def build_apply_sql(api_key: str, base_url: str) -> str:
                     "0",
                     stable.sql_quote(stable.normalize_base_url(base_url)),
                     stable.sql_quote(stable.INTERNAL_MODEL),
-                    stable.sql_quote("default"),
+                    stable.sql_quote(stable.PUBLIC_CHANNEL_GROUPS),
                     stable.sql_quote(mapping),
                     str(FALLBACK_PRIORITY),
                     "1",
@@ -90,7 +90,9 @@ def build_apply_sql(api_key: str, base_url: str) -> str:
             + stable.sql_quote(stable.normalize_base_url(base_url))
             + ", models = "
             + stable.sql_quote(stable.INTERNAL_MODEL)
-            + ", `group` = 'default', model_mapping = "
+            + ", `group` = "
+            + stable.sql_quote(stable.PUBLIC_CHANNEL_GROUPS)
+            + ", model_mapping = "
             + stable.sql_quote(mapping)
             + ", priority = "
             + str(FALLBACK_PRIORITY)

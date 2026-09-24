@@ -621,6 +621,18 @@ func TestShouldRetryPlaygroundImageTaskFailureOnlyForTransientErrors(t *testing.
 			want:   true,
 		},
 		{
+			name:   "provider model temporarily unavailable for account pool",
+			reason: "status_code=403, model is not available for the current account",
+			status: http.StatusForbidden,
+			want:   true,
+		},
+		{
+			name:   "provider exposes service unavailable with forbidden status",
+			reason: "status_code=403, service unavailable",
+			status: http.StatusForbidden,
+			want:   true,
+		},
+		{
 			name:   "provider account precharge failed",
 			reason: "status_code=403, 预扣费额度失败, upstream account balance unavailable",
 			status: http.StatusForbidden,

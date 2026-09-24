@@ -32,6 +32,10 @@ class StableImage2EnterpriseFallbackTest(unittest.TestCase):
         self.assertIn("internal-image2-stable-v1", sql)
         self.assertIn('{"internal-image2-stable-v1":"gpt-image-2"}', sql)
         self.assertIn("priority = 0", sql)
+        self.assertGreaterEqual(
+            sql.count("default,standard,pro,code,internal"),
+            2,
+        )
         self.assertNotIn("官转image 2稳定", sql)
 
     def test_topology_requires_one_primary_and_allows_one_fallback(self) -> None:

@@ -1538,6 +1538,11 @@ func isTransientPlaygroundImageProviderRoutingFailure(reason string) bool {
 	}
 	if playgroundImageTaskFailureHasAny(normalized,
 		"no available compatible accounts",
+		"model is not available",
+		"model is unavailable",
+		"model not available",
+		"model currently unavailable",
+		"service unavailable",
 		"not supported model for image generation, only imagen models are supported",
 		"upstream rate limit exceeded",
 	) {
