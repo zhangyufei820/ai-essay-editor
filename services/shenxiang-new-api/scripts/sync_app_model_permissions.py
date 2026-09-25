@@ -3447,7 +3447,19 @@ def sync_abilities() -> None:
             + sql_quote(SPECIAL_TEXT_GROUP)
             + " AND channel_id NOT IN (SELECT id FROM channels WHERE tag IN ("
             + special_channel_tags_sql
-            + "));",
+            + ")) AND NOT ((model = "
+            + sql_quote(KIMI_K3_MODEL)
+            + " AND channel_id IN ("
+            + kimi_enabled_channel_sql
+            + ")) OR (model = "
+            + sql_quote(GPT6_ASTRA_MODEL)
+            + " AND channel_id IN ("
+            + astra_enabled_channel_sql
+            + ")) OR (model = "
+            + sql_quote(GPT6_SOL_MODEL)
+            + " AND channel_id IN ("
+            + sol_enabled_channel_sql
+            + ")));",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
             + "(SELECT id FROM channels WHERE tag IN ("
             + special_channel_tags_sql

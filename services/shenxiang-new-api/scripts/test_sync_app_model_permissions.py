@@ -146,7 +146,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("GPT6_MANAGED_CHANNEL_MODEL_BY_TAG", source)
         self.assertIn("sol_enabled_channel_sql", source)
 
-    def test_sync_abilities_accepts_astra_channels_in_discount_plus_and_special(self) -> None:
+    def test_sync_abilities_accepts_gpt6_channels_in_discount_plus_and_special(self) -> None:
         captured: list[str] = []
 
         def fake_mysql(query: str) -> list[list[str]]:
@@ -190,6 +190,25 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 "'xingren-gpt6-sol-" + group + "-1'",
                 isolation_guard,
                 msg=f"{group} isolation must not disable its managed Sol chain",
+            )
+
+            ability_guard = next(
+                statement
+                for statement in sql.split(";\n")
+                if statement.startswith(
+                    "UPDATE abilities SET enabled = 0 WHERE `group` = "
+                    f"'{group}' AND channel_id NOT IN"
+                )
+            )
+            self.assertIn(
+                "model = 'gpt-6-astra' AND channel_id IN",
+                ability_guard,
+                msg=f"{group} cleanup must preserve its managed Astra chain",
+            )
+            self.assertIn(
+                "model = 'gpt-6-sol' AND channel_id IN",
+                ability_guard,
+                msg=f"{group} cleanup must preserve its managed Sol chain",
             )
 
     def test_discount_text_models_are_exactly_the_public_text_aliases(self) -> None:
