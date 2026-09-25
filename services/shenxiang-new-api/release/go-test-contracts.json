@@ -101,7 +101,7 @@
   },
   {
     "package": "./relay/helper",
-    "run": "^(TestHandleGroupRatioPinsSpecialMarketplaceRatio|TestHandleGroupRatioPinsAstraMarketplacePriceAcrossPublicRoutingGroups|TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice|TestResponsesInitialResponseTimeoutOnlyAppliesToResponses|TestStreamScannerHandlerTimesOutSilentResponsesStreamBeforeGlobalTimeout)$"
+    "run": "^(TestHandleGroupRatioPinsSpecialMarketplaceRatio|TestHandleGroupRatioPinsAstraMarketplacePriceAcrossPublicRoutingGroups|TestHandleGroupRatioPinsSolMarketplacePriceAcrossPublicRoutingGroups|TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice|TestResponsesInitialResponseTimeoutOnlyAppliesToResponses|TestStreamScannerHandlerTimesOutSilentResponsesStreamBeforeGlobalTimeout)$"
   },
   {
     "package": "./service",
@@ -110,6 +110,10 @@
   {
     "package": "./service",
     "run": "^(TestEnsureSystemTokensForSpecialUserCreatesExactCodexModels|TestSpecialCodexSystemTokenLimitsAreReconciledExactly|TestSpecialPricingGroupIsPinnedAndCannotBeChained|TestSpecialModelAbilityCircuitSkipsDisabledPrimary)$"
+  },
+  {
+    "package": "./types",
+    "run": "^TestPublicMessage.*$"
   },
   {
     "package": "./model",

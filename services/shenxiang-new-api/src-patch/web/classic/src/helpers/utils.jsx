@@ -884,9 +884,9 @@ export const calculateModelPrice = ({
     }
   }
 
-  // GPT-6 Astra may route through the default, plus, or discount chain, but
-  // the Model Plaza price is fixed at 1x for every chain.
-  if (String(record?.model_name || '').trim().toLowerCase() === 'gpt-6-astra') {
+  // GPT-6 models may route through the default, plus, or discount chain, but
+  // their Model Plaza price is fixed at 1x for every chain.
+  if (['gpt-6-astra', 'gpt-6-sol'].includes(String(record?.model_name || '').trim().toLowerCase())) {
     usedGroupRatio = 1;
   }
 

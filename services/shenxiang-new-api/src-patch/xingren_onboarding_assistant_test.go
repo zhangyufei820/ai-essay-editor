@@ -47,6 +47,9 @@ func TestXingrenCodexModelAcceptsAstra(t *testing.T) {
 	if got := xingrenCodexModel("gpt-6-astra"); got != "gpt-6-astra" {
 		t.Fatalf("xingrenCodexModel() = %q, want gpt-6-astra", got)
 	}
+	if got := xingrenCodexModel("gpt-6-sol"); got != "gpt-6-sol" {
+		t.Fatalf("xingrenCodexModel() = %q, want gpt-6-sol", got)
+	}
 }
 
 func TestXingrenCodexTokenGroupDefaultsLegacyUserGroup(t *testing.T) {

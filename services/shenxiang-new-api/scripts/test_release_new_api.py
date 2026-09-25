@@ -86,6 +86,8 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertIn('python3 "$SYNC_SCRIPT"', runner)
         self.assertIn('run_optional_reconcile "kimi-k3"', runner)
         self.assertIn('run_optional_reconcile "gpt-6-astra"', runner)
+        self.assertIn('GPT6_MODEL_PROFILE=sol GPT6_SOL_CHANNEL_SYNC_LOCK_HELD=1', runner)
+        self.assertIn('"$GPT6_ASTRA_SCRIPT" --reconcile', runner)
         self.assertIn('run_optional_reconcile "grok-4.5"', runner)
         self.assertIn('run_optional_reconcile "grok-4.6"', runner)
         self.assertLess(

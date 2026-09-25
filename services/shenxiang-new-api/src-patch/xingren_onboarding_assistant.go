@@ -56,7 +56,8 @@ var (
 		"gpt-5.5":      true,
 		"gpt-5.4":      true,
 		"gpt-5.4-mini": true,
-		"gpt-6-astra": true,
+		"gpt-6-astra":  true,
+		"gpt-6-sol":    true,
 	}
 )
 

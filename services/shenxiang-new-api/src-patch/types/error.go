@@ -356,9 +356,6 @@ func publicErrorCode(code any) any {
 func (e *NewAPIError) ToPublicOpenAIError(requestId string) OpenAIError {
 	result := e.ToOpenAIError()
 	result.Message = e.PublicMessage()
-	if requestId != "" {
-		result.Message = common.MessageWithRequestId(result.Message, requestId)
-	}
 	if ContainsProviderDisclosure(strings.ToLower(result.Type)) {
 		result.Type = string(ErrorTypeNewAPIError)
 	}
@@ -401,9 +398,6 @@ func (e *NewAPIError) ToClaudeError() ClaudeError {
 func (e *NewAPIError) ToPublicClaudeError(requestId string) ClaudeError {
 	result := e.ToClaudeError()
 	result.Message = e.PublicMessage()
-	if requestId != "" {
-		result.Message = common.MessageWithRequestId(result.Message, requestId)
-	}
 	if ContainsProviderDisclosure(strings.ToLower(result.Type)) {
 		result.Type = string(ErrorTypeNewAPIError)
 	}

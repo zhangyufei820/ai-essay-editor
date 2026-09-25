@@ -164,10 +164,20 @@ func TestMonthlyCardAstraAlwaysUsesFullMarketplaceQuota(t *testing.T) {
 	}
 }
 
+func TestMonthlyCardSolUsesTextPlanValueMultiplier(t *testing.T) {
+	require.True(t, MonthlyCardChannelSupportsModel("gpt-6-sol"))
+	require.True(t, MonthlyCardTextSupportsModel("gpt-6-sol"))
+	info := &relaycommon.RelayInfo{
+		BillingSource: BillingSourceSubscription, OriginModelName: "gpt-6-sol",
+		SubscriptionPlanId: 4, SubscriptionPlanTitle: "¥300 月卡", UsingGroup: "discount",
+	}
+	require.Equal(t, 90, EffectiveMonthlyCardTextBillingQuota(info, 180))
+}
+
 func TestMonthlyCardCodexModelsAndWalletAcrossPublicGroups(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, group := range []string{"discount", "plus", "default"} {
-		for _, modelName := range []string{"gpt-6-astra", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4-mini"} {
+		for _, modelName := range []string{"gpt-6-astra", "gpt-6-sol", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4-mini"} {
 			for _, monthly := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/monthly=%t", group, modelName, monthly), func(t *testing.T) {
 					truncate(t)

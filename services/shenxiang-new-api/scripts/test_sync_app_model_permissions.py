@@ -63,6 +63,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("gpt-5.6-luna", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.6-terra", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.6-sol", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("gpt-6-sol", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("kimi-k3", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-5.5-openai-compact", self.module.CODEX_ALLOWED_MODELS)
         self.assertNotIn("gpt-5.3-codex-spark", self.module.CODEX_ALLOWED_MODELS)
@@ -118,11 +119,32 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("gpt-6-astra", self.module.PUBLIC_OPENAI_TEXT_MODELS)
         self.assertIn("gpt-6-astra", self.module.CODEX_ALLOWED_MODELS)
 
+    def test_gpt6_sol_catalog_uses_exact_cny_tiers(self) -> None:
+        prices = self.module.PUBLIC_OPENAI_TEXT_MODELS["gpt-6-sol"]
+
+        self.assertEqual(prices["input_cny"], self.module.Decimal("5.0000"))
+        self.assertEqual(prices["output_cny"], self.module.Decimal("30.0000"))
+        self.assertEqual(prices["cache_read_cny"], self.module.Decimal("0.5000"))
+        self.assertEqual(prices["cache_create_cny"], self.module.Decimal("6.2500"))
+        self.assertEqual(prices["longcontext_input_cny"], self.module.Decimal("10.0000"))
+        self.assertEqual(prices["longcontext_output_cny"], self.module.Decimal("45.0000"))
+        self.assertEqual(prices["longcontext_cache_read_cny"], self.module.Decimal("1.0000"))
+        self.assertEqual(prices["longcontext_cache_create_cny"], self.module.Decimal("12.5000"))
+        self.assertEqual(self.module.GPT6_SOL_MODEL, "gpt-6-sol")
+        self.assertEqual(len(self.module.GPT6_SOL_CHANNEL_TAGS), 32)
+
+        frontend = (
+            SCRIPT_PATH.parent.parent
+            / "src-patch/web/classic/src/helpers/utils.jsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("['gpt-6-astra', 'gpt-6-sol'].includes", frontend)
+
     def test_gpt6_astra_ability_sync_preserves_discount_and_plus_visibility(self) -> None:
         source = SCRIPT_PATH.read_text(encoding="utf-8")
 
         self.assertIn("astra_enabled_channel_sql", source)
-        self.assertGreaterEqual(source.count("sql_quote(GPT6_ASTRA_MODEL)"), 6)
+        self.assertIn("GPT6_MANAGED_CHANNEL_MODEL_BY_TAG", source)
+        self.assertIn("sol_enabled_channel_sql", source)
 
     def test_sync_abilities_accepts_astra_channels_in_discount_plus_and_special(self) -> None:
         captured: list[str] = []
@@ -133,9 +155,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                     ["94", "gpt-6-astra", "40", "100", "xingren-gpt6-astra-discount-1", "discount"],
                     ["90", "gpt-6-astra", "40", "100", "xingren-gpt6-astra-plus-1", "plus"],
                     ["98", "gpt-6-astra", "40", "100", "xingren-gpt6-astra-special-1", "special"],
+                    ["194", "gpt-6-sol", "40", "100", "xingren-gpt6-sol-discount-1", "discount"],
+                    ["190", "gpt-6-sol", "40", "100", "xingren-gpt6-sol-plus-1", "plus"],
+                    ["198", "gpt-6-sol", "40", "100", "xingren-gpt6-sol-special-1", "special"],
                 ]
             if "SELECT model_name FROM models" in query:
-                return [["gpt-6-astra"]]
+                return [["gpt-6-astra"], ["gpt-6-sol"]]
             return []
 
         self.module.active_groups = lambda: ["default", "discount", "plus", "special"]
@@ -147,6 +172,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sql = "\n".join(captured)
         for group in ("discount", "plus", "special"):
             self.assertIn(f"SELECT '{group}', 'gpt-6-astra'", sql)
+            self.assertIn(f"SELECT '{group}', 'gpt-6-sol'", sql)
             isolation_guard = next(
                 statement
                 for statement in sql.split(";\n")
@@ -159,6 +185,11 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
                 "'xingren-gpt6-astra-" + group + "-1'",
                 isolation_guard,
                 msg=f"{group} isolation must not disable its managed Astra chain",
+            )
+            self.assertIn(
+                "'xingren-gpt6-sol-" + group + "-1'",
+                isolation_guard,
+                msg=f"{group} isolation must not disable its managed Sol chain",
             )
 
     def test_discount_text_models_are_exactly_the_public_text_aliases(self) -> None:
@@ -533,7 +564,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -541,7 +572,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_token_cache_key_uses_crypto_secret_hmac(self) -> None:
@@ -1396,8 +1427,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '106'", sql)
         self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105,key-106", sql)
         self.assertIn("model_limits_enabled = 1", sql)
-        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
-        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("gpt-5.3-codex-spark", sql)
         self.assertNotIn("gpt-5.3-spark", sql)
         self.assertNotIn("gpt-5.4-openai-compact", sql)
@@ -1469,13 +1500,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         result = self.module.sync_astra_access_for_target_user_tokens()
 
         sql = "\n".join(captured)
-        self.assertEqual(result, {"tokens_rewritten": 2, "token_caches_deleted": 2})
+        self.assertEqual(result, {"tokens_rewritten": 3, "token_caches_deleted": 3})
         self.assertIn("WHERE id = '401'", sql)
         self.assertIn("WHERE id = '402'", sql)
-        self.assertNotIn("WHERE id = '403'", sql)
-        self.assertIn("gpt-5.5,gpt-6-astra", sql)
-        self.assertIn("gpt-5.6-sol,gpt-6-astra", sql)
-        self.assertIn("CACHE:user-key-default,user-key-plus", sql)
+        self.assertIn("WHERE id = '403'", sql)
+        self.assertIn("gpt-5.5,gpt-6-astra,gpt-6-sol", sql)
+        self.assertIn("gpt-5.6-sol,gpt-6-astra,gpt-6-sol", sql)
+        self.assertIn("CACHE:user-key-default,user-key-plus,user-key-discount", sql)
 
     def test_sync_user_claude_tokens_replaces_unrestricted_limits(self) -> None:
         captured: list[str] = []
@@ -1842,7 +1873,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.ensure_public_openai_text_models()
 
         sql = "\n".join(captured)
-        for model in ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-astra"]:
+        for model in ["gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-astra", "gpt-6-sol"]:
             self.assertIn(model, sql)
         self.assertIn("text,openai,codex", sql)
         self.assertIn('{"openai":"/v1/chat/completions"}', sql)
@@ -1869,6 +1900,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             "gpt-5.6-terra": 0.171232876712,
             "gpt-5.6-sol": 0.342465753425,
             "gpt-6-astra": 0.684931506849,
+            "gpt-6-sol": 0.342465753425,
         }
         expected_completion_ratios = {
             "gpt-5.4": 6.136363636364,
@@ -1878,6 +1910,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             "gpt-5.6-terra": 6.0,
             "gpt-5.6-sol": 6.0,
             "gpt-6-astra": 5.0,
+            "gpt-6-sol": 6.0,
         }
         for model, ratio in expected_model_ratios.items():
             self.assertEqual(captured_options["ModelRatio"][model], ratio)
@@ -1914,8 +1947,9 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         luna_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-luna"]
         terra_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-terra"]
         sol_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-sol"]
+        gpt6_sol_expr = captured_options["billing_setting.billing_expr"]["gpt-6-sol"]
 
-        for expr in [gpt54_expr, gpt55_expr, gpt56_expr, luna_expr, terra_expr, sol_expr]:
+        for expr in [gpt54_expr, gpt55_expr, gpt56_expr, luna_expr, terra_expr, sol_expr, gpt6_sol_expr]:
             self.assertIn("len <= 272000", expr)
             self.assertIn('tier("base"', expr)
             self.assertIn('tier("longcontext"', expr)
@@ -1937,6 +1971,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("c * 6.657534246575", gpt55_expr)
 
         self.assertEqual(gpt56_expr, sol_expr)
+        self.assertEqual(gpt6_sol_expr, sol_expr)
         self.assertIn("cr * 0.147945205479", gpt55_expr)
         self.assertIn("cc * 1.849315068493", gpt55_expr)
 

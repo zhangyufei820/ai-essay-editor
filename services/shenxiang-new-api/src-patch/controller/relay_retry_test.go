@@ -279,7 +279,7 @@ func TestWriteResponsesStreamErrorWritesOneExplicitSSEError(t *testing.T) {
 	require.Equal(t, 1, strings.Count(body, "event: error\n"))
 	require.Contains(t, body, `"type":"error"`)
 	require.Contains(t, body, `"code":"empty_response"`)
-	require.Contains(t, body, "req_test")
+	require.NotContains(t, body, "req_test")
 	require.NotContains(t, strings.ToLower(body), "upstream")
 }
 

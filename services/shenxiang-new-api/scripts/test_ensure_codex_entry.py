@@ -32,6 +32,7 @@ class EnsureCodexEntryTest(unittest.TestCase):
 
     def test_gpt6_astra_is_preserved_by_codex_token_guard(self) -> None:
         self.assertIn("gpt-6-astra", self.module.CODEX_ALLOWED_MODELS)
+        self.assertIn("gpt-6-sol", self.module.CODEX_ALLOWED_MODELS)
 
     def test_gpt56_is_preserved_by_codex_token_guard(self) -> None:
         self.assertIn("gpt-5.6", self.module.CODEX_ALLOWED_MODELS)
@@ -232,7 +233,7 @@ API.get('/api/user/models');
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -240,7 +241,7 @@ API.get('/api/user/models');
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_supplier_exposed_model_limit_predicate_covers_known_markers(self) -> None:

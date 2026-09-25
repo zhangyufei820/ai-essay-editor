@@ -477,6 +477,10 @@ class Release:
         if not astra_test.is_file():
             raise ReleaseError("candidate is missing Astra routing policy tests")
         run(["python3", str(astra_test)])
+        sol_test = self.checkout / "services/shenxiang-new-api/scripts/test_configure_gpt6_sol_channel.py"
+        if not sol_test.is_file():
+            raise ReleaseError("candidate is missing Sol routing policy tests")
+        run(["python3", str(sol_test)])
 
     def build_image(self) -> None:
         labels = self.image_labels(self.image)

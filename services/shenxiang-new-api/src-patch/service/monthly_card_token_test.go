@@ -254,6 +254,7 @@ func TestMonthlyCardTokenRepairPreservesSelectedPublicGroupChain(t *testing.T) {
 				require.Equal(t, existing.Key, token.Key)
 				require.Equal(t, group, token.Group)
 				require.Contains(t, strings.Split(token.ModelLimits, ","), "gpt-6-astra")
+				require.Contains(t, strings.Split(token.ModelLimits, ","), "gpt-6-sol")
 				require.Contains(t, strings.Split(token.ModelLimits, ","), "gpt-5.6")
 				require.False(t, token.CrossGroupRetry)
 			}

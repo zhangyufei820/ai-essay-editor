@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe existing OpenAI routes and configure independent Astra chains."""
+"""Probe existing OpenAI routes and configure independent GPT-6 chains."""
 from __future__ import annotations
 
 import argparse
@@ -23,32 +23,46 @@ sys.path.insert(0, str(Path(__file__).parent))
 import sync_app_model_permissions as sync
 import provider_monitor
 
-MODEL_NAME = "gpt-6-astra"
-LEGACY_CHANNEL_TAG = "xingren-gpt6-astra"
-SOURCE_CHANNEL_TAGS = (
-    LEGACY_CHANNEL_TAG,
-    "xingren-discount-text-aihub",
-    "xingren-plus-text-wangwang",
-    "xingren-plus-text-pdhlzy",
-)
+PROFILE_NAME = os.environ.get("GPT6_MODEL_PROFILE", "astra").strip().lower()
+if PROFILE_NAME not in {"astra", "sol"}:
+    raise RuntimeError("GPT6_MODEL_PROFILE must be astra or sol")
+
+ASTRA_SOURCE_TAG = "xingren-gpt6-astra"
+AIHUB_SOURCE_TAG = "xingren-discount-text-aihub"
+WANGWANG_SOURCE_TAG = "xingren-plus-text-wangwang"
+PDHLZY_SOURCE_TAG = "xingren-plus-text-pdhlzy"
+
+if PROFILE_NAME == "sol":
+    MODEL_NAME = "gpt-6-sol"
+    DISPLAY_NAME = "GPT-6 Sol"
+    SOURCE_CHANNEL_TAGS = (AIHUB_SOURCE_TAG, WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG, ASTRA_SOURCE_TAG)
+    MANAGED_TAG_PREFIX = "xingren-gpt6-sol-"
+    DISCOUNT_PRIMARY_SOURCE_TAG = AIHUB_SOURCE_TAG
+    DEPRECATED_CHANNEL_TAG = None
+    LOCK_PATH = "/tmp/shenxiang-new-api-gpt6-sol-channel.lock"
+    LOCK_HELD_ENV = "GPT6_SOL_CHANNEL_SYNC_LOCK_HELD"
+    SQL_VAR_PREFIX = "sol"
+else:
+    MODEL_NAME = "gpt-6-astra"
+    DISPLAY_NAME = "GPT-6 Astra"
+    SOURCE_CHANNEL_TAGS = (ASTRA_SOURCE_TAG, AIHUB_SOURCE_TAG, WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG)
+    MANAGED_TAG_PREFIX = "xingren-gpt6-astra-"
+    DISCOUNT_PRIMARY_SOURCE_TAG = ASTRA_SOURCE_TAG
+    DEPRECATED_CHANNEL_TAG = ASTRA_SOURCE_TAG
+    LOCK_PATH = "/tmp/shenxiang-new-api-gpt6-astra-channel.lock"
+    LOCK_HELD_ENV = "GPT6_ASTRA_CHANNEL_SYNC_LOCK_HELD"
+    SQL_VAR_PREFIX = "astra"
+
+LEGACY_CHANNEL_TAG = ASTRA_SOURCE_TAG
 # Public tiers prefer their configured sources, but only completed probes can
 # enable them. Legacy tiers retain their established order above.
-GROUP_SOURCE_TAG_ORDER_OVERRIDES = {
-    "discount": (
-        "xingren-plus-text-pdhlzy",
-        "xingren-plus-text-wangwang",
-        "xingren-discount-text-aihub",
-        LEGACY_CHANNEL_TAG,
-    ),
-    "plus": ("xingren-plus-text-wangwang", "xingren-plus-text-pdhlzy", "xingren-discount-text-aihub", LEGACY_CHANNEL_TAG),
-    "default": ("xingren-plus-text-wangwang", "xingren-plus-text-pdhlzy", "xingren-discount-text-aihub", LEGACY_CHANNEL_TAG),
+GROUP_SOURCE_TAG_ORDER_OVERRIDES = {} if PROFILE_NAME == "sol" else {
+    "discount": (PDHLZY_SOURCE_TAG, WANGWANG_SOURCE_TAG, AIHUB_SOURCE_TAG, ASTRA_SOURCE_TAG),
+    "plus": (WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG, AIHUB_SOURCE_TAG, ASTRA_SOURCE_TAG),
+    "default": (WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG, AIHUB_SOURCE_TAG, ASTRA_SOURCE_TAG),
 }
 MANAGED_GROUPS = ("default", "standard", "pro", "code", "internal", "plus", "discount", "special")
-MANAGED_TAG_PREFIX = "xingren-gpt6-astra-"
 CHAIN_PRIORITIES = (40, 30, 20, 10)
-DISCOUNT_PRIMARY_SOURCE_TAG = LEGACY_CHANNEL_TAG
-LOCK_PATH = "/tmp/shenxiang-new-api-gpt6-astra-channel.lock"
-LOCK_HELD_ENV = "GPT6_ASTRA_CHANNEL_SYNC_LOCK_HELD"
 MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_REQUEST_ATTEMPTS = 3
 RETRYABLE_HTTP_STATUS = {429, 502, 503, 504}
@@ -106,7 +120,7 @@ def channel_lock():
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise ConfigurationError("GPT-6 Astra channel sync is already running") from None
+            raise ConfigurationError(f"{DISPLAY_NAME} channel sync is already running") from None
         yield
     finally:
         fcntl.flock(descriptor, fcntl.LOCK_UN)
@@ -122,7 +136,7 @@ def fetch_json(url: str, api_key: str, body: dict[str, object] | None = None) ->
             "Authorization": "Bearer " + validate_key(api_key),
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "shenxiang-gpt6-astra-probe/2.0",
+            "User-Agent": f"shenxiang-{MODEL_NAME}-probe/2.0",
         },
         method="POST" if body is not None else "GET",
     )
@@ -343,7 +357,7 @@ def validate_group_options() -> None:
         except (KeyError, json.JSONDecodeError):
             raise ConfigurationError(f"{key} is missing or invalid") from None
         if not isinstance(parsed, dict) or any(group not in parsed for group in MANAGED_GROUPS):
-            raise ConfigurationError(f"{key} does not contain all managed Astra groups")
+            raise ConfigurationError(f"{key} does not contain all managed {DISPLAY_NAME} groups")
 
 
 def validate_managed_channel_tags() -> None:
@@ -353,7 +367,7 @@ def validate_managed_channel_tags() -> None:
         + " GROUP BY tag HAVING COUNT(*) > 1"
     )
     if rows:
-        raise ConfigurationError("GPT-6 Astra managed tags are duplicated")
+        raise ConfigurationError(f"{DISPLAY_NAME} managed tags are duplicated")
 
 
 def build_apply_sql(
@@ -363,26 +377,26 @@ def build_apply_sql(
     probe_results: list[dict] | None = None,
 ) -> str:
     if not groups or len(set(groups)) != len(groups) or not set(groups).issubset(MANAGED_GROUPS):
-        raise ConfigurationError("invalid Astra target groups")
+        raise ConfigurationError(f"invalid {DISPLAY_NAME} target groups")
     if enabled_source_tags is None:
         enabled_source_tags = {source.tag for source in sources}
     unknown_tags = enabled_source_tags.difference(source.tag for source in sources)
     if unknown_tags:
-        raise ConfigurationError("enabled Astra source set contains an unknown source")
+        raise ConfigurationError(f"enabled {DISPLAY_NAME} source set contains an unknown source")
     tags = tuple(managed_tag(group, index) for group in groups for index in range(len(SOURCE_CHANNEL_TAGS)))
-    all_tags = (LEGACY_CHANNEL_TAG, *tags)
+    all_tags = ((DEPRECATED_CHANNEL_TAG,) if DEPRECATED_CHANNEL_TAG else ()) + tags
     tag_sql = ",".join(sql_quote(tag) for tag in all_tags)
     target_vars: list[str] = []
     statements = [
         "START TRANSACTION;",
         "SELECT id FROM channels WHERE tag IN (" + tag_sql + ") FOR UPDATE;",
-        "SET @astra_duplicate_count := " + " + ".join("IF((SELECT COUNT(*) FROM channels WHERE tag=" + sql_quote(tag) + ") > 1,1,0)" for tag in tags) + ";",
-        "SET @astra_ratio_ok := (JSON_VALID((SELECT `value` FROM options WHERE `key`='GroupRatio')) AND " + " AND ".join("JSON_EXTRACT((SELECT `value` FROM options WHERE `key`='GroupRatio'), '$." + group + "') IS NOT NULL" for group in MANAGED_GROUPS) + ");",
-        "SET @astra_apply_status := CASE WHEN @astra_duplicate_count > 0 THEN 'duplicate_channels' WHEN @astra_ratio_ok <> 1 THEN 'group_options_invalid' ELSE 'ok' END;",
-        "SET @astra_apply_allowed := IF(@astra_apply_status='ok',1,0);",
+        f"SET @{SQL_VAR_PREFIX}_duplicate_count := " + " + ".join("IF((SELECT COUNT(*) FROM channels WHERE tag=" + sql_quote(tag) + ") > 1,1,0)" for tag in tags) + ";",
+        f"SET @{SQL_VAR_PREFIX}_ratio_ok := (JSON_VALID((SELECT `value` FROM options WHERE `key`='GroupRatio')) AND " + " AND ".join("JSON_EXTRACT((SELECT `value` FROM options WHERE `key`='GroupRatio'), '$." + group + "') IS NOT NULL" for group in MANAGED_GROUPS) + ");",
+        f"SET @{SQL_VAR_PREFIX}_apply_status := CASE WHEN @{SQL_VAR_PREFIX}_duplicate_count > 0 THEN 'duplicate_channels' WHEN @{SQL_VAR_PREFIX}_ratio_ok <> 1 THEN 'group_options_invalid' ELSE 'ok' END;",
+        f"SET @{SQL_VAR_PREFIX}_apply_allowed := IF(@{SQL_VAR_PREFIX}_apply_status='ok',1,0);",
     ]
-    if groups == MANAGED_GROUPS:
-        statements.append("UPDATE channels SET status=2 WHERE tag=" + sql_quote(LEGACY_CHANNEL_TAG) + " AND @astra_apply_allowed=1;")
+    if groups == MANAGED_GROUPS and DEPRECATED_CHANNEL_TAG:
+        statements.append("UPDATE channels SET status=2 WHERE tag=" + sql_quote(DEPRECATED_CHANNEL_TAG) + f" AND @{SQL_VAR_PREFIX}_apply_allowed=1;")
     discount_priorities, discount_verified = discount_route_policy(sources, probe_results, enabled_source_tags)
     for group in groups:
         group_sources = sources_for_group(group, sources)
@@ -391,24 +405,24 @@ def build_apply_sql(
         for index, source in enumerate(group_sources):
             priority = discount_priorities[source.tag] if group == "discount" and probe_results is not None else CHAIN_PRIORITIES[index]
             tag = managed_tag(group, index)
-            variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
+            variable = f"@{SQL_VAR_PREFIX}_" + group.replace("-", "_") + "_" + str(index + 1)
             channel_status = "1" if source.tag in group_enabled else "2"
             target_vars.append(variable)
             mapping = json.dumps({MODEL_NAME: MODEL_NAME}, separators=(",", ":"))
-            name = "GPT-6 Astra " + group + " 链路 " + chr(65 + index)
+            name = DISPLAY_NAME + " " + group + " 链路 " + chr(65 + index)
             statements.extend(
                 [
-                    "SET " + variable + " := IF(@astra_apply_allowed=1,(SELECT MIN(id) FROM channels WHERE tag=" + sql_quote(tag) + "),NULL);",
-                    "INSERT INTO channels (type,`key`,status,name,weight,created_time,test_time,response_time,base_url,models,`group`,model_mapping,priority,auto_ban,tag,remark,settings) SELECT 1," + sql_quote(source.api_key) + "," + channel_status + "," + sql_quote(name) + ",100,UNIX_TIMESTAMP(),0,0," + sql_quote(source.base_url) + "," + sql_quote(MODEL_NAME) + "," + sql_quote(group) + "," + sql_quote(mapping) + "," + str(priority) + ",1," + sql_quote(tag) + ",'独立分组计费链路','{}' WHERE " + variable + " IS NULL AND @astra_apply_allowed=1;",
-                    "SET " + variable + " := IF(@astra_apply_allowed=1,IFNULL(" + variable + ",LAST_INSERT_ID()),NULL);",
-                    "UPDATE channels SET type=1, `key`=" + sql_quote(source.api_key) + ", status=" + channel_status + ", name=" + sql_quote(name) + ", weight=100, base_url=" + sql_quote(source.base_url) + ", models=" + sql_quote(MODEL_NAME) + ", `group`=" + sql_quote(group) + ", model_mapping=" + sql_quote(mapping) + ", priority=" + str(priority) + ", auto_ban=1, tag=" + sql_quote(tag) + ", remark='独立分组计费链路', settings='{}' WHERE id=" + variable + " AND @astra_apply_allowed=1;",
+                    "SET " + variable + f" := IF(@{SQL_VAR_PREFIX}_apply_allowed=1,(SELECT MIN(id) FROM channels WHERE tag=" + sql_quote(tag) + "),NULL);",
+                    "INSERT INTO channels (type,`key`,status,name,weight,created_time,test_time,response_time,base_url,models,`group`,model_mapping,priority,auto_ban,tag,remark,settings) SELECT 1," + sql_quote(source.api_key) + "," + channel_status + "," + sql_quote(name) + ",100,UNIX_TIMESTAMP(),0,0," + sql_quote(source.base_url) + "," + sql_quote(MODEL_NAME) + "," + sql_quote(group) + "," + sql_quote(mapping) + "," + str(priority) + ",1," + sql_quote(tag) + ",'独立分组计费链路','{}' WHERE " + variable + f" IS NULL AND @{SQL_VAR_PREFIX}_apply_allowed=1;",
+                    "SET " + variable + f" := IF(@{SQL_VAR_PREFIX}_apply_allowed=1,IFNULL(" + variable + ",LAST_INSERT_ID()),NULL);",
+                    "UPDATE channels SET type=1, `key`=" + sql_quote(source.api_key) + ", status=" + channel_status + ", name=" + sql_quote(name) + ", weight=100, base_url=" + sql_quote(source.base_url) + ", models=" + sql_quote(MODEL_NAME) + ", `group`=" + sql_quote(group) + ", model_mapping=" + sql_quote(mapping) + ", priority=" + str(priority) + ", auto_ban=1, tag=" + sql_quote(tag) + ", remark='独立分组计费链路', settings='{}' WHERE id=" + variable + f" AND @{SQL_VAR_PREFIX}_apply_allowed=1;",
                 ]
             )
     id_list = ",".join(target_vars)
     statements.extend(
         [
-            "UPDATE abilities SET enabled=0 WHERE model=" + sql_quote(MODEL_NAME) + " AND `group` IN (" + ",".join(sql_quote(g) for g in groups) + ") AND channel_id NOT IN (" + id_list + ") AND @astra_apply_allowed=1;",
-            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id=ability.channel_id SET ability.enabled=0 WHERE channel.tag IN (" + ",".join(sql_quote(tag) for tag in tags) + ") AND (ability.model<>" + sql_quote(MODEL_NAME) + " OR ability.`group`<>channel.`group` OR ability.tag<>channel.tag) AND @astra_apply_allowed=1;",
+            "UPDATE abilities SET enabled=0 WHERE model=" + sql_quote(MODEL_NAME) + " AND `group` IN (" + ",".join(sql_quote(g) for g in groups) + ") AND channel_id NOT IN (" + id_list + f") AND @{SQL_VAR_PREFIX}_apply_allowed=1;",
+            "UPDATE abilities AS ability JOIN channels AS channel ON channel.id=ability.channel_id SET ability.enabled=0 WHERE channel.tag IN (" + ",".join(sql_quote(tag) for tag in tags) + ") AND (ability.model<>" + sql_quote(MODEL_NAME) + f" OR ability.`group`<>channel.`group` OR ability.tag<>channel.tag) AND @{SQL_VAR_PREFIX}_apply_allowed=1;",
         ]
     )
     for group in groups:
@@ -418,7 +432,7 @@ def build_apply_sql(
         for index, source in enumerate(group_sources):
             priority = discount_priorities[source.tag] if group == "discount" and probe_results is not None else CHAIN_PRIORITIES[index]
             tag = managed_tag(group, index)
-            variable = "@astra_" + group.replace("-", "_") + "_" + str(index + 1)
+            variable = f"@{SQL_VAR_PREFIX}_" + group.replace("-", "_") + "_" + str(index + 1)
             ability_enabled = "1" if source.tag in group_enabled else "0"
             statements.append(
                 "INSERT INTO abilities (`group`,model,channel_id,enabled,priority,weight,tag) VALUES (" + ",".join([sql_quote(group), sql_quote(MODEL_NAME), variable, ability_enabled, str(priority), "100", sql_quote(tag)]) + ") ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),priority=VALUES(priority),weight=100,tag=VALUES(tag);"
@@ -440,7 +454,7 @@ def discount_route_policy(sources, probe_results, enabled_source_tags):
     # Responses and Chat checks pass. The stricter repeated Codex round-trip
     # gate decides only whether an optional fallback is safe to add.
     routable = set(healthy)
-    if any(source.tag == DISCOUNT_PRIMARY_SOURCE_TAG for source in sources):
+    if PROFILE_NAME == "astra" and any(source.tag == DISCOUNT_PRIMARY_SOURCE_TAG for source in sources):
         routable.add(DISCOUNT_PRIMARY_SOURCE_TAG)
     return {source.tag: CHAIN_PRIORITIES[i] for i, source in enumerate(ranked)}, routable
 
@@ -466,29 +480,37 @@ def probe_sources(sources: tuple[SourceChannel, ...]) -> tuple[list[dict[str, ob
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Probe OpenAI sources and configure independent GPT-6 Astra chains")
+    parser = argparse.ArgumentParser(description=f"Probe OpenAI sources and configure independent {DISPLAY_NAME} chains")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--apply", action="store_true")
+    action.add_argument("--reconcile", action="store_true")
     action.add_argument("--reconcile-if-configured", action="store_true")
-    parser.add_argument("--discount-only", action="store_true", help="change only the public 0.25x Astra chain")
+    parser.add_argument("--discount-only", action="store_true", help=f"change only the public discount {DISPLAY_NAME} chain")
     args = parser.parse_args()
     with channel_lock():
         sources = load_sources()
         probe_results, unavailable_tags = probe_sources(sources)
         if not probe_results:
-            raise ConfigurationError("no GPT-6 Astra source passed verification")
+            raise ConfigurationError(f"no {DISPLAY_NAME} source passed verification")
+        verified_source_tags = {
+            str(result["tag"])
+            for result in probe_results
+            if PROFILE_NAME == "astra" or result.get("discount_healthy") is True
+        }
+        if PROFILE_NAME == "sol" and not verified_source_tags:
+            raise ConfigurationError("no GPT-6 Sol source passed repeated Codex tool verification")
         if args.apply and unavailable_tags:
-            raise ConfigurationError("one or more GPT-6 Astra sources failed verification")
+            raise ConfigurationError(f"one or more {DISPLAY_NAME} sources failed verification")
         configured = sync.mysql("SELECT COUNT(*) FROM channels WHERE tag LIKE " + sql_quote(MANAGED_TAG_PREFIX + "%"))
         if args.reconcile_if_configured and (not configured or int(configured[0][0]) == 0):
             print(json.dumps({"ok": True, "action": "not_configured", "model": MODEL_NAME, "sources": probe_results}, ensure_ascii=False, separators=(",", ":")))
             return 0
-        if args.apply or args.reconcile_if_configured:
+        if args.apply or args.reconcile or args.reconcile_if_configured:
             if load_sources() != sources:
                 raise ConfigurationError("source identity changed while probing; no changes applied")
-            apply_sources(sources, {str(result["tag"]) for result in probe_results},
+            apply_sources(sources, verified_source_tags,
                           groups=("discount",) if args.discount_only else MANAGED_GROUPS, probe_results=probe_results)
-    action_name = "applied" if args.apply else "reconciled" if args.reconcile_if_configured else "probe"
+    action_name = "applied" if args.apply else "reconciled" if (args.reconcile or args.reconcile_if_configured) else "probe"
     selected_groups = ("discount",) if args.discount_only else MANAGED_GROUPS
     print(json.dumps({"ok": True, "action": action_name, "model": MODEL_NAME, "groups": selected_groups, "sources": probe_results, "unavailable_sources": unavailable_tags}, ensure_ascii=False, separators=(",", ":")))
     return 0

@@ -59,7 +59,7 @@ func TestPublicMessageKeepsSubscriptionConcurrencyMessage(t *testing.T) {
 	}
 
 	publicErr := err.ToPublicOpenAIError("req-test")
-	if got, want := publicErr.Message, "当前月卡并发已满，请等待已有任务完成后重试。 (request id: req-test)"; got != want {
+	if got, want := publicErr.Message, "当前月卡并发已满，请等待已有任务完成后重试。"; got != want {
 		t.Fatalf("ToPublicOpenAIError().Message = %q, want %q", got, want)
 	}
 	if got, want := publicErr.Code, any(ErrorCodeSubscriptionConcurrency); got != want {
@@ -82,7 +82,7 @@ func TestPublicMessageHidesSupplierNames(t *testing.T) {
 		}, http.StatusBadGateway)
 
 		publicErr := err.ToPublicOpenAIError("req-test")
-		if got, want := publicErr.Message, "模型服务暂时不可用，请稍后重试。 (request id: req-test)"; got != want {
+		if got, want := publicErr.Message, "模型服务暂时不可用，请稍后重试。"; got != want {
 			t.Fatalf("Message for %q = %q, want %q", message, got, want)
 		}
 		if publicErr.Code == "bad_response" {

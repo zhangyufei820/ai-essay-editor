@@ -49,9 +49,9 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 		logger.LogDebug(ctx, "final group: %s", autoGroup)
 		relayInfo.UsingGroup = autoGroup.(string)
 	}
-	// GPT-6 Astra keeps the selected group for channel routing, but its Model
-	// Plaza price is never discounted by the 0.25x/0.5x group multipliers.
-	if service.IsGpt6AstraModel(relayInfo.OriginModelName) {
+	// GPT-6 models keep the selected group for channel routing, but their Model
+	// Plaza prices are never changed by routing-group multipliers.
+	if service.IsGpt6FixedMarketplaceModel(relayInfo.OriginModelName) {
 		groupRatioInfo.GroupRatio = service.Gpt6AstraPricingGroupRatio
 		return groupRatioInfo
 	}

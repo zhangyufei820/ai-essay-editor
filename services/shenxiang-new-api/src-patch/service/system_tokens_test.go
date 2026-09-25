@@ -80,6 +80,7 @@ func TestSystemTokenProfilesCodexTextIncludesPublicImageModels(t *testing.T) {
 	require.Contains(t, codexModels, "gpt-5.6-terra")
 	require.Contains(t, codexModels, "gpt-5.6-sol")
 	require.Contains(t, codexModels, "gpt-6-astra")
+	require.Contains(t, codexModels, "gpt-6-sol")
 	require.Contains(t, codexModels, "gpt-5.5-openai-compact")
 	require.Contains(t, codexModels, "codex-auto-review")
 	require.NotContains(t, codexModels, "特价 image-2")

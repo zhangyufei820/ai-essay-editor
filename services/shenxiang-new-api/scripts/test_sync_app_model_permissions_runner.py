@@ -84,10 +84,12 @@ exit "${TEST_FLOCK_EXIT:-0}"
             """#!/usr/bin/env bash
 script="$1"
 name="${script##*/}"
-printf 'python3|%s|kimi=%s|astra=%s|grok45=%s|grok46=%s\n' \
+printf 'python3|%s|profile=%s|kimi=%s|astra=%s|sol=%s|grok45=%s|grok46=%s\n' \
   "$name" \
+  "${GPT6_MODEL_PROFILE:-}" \
   "${KIMI_K3_CHANNEL_SYNC_LOCK_HELD:-}" \
   "${GPT6_ASTRA_CHANNEL_SYNC_LOCK_HELD:-}" \
+  "${GPT6_SOL_CHANNEL_SYNC_LOCK_HELD:-}" \
   "${GROK45_MODEL_SYNC_LOCK_HELD:-}" \
   "${GROK46_MODEL_SYNC_LOCK_HELD:-}" >> "$TEST_CALL_LOG"
 
@@ -99,7 +101,13 @@ fi
 case "$name" in
   sync_app_model_permissions.py) exit_code="${TEST_SYNC_EXIT:-0}" ;;
   configure_kimi_k3_channel.py) exit_code="${TEST_KIMI_EXIT:-0}" ;;
-  configure_gpt6_astra_channel.py) exit_code="${TEST_ASTRA_EXIT:-0}" ;;
+  configure_gpt6_astra_channel.py)
+    if [ "${GPT6_MODEL_PROFILE:-}" = "sol" ]; then
+      exit_code="${TEST_SOL_EXIT:-0}"
+    else
+      exit_code="${TEST_ASTRA_EXIT:-0}"
+    fi
+    ;;
   configure_grok45_model.py) exit_code="${TEST_GROK45_EXIT:-0}" ;;
   configure_grok46_model.py) exit_code="${TEST_GROK46_EXIT:-0}" ;;
   *) exit_code=98 ;;
@@ -153,6 +161,7 @@ exit "$exit_code"
                 "sync_app_model_permissions.py",
                 "configure_kimi_k3_channel.py",
                 "configure_gpt6_astra_channel.py",
+                "configure_gpt6_astra_channel.py",
                 "configure_grok45_model.py",
                 "configure_grok46_model.py",
             ],
@@ -164,6 +173,7 @@ exit "$exit_code"
         cases = (
             ("TEST_KIMI_EXIT", "kimi-k3"),
             ("TEST_ASTRA_EXIT", "gpt-6-astra"),
+            ("TEST_SOL_EXIT", "gpt-6-sol"),
             ("TEST_GROK45_EXIT", "grok-4.5"),
             ("TEST_GROK46_EXIT", "grok-4.6"),
         )
@@ -173,7 +183,7 @@ exit "$exit_code"
                 result = self._run(**{exit_variable: "3"})
 
                 self.assertEqual(0, result.returncode, result.stderr)
-                self.assertEqual(5, len(self._python_calls()))
+                self.assertEqual(6, len(self._python_calls()))
                 self.assertIn(
                     f"warning: optional model reconcile failed model={model} exit_code=3",
                     result.stderr,
@@ -184,7 +194,7 @@ exit "$exit_code"
         result = self._run(TEST_KIMI_EXIT="3", TEST_GROK46_EXIT="4")
 
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(5, len(self._python_calls()))
+        self.assertEqual(6, len(self._python_calls()))
         self.assertIn("optional_failures=kimi-k3:3,grok-4.6:4", result.stderr)
 
     def test_missing_optional_script_is_non_blocking(self) -> None:
@@ -193,7 +203,7 @@ exit "$exit_code"
         result = self._run()
 
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(5, len(self._python_calls()))
+        self.assertEqual(6, len(self._python_calls()))
         self.assertIn(
             "warning: optional model reconcile failed model=kimi-k3 exit_code=2",
             result.stderr,
@@ -216,10 +226,11 @@ exit "$exit_code"
         log_lines = self.call_log.read_text(encoding="utf-8").splitlines()
         self.assertEqual("flock|-n 9", log_lines[0])
         calls = self._python_calls()
-        self.assertIn("|kimi=1|astra=|grok45=|grok46=", calls[1])
-        self.assertIn("|kimi=|astra=1|grok45=|grok46=", calls[2])
-        self.assertIn("|kimi=|astra=|grok45=1|grok46=", calls[3])
-        self.assertIn("|kimi=|astra=|grok45=|grok46=1", calls[4])
+        self.assertIn("|profile=|kimi=1|astra=|sol=|grok45=|grok46=", calls[1])
+        self.assertIn("|profile=|kimi=|astra=1|sol=|grok45=|grok46=", calls[2])
+        self.assertIn("|profile=sol|kimi=|astra=|sol=1|grok45=|grok46=", calls[3])
+        self.assertIn("|profile=|kimi=|astra=|sol=|grok45=1|grok46=", calls[4])
+        self.assertIn("|profile=|kimi=|astra=|sol=|grok45=|grok46=1", calls[5])
 
     def test_lock_contention_remains_fatal_before_any_sync(self) -> None:
         result = self._run(TEST_FLOCK_EXIT="75")
