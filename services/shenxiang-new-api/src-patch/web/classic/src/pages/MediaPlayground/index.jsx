@@ -633,6 +633,8 @@ const IMAGE_GENERATION_GROUP = {
 
 const IMAGE_EDIT_REFERENCE_LIMIT = 10;
 const VIDEO_REFERENCE_LIMIT = 5;
+const REFERENCE_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+const REFERENCE_MEDIA_TOTAL_MAX_BYTES = 48 * 1024 * 1024;
 const VIDEO_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const VIDEO_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'];
 const VIDEO_AUDIO_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/aac'];
@@ -1504,6 +1506,14 @@ function userFacingGenerationError(error) {
   const code =
     typeof error === 'string' ? '' : String(error?.code || '').toLowerCase();
   if (
+    lower.includes('413') ||
+    lower.includes('payload too large') ||
+    lower.includes('content too large') ||
+    lower.includes('request entity too large')
+  ) {
+    return '请求内容过大。请压缩或移除重复图片、视频和文件后重新提交；不要原样重试。';
+  }
+  if (
     lower.includes('prompt_blocked') ||
     lower.includes('content_policy_violation') ||
     lower.includes('content moderation') ||
@@ -1844,6 +1854,29 @@ function fileMediaType(file) {
 
 function referenceFileOf(item) {
   return item?.file || item;
+}
+
+function referenceUploadBudgetError(items) {
+  const files = Array.from(items || []).map(referenceFileOf).filter(Boolean);
+  for (const file of files) {
+    const mediaType = fileMediaType(file);
+    const maxBytes =
+      mediaType === 'image'
+        ? REVERSE_PROMPT_MAX_IMAGE_BYTES
+        : REFERENCE_MEDIA_MAX_BYTES;
+    if (Number(file?.size || 0) > maxBytes) {
+      const limitMb = Math.floor(maxBytes / (1024 * 1024));
+      return `${file?.name || '参考素材'} 超过 ${limitMb}MB，请压缩后再上传。`;
+    }
+  }
+  const totalBytes = files.reduce(
+    (sum, file) => sum + Number(file?.size || 0),
+    0,
+  );
+  if (totalBytes > REFERENCE_MEDIA_TOTAL_MAX_BYTES) {
+    return '参考素材总大小不能超过 48MB，请移除重复素材或压缩后再上传。';
+  }
+  return '';
 }
 
 function referenceMediaTypeOf(item) {
@@ -3552,6 +3585,14 @@ const MediaPlayground = () => {
   function addReferenceFiles(fileList) {
     const incoming = Array.from(fileList || []);
     if (incoming.length === 0) return;
+    const budgetError = referenceUploadBudgetError([
+      ...referenceFiles,
+      ...incoming,
+    ]);
+    if (budgetError) {
+      Toast.error(budgetError);
+      return;
+    }
 
     if (mode === 'video') {
       const counts = videoReferenceCounts(referenceFiles);
@@ -4615,6 +4656,7 @@ const MediaPlayground = () => {
   }
 
   async function handleSubmit() {
+    if (submitting) return;
     if (!modelAllowed) return Toast.error('当前用户分组暂未开放这个模型。');
     if (mode === 'image' && !imageModelSupportsWorkflow(activeImageModel, imageWorkflow)) {
       return Toast.warning('当前模型仅支持文生图，请切换到文生图或更换支持图片编辑的模型。');
@@ -4660,6 +4702,12 @@ const MediaPlayground = () => {
     }
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile)
       return Toast.error('首尾帧视频需要同时上传首帧和尾帧。');
+    const budgetError = referenceUploadBudgetError([
+      ...referenceFiles,
+      lastFrameFile,
+      maskFile,
+    ]);
+    if (budgetError) return Toast.error(budgetError);
 
     setSubmitting(true);
     setSubmitStartedAt(Date.now());
@@ -4759,6 +4807,11 @@ const MediaPlayground = () => {
       Toast.warning('当前区域只支持图片素材。');
       return false;
     }
+    const budgetError = referenceUploadBudgetError([...referenceFiles, file]);
+    if (budgetError) {
+      Toast.error(budgetError);
+      return false;
+    }
     if (referenceFiles.length >= IMAGE_EDIT_REFERENCE_LIMIT) {
       Toast.warning(`最多支持上传 ${IMAGE_EDIT_REFERENCE_LIMIT} 张参考图。`);
       return false;
@@ -4774,6 +4827,11 @@ const MediaPlayground = () => {
 
   function appendVideoReferenceFile(file, successMessage) {
     if (!file) return false;
+    const budgetError = referenceUploadBudgetError([...referenceFiles, file]);
+    if (budgetError) {
+      Toast.error(budgetError);
+      return false;
+    }
     const targetPolicy = videoReferencePolicy(activeVideoModel, {
       reservedImageSlots: reservedLastFrameImageSlots(videoModel, 'image'),
     });

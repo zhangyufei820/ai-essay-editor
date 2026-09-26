@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -87,6 +88,22 @@ func TestPublicMessageHidesSupplierNames(t *testing.T) {
 		}
 		if publicErr.Code == "bad_response" {
 			t.Fatalf("Code for %q = %v, want sanitized service_unavailable", message, publicErr.Code)
+		}
+	}
+}
+
+func TestPublicMessageExplainsOversizedRequestWithoutRetry(t *testing.T) {
+	err := NewErrorWithStatusCode(
+		errors.New("http: request body too large"),
+		ErrorCodeReadRequestBodyFailed,
+		http.StatusRequestEntityTooLarge,
+		ErrOptionWithSkipRetry(),
+	)
+
+	message := err.PublicMessage()
+	for _, expected := range []string{"开启新会话", "压缩上下文", "Base64", "不要原样重试"} {
+		if !strings.Contains(message, expected) {
+			t.Fatalf("PublicMessage() = %q, want substring %q", message, expected)
 		}
 	}
 }

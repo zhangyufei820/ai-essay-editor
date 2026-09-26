@@ -239,7 +239,7 @@ func (e *NewAPIError) PublicMessage() string {
 		return "请求参数有误，请检查后重试。"
 	case ErrorCodeReadRequestBodyFailed:
 		if strings.Contains(lowerMsg, "too large") || strings.Contains(lowerMsg, "exceeds") {
-			return "请求内容过大，请减少文件或内容后重试。"
+			return "请求内容过大。请开启新会话或先压缩上下文，并移除重复图片、文件和 Base64 数据；不要原样重试。"
 		}
 		return "请求内容读取失败，请检查后重试。"
 	case ErrorCodeSensitiveWordsDetected, ErrorCodePromptBlocked, ErrorCodeViolationFeeGrokCSAM:

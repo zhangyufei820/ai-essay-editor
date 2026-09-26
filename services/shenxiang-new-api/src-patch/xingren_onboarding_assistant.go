@@ -767,6 +767,7 @@ func xingrenAssistantSystemPrompt() string {
 		"Windows 方案要兼容 PowerShell 5.1。优先生成单行命令；不要用 heredoc、@'...'@、复杂 if/else 或多层大括号。npm 命令用 npm.cmd，Codex 命令用 codex.cmd，不识别时再用 & \"$env:APPDATA\\npm\\codex.cmd\"。Mac 终端按官方 Codex 配置形态写 ~/.codex/config.toml，使用 [model_providers.aiphui] 和 env_key。",
 		"默认工作目录：Windows 使用 C:\\codex-work，不要让用户在 C:\\Windows\\system32 里测试 Codex；Mac 使用 $HOME/codex-work。桌面 App 英文界面不影响接入，也不影响中文回复；不要承诺一定能切中文界面。",
 		"如果用户上传截图，先视觉识别：终端路径、是否处于 >>、红色报错、codex 版本号、config.toml 内容、Key 是否暴露、是否在 system32、node/npm 状态、wire_api/base_url/provider、Working、Trust directory、英文界面。回复顺序必须是：结论、截图依据、下一步最短命令或动作。",
+		"遇到 413、Payload Too Large 或 Content Too Large 时，必须明确说明请求体包含整段会话、图片、文件和 Base64 数据，不能原样重试；先新建任务或压缩上下文，并移除重复附件。Cloudflare 入口返回 HTML 413 时应用源站没有收到请求。",
 		"内置知识库能命中时按知识库回答。未命中时不要编造最新官方信息；说明内置库未命中，需要核验官方 OpenAI Codex、AIPHUI、Microsoft PowerShell/winget、Node/npm 文档或 GitHub issue，并先给保守排查步骤。",
 		"回答要像真人远程接入老师：短句、直接、可执行。每次给命令后都要跟下一步操作、可能遇到的问题和解决方式。不要输出 Markdown 表格，不要复述隐藏推理。",
 	}, "\n")
@@ -824,6 +825,8 @@ func xingrenAssistantKnowledgeReply(message string, pageContext *xingrenAssistan
 		return "结论：403 通常表示 Key 能读到，但模型权限、分组、套餐或余额不允许访问 gpt-5.5。\n\n下一步：检查令牌是否允许 gpt-5.5、账号余额和分组权限。权限修好后再跑 /v1/responses 测试。"
 	case strings.Contains(messageText, "404"):
 		return "结论：404 优先查 base_url 和路径。\n\nAIPHUI 标准 base_url 是 https://api.aiphui.top/v1。不要写成 https://api.aiphui.top/v1/responses，因为 Codex 会自己拼 responses 路径。\n\n下一步：覆盖 config.toml，确认 wire_api = \"responses\"。"
+	case strings.Contains(messageText, "413") || xingrenAssistantContainsAny(messageText, "payload too large", "content too large", "request entity too large"):
+		return "结论：这是请求体过大，不是供应商模型不可用。请求体会包含当前任务的整段会话、图片、文件和 Base64 数据；原样重试仍会失败。\n\n下一步：新建一个任务或先压缩当前上下文，移除重复图片和文件，再只提交当前需要的内容。不要连续重试同一个超大请求。\n\n如果响应是 Cloudflare 的 HTML 413，说明请求在入口层已被拦截，AIPHUI 源站没有收到它。"
 	case strings.Contains(messageText, "timeout") || strings.Contains(messageText, "超时"):
 		return "结论：timeout 先查网络、代理、AIPHUI 响应慢和 base_url，不要先判定 Key 错。\n\n下一步：用 PowerShell 直接测 /v1/responses。如果 PowerShell 成功而桌面 App 超时，完全退出 App 后重启；如果 PowerShell 也超时，换网络或检查代理。"
 	default:

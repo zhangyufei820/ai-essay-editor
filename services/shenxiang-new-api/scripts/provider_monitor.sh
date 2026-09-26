@@ -32,19 +32,25 @@ fi
 
 mkdir -p "$ROOT/logs" "$ROOT/data"
 
+run_with_timeout() {
+  local timeout_seconds="$1"
+  shift
+  exec timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" python3 "$MONITOR" "$@"
+}
+
 case "${1:-}" in
   --fast)
     shift
     if ! python3 "$MONITOR" --help 2>&1 | grep -q -- "--family"; then
       exit 0
     fi
-    exec python3 "$MONITOR" --family discount_text --family plus_text "$@"
+    run_with_timeout "${PROVIDER_MONITOR_FAST_TIMEOUT_SECONDS:-420}" --family discount_text --family plus_text "$@"
     ;;
   --full)
     shift
-    exec python3 "$MONITOR" "$@"
+    run_with_timeout "${PROVIDER_MONITOR_FULL_TIMEOUT_SECONDS:-1200}" "$@"
     ;;
   *)
-    exec python3 "$MONITOR" "$@"
+    run_with_timeout "${PROVIDER_MONITOR_TIMEOUT_SECONDS:-1200}" "$@"
     ;;
 esac

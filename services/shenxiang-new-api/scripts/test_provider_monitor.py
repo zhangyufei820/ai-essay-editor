@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -141,6 +142,10 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertIsNone(families["discount_text"].probe_models_by_tag)
         self.assertEqual(families["discount_text"].ability_group, "discount")
         self.assertIsNone(families["discount_text"].request_formats_by_channel)
+        self.assertEqual(
+            families["discount_text"].request_formats_by_tag,
+            {"xingren-discount-text-pdhlzy": "chat"},
+        )
         self.assertEqual(families["plus_text"].channel_ids, ())
         self.assertEqual(
             families["plus_text"].managed_tag_priorities,
@@ -330,6 +335,52 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(resolved.baseline_priorities, {41: 40, 28: 30, 42: 20, 68: 10})
         self.assertEqual(resolved.expected_tags[42], "xingren-discount-text-pdhlzy")
         self.assertEqual(resolved.request_format, "responses")
+
+    def test_discount_pdhlzy_uses_chat_while_other_routes_use_responses(self) -> None:
+        family = self.module.TextFamily(
+            name="test_discount_wire_protocol",
+            models=("gpt-test",),
+            channel_ids=(42, 43),
+            baseline_priorities={42: 20, 43: 10},
+            allow_disable=False,
+            standalone=True,
+            request_format="responses",
+            expected_tags={42: "xingren-discount-text-pdhlzy", 43: "responses-route"},
+            ability_group="discount",
+            manage_model_abilities=True,
+            request_formats_by_tag={"xingren-discount-text-pdhlzy": "chat"},
+        )
+        channels = {
+            channel_id: {
+                "id": channel_id,
+                "status": 1,
+                "priority": family.baseline_priorities[channel_id],
+                "weight": 100,
+                "group": "discount",
+                "models": "gpt-test",
+                "model_mapping": "{}",
+                "tag": family.expected_tags[channel_id],
+                "key": "test-secret-value",
+                "base_url": f"https://route-{channel_id}.invalid",
+            }
+            for channel_id in family.channel_ids
+        }
+        abilities = {
+            (channel_id, "gpt-test"): {"enabled": 1, "tag": family.expected_tags[channel_id]}
+            for channel_id in family.channel_ids
+        }
+        success = {"ok": True, "status": 200, "first_token_ms": 10, "reason": "ok"}
+        with (
+            mock.patch.object(self.module, "load_abilities", return_value=abilities),
+            mock.patch.object(self.module, "request_chat", return_value=success) as request_chat,
+            mock.patch.object(self.module, "request_responses", return_value=success) as request_responses,
+            mock.patch.object(self.module, "set_model_ability_enabled"),
+            mock.patch.object(self.module, "write_event"),
+        ):
+            self.module.evaluate_managed_model_family(family, channels, {}, {}, False, False)
+
+        request_chat.assert_called_once_with("https://route-42.invalid", "test-secret-value", "gpt-test")
+        request_responses.assert_called_once_with("https://route-43.invalid", "test-secret-value", "gpt-test")
 
     def test_discount_family_uses_original_routes_when_new_primary_tag_is_missing(self) -> None:
         family = next(family for family in self.module.TEXT_FAMILIES if family.name == "discount_text")
@@ -596,6 +647,70 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         encoded = json.dumps(value)
         self.assertNotIn("supplier.example", encoded)
         self.assertNotIn("test-secret-value", encoded)
+
+    def test_docker_log_scan_is_tail_bounded(self) -> None:
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok\n")
+        with mock.patch.object(self.module.subprocess, "run", return_value=completed) as run:
+            self.assertEqual(self.module.docker_logs_since(300), "ok\n")
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[:4], ["docker", "logs", "--since", "300s"])
+        self.assertIn("--tail", command)
+        self.assertEqual(command[-1], "shenxiang-new-api")
+
+    def test_monitor_stdout_summary_does_not_embed_route_payloads(self) -> None:
+        summary = self.module.summarize_monitor_results(
+            {
+                "discount_text": {
+                    "routes": {"gpt-test:42": {"result": {"preview": "secret-output"}}},
+                    "channels": {42: {"models": {"gpt-test": {"reason": "secret-error"}}}},
+                }
+            }
+        )
+
+        encoded = json.dumps(summary)
+        self.assertEqual(summary["discount_text"], {"route_count": 1, "channel_count": 1})
+        self.assertNotIn("secret-output", encoded)
+        self.assertNotIn("secret-error", encoded)
+
+    def test_gateway_canary_failure_makes_monitor_fail_closed(self) -> None:
+        self.assertTrue(self.module.monitor_results_ok({"discount_text": {"ok": False}}))
+        self.assertTrue(
+            self.module.monitor_results_ok({"gateway_responses_canary": {"ok": True}})
+        )
+        self.assertFalse(
+            self.module.monitor_results_ok({"gateway_responses_canary": {"ok": False}})
+        )
+
+    def test_gateway_canary_uses_admin_token_without_logging_key(self) -> None:
+        token_row = {
+            "token_id": 77,
+            "user_id": 1,
+            "status": 1,
+            "api_key": "test-admin-secret",
+            "group_name": "default",
+            "model_limits": "gpt-5.4-mini,gpt-5.5",
+        }
+        success = {"ok": True, "status": 200, "first_token_ms": 12, "reason": "ok"}
+        with (
+            mock.patch.object(self.module, "mysql_json", return_value=[token_row]) as mysql_json,
+            mock.patch.object(self.module, "request_responses", return_value=success) as request,
+            mock.patch.object(self.module, "write_event") as write_event,
+        ):
+            result = self.module.evaluate_gateway_responses_canary({})
+
+        query = mysql_json.call_args.args[0]
+        self.assertIn("user_id = 1", query)
+        self.assertIn("LIMIT 2", query)
+        request.assert_called_once_with(
+            "https://api.aiphui.top",
+            "sk-test-admin-secret",
+            "gpt-5.5",
+        )
+        event = write_event.call_args.args[0]
+        self.assertTrue(result["ok"])
+        self.assertNotIn("api_key", event)
+        self.assertNotIn("test-admin-secret", json.dumps(event))
 
 
 if __name__ == "__main__":

@@ -25,11 +25,15 @@
   },
   {
     "package": "./controller",
-    "run": "^(TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel|TestNormalizePlaygroundImageTaskPayloadPreservesExplicitDiscountImage2ExtraBody|TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName|TestPlaygroundImageTaskResponsesExposeSafeRetryMetadata|TestPlaygroundImageTaskDeadlineBoundsAttemptAndRetry|TestPlaygroundImageTaskWatchdog.*|TestMarkPlaygroundImageTaskFailurePreservesTerminalSuccess|TestMarkPlaygroundImageTaskLogFailureRecordsAttemptMetadata|TestMarkPlaygroundImageTaskLogRetryingRecordsAttemptMetadata|TestSanitizePlaygroundImageTaskPayloadForResponseHidesAttemptMetadata|TestSanitizePlaygroundImageTaskFailure.*|TestShouldRetryPlaygroundImageTaskFailure.*|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestListVisibleModelsUsesExplicitTokenGroupChain|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility|TestFilterPricingByUsableGroupsSynthesizesStableImage2PublicPricing|TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing|TestPublicPricingGroupsExposesPlusOnlyWhenExplicitlyEnabled|TestPublicPricingGroupsExposesAllClaudeMarketplaceGroups|TestManagedTextTokenUpdateSynchronizesPreferenceAndLegacyToken|TestManagedTextTokenUpdateSupportsOrderedGroupChain|TestManagedTextTokenRejectsUnsupportedPricingGroup|TestResolveUserTextPricingGroupMigratesLegacyTokenChoice|TestPublicPlaygroundTaskFailureReason.*|TestPlaygroundTaskResponsesExposeOnlyPublicFailureMessage|TestGetAllTokensWithSystemSyncCreatesPublicTokensBeforeListing|TestSelectUserGroupsForPurposeIncludesTerminalOnlyForTokenConfig|TestShouldRetryAllowsPlusTextTimeoutFallback|TestShouldRetryPlusTextTimeoutGuardrails|TestPrepareTokenGroupFallbackBilling.*|TestShouldRetryExplicitGroupChainStopsAfterResponsesOutput|TestShouldRetryStopsWhenResponsesClientDisconnected)$"
+    "run": "^(TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel|TestNormalizePlaygroundImageTaskPayloadPreservesExplicitDiscountImage2ExtraBody|TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName|TestPlaygroundImageTaskResponsesExposeSafeRetryMetadata|TestPlaygroundImageTaskDeadlineBoundsAttemptAndRetry|TestPlaygroundImageTaskWatchdog.*|TestMarkPlaygroundImageTaskFailurePreservesTerminalSuccess|TestMarkPlaygroundImageTaskLogFailureRecordsAttemptMetadata|TestMarkPlaygroundImageTaskLogRetryingRecordsAttemptMetadata|TestSanitizePlaygroundImageTaskPayloadForResponseHidesAttemptMetadata|TestSanitizePlaygroundImageTaskFailure.*|TestShouldRetryPlaygroundImageTaskFailure.*|TestListVisibleModelsOnlyReturnsTokenLimitedRoutableModels|TestListVisibleModelsUsesExplicitTokenGroupChain|TestRetrieveVisibleModelUsesSameTokenAndGroupVisibility|TestFilterPricingByUsableGroupsSynthesizesStableImage2PublicPricing|TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing|TestPublicPricingGroupsExposesPlusOnlyWhenExplicitlyEnabled|TestPublicPricingGroupsExposesAllClaudeMarketplaceGroups|TestManagedTextTokenUpdateSynchronizesPreferenceAndLegacyToken|TestManagedTextTokenUpdateSupportsOrderedGroupChain|TestManagedTextTokenRejectsUnsupportedPricingGroup|TestResolveUserTextPricingGroupMigratesLegacyTokenChoice|TestPublicPlaygroundTaskFailureReason.*|TestPlaygroundTaskResponsesExposeOnlyPublicFailureMessage|TestGetAllTokensWithSystemSyncCreatesPublicTokensBeforeListing|TestSelectUserGroupsForPurposeIncludesTerminalOnlyForTokenConfig|TestPrepareTokenGroupFallbackBilling.*|TestShouldRetryExplicitGroupChainStopsAfterResponsesOutput|TestShouldRetryStopsWhenResponsesClientDisconnected)$"
   },
   {
     "package": "./controller",
     "run": "^(TestShouldRetryAllowsDiscountImage2Fallback|TestStableImage2ForcedChannelIDs|TestShouldRetryAllowsStableImage2Fallback)$"
+  },
+  {
+    "package": "./controller",
+    "run": "^(TestShouldRetryAllowsManagedTextUpstreamFallback|TestShouldRetryManagedTextUpstreamGuardrails)$"
   },
   {
     "package": "./controller",
@@ -45,7 +49,7 @@
   },
   {
     "package": "./controller",
-    "run": "^(TestPublicPricingGroupsExposesSpecialWhenExplicitlyEnabled|TestShouldRetryAllowsSpecialTextTimeoutFallback)$"
+    "run": "^TestPublicPricingGroupsExposesSpecialWhenExplicitlyEnabled$"
   },
   {
     "package": "./controller",
@@ -114,6 +118,10 @@
   {
     "package": "./types",
     "run": "^TestPublicMessage.*$"
+  },
+  {
+    "package": "./.",
+    "run": "^TestXingrenOnboardingExplains413WithoutRetryingSamePayload$"
   },
   {
     "package": "./model",

@@ -335,6 +335,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	if err != nil {
 		// Map "request body too large" to 413 so clients can handle it correctly
 		if common.IsRequestBodyTooLargeError(err) || errors.Is(err, common.ErrRequestBodyTooLarge) {
+			c.Header("X-AIPHUI-Retryable", "false")
 			newAPIError = types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusRequestEntityTooLarge, types.ErrOptionWithSkipRetry())
 		} else {
 			newAPIError = types.NewError(err, types.ErrorCodeInvalidRequest)
@@ -456,6 +457,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if bodyErr != nil {
 			// Ensure consistent 413 for oversized bodies even when error occurs later (e.g., retry path)
 			if common.IsRequestBodyTooLargeError(bodyErr) || errors.Is(bodyErr, common.ErrRequestBodyTooLarge) {
+				c.Header("X-AIPHUI-Retryable", "false")
 				newAPIError = types.NewErrorWithStatusCode(bodyErr, types.ErrorCodeReadRequestBodyFailed, http.StatusRequestEntityTooLarge, types.ErrOptionWithSkipRetry())
 			} else {
 				newAPIError = types.NewErrorWithStatusCode(bodyErr, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
@@ -1304,10 +1306,15 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if c != nil && c.Request != nil && c.Request.Context().Err() != nil {
 		return false
 	}
+	// Retrying the same oversized payload cannot succeed and can amplify load
+	// when a client includes accumulated conversation history or Base64 files.
+	if openaiErr.StatusCode == http.StatusRequestEntityTooLarge {
+		return false
+	}
 	if service.HasExplicitTokenGroupChain(c) && service.HasTextOutputSent(c) {
 		return false
 	}
-	if shouldRetryManagedTextTimeout(c, openaiErr, retryTimes) {
+	if shouldRetryManagedTextUpstreamFailure(c, openaiErr, retryTimes) {
 		return true
 	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) &&
@@ -1343,7 +1350,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	return operation_setting.ShouldRetryByStatusCode(code)
 }
 
-func shouldRetryManagedTextTimeout(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
+func shouldRetryManagedTextUpstreamFailure(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
 	if c == nil || c.Request == nil || c.Request.URL == nil || openaiErr == nil || retryTimes <= 0 {
 		return false
 	}
@@ -1354,14 +1361,23 @@ func shouldRetryManagedTextTimeout(c *gin.Context, openaiErr *types.NewAPIError,
 		return false
 	}
 	group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-	if group != service.PlusPricingGroupName && group != service.SpecialPricingGroupName {
+	if group != "default" && group != service.DiscountPricingGroupName && group != service.PlusPricingGroupName && group != service.SpecialPricingGroupName {
 		return false
 	}
 	path := c.Request.URL.Path
 	if path != "/v1/responses" && path != "/v1/chat/completions" {
 		return false
 	}
-	return openaiErr.StatusCode == http.StatusGatewayTimeout || openaiErr.StatusCode == 524
+	code := openaiErr.StatusCode
+	return code == http.StatusUnauthorized ||
+		code == http.StatusForbidden ||
+		code == http.StatusNotFound ||
+		code == http.StatusRequestTimeout ||
+		code == http.StatusConflict ||
+		code == http.StatusTooEarly ||
+		code == http.StatusTooManyRequests ||
+		code >= http.StatusInternalServerError ||
+		code < 100 || code > 599
 }
 
 func shouldRetryPlaygroundForcedChannelError(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {

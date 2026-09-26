@@ -47,8 +47,15 @@ IMAGE_REAL_REQUEST_LIMIT = int(os.environ.get("PROVIDER_MONITOR_IMAGE_REAL_REQUE
 IMAGE_REAL_REQUEST_P95_DEGRADE_MS = int(os.environ.get("PROVIDER_MONITOR_IMAGE_REAL_REQUEST_P95_DEGRADE_MS", "300000"))
 IMAGE_REAL_REQUEST_P95_SEVERE_MS = int(os.environ.get("PROVIDER_MONITOR_IMAGE_REAL_REQUEST_P95_SEVERE_MS", "600000"))
 IMAGE_LONG_TAIL_CHANNEL_IDS = os.environ.get("PROVIDER_MONITOR_IMAGE_LONG_TAIL_CHANNEL_IDS", "4,8,12,16")
+DOCKER_LOG_TAIL_LINES = int(os.environ.get("PROVIDER_MONITOR_DOCKER_LOG_TAIL_LINES", "10000"))
+GATEWAY_RESPONSES_BASE_URL = os.environ.get(
+    "PROVIDER_MONITOR_GATEWAY_BASE_URL",
+    "https://api.aiphui.top",
+).rstrip("/")
 
 REDACTED = "***redacted***"
+ADMIN_SYSTEM_TOKEN_USER_ID = 1
+ADMIN_CODEX_TOKEN_NAME = "星人 Codex 文本令牌"
 SENSITIVE_TEXT_PATTERNS = (
     re.compile(r"sk-[A-Za-z0-9][A-Za-z0-9_\-]{8,}"),
     re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s\"']+"),
@@ -72,6 +79,7 @@ class TextFamily:
     managed_tag_fallback: tuple[tuple[str, int, int], ...] = ()
     probe_models_by_tag: dict[str, tuple[str, ...]] | None = None
     request_formats_by_channel: dict[int, str] | None = None
+    request_formats_by_tag: dict[str, str] | None = None
     optional_managed_tags: tuple[str, ...] = ()
 
 
@@ -105,6 +113,11 @@ TEXT_FAMILIES = (
             ("xingren-discount-text-pdhlzy", 42, 20),
             ("xingren-discount-text-geek2api", 68, 10),
         ),
+        request_formats_by_tag={
+            # This legacy identity fronts the tkfora route. It only accepts
+            # Chat Completions even though the public endpoint is Responses.
+            "xingren-discount-text-pdhlzy": "chat",
+        },
     ),
     TextFamily(
         name="plus_text",
@@ -1395,7 +1408,9 @@ def evaluate_managed_model_family(
                 upstream_model = model_mapping.get(model, model).strip()
                 if not upstream_model:
                     continue
-                request_format = (family.request_formats_by_channel or {}).get(channel_id, family.request_format)
+                request_format = (family.request_formats_by_channel or {}).get(channel_id)
+                if not request_format:
+                    request_format = (family.request_formats_by_tag or {}).get(expected_tag, family.request_format)
                 requester = request_chat if request_format == "chat" else request_responses
                 futures[pool.submit(requester, base_url, api_key, upstream_model)] = (channel_id, model)
         for future in concurrent.futures.as_completed(futures):
@@ -1751,7 +1766,15 @@ def evaluate_text_family(
 
 def docker_logs_since(seconds: int) -> str:
     result = subprocess.run(
-        ["docker", "logs", "--since", f"{int(seconds)}s", "shenxiang-new-api"],
+        [
+            "docker",
+            "logs",
+            "--since",
+            f"{int(seconds)}s",
+            "--tail",
+            str(max(1, DOCKER_LOG_TAIL_LINES)),
+            "shenxiang-new-api",
+        ],
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -1761,6 +1784,72 @@ def docker_logs_since(seconds: int) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"docker logs failed: {(result.stdout or '').strip()[:300]}")
     return result.stdout or ""
+
+
+def summarize_monitor_results(results: dict[str, Any]) -> dict[str, Any]:
+    summaries: dict[str, Any] = {}
+    for name, result in results.items():
+        if not isinstance(result, dict):
+            summaries[name] = {"status": "recorded"}
+            continue
+        routes = result.get("routes")
+        channels = result.get("channels")
+        summaries[name] = {
+            "route_count": len(routes) if isinstance(routes, dict) else 0,
+            "channel_count": len(channels) if isinstance(channels, dict) else 0,
+        }
+        if "ok" in result:
+            summaries[name]["ok"] = bool(result.get("ok"))
+    return summaries
+
+
+def monitor_results_ok(results: dict[str, Any]) -> bool:
+    gateway_canary = results.get("gateway_responses_canary")
+    return not isinstance(gateway_canary, dict) or gateway_canary.get("ok") is True
+
+
+def evaluate_gateway_responses_canary(env: dict[str, str]) -> dict[str, Any]:
+    rows = mysql_json(
+        "SELECT JSON_OBJECT("
+        "'token_id', id, 'user_id', user_id, 'status', status, 'api_key', `key`, "
+        "'group_name', COALESCE(`group`, ''), 'model_limits', COALESCE(model_limits, '')"
+        ") FROM tokens WHERE deleted_at IS NULL AND user_id = 1 AND name = "
+        + shell_quote(ADMIN_CODEX_TOKEN_NAME)
+        + " AND status = 1 ORDER BY id ASC LIMIT 2",
+        env,
+    )
+    if len(rows) != 1:
+        raise RuntimeError("gateway canary requires exactly one enabled admin Codex token")
+    token = rows[0]
+    if int(token.get("user_id") or 0) != ADMIN_SYSTEM_TOKEN_USER_ID:
+        raise RuntimeError("gateway canary token is not admin-owned")
+    api_key = str(token.get("api_key") or "").strip()
+    if not api_key:
+        raise RuntimeError("gateway canary admin token has no key")
+    if not api_key.startswith("sk-"):
+        api_key = "sk-" + api_key
+    models = [
+        model.strip()
+        for model in str(token.get("model_limits") or "").split(",")
+        if model.strip().startswith("gpt-") and "image" not in model.lower()
+    ]
+    if not models:
+        raise RuntimeError("gateway canary admin token has no Codex text model")
+    model = "gpt-5.5" if "gpt-5.5" in models else models[0]
+    result = request_responses(GATEWAY_RESPONSES_BASE_URL, api_key, model)
+    event = {
+        "ts": now_iso(),
+        "event": "gateway_responses_canary",
+        "ok": bool(result.get("ok")),
+        "status": int(result.get("status") or 0),
+        "reason": str(result.get("reason") or ""),
+        "token_id": int(token.get("token_id") or 0),
+        "user_id": ADMIN_SYSTEM_TOKEN_USER_ID,
+        "group": str(token.get("group_name") or "default"),
+        "model": model,
+    }
+    write_event(event)
+    return event
 
 
 def find_recent_image2_primary_524s() -> list[str]:
@@ -2078,6 +2167,7 @@ def main() -> int:
 
             results: dict[str, Any] = {}
             if not family_only:
+                results["gateway_responses_canary"] = evaluate_gateway_responses_canary(env)
                 real_request_families = tuple(
                     family for family in selected_families if not family.manage_model_abilities
                 )
@@ -2108,8 +2198,19 @@ def main() -> int:
                     args.adopt_managed_disabled,
                 )
             save_state(state)
-            print(json.dumps({"ok": True, "dry_run": args.dry_run, "results": results}, ensure_ascii=False))
-            return 0
+            ok = monitor_results_ok(results)
+            print(
+                json.dumps(
+                    {
+                        "ok": ok,
+                        "dry_run": args.dry_run,
+                        "summary": summarize_monitor_results(results),
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            )
+            return 0 if ok else 1
 
 
 if __name__ == "__main__":

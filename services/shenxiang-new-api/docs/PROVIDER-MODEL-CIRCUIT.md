@@ -16,7 +16,11 @@
 
 ## 请求与路由
 
-探测 payload 最小化且不记录输入输出、密钥、供应商 URL 或完整上游错误。`discount_text` 的 channel `42` 使用 `/v1/chat/completions` 探测，其余受管通道使用原生 `/v1/responses`；两种探针都必须收到真实输出并完整结束才算成功。运行时对 `discount/plus` 选择出的 channel 做一次实时 ability 检查；被熔断的高优先级模型会在发出上游请求前直接跳到下一优先级。ability 查询异常时保持原有路由，避免 MySQL 短暂异常把整组误判为无可用通道。
+探测 payload 最小化且不记录输入输出、密钥、供应商 URL 或完整上游错误。`discount_text` 的 `xingren-discount-text-pdhlzy` 兼容身份使用 `/v1/chat/completions` 探测，其余受管通道使用原生 `/v1/responses`；两种探针都必须收到真实输出并完整结束才算成功。运行时对 `default/discount/plus/special` 选择出的 channel 做一次实时 ability 检查；被熔断的高优先级模型会在发出上游请求前直接跳到下一优先级。ability 查询异常时保持原有路由，避免 MySQL 短暂异常把整组误判为无可用通道。
+
+完整巡检还必须使用 `user_id=1` 的“星人 Codex 文本令牌”通过 `https://api.aiphui.top/v1/responses` 公网入口发起最小请求，覆盖 Cloudflare、认证、令牌模型权限、分组路由、协议转换和响应解析。供应商直探成功但该用户链路探针失败时，巡检返回非零，不能判定服务健康。
+
+监控进程有墙钟超时，Docker 日志读取有尾行上限，Cron 标准输出只保留汇总；完整探测明细写入脱敏 JSONL。这样可避免长任务长期占锁和 Cron 日志无限膨胀。
 
 ## 调度
 

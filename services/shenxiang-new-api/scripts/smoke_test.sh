@@ -9,7 +9,7 @@ REQUEST_MODE="${REQUEST_MODE:-models}"
 usage() {
   cat <<'EOF'
 Usage:
-  smoke_test.sh [--profile codex|image|claude|video] [--mode models|chat]
+  smoke_test.sh [--profile codex|image|claude|video] [--mode models|chat|responses]
 
 System smoke tests must use an admin-owned token only. This script never
 accepts a raw API key argument; it resolves a token from MySQL where user_id=1.
@@ -51,7 +51,7 @@ case "$TOKEN_PROFILE" in
 esac
 
 case "$REQUEST_MODE" in
-  models|chat) ;;
+  models|chat|responses) ;;
   *)
     echo "ERROR: unsupported mode: ${REQUEST_MODE}" >&2
     usage >&2
@@ -140,5 +140,41 @@ case "$REQUEST_MODE" in
         "stream": false,
         "max_tokens": 4
       }' | sed -n '1,120p'
+    ;;
+  responses)
+    if [ "$TOKEN_PROFILE" != "codex" ]; then
+      echo "ERROR: --mode responses is only allowed with --profile codex" >&2
+      exit 2
+    fi
+    echo "Testing /v1/responses with admin token"
+    response="$({
+      curl_with_admin_auth "${PUBLIC_BASE%/}/v1/responses" \
+        --connect-timeout 10 \
+        --max-time 90 \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: shenxiang-admin-smoke/20260926" \
+        -d '{
+          "model": "'"${MODEL}"'",
+          "instructions": "Reply exactly OK.",
+          "input": [{"role":"user","content":[{"type":"input_text","text":"OK?"}]}],
+          "stream": false,
+          "store": false,
+          "max_output_tokens": 16
+        }'
+    })"
+    printf '%s' "$response" | python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+if payload.get("error"):
+    raise SystemExit("responses smoke returned an error")
+text = str(payload.get("output_text") or "")
+if not text:
+    for item in payload.get("output") or []:
+        for content in item.get("content") or []:
+            text += str(content.get("text") or "")
+if "OK" not in text.upper():
+    raise SystemExit("responses smoke returned no visible OK output")
+print("Responses smoke succeeded with visible output")
+'
     ;;
 esac
