@@ -658,6 +658,16 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertIn("--tail", command)
         self.assertEqual(command[-1], "shenxiang-new-api")
 
+    def test_docker_mysql_forces_utf8mb4_for_chinese_token_names(self) -> None:
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="{}\n", stderr="")
+        env = {"MYSQL_ROOT_PASSWORD": "test-password", "MYSQL_DATABASE": "test-db"}
+        with mock.patch.object(self.module.subprocess, "run", return_value=completed) as run:
+            self.module.docker_mysql(["--batch", "-e", "SELECT 1"], env)
+
+        command = run.call_args.args[0]
+        self.assertIn("--default-character-set=utf8mb4", command)
+        self.assertLess(command.index("--default-character-set=utf8mb4"), command.index("-uroot"))
+
     def test_monitor_stdout_summary_does_not_embed_route_payloads(self) -> None:
         summary = self.module.summarize_monitor_results(
             {

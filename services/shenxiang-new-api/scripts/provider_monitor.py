@@ -298,6 +298,7 @@ def docker_mysql(args: list[str], env: dict[str, str], *, input_text: str | None
         f"MYSQL_PWD={env['MYSQL_ROOT_PASSWORD']}",
         "shenxiang-new-api-mysql",
         "mysql",
+        "--default-character-set=utf8mb4",
         "-uroot",
         env["MYSQL_DATABASE"],
     ] + args
