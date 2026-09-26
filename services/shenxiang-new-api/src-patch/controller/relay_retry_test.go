@@ -1067,22 +1067,24 @@ func TestShouldRetryKeepsGlobalTimeoutPolicyWithoutForcedFallback(t *testing.T) 
 	}
 }
 
-func TestShouldRetryAllowsPlusTextTimeoutFallback(t *testing.T) {
+func TestShouldRetryAllowsManagedTextUpstreamFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, tc := range []struct {
 		name   string
 		path   string
+		group  string
 		status int
 	}{
-		{name: "responses 504", path: "/v1/responses", status: http.StatusGatewayTimeout},
-		{name: "responses 524", path: "/v1/responses", status: 524},
-		{name: "chat 504", path: "/v1/chat/completions", status: http.StatusGatewayTimeout},
+		{name: "default responses 504", path: "/v1/responses", group: "default", status: http.StatusGatewayTimeout},
+		{name: "discount upstream 401", path: "/v1/responses", group: service.DiscountPricingGroupName, status: http.StatusUnauthorized},
+		{name: "plus responses 524", path: "/v1/responses", group: service.PlusPricingGroupName, status: 524},
+		{name: "special chat 429", path: "/v1/chat/completions", group: service.SpecialPricingGroupName, status: http.StatusTooManyRequests},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Request = httptest.NewRequest(http.MethodPost, tc.path, nil)
 			c.Set("channel_affinity_skip_retry_on_failure", true)
-			common.SetContextKey(c, constant.ContextKeyUsingGroup, service.PlusPricingGroupName)
+			common.SetContextKey(c, constant.ContextKeyUsingGroup, tc.group)
 
 			err := types.WithOpenAIError(types.OpenAIError{
 				Message: "gateway timeout",
@@ -1091,43 +1093,13 @@ func TestShouldRetryAllowsPlusTextTimeoutFallback(t *testing.T) {
 			}, tc.status)
 
 			if !shouldRetry(c, err, 1) {
-				t.Fatal("shouldRetry() = false, want true for Plus text timeout")
+				t.Fatal("shouldRetry() = false, want true for managed text upstream failure")
 			}
 		})
 	}
 }
 
-func TestShouldRetryAllowsSpecialTextTimeoutFallback(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	for _, tc := range []struct {
-		name   string
-		path   string
-		status int
-	}{
-		{name: "responses 504", path: "/v1/responses", status: http.StatusGatewayTimeout},
-		{name: "responses 524", path: "/v1/responses", status: 524},
-		{name: "chat 504", path: "/v1/chat/completions", status: http.StatusGatewayTimeout},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			c, _ := gin.CreateTestContext(httptest.NewRecorder())
-			c.Request = httptest.NewRequest(http.MethodPost, tc.path, nil)
-			c.Set("channel_affinity_skip_retry_on_failure", true)
-			common.SetContextKey(c, constant.ContextKeyUsingGroup, service.SpecialPricingGroupName)
-
-			err := types.WithOpenAIError(types.OpenAIError{
-				Message: "gateway timeout",
-				Type:    "openai_error",
-				Code:    "upstream_timeout",
-			}, tc.status)
-
-			if !shouldRetry(c, err, 1) {
-				t.Fatal("shouldRetry() = false, want true for special text timeout")
-			}
-		})
-	}
-}
-
-func TestShouldRetryPlusTextTimeoutGuardrails(t *testing.T) {
+func TestShouldRetryManagedTextUpstreamGuardrails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	newContext := func(path, group string) *gin.Context {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -1149,11 +1121,12 @@ func TestShouldRetryPlusTextTimeoutGuardrails(t *testing.T) {
 		err        *types.NewAPIError
 		retryTimes int
 	}{
-		{name: "default group", context: newContext("/v1/responses", "default"), err: newTimeout(), retryTimes: 1},
+		{name: "unmanaged group", context: newContext("/v1/responses", "standard"), err: newTimeout(), retryTimes: 1},
 		{name: "image path", context: newContext("/v1/images/generations", service.PlusPricingGroupName), err: newTimeout(), retryTimes: 1},
 		{name: "no retries left", context: newContext("/v1/responses", service.PlusPricingGroupName), err: newTimeout(), retryTimes: 0},
 		{name: "local skip retry error", context: newContext("/v1/responses", service.PlusPricingGroupName), err: newTimeout(types.ErrOptionWithSkipRetry()), retryTimes: 1},
 		{name: "local non upstream error", context: newContext("/v1/responses", service.PlusPricingGroupName), err: types.NewErrorWithStatusCode(errors.New("local timeout"), types.ErrorCodeInvalidRequest, http.StatusGatewayTimeout), retryTimes: 1},
+		{name: "payload too large", context: newContext("/v1/responses", service.PlusPricingGroupName), err: types.WithOpenAIError(types.OpenAIError{Message: "payload too large", Type: "openai_error", Code: "request_too_large"}, http.StatusRequestEntityTooLarge), retryTimes: 1},
 	}
 	specificChannel := newContext("/v1/responses", service.PlusPricingGroupName)
 	specificChannel.Set("specific_channel_id", 43)

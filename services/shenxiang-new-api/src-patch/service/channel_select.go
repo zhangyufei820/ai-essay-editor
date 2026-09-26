@@ -17,8 +17,11 @@ var isChannelAbilityEnabledForCircuit = model.IsChannelAbilityEnabled
 
 type randomSatisfiedChannelSelector func(string, string, int, string) (*model.Channel, error)
 
-func usesModelAbilityCircuit(group string) bool {
-	return group == DiscountPricingGroupName || group == PlusPricingGroupName || group == SpecialPricingGroupName
+func usesModelAbilityCircuit(group string, requestPath string) bool {
+	if requestPath != "/v1/responses" && requestPath != "/v1/chat/completions" {
+		return false
+	}
+	return group == "default" || group == DiscountPricingGroupName || group == PlusPricingGroupName || group == SpecialPricingGroupName
 }
 
 func getRandomSatisfiedChannelWithCircuit(
@@ -30,7 +33,7 @@ func getRandomSatisfiedChannelWithCircuit(
 	requestPath string,
 ) (*model.Channel, error) {
 	channel, err := selector(group, modelName, retry, requestPath)
-	if err != nil || channel == nil || !usesModelAbilityCircuit(group) {
+	if err != nil || channel == nil || !usesModelAbilityCircuit(group, requestPath) {
 		return channel, err
 	}
 	seen := make(map[int]struct{})

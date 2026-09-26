@@ -116,6 +116,12 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertIn('"candidate is missing media image contract checks"', release_core)
         self.assertIn('["node", str(image_contract_check), "--source-root", str(self.source_dir)]', release_core)
 
+    def test_release_verifies_authenticated_responses_user_path(self) -> None:
+        release_core = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn('scripts/smoke_test.sh', release_core)
+        self.assertIn('"--mode",\n                "responses"', release_core)
+        self.assertIn('PUBLIC_API_BASE_URL=https://api.aiphui.top', release_core)
+
     def test_release_syncs_manifest_pinned_codex_entry_guard(self) -> None:
         self.assertIn("scripts/codex_entry_guard.sh", MODULE.GOVERNANCE_FILES)
 
@@ -147,6 +153,9 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertIn('MANIFEST="$ROOT/release-manifest.json"', runner)
         self.assertIn('MONITOR="$CHECKOUT/services/shenxiang-new-api/scripts/provider_monitor.py"', runner)
         self.assertIn("--family discount_text --family plus_text", runner)
+        self.assertIn("run_with_timeout", runner)
+        self.assertIn("PROVIDER_MONITOR_FAST_TIMEOUT_SECONDS", runner)
+        self.assertIn("timeout --signal=TERM --kill-after=15s", runner)
         self.assertNotIn('python3 "$ROOT/scripts/provider_monitor.py"', runner)
 
         cron = (MODULE_PATH.parent.parent / "cron" / "shenxiang-new-api-provider-monitor").read_text(encoding="utf-8")

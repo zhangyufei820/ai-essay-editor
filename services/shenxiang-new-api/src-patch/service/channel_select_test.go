@@ -119,18 +119,24 @@ func TestModelAbilityCircuitReturnsNoChannelWhenEveryRouteIsDisabled(t *testing.
 	require.Nil(t, channel)
 }
 
-func TestModelAbilityCircuitDoesNotAffectDefaultGroup(t *testing.T) {
+func TestModelAbilityCircuitSkipsDisabledDefaultPrimary(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(nil)
-	withCircuitAbilityChecker(t, func(_ string, _ string, _ int) (bool, error) {
-		require.Fail(t, "default routing must not query the model circuit")
-		return false, nil
+	seenRetries := make([]int, 0, 2)
+	withCircuitAbilityChecker(t, func(group, modelName string, channelID int) (bool, error) {
+		require.Equal(t, "default", group)
+		require.Equal(t, "gpt-5.5", modelName)
+		return channelID == 3, nil
 	})
 
 	channel, err := getRandomSatisfiedChannelWithCircuit(
 		ctx,
-		func(_ string, _ string, _ int, _ string) (*model.Channel, error) {
-			return &model.Channel{Id: 2}, nil
+		func(_ string, _ string, retry int, _ string) (*model.Channel, error) {
+			seenRetries = append(seenRetries, retry)
+			if retry == 0 {
+				return &model.Channel{Id: 2}, nil
+			}
+			return &model.Channel{Id: 3}, nil
 		},
 		"default",
 		"gpt-5.5",
@@ -140,7 +146,32 @@ func TestModelAbilityCircuitDoesNotAffectDefaultGroup(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, channel)
-	require.Equal(t, 2, channel.Id)
+	require.Equal(t, 3, channel.Id)
+	require.Equal(t, []int{0, 1}, seenRetries)
+}
+
+func TestModelAbilityCircuitDoesNotAffectDefaultMedia(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(nil)
+	withCircuitAbilityChecker(t, func(_ string, _ string, _ int) (bool, error) {
+		require.Fail(t, "media routing must not query the text model circuit")
+		return false, nil
+	})
+
+	channel, err := getRandomSatisfiedChannelWithCircuit(
+		ctx,
+		func(_ string, _ string, _ int, _ string) (*model.Channel, error) {
+			return &model.Channel{Id: 22}, nil
+		},
+		"default",
+		"gpt-image-2-4K",
+		0,
+		"/v1/images/generations",
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	require.Equal(t, 22, channel.Id)
 }
 
 func TestCacheGetRandomSatisfiedChannelFallsThroughMissingPrimaryGroup(t *testing.T) {

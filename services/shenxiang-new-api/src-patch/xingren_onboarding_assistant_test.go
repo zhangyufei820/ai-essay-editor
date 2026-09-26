@@ -52,6 +52,15 @@ func TestXingrenCodexModelAcceptsAstra(t *testing.T) {
 	}
 }
 
+func TestXingrenOnboardingExplains413WithoutRetryingSamePayload(t *testing.T) {
+	reply := xingrenAssistantKnowledgeReply("unexpected status 413 Payload Too Large cloudflare", nil, nil)
+	for _, expected := range []string{"请求体过大", "整段会话", "不要连续重试", "源站没有收到"} {
+		if !strings.Contains(reply, expected) {
+			t.Fatalf("413 reply missing %q: %s", expected, reply)
+		}
+	}
+}
+
 func TestXingrenCodexTokenGroupDefaultsLegacyUserGroup(t *testing.T) {
 	token := buildXingrenCodexUserToken(42, "test-key", "test-token", "gpt-5.5", "internal")
 	if token.Group != "default" {

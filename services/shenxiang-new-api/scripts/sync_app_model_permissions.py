@@ -883,6 +883,49 @@ def ensure_codex_image_model_limits(raw: str, required_models: list[str] | None 
     return ",".join(models)
 
 
+def load_routable_codex_models_by_group() -> dict[str, set[str]]:
+    rows = mysql(
+        "SELECT DISTINCT ability.`group`, ability.model FROM abilities AS ability "
+        "JOIN channels AS channel ON channel.id = ability.channel_id "
+        "JOIN models AS public_model ON public_model.model_name = ability.model "
+        "AND public_model.deleted_at IS NULL AND public_model.status = 1 "
+        "WHERE ability.enabled = 1 AND channel.status = 1;"
+    )
+    allowed = set(CODEX_ALLOWED_MODELS)
+    result: dict[str, set[str]] = {}
+    for group, model in rows:
+        normalized_group = group.strip()
+        normalized_model = model.strip()
+        if normalized_group and normalized_model in allowed:
+            result.setdefault(normalized_group, set()).add(normalized_model)
+    return result
+
+
+def routable_codex_models_for_group_chain(
+    raw_group: str,
+    candidates: list[str] | tuple[str, ...],
+    routable_by_group: dict[str, set[str]] | None,
+) -> list[str]:
+    sanitized = sanitize_codex_token_models(list(candidates))
+    if routable_by_group is None:
+        return sanitized
+    groups = list(dict.fromkeys(part.strip() for part in raw_group.split(",") if part.strip()))
+    if not groups:
+        groups = ["default"]
+    routable = set().union(*(routable_by_group.get(group, set()) for group in groups))
+    return [model for model in sanitized if model in routable]
+
+
+def reconcile_codex_model_limits(raw: str, required_models: list[str]) -> str:
+    required = sanitize_codex_token_models(required_models)
+    allowed = set(required)
+    models = [model for model in sanitize_codex_token_models(raw.split(",")) if model in allowed]
+    for model in required:
+        if model not in models:
+            models.append(model)
+    return ",".join(models)
+
+
 def is_supplier_exposed_model(model: str) -> bool:
     normalized = model.strip().lower()
     if normalized in SUPPLIER_EXPOSED_MODELS:
@@ -2522,7 +2565,10 @@ def sync_grok_image_metadata() -> None:
     )
 
 
-def sync_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
+def sync_tokens(
+    profiles: dict[str, list[str]],
+    routable_by_group: dict[str, set[str]] | None = None,
+) -> dict[str, int]:
     expected_models_by_name: dict[str, str] = {}
     expected_groups_by_name: dict[str, str] = {}
     for profile, names in TOKEN_PROFILES.items():
@@ -2547,8 +2593,20 @@ def sync_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
         expected_models = expected_models_by_name.get(name)
         if expected_models is None:
             continue
-        if name in TOKEN_PROFILES["codex"] and raw_group == SPECIAL_TEXT_GROUP:
-            expected_models = SPECIAL_TEXT_MODEL_LIMITS
+        if name in TOKEN_PROFILES["codex"]:
+            candidates = (
+                list(SPECIAL_TEXT_ALLOWED_MODELS)
+                if raw_group == SPECIAL_TEXT_GROUP
+                else profiles["codex"]
+            )
+            scoped_models = routable_codex_models_for_group_chain(
+                raw_group,
+                candidates,
+                routable_by_group,
+            )
+            if routable_by_group is not None and not scoped_models:
+                raise RuntimeError(f"no routable Codex models for managed system token group {raw_group or 'default'}")
+            expected_models = ",".join(scoped_models)
         expected_group = expected_groups_by_name.get(name)
         if raw_limits != expected_models or raw_enabled != "1" or (expected_group is not None and raw_group != expected_group):
             token_updates.append((token_id, token_key, expected_models, expected_group))
@@ -2574,7 +2632,10 @@ def sync_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
-def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict[str, int]:
+def sync_user_codex_tokens(
+    profiles: dict[str, list[str]] | None = None,
+    routable_by_group: dict[str, set[str]] | None = None,
+) -> dict[str, int]:
     names = TOKEN_PROFILES["codex"]
     required_models = profiles["codex"] if profiles and profiles.get("codex") else CODEX_ALLOWED_MODELS
     name_predicates = [
@@ -2594,7 +2655,25 @@ def sync_user_codex_tokens(profiles: dict[str, list[str]] | None = None) -> dict
     )
     token_updates: list[tuple[str, str, str]] = []
     for token_id, token_key, raw_limits, raw_enabled, raw_group in token_rows:
-        next_limits = SPECIAL_TEXT_MODEL_LIMITS if raw_group == SPECIAL_TEXT_GROUP else ensure_codex_image_model_limits(raw_limits, required_models)
+        candidates = list(SPECIAL_TEXT_ALLOWED_MODELS) if raw_group == SPECIAL_TEXT_GROUP else required_models
+        if routable_by_group is not None:
+            candidates = [
+                model for model in candidates if model not in CONTROLLED_CODEX_MODEL_ALIASES
+            ]
+        scoped_models = routable_codex_models_for_group_chain(
+            raw_group,
+            candidates,
+            routable_by_group,
+        )
+        if routable_by_group is not None and not scoped_models:
+            raise RuntimeError(f"no routable Codex models for managed user token group {raw_group or 'default'}")
+        next_limits = (
+            reconcile_codex_model_limits(raw_limits, scoped_models)
+            if routable_by_group is not None
+            else SPECIAL_TEXT_MODEL_LIMITS
+            if raw_group == SPECIAL_TEXT_GROUP
+            else ensure_codex_image_model_limits(raw_limits, required_models)
+        )
         if next_limits != raw_limits or raw_enabled != "1":
             token_updates.append((token_id, next_limits, token_key))
 
@@ -2623,7 +2702,9 @@ def append_model_limit(raw_limits: str, model: str) -> str:
     return raw_limits + separator + model
 
 
-def sync_astra_access_for_target_user_tokens() -> dict[str, int]:
+def sync_astra_access_for_target_user_tokens(
+    routable_by_group: dict[str, set[str]] | None = None,
+) -> dict[str, int]:
     """Grant managed GPT-6 models to restricted user keys in supported groups."""
     normalized_group = "REPLACE(COALESCE(`group`, ''), ' ', '')"
     group_predicate = " OR ".join(
@@ -2643,9 +2724,24 @@ def sync_astra_access_for_target_user_tokens() -> dict[str, int]:
         + ");"
     )
     token_updates: list[tuple[str, str, str]] = []
-    for token_id, token_key, raw_limits, _raw_group in token_rows:
-        next_limits = append_model_limit(raw_limits, GPT6_ASTRA_MODEL)
-        next_limits = append_model_limit(next_limits, GPT6_SOL_MODEL)
+    for token_id, token_key, raw_limits, raw_group in token_rows:
+        next_limits = raw_limits
+        routable = set(
+            routable_codex_models_for_group_chain(
+                raw_group,
+                [GPT6_ASTRA_MODEL, GPT6_SOL_MODEL],
+                routable_by_group,
+            )
+        )
+        for model in (GPT6_ASTRA_MODEL, GPT6_SOL_MODEL):
+            if routable_by_group is None or model in routable:
+                next_limits = append_model_limit(next_limits, model)
+            else:
+                next_limits = ",".join(
+                    item.strip()
+                    for item in next_limits.split(",")
+                    if item.strip() and item.strip() != model
+                )
         if next_limits != raw_limits:
             token_updates.append((token_id, next_limits, token_key))
 
@@ -2666,17 +2762,34 @@ def sync_astra_access_for_target_user_tokens() -> dict[str, int]:
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
-def sync_controlled_codex_alias_tokens() -> dict[str, int]:
+def sync_controlled_codex_alias_tokens(
+    routable_by_group: dict[str, set[str]] | None = None,
+) -> dict[str, int]:
     token_rows = mysql(
-        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, '') FROM tokens "
+        "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(`group`, '') FROM tokens "
         "WHERE deleted_at IS NULL AND status = 1 AND model_limits_enabled = 1 "
-        "AND FIND_IN_SET("
+        "AND (FIND_IN_SET("
         + sql_quote(CODEX_AUTO_REVIEW_BACKING_MODEL)
-        + ", REPLACE(COALESCE(model_limits, ''), ' ', '')) > 0;"
+        + ", REPLACE(COALESCE(model_limits, ''), ' ', '')) > 0"
+        " OR FIND_IN_SET("
+        + sql_quote(CODEX_AUTO_REVIEW_MODEL)
+        + ", REPLACE(COALESCE(model_limits, ''), ' ', '')) > 0);"
     )
     token_updates: list[tuple[str, str, str, str]] = []
-    for token_id, token_key, raw_limits in token_rows:
-        next_limits = append_model_limit(raw_limits, CODEX_AUTO_REVIEW_MODEL)
+    for token_id, token_key, raw_limits, raw_group in token_rows:
+        alias_is_routable = CODEX_AUTO_REVIEW_MODEL in routable_codex_models_for_group_chain(
+            raw_group,
+            [CODEX_AUTO_REVIEW_MODEL],
+            routable_by_group,
+        )
+        if routable_by_group is None or alias_is_routable:
+            next_limits = append_model_limit(raw_limits, CODEX_AUTO_REVIEW_MODEL)
+        else:
+            next_limits = ",".join(
+                item.strip()
+                for item in raw_limits.split(",")
+                if item.strip() and item.strip() != CODEX_AUTO_REVIEW_MODEL
+            )
         if next_limits != raw_limits:
             token_updates.append((token_id, raw_limits, next_limits, token_key))
 
@@ -2687,9 +2800,12 @@ def sync_controlled_codex_alias_tokens() -> dict[str, int]:
             + sql_quote(next_limits)
             + " WHERE id = "
             + sql_quote(token_id)
-            + " AND status = 1 AND model_limits_enabled = 1 AND FIND_IN_SET("
+            + " AND status = 1 AND model_limits_enabled = 1 AND (FIND_IN_SET("
             + sql_quote(CODEX_AUTO_REVIEW_BACKING_MODEL)
             + ", REPLACE(COALESCE(model_limits, ''), ' ', '')) > 0"
+            + " OR FIND_IN_SET("
+            + sql_quote(CODEX_AUTO_REVIEW_MODEL)
+            + ", REPLACE(COALESCE(model_limits, ''), ' ', '')) > 0)"
             + " AND BINARY COALESCE(model_limits, '') = BINARY "
             + sql_quote(raw_limits)
             + ";"
@@ -3924,10 +4040,13 @@ def main() -> int:
         print(f"refuse to sync empty model profiles: {', '.join(missing)}", file=sys.stderr)
         return 2
     sync_abilities()
-    system_token_result = sync_tokens(system_token_profiles(profiles))
-    codex_token_result = sync_user_codex_tokens(profiles)
-    astra_token_result = sync_astra_access_for_target_user_tokens()
-    codex_alias_token_result = sync_controlled_codex_alias_tokens()
+    routable_codex_models = load_routable_codex_models_by_group()
+    if not routable_codex_models:
+        raise RuntimeError("no routable Codex models found after ability sync")
+    system_token_result = sync_tokens(system_token_profiles(profiles), routable_codex_models)
+    codex_token_result = sync_user_codex_tokens(profiles, routable_codex_models)
+    astra_token_result = sync_astra_access_for_target_user_tokens(routable_codex_models)
+    codex_alias_token_result = sync_controlled_codex_alias_tokens(routable_codex_models)
     claude_token_result = sync_user_claude_tokens(profiles)
     image_token_result = sync_user_image_tokens(profiles)
     video_token_result = sync_user_video_tokens(profiles)

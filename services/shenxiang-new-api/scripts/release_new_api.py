@@ -589,6 +589,19 @@ WHERE platform IN ('playground_image', 'playground_video')
                 "shenxiang-new-api-mysql",
             ]
         )
+        smoke_test = self.checkout / "services/shenxiang-new-api/scripts/smoke_test.sh"
+        run(
+            [
+                "env",
+                f"APP_DIR={self.app_dir}",
+                "PUBLIC_API_BASE_URL=https://api.aiphui.top",
+                str(smoke_test),
+                "--profile",
+                "codex",
+                "--mode",
+                "responses",
+            ]
+        )
 
     def sync_governance_files(self) -> None:
         service = self.checkout / "services/shenxiang-new-api"

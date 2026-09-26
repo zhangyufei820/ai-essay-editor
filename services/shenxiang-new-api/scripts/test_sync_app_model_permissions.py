@@ -1407,6 +1407,50 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("codex-auto-review", special_update)
         self.assertIn("CACHE:admin-codex-key,user-claude-key,user-image-key,user-special-codex-key", sql)
 
+    def test_routable_codex_models_follow_token_group_chain(self) -> None:
+        routes = {
+            "default": {"gpt-5.5", "gpt-5.6-sol"},
+            "discount": {"gpt-5.5"},
+            "plus": {"gpt-5.4-mini"},
+        }
+
+        self.assertEqual(
+            self.module.routable_codex_models_for_group_chain(
+                "discount,plus",
+                ["gpt-5.5", "gpt-5.4-mini", "gpt-5.6-sol"],
+                routes,
+            ),
+            ["gpt-5.5", "gpt-5.4-mini"],
+        )
+
+    def test_sync_tokens_prunes_models_without_routes_in_token_group(self) -> None:
+        captured: list[str] = []
+        self.module.mysql = lambda query: [[
+            "101",
+            "admin-codex-key",
+            "星人 Codex 文本令牌",
+            "gpt-5.5,gpt-5.4-mini,gpt-5.6-sol",
+            "1",
+            "discount",
+        ]]
+        self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: len(keys)
+
+        result = self.module.sync_tokens(
+            {
+                "codex": ["gpt-5.5", "gpt-5.4-mini", "gpt-5.6-sol"],
+                "claude": [],
+                "image": [],
+                "video": [],
+            },
+            {"discount": {"gpt-5.5", "gpt-5.6-sol"}},
+        )
+
+        sql = "\n".join(captured)
+        self.assertEqual(result, {"tokens_rewritten": 1, "token_caches_deleted": 1})
+        self.assertIn("model_limits = 'gpt-5.5,gpt-5.6-sol'", sql)
+        self.assertNotIn("model_limits = 'gpt-5.5,gpt-5.4-mini,gpt-5.6-sol'", sql)
+
     def test_sync_user_codex_tokens_updates_non_admin_codex_tokens(self) -> None:
         captured: list[str] = []
 
@@ -1492,6 +1536,28 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("codex-auto-review", sql)
         self.assertNotIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertIn("CACHE:key-108", sql)
+
+    def test_route_aware_user_sync_keeps_controlled_alias_out_of_bulk_grant(self) -> None:
+        captured: list[str] = []
+        self.module.mysql = lambda query: [[
+            "109",
+            "key-109",
+            "gpt-5.5,codex-auto-review",
+            "1",
+            "plus",
+        ]]
+        self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: len(keys)
+
+        result = self.module.sync_user_codex_tokens(
+            {"codex": ["gpt-5.5", "codex-auto-review"]},
+            {"plus": {"gpt-5.5", "codex-auto-review"}},
+        )
+
+        sql = "\n".join(captured)
+        self.assertEqual(result, {"tokens_rewritten": 1, "token_caches_deleted": 1})
+        self.assertIn("model_limits = 'gpt-5.5'", sql)
+        self.assertNotIn("model_limits = 'gpt-5.5,codex-auto-review'", sql)
 
     def test_sync_astra_access_updates_all_target_group_user_tokens_regardless_of_name(self) -> None:
         captured: list[str] = []
@@ -1866,8 +1932,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             self.assertIn("model_limits_enabled = 1", query)
             self.assertIn("FIND_IN_SET('gpt-5.5'", query)
             return [
-                ["301", "key-301", "gpt-5.5,gpt-5.4"],
-                ["302", "key-302", "gpt-5.5,codex-auto-review"],
+                ["301", "key-301", "gpt-5.5,gpt-5.4", "plus"],
+                ["302", "key-302", "gpt-5.5,codex-auto-review", "plus"],
             ]
 
         self.module.mysql = fake_mysql
@@ -1884,6 +1950,25 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("BINARY COALESCE(model_limits, '') = BINARY 'gpt-5.5,gpt-5.4'", sql)
         self.assertNotIn("WHERE id = '302'", sql)
         self.assertIn("CACHE:key-301", sql)
+
+    def test_sync_controlled_alias_removes_unroutable_alias(self) -> None:
+        captured: list[str] = []
+        self.module.mysql = lambda query: [[
+            "303",
+            "key-303",
+            "gpt-5.5,codex-auto-review",
+            "discount",
+        ]]
+        self.module.mysql_exec = captured.append
+        self.module.delete_token_caches = lambda keys: len(keys)
+
+        result = self.module.sync_controlled_codex_alias_tokens(
+            {"discount": {"gpt-5.5"}}
+        )
+
+        sql = "\n".join(captured)
+        self.assertEqual(result, {"tokens_rewritten": 1, "token_caches_deleted": 1})
+        self.assertIn("model_limits = 'gpt-5.5'", sql)
 
     def test_ensure_public_openai_text_models_uses_public_chat_metadata(self) -> None:
         captured: list[str] = []
@@ -2204,6 +2289,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             "video": ["grok-video-1.5"],
         }
         sync_abilities = mock.Mock()
+        routable_models = {"default": {"gpt-5.6"}}
         sync_user_codex_tokens = mock.Mock(return_value={"tokens_rewritten": 1, "token_caches_deleted": 1})
         sync_astra_access_for_target_user_tokens = mock.Mock(return_value={"tokens_rewritten": 1, "token_caches_deleted": 1})
         optional_reconcile = mock.Mock(
@@ -2237,6 +2323,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             sync_supplier_safe_public_metadata=empty_result,
             model_lists=mock.Mock(return_value=profiles),
             sync_abilities=sync_abilities,
+            load_routable_codex_models_by_group=mock.Mock(return_value=routable_models),
             system_token_profiles=mock.Mock(return_value=profiles),
             sync_tokens=empty_result,
             sync_user_codex_tokens=sync_user_codex_tokens,
@@ -2252,8 +2339,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(0, result)
         sync_abilities.assert_called_once_with()
-        sync_user_codex_tokens.assert_called_once_with(profiles)
-        sync_astra_access_for_target_user_tokens.assert_called_once_with()
+        sync_user_codex_tokens.assert_called_once_with(profiles, routable_models)
+        sync_astra_access_for_target_user_tokens.assert_called_once_with(routable_models)
         self.assertIn("optional model reconcile failed step=claude_opus5_stable_model", errors.getvalue())
         self.assertIn("optional_failures=['claude_opus5_stable_model:RuntimeError']", output.getvalue())
 
