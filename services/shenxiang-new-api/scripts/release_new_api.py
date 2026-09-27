@@ -450,6 +450,12 @@ class Release:
             else:
                 run([*docker_go, "-count=1", package])
 
+        provider_monitor_test = (
+            self.checkout / "services/shenxiang-new-api/scripts/test_provider_monitor.py"
+        )
+        if not provider_monitor_test.is_file():
+            raise ReleaseError("candidate is missing provider monitor tests")
+        run(["python3", str(provider_monitor_test)])
         permission_sync_test = self.checkout / "services/shenxiang-new-api/scripts/test_sync_app_model_permissions.py"
         if not permission_sync_test.is_file():
             raise ReleaseError("candidate is missing model permission sync tests")

@@ -5,6 +5,7 @@ import argparse
 import concurrent.futures
 import fcntl
 import hashlib
+import hmac
 import json
 import math
 import os
@@ -56,6 +57,8 @@ GATEWAY_RESPONSES_BASE_URL = os.environ.get(
 REDACTED = "***redacted***"
 ADMIN_SYSTEM_TOKEN_USER_ID = 1
 ADMIN_CODEX_TOKEN_NAME = "星人 Codex 文本令牌"
+MANAGED_CODEX_TOKEN_NAMES = (ADMIN_CODEX_TOKEN_NAME, "星人 Codex 自动令牌")
+USER_CODEX_TOKEN_NAME_PREFIX = "星人Codex "
 SENSITIVE_TEXT_PATTERNS = (
     re.compile(r"sk-[A-Za-z0-9][A-Za-z0-9_\-]{8,}"),
     re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s\"']+"),
@@ -326,6 +329,205 @@ def mysql_json(query: str, env: dict[str, str]) -> list[dict[str, Any]]:
 
 def shell_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def split_csv(value: str) -> list[str]:
+    items: list[str] = []
+    seen: set[str] = set()
+    for raw_item in str(value or "").split(","):
+        item = raw_item.strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        items.append(item)
+    return items
+
+
+def load_routable_models_by_group(env: dict[str, str]) -> dict[str, set[str]]:
+    rows = mysql_json(
+        "SELECT JSON_OBJECT("
+        "'group_name', ability.`group`, 'model', ability.model"
+        ") FROM abilities AS ability "
+        "JOIN channels AS channel ON channel.id = ability.channel_id "
+        "JOIN models AS public_model ON public_model.model_name = ability.model "
+        "AND public_model.deleted_at IS NULL AND public_model.status = 1 "
+        "WHERE ability.enabled = 1 AND channel.status = 1",
+        env,
+    )
+    routable: dict[str, set[str]] = {}
+    for row in rows:
+        group = str(row.get("group_name") or "").strip()
+        model = str(row.get("model") or "").strip()
+        if group and model:
+            routable.setdefault(group, set()).add(model)
+    return routable
+
+
+def load_managed_codex_tokens(env: dict[str, str]) -> list[dict[str, Any]]:
+    names = ",".join(shell_quote(name) for name in MANAGED_CODEX_TOKEN_NAMES)
+    return mysql_json(
+        "SELECT JSON_OBJECT("
+        "'token_id', id, 'api_key', `key`, 'group_name', COALESCE(`group`, ''), "
+        "'model_limits', COALESCE(model_limits, '')"
+        ") FROM tokens WHERE deleted_at IS NULL AND status = 1 "
+        "AND model_limits_enabled = 1 AND (name IN ("
+        + names
+        + ") OR name LIKE "
+        + shell_quote(USER_CODEX_TOKEN_NAME_PREFIX + "%")
+        + ") ORDER BY id",
+        env,
+    )
+
+
+def token_cache_key(api_key: str, env: dict[str, str]) -> str:
+    secret = str(env.get("CRYPTO_SECRET") or "")
+    if not secret:
+        raise RuntimeError("CRYPTO_SECRET is required to invalidate token cache")
+    digest = hmac.new(secret.encode("utf-8"), api_key.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"token:{digest}"
+
+
+def delete_token_caches(api_keys: list[str], env: dict[str, str]) -> int:
+    unique_api_keys = list(dict.fromkeys(key.strip() for key in api_keys if key.strip()))
+    if not unique_api_keys:
+        return 0
+    password = str(env.get("REDIS_PASSWORD") or "")
+    if not password:
+        raise RuntimeError("REDIS_PASSWORD is required to invalidate token cache")
+    redis_container = str(env.get("REDIS_CONTAINER") or "shenxiang-new-api-redis")
+    process_env = os.environ.copy()
+    process_env["REDISCLI_AUTH"] = password
+    payload = "".join(f"DEL {token_cache_key(api_key, env)}\n" for api_key in unique_api_keys)
+    subprocess.run(
+        ["docker", "exec", "-i", "-e", "REDISCLI_AUTH", redis_container, "redis-cli", "--pipe"],
+        input=payload.encode("utf-8"),
+        env=process_env,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return len(unique_api_keys)
+
+
+def reconcile_managed_codex_token_routes(
+    env: dict[str, str],
+    state: dict[str, Any],
+    dry_run: bool,
+) -> dict[str, Any]:
+    routable_by_group = load_routable_models_by_group(env)
+    tokens = load_managed_codex_tokens(env)
+    token_state = state.setdefault("managed_token_routes", {})
+    pending_cache_ids = {
+        int(token_id)
+        for token_id in state.get("managed_token_cache_pending", [])
+        if str(token_id).isdigit()
+    }
+    active_token_ids: set[int] = set()
+    plans: list[dict[str, Any]] = []
+    tokens_without_routes = 0
+    suppressed_count = 0
+    restored_count = 0
+
+    for token in tokens:
+        token_id = int(token.get("token_id") or 0)
+        api_key = str(token.get("api_key") or "").strip()
+        raw_limits = str(token.get("model_limits") or "")
+        if token_id <= 0 or not api_key:
+            raise RuntimeError("managed Codex token is missing identity or key")
+        active_token_ids.add(token_id)
+        current_models = split_csv(raw_limits)
+        group_names = split_csv(str(token.get("group_name") or "")) or ["default"]
+        routable = set().union(*(routable_by_group.get(group, set()) for group in group_names))
+
+        previous = token_state.get(str(token_id))
+        previous_suppressed: list[str] = []
+        if isinstance(previous, dict) and previous.get("last_applied_limits") == raw_limits:
+            previous_suppressed = split_csv(",".join(previous.get("suppressed_models") or []))
+        desired_models = list(dict.fromkeys([*current_models, *previous_suppressed]))
+        next_models = [model for model in desired_models if model in routable]
+        suppressed_models = [model for model in desired_models if model not in routable]
+        if not next_models:
+            tokens_without_routes += 1
+            continue
+
+        next_limits = ",".join(next_models)
+        suppressed_count += len(suppressed_models)
+        restored_count += sum(1 for model in previous_suppressed if model in next_models)
+        plans.append(
+            {
+                "token_id": token_id,
+                "api_key": api_key,
+                "raw_limits": raw_limits,
+                "next_limits": next_limits,
+                "suppressed_models": suppressed_models,
+            }
+        )
+
+    updates = [plan for plan in plans if plan["raw_limits"] != plan["next_limits"]]
+    cache_entries_deleted = 0
+    cache_error = ""
+    if not dry_run:
+        if updates:
+            statements = ["START TRANSACTION;"]
+            for plan in updates:
+                statements.append(
+                    "UPDATE tokens SET model_limits = "
+                    + shell_quote(plan["next_limits"])
+                    + " WHERE id = "
+                    + str(plan["token_id"])
+                    + " AND deleted_at IS NULL AND status = 1 AND model_limits_enabled = 1 "
+                    + "AND BINARY COALESCE(model_limits, '') = BINARY "
+                    + shell_quote(plan["raw_limits"])
+                    + ";"
+                )
+                pending_cache_ids.add(plan["token_id"])
+            statements.append("COMMIT;")
+            execute_sql(env, "\n".join(statements), False)
+
+        for plan in plans:
+            token_id = plan["token_id"]
+            if plan["suppressed_models"]:
+                token_state[str(token_id)] = {
+                    "last_applied_limits": plan["next_limits"],
+                    "suppressed_models": plan["suppressed_models"],
+                }
+            else:
+                token_state.pop(str(token_id), None)
+        for token_id in list(token_state):
+            if str(token_id).isdigit() and int(token_id) not in active_token_ids:
+                token_state.pop(token_id, None)
+        pending_cache_ids.intersection_update(active_token_ids)
+
+        pending_plans = [plan for plan in plans if plan["token_id"] in pending_cache_ids]
+        pending_keys = [str(plan["api_key"]) for plan in pending_plans]
+        if len(pending_plans) != len(pending_cache_ids):
+            cache_error = "managed Codex token cache retry is missing an active route plan"
+        elif pending_keys:
+            try:
+                cache_entries_deleted = delete_token_caches(pending_keys, env)
+                pending_cache_ids.difference_update(plan["token_id"] for plan in pending_plans)
+            except Exception as exc:
+                cache_error = redact_text(str(exc))[:300]
+        state["managed_token_cache_pending"] = sorted(pending_cache_ids)
+
+    ok = tokens_without_routes == 0 and (dry_run or not cache_error)
+    event = {
+        "ts": now_iso(),
+        "event": "managed_codex_token_routes",
+        "ok": ok,
+        "dry_run": dry_run,
+        "tokens_checked": len(tokens),
+        "tokens_updated": len(updates),
+        "models_suppressed": suppressed_count,
+        "models_restored": restored_count,
+        "tokens_without_routes": tokens_without_routes,
+        "cache_entries_deleted": cache_entries_deleted,
+        "cache_pending": len(pending_cache_ids),
+    }
+    if cache_error:
+        event["cache_error"] = cache_error
+    write_event(event)
+    return event
 
 
 def parse_int_list(value: str) -> list[int]:
@@ -1805,8 +2007,11 @@ def summarize_monitor_results(results: dict[str, Any]) -> dict[str, Any]:
 
 
 def monitor_results_ok(results: dict[str, Any]) -> bool:
-    gateway_canary = results.get("gateway_responses_canary")
-    return not isinstance(gateway_canary, dict) or gateway_canary.get("ok") is True
+    for required_result in ("gateway_responses_canary", "managed_codex_token_routes"):
+        result = results.get(required_result)
+        if isinstance(result, dict) and result.get("ok") is not True:
+            return False
+    return True
 
 
 def evaluate_gateway_responses_canary(env: dict[str, str]) -> dict[str, Any]:
@@ -2198,6 +2403,11 @@ def main() -> int:
                     args.dry_run,
                     args.adopt_managed_disabled,
                 )
+            results["managed_codex_token_routes"] = reconcile_managed_codex_token_routes(
+                env,
+                state,
+                args.dry_run,
+            )
             save_state(state)
             ok = monitor_results_ok(results)
             print(

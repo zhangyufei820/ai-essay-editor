@@ -170,6 +170,10 @@ class ReleaseNewApiTest(unittest.TestCase):
         self.assertIn("release provider monitor bootstrap pending", release_guard)
         self.assertIn("legacy_provider_monitor_runner_sha256", release_guard)
 
+        release_core = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn("test_provider_monitor.py", release_core)
+        self.assertIn("candidate is missing provider monitor tests", release_core)
+
     def test_active_release_reconciles_governance_before_returning(self) -> None:
         release = object.__new__(MODULE.Release)
         release.app_dir = Path("/tmp/test-new-api")
