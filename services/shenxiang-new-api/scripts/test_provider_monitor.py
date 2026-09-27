@@ -668,6 +668,227 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertIn("--default-character-set=utf8mb4", command)
         self.assertLess(command.index("--default-character-set=utf8mb4"), command.index("-uroot"))
 
+    def test_managed_codex_tokens_prune_unroutable_models_and_invalidate_cache(self) -> None:
+        state = {}
+        token = {
+            "token_id": 12,
+            "api_key": "test-token-secret",
+            "group_name": "default",
+            "model_limits": "gpt-5.5,gpt-5.6",
+        }
+        captured_sql: list[str] = []
+        with (
+            mock.patch.object(
+                self.module,
+                "load_routable_models_by_group",
+                return_value={"default": {"gpt-5.5"}},
+            ),
+            mock.patch.object(self.module, "load_managed_codex_tokens", return_value=[token]),
+            mock.patch.object(
+                self.module,
+                "execute_sql",
+                side_effect=lambda _env, sql, _dry: captured_sql.append(sql),
+            ),
+            mock.patch.object(self.module, "delete_token_caches", return_value=1) as delete_cache,
+            mock.patch.object(self.module, "write_event"),
+        ):
+            result = self.module.reconcile_managed_codex_token_routes({}, state, False)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["tokens_updated"], 1)
+        self.assertEqual(result["models_suppressed"], 1)
+        self.assertIn("SET model_limits = 'gpt-5.5'", captured_sql[0])
+        self.assertIn("BINARY 'gpt-5.5,gpt-5.6'", captured_sql[0])
+        delete_cache.assert_called_once_with(["test-token-secret"], {})
+        self.assertEqual(
+            state["managed_token_routes"]["12"],
+            {"last_applied_limits": "gpt-5.5", "suppressed_models": ["gpt-5.6"]},
+        )
+        self.assertEqual(state["managed_token_cache_pending"], [])
+
+    def test_managed_codex_tokens_restore_only_monitor_suppressed_models(self) -> None:
+        state = {
+            "managed_token_routes": {
+                "12": {
+                    "last_applied_limits": "gpt-5.5",
+                    "suppressed_models": ["gpt-5.6"],
+                }
+            },
+            "managed_token_cache_pending": [],
+        }
+        token = {
+            "token_id": 12,
+            "api_key": "test-token-secret",
+            "group_name": "default",
+            "model_limits": "gpt-5.5",
+        }
+        captured_sql: list[str] = []
+        with (
+            mock.patch.object(
+                self.module,
+                "load_routable_models_by_group",
+                return_value={"default": {"gpt-5.5", "gpt-5.6"}},
+            ),
+            mock.patch.object(self.module, "load_managed_codex_tokens", return_value=[token]),
+            mock.patch.object(
+                self.module,
+                "execute_sql",
+                side_effect=lambda _env, sql, _dry: captured_sql.append(sql),
+            ),
+            mock.patch.object(self.module, "delete_token_caches", return_value=1),
+            mock.patch.object(self.module, "write_event"),
+        ):
+            result = self.module.reconcile_managed_codex_token_routes({}, state, False)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["models_restored"], 1)
+        self.assertIn("SET model_limits = 'gpt-5.5,gpt-5.6'", captured_sql[0])
+        self.assertNotIn("12", state["managed_token_routes"])
+
+    def test_external_token_change_discards_stale_suppression_state(self) -> None:
+        state = {
+            "managed_token_routes": {
+                "12": {
+                    "last_applied_limits": "gpt-5.5",
+                    "suppressed_models": ["gpt-5.6"],
+                }
+            }
+        }
+        token = {
+            "token_id": 12,
+            "api_key": "test-token-secret",
+            "group_name": "default",
+            "model_limits": "gpt-5.5,gpt-5.4",
+        }
+        with (
+            mock.patch.object(
+                self.module,
+                "load_routable_models_by_group",
+                return_value={"default": {"gpt-5.5", "gpt-5.4", "gpt-5.6"}},
+            ),
+            mock.patch.object(self.module, "load_managed_codex_tokens", return_value=[token]),
+            mock.patch.object(self.module, "execute_sql") as execute_sql,
+            mock.patch.object(self.module, "delete_token_caches") as delete_cache,
+            mock.patch.object(self.module, "write_event"),
+        ):
+            result = self.module.reconcile_managed_codex_token_routes({}, state, False)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["models_restored"], 0)
+        execute_sql.assert_not_called()
+        delete_cache.assert_not_called()
+        self.assertNotIn("12", state["managed_token_routes"])
+
+    def test_cache_failure_is_persisted_and_retried_without_another_db_update(self) -> None:
+        state = {}
+        first_token = {
+            "token_id": 12,
+            "api_key": "test-token-secret",
+            "group_name": "default",
+            "model_limits": "gpt-5.5,gpt-5.6",
+        }
+        second_token = {**first_token, "model_limits": "gpt-5.5"}
+        with (
+            mock.patch.object(
+                self.module,
+                "load_routable_models_by_group",
+                return_value={"default": {"gpt-5.5"}},
+            ),
+            mock.patch.object(self.module, "load_managed_codex_tokens", return_value=[first_token]),
+            mock.patch.object(self.module, "execute_sql"),
+            mock.patch.object(
+                self.module,
+                "delete_token_caches",
+                side_effect=RuntimeError("redis unavailable"),
+            ),
+            mock.patch.object(self.module, "write_event"),
+        ):
+            first = self.module.reconcile_managed_codex_token_routes({}, state, False)
+
+        self.assertFalse(first["ok"])
+        self.assertEqual(state["managed_token_cache_pending"], [12])
+
+        with (
+            mock.patch.object(
+                self.module,
+                "load_routable_models_by_group",
+                return_value={"default": {"gpt-5.5"}},
+            ),
+            mock.patch.object(self.module, "load_managed_codex_tokens", return_value=[second_token]),
+            mock.patch.object(self.module, "execute_sql") as execute_sql,
+            mock.patch.object(self.module, "delete_token_caches", return_value=1) as delete_cache,
+            mock.patch.object(self.module, "write_event"),
+        ):
+            second = self.module.reconcile_managed_codex_token_routes({}, state, False)
+
+        self.assertTrue(second["ok"])
+        execute_sql.assert_not_called()
+        delete_cache.assert_called_once_with(["test-token-secret"], {})
+        self.assertEqual(state["managed_token_cache_pending"], [])
+
+    def test_token_route_reconciliation_dry_run_never_mutates_database_or_cache(self) -> None:
+        state = {}
+        token = {
+            "token_id": 12,
+            "api_key": "test-token-secret",
+            "group_name": "default",
+            "model_limits": "gpt-5.5,gpt-5.6",
+        }
+        with (
+            mock.patch.object(
+                self.module,
+                "load_routable_models_by_group",
+                return_value={"default": {"gpt-5.5"}},
+            ),
+            mock.patch.object(self.module, "load_managed_codex_tokens", return_value=[token]),
+            mock.patch.object(self.module, "execute_sql") as execute_sql,
+            mock.patch.object(self.module, "delete_token_caches") as delete_cache,
+            mock.patch.object(self.module, "write_event"),
+        ):
+            result = self.module.reconcile_managed_codex_token_routes({}, state, True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["tokens_updated"], 1)
+        execute_sql.assert_not_called()
+        delete_cache.assert_not_called()
+        self.assertEqual(state["managed_token_routes"], {})
+
+    def test_token_route_reconciliation_fails_closed_when_token_has_no_route(self) -> None:
+        token = {
+            "token_id": 12,
+            "api_key": "test-token-secret",
+            "group_name": "default",
+            "model_limits": "gpt-5.6",
+        }
+        with (
+            mock.patch.object(
+                self.module,
+                "load_routable_models_by_group",
+                return_value={"default": {"gpt-5.5"}},
+            ),
+            mock.patch.object(self.module, "load_managed_codex_tokens", return_value=[token]),
+            mock.patch.object(self.module, "execute_sql") as execute_sql,
+            mock.patch.object(self.module, "delete_token_caches") as delete_cache,
+            mock.patch.object(self.module, "write_event"),
+        ):
+            result = self.module.reconcile_managed_codex_token_routes({}, {}, False)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["tokens_without_routes"], 1)
+        execute_sql.assert_not_called()
+        delete_cache.assert_not_called()
+
+    def test_token_cache_invalidation_hashes_keys_and_hides_redis_password(self) -> None:
+        env = {"CRYPTO_SECRET": "test-crypto", "REDIS_PASSWORD": "test-redis"}
+        with mock.patch.object(self.module.subprocess, "run") as run:
+            deleted = self.module.delete_token_caches(["raw-token", "raw-token"], env)
+
+        self.assertEqual(deleted, 1)
+        command = run.call_args.args[0]
+        self.assertNotIn("test-redis", command)
+        self.assertIn("REDISCLI_AUTH", command)
+        self.assertNotIn(b"raw-token", run.call_args.kwargs["input"])
+
     def test_monitor_stdout_summary_does_not_embed_route_payloads(self) -> None:
         summary = self.module.summarize_monitor_results(
             {
@@ -690,6 +911,12 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         )
         self.assertFalse(
             self.module.monitor_results_ok({"gateway_responses_canary": {"ok": False}})
+        )
+        self.assertTrue(
+            self.module.monitor_results_ok({"managed_codex_token_routes": {"ok": True}})
+        )
+        self.assertFalse(
+            self.module.monitor_results_ok({"managed_codex_token_routes": {"ok": False}})
         )
 
     def test_gateway_canary_uses_admin_token_without_logging_key(self) -> None:
