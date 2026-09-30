@@ -25,7 +25,7 @@ Dify can use Chinese display aliases while sending ASCII gateway model names:
 | Dify display model | Gateway `endpoint_model_name` | Route intent |
 |---|---|---|
 | `沈翔快速对话` | `sx-fast-chat` | fastest stable text chat |
-| `沈翔语文优先` | `sx-chinese-text` | Chinese-language writing and humanities tasks, Claude-first |
+| `沈翔语文优先` | `sx-chinese-text` | Chinese-language writing and humanities tasks, VecoAI Gemini Flash |
 | `沈翔数学推理` | `sx-math-text` | math and reasoning tasks, OpenAI/Gemini-first |
 | `沈翔通用文本` | `sx-general-text` | general text tasks |
 | `沈翔图像识别` | `sx-image-vision` | multimodal image recognition / visual understanding |
@@ -70,7 +70,7 @@ The LLM gateway uses LiteLLM's background health checks and health-check-driven 
 
 This is true dynamic failover on the request path, not random load spreading. The product objective is fastest stable responses: hold the fastest healthy primary, then switch away quickly when it is unhealthy.
 
-As of 2026-09-18, all shenxiang.school GPT and Claude aliases use the designated managed New API account as the single primary with one explicit Viva fallback. `sx-image-vision` is the exception: it uses VecoAI `gpt-5.4-mini` as primary, then VecoAI `qwen-vl-max`, then VecoAI `gemini-3.8-flash`. LiteLLM changes to the next route only on an upstream failure, timeout, or circuit event; it does not switch based on OCR quality.
+As of 2026-09-30, the essay-critical aliases `sx-fast-chat` and `sx-chinese-text` use VecoAI `gemini-3.8-flash` with `gemini-3.6-flash` fallback. `sx-image-vision` uses the same primary, followed by `gemini-3.6-flash` and `gemini-3.7-flash`. This isolates grading from the recent New API timeout and Viva quota failure. Other GPT and Claude aliases retain the managed New API primary and Viva fallback. LiteLLM changes to the next route only on an upstream failure, timeout, or circuit event; it does not switch based on OCR quality.
 
 Long-running image generation stays on durable task gateways rather than the realtime LiteLLM process. Those gateways follow the same ownership rule: the designated New API image token is primary and Viva is the only fallback.
 

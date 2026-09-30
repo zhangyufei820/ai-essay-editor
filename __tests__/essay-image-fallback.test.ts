@@ -41,8 +41,8 @@ describe("essay image fallback", () => {
     LITELLM_MASTER_KEY: process.env.LITELLM_MASTER_KEY,
     ESSAY_AI_SUITE_API_TOKEN: process.env.ESSAY_AI_SUITE_API_TOKEN,
     LLM_GATEWAY_BASE_URL: process.env.LLM_GATEWAY_BASE_URL,
-    SHENXIANG_NEW_API_BASE_URL: process.env.SHENXIANG_NEW_API_BASE_URL,
-    SHENXIANG_NEW_API_TEXT_API_KEY: process.env.SHENXIANG_NEW_API_TEXT_API_KEY,
+    VECOAI_LLM_BASE_URL: process.env.VECOAI_LLM_BASE_URL,
+    VECOAI_LLM_API_KEY: process.env.VECOAI_LLM_API_KEY,
   }
 
   beforeEach(() => {
@@ -50,8 +50,8 @@ describe("essay image fallback", () => {
     process.env.ESSAY_OCR_SIGNING_SECRET = "test-essay-ocr-signing-secret"
     process.env.LITELLM_MASTER_KEY = "test-gateway-key"
     process.env.LLM_GATEWAY_BASE_URL = "http://llm-gateway:4000/v1/"
-    delete process.env.SHENXIANG_NEW_API_BASE_URL
-    delete process.env.SHENXIANG_NEW_API_TEXT_API_KEY
+    delete process.env.VECOAI_LLM_BASE_URL
+    delete process.env.VECOAI_LLM_API_KEY
   })
 
   afterAll(() => {
@@ -137,7 +137,7 @@ describe("essay image fallback", () => {
     })
   })
 
-  it("uses sx-chinese-text vision when essay-ai-suite OCR fails", async () => {
+  it("uses sx-image-vision when essay-ai-suite OCR fails", async () => {
     callEssayAiSuiteMock.mockResolvedValue({ ok: false, error: "unavailable" })
     internalDifyFetchMock.mockResolvedValue(new Response(JSON.stringify({
       choices: [{ message: { content: "  春天来了。\r\n我和同学们在花园里观察花草并认真记录。  " } }],
@@ -162,7 +162,7 @@ describe("essay image fallback", () => {
     expect(init.headers.Authorization).toBe("Bearer test-gateway-key")
     expect(init.signal).toBeInstanceOf(AbortSignal)
     const body = JSON.parse(init.body)
-    expect(body.model).toBe("sx-chinese-text")
+    expect(body.model).toBe("sx-image-vision")
     expect(body.messages[1].content[1].image_url.url).toBe("data:image/png;base64,aGVsbG8=")
   })
 
@@ -360,10 +360,10 @@ describe("essay image fallback", () => {
   })
 
   it("uses the configured direct text model before the slower suite grader", async () => {
-    process.env.SHENXIANG_NEW_API_BASE_URL = "http://new-api:3000/v1/"
-    process.env.SHENXIANG_NEW_API_TEXT_API_KEY = "test-new-api-key"
+    process.env.VECOAI_LLM_BASE_URL = "http://vecoai:3000/v1/"
+    process.env.VECOAI_LLM_API_KEY = "test-vecoai-key"
     internalDifyFetchMock.mockResolvedValue(new Response(JSON.stringify({
-      model: "gpt-6-astra",
+      model: "gemini-3.8-flash",
       choices: [{
         finish_reason: "stop",
         message: { content: validReport },
@@ -376,16 +376,16 @@ describe("essay image fallback", () => {
     })).resolves.toEqual({
       markdownReport: validReport,
       provider: "llm",
-      model: "gpt-6-astra",
-      promptVersion: "direct-essay-grading-v1",
+      model: "gemini-3.8-flash",
+      promptVersion: "direct-essay-grading-v2",
     })
     expect(internalDifyFetchMock).toHaveBeenCalledTimes(1)
     const [url, init] = internalDifyFetchMock.mock.calls[0]
-    expect(url).toBe("http://new-api:3000/v1/chat/completions")
-    expect(init.headers.Authorization).toBe("Bearer test-new-api-key")
+    expect(url).toBe("http://vecoai:3000/v1/chat/completions")
+    expect(init.headers.Authorization).toBe("Bearer test-vecoai-key")
     expect(init.signal).toBeInstanceOf(AbortSignal)
     const body = JSON.parse(init.body)
-    expect(body.model).toBe("gpt-6-astra")
+    expect(body.model).toBe("gemini-3.8-flash")
     expect(body.max_tokens).toBe(1_400)
     expect(body.messages[0].content).toContain("第一行必须严格使用")
     expect(body.messages[1].content).toContain("学段：初中")
@@ -393,8 +393,8 @@ describe("essay image fallback", () => {
   })
 
   it("returns a validated local report when the configured direct model is unavailable", async () => {
-    process.env.SHENXIANG_NEW_API_BASE_URL = "http://new-api:3000/v1"
-    process.env.SHENXIANG_NEW_API_TEXT_API_KEY = "test-new-api-key"
+    process.env.VECOAI_LLM_BASE_URL = "http://vecoai:3000/v1"
+    process.env.VECOAI_LLM_API_KEY = "test-vecoai-key"
     internalDifyFetchMock.mockResolvedValue(new Response(JSON.stringify({
       error: { message: "unavailable" },
     }), { status: 503, headers: { "Content-Type": "application/json" } }))

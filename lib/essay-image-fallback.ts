@@ -14,10 +14,10 @@ const ESSAY_AI_SUITE_OCR_TIMEOUT_MS = 10_000
 const LLM_GATEWAY_OCR_TIMEOUT_MS = 80_000
 const ESSAY_AI_SUITE_GRADE_TIMEOUT_MS = 35_000
 const DIRECT_ESSAY_GRADE_TIMEOUT_MS = 35_000
-const DIRECT_ESSAY_GRADE_MODEL = "gpt-6-astra"
-const DIRECT_ESSAY_GRADE_PROMPT_VERSION = "direct-essay-grading-v1"
+const DIRECT_ESSAY_GRADE_MODEL = "gemini-3.8-flash"
+const DIRECT_ESSAY_GRADE_PROMPT_VERSION = "direct-essay-grading-v2"
 const LOCAL_ESSAY_GRADE_PROMPT_VERSION = "local-essay-grading-v1"
-const ESSAY_OCR_MODEL = "sx-chinese-text"
+const ESSAY_OCR_MODEL = "sx-image-vision"
 const MAX_IMAGE_BASE64_LENGTH = 24 * 1024 * 1024
 const MIN_ESSAY_OCR_CONTENT_CHARS = 12
 
@@ -487,8 +487,8 @@ function buildGradeRequest(params: GradeEssayWithFallbackParams) {
 }
 
 function getDirectEssayGradeConfig() {
-  const baseUrl = process.env.SHENXIANG_NEW_API_BASE_URL?.trim().replace(/\/+$/, "") || ""
-  const apiKey = process.env.SHENXIANG_NEW_API_TEXT_API_KEY?.trim() || ""
+  const baseUrl = process.env.VECOAI_LLM_BASE_URL?.trim().replace(/\/+$/, "") || ""
+  const apiKey = process.env.VECOAI_LLM_API_KEY?.trim() || ""
   return { baseUrl, apiKey }
 }
 

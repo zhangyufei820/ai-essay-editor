@@ -72,11 +72,10 @@ function fallbackMap(config: GatewayConfig) {
 }
 
 describe("llm gateway provider routing policy", () => {
-  it("pins non-vision production aliases to one New API deployment", () => {
+  it("keeps unrelated production aliases on one New API deployment", () => {
     const config = loadConfig()
     const productionAliases = [
-      "sx-fast-chat",
-      "sx-chinese-text",
+      "sx-super-agent",
       "sx-math-text",
       "sx-general-text",
       "sx-claude-sonnet-4-6",
@@ -116,46 +115,48 @@ describe("llm gateway provider routing policy", () => {
     }
   })
 
-  it("pins sx-image-vision to the requested VecoAI primary", () => {
+  it("pins essay text and image aliases to available VecoAI models", () => {
     const config = loadConfig()
-    const deployment = modelsByName(config, "sx-image-vision")
-
-    expect(deployment).toHaveLength(1)
-    expect(deployment[0]?.litellm_params).toMatchObject({
-      model: "openai/gpt-5.4-mini",
-      api_base: "os.environ/VECOAI_LLM_BASE_URL",
-      api_key: "os.environ/VECOAI_LLM_API_KEY",
-      timeout: 20,
-    })
-    expect(deployment[0]?.model_info).toMatchObject({
-      id: "deploy-vecoai-gpt-5-4-mini",
-      mode: "chat",
-      health_check_timeout: 8,
-      health_check_max_tokens: 3,
-    })
+    for (const alias of ["sx-fast-chat", "sx-chinese-text", "sx-image-vision"]) {
+      const deployment = modelsByName(config, alias)
+      expect(deployment).toHaveLength(1)
+      expect(deployment[0]?.litellm_params).toMatchObject({
+        model: "openai/gemini-3.8-flash",
+        api_base: "os.environ/VECOAI_LLM_BASE_URL",
+        api_key: "os.environ/VECOAI_LLM_API_KEY",
+      })
+      expect(deployment[0]?.model_info).toMatchObject({
+        id: "deploy-vecoai-gemini-3-8-flash",
+        mode: "chat",
+        health_check_timeout: 8,
+        health_check_max_tokens: 3,
+      })
+    }
   })
 
   it("uses the dedicated user token family for OpenAI and Claude primaries", () => {
     const config = loadConfig()
 
-    for (const alias of ["sx-fast-chat", "sx-math-text", "sx-general-text", "gpt-5.4", "gpt-5.5"]) {
+    for (const alias of ["sx-math-text", "sx-general-text", "gpt-5.4", "gpt-5.5"]) {
       expect(modelsByName(config, alias)[0]?.litellm_params?.api_key).toBe(
         "os.environ/SHENXIANG_NEW_API_TEXT_API_KEY",
       )
     }
 
-    expect(modelsByName(config, "sx-image-vision")[0]?.litellm_params?.api_key).toBe(
-      "os.environ/VECOAI_LLM_API_KEY",
-    )
+    for (const alias of ["sx-fast-chat", "sx-chinese-text", "sx-image-vision"]) {
+      expect(modelsByName(config, alias)[0]?.litellm_params?.api_key).toBe(
+        "os.environ/VECOAI_LLM_API_KEY",
+      )
+    }
 
-    for (const alias of ["sx-chinese-text", "claude-sonnet-4-6", "claude-opus-4-7"]) {
+    for (const alias of ["claude-sonnet-4-6", "claude-opus-4-7"]) {
       expect(modelsByName(config, alias)[0]?.litellm_params?.api_key).toBe(
         "os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY",
       )
     }
   })
 
-  it("keeps the requested VecoAI vision chain and Viva fallbacks for other aliases", () => {
+  it("keeps tested VecoAI essay fallbacks and Viva fallbacks for unrelated aliases", () => {
     const config = loadConfig()
     const targets = fallbackMap(config)
     const productionModels = config.model_list.filter((item) => !item.model_name.startsWith("fallback-"))
@@ -169,6 +170,10 @@ describe("llm gateway provider routing policy", () => {
     }
 
     expect(visionFallbackModels).toHaveLength(2)
+    expect(visionFallbackModels.map((model) => model.litellm_params?.model).sort()).toEqual([
+      "openai/gemini-3.6-flash",
+      "openai/gemini-3.7-flash",
+    ])
     for (const model of visionFallbackModels) {
       expect(model.litellm_params?.api_base).toBe("os.environ/VECOAI_LLM_BASE_URL")
       expect(model.litellm_params?.api_key).toBe("os.environ/VECOAI_LLM_API_KEY")
@@ -180,9 +185,11 @@ describe("llm gateway provider routing policy", () => {
       expect(modelTargets?.length).toBeGreaterThan(0)
       if (model.model_name === "sx-image-vision") {
         expect(modelTargets).toEqual([
-          "fallback-vecoai-qwen-vl-max",
-          "fallback-vecoai-gemini-3-8-flash",
+          "fallback-vecoai-gemini-3-6-flash",
+          "fallback-vecoai-gemini-3-7-flash",
         ])
+      } else if (["sx-fast-chat", "sx-chinese-text"].includes(model.model_name)) {
+        expect(modelTargets).toEqual(["fallback-vecoai-gemini-3-6-flash"])
       } else {
         expect(modelTargets?.every((target) => target.startsWith("fallback-viva-"))).toBe(true)
       }
@@ -210,9 +217,9 @@ describe("llm gateway provider routing policy", () => {
 
   it("keeps the requested primary model mappings explicit", () => {
     const config = loadConfig()
-    expect(modelsByName(config, "sx-fast-chat")[0]?.litellm_params?.model).toBe("openai/gpt-5.5")
+    expect(modelsByName(config, "sx-fast-chat")[0]?.litellm_params?.model).toBe("openai/gemini-3.8-flash")
     expect(modelsByName(config, "sx-general-text")[0]?.litellm_params?.model).toBe("openai/gpt-5.4-mini")
-    expect(modelsByName(config, "sx-chinese-text")[0]?.litellm_params?.model).toBe("openai/claude-sonnet-4-6")
+    expect(modelsByName(config, "sx-chinese-text")[0]?.litellm_params?.model).toBe("openai/gemini-3.8-flash")
     expect(modelsByName(config, "claude-opus-4-7")[0]?.litellm_params?.model).toBe("openai/claude-opus-4-7")
   })
 

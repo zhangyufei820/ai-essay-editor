@@ -1,6 +1,6 @@
 # LLM Gateway
 
-Self-hosted OpenAI-compatible routing layer for realtime text and image-recognition calls. It keeps upstream keys server-side and exposes stable business aliases. Text aliases use the managed New API primary with Viva fallbacks; `sx-image-vision` uses its own VecoAI OCR/vision chain.
+Self-hosted OpenAI-compatible routing layer for realtime text and image-recognition calls. It keeps upstream keys server-side and exposes stable business aliases. Essay-critical text and vision aliases use VecoAI; unrelated aliases retain the managed New API primary with Viva fallbacks.
 
 - `sx-fast-chat`
 - `sx-chinese-text`
@@ -20,9 +20,9 @@ Self-hosted OpenAI-compatible routing layer for realtime text and image-recognit
 
 Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps the primary healthy with background checks, and failover happens through explicit `router_settings.fallbacks` chains:
 
-- text aliases: the managed New API account requested for shenxiang.school, then the matching Viva fallback
-- `sx-image-vision`: VecoAI `gpt-5.4-mini`, then VecoAI `qwen-vl-max`, then VecoAI `gemini-3.8-flash`
-- only this visual-recognition alias uses VecoAI directly
+- `sx-fast-chat` and `sx-chinese-text`: VecoAI `gemini-3.8-flash`, then `gemini-3.6-flash`
+- `sx-image-vision`: VecoAI `gemini-3.8-flash`, then `gemini-3.6-flash`, then `gemini-3.7-flash`
+- other text aliases: managed New API, then the matching Viva fallback
 - provider retry count is `0`: a failed primary immediately moves to the fallback chain instead of spending another request on the same unhealthy route
 
 Deployment `model_info.id` values are shared across equivalent text aliases where the same provider/model pair is reused. This makes cooldown and circuit state follow the real upstream deployment instead of one alias only.
