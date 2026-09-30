@@ -40,3 +40,11 @@
 2. 回退到上一个已验证版本。
 3. 不要覆盖 `.env.production`，不要删除数据库或持久化数据。
 4. 回滚后重新检查 `/api/health`、`/health`、`/`、`/pricing`、`/admin`。
+
+## 6. 作文批改失败或回复不完整
+
+1. 先确认 `/api/health` 的版本号和 `shenxiang-nextjs`、`shenxiang-llm-gateway`、Dify API/worker 的健康状态；站点健康不代表模型可用。
+2. 按报错时间核对 Next.js、Dify worker、LLM 网关日志，区分上传/OCR 失败、模型超时、上游 403 额度不足、报告格式不完整。不要输出密钥或用户作文正文。
+3. 查看网关容器 `/app/config.yaml` 的实际挂载源，确认与仓库 `services/llm-gateway/config.yaml` 一致；`sx-fast-chat`、`sx-chinese-text`、`sx-image-vision` 必须能完成真实请求。仅有模型清单或健康检查通过不算验收。
+4. 修复发布后，在本机运行 `RUN_PRODUCTION_E2E=1 npx playwright test tests/e2e/production-essay-grading.spec.ts --project=chromium`。测试账号密码仅从 `SHENXIANG_E2E_TEST_PASSWORD` 或本机 secret 文件读取；用例会真实上传合成作文图片并消耗少量测试积分。
+5. 若浏览器用例失败，先看失败步骤和页面快照；若模型请求失败，再检查供应商当前模型列表、额度和网关 fallback。不要因 `/api/health` 为绿色就结束排查。
