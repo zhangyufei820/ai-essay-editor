@@ -369,14 +369,6 @@ model_list:
       timeout: 20
     model_info: { id: fallback-vecoai-gemini-3-6-flash, mode: chat, disable_background_health_check: true }
 
-  - model_name: fallback-vecoai-gemini-3-7-flash
-    litellm_params:
-      model: openai/gemini-3.7-flash
-      api_base: os.environ/VECOAI_LLM_BASE_URL
-      api_key: os.environ/VECOAI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-vecoai-gemini-3-7-flash, mode: chat, disable_background_health_check: true }
-
   - model_name: fallback-vecoai-gemini-3-pro-image-preview
     litellm_params:
       model: openai/gemini-3-pro-image-preview
@@ -414,7 +406,7 @@ router_settings:
     - sx-chinese-text: ["fallback-vecoai-gemini-3-6-flash"]
     - sx-math-text: ["fallback-vecoai-gemini-3-8-flash"]
     - sx-general-text: ["fallback-vecoai-gemini-3-6-flash"]
-    - sx-image-vision: ["fallback-new-api-gpt-5-6-sol-vision", "fallback-vecoai-gemini-3-6-flash", "fallback-vecoai-gemini-3-7-flash"]
+    - sx-image-vision: ["fallback-new-api-gpt-5-6-sol-vision"]
     - sx-claude-sonnet-4-6: ["fallback-vecoai-gemini-3-8-flash"]
     - sx-claude-opus-4-6-thinking: ["fallback-vecoai-gemini-3-8-flash"]
     - sx-gemini-3.1-pro: ["fallback-vecoai-gemini-3-8-flash"]

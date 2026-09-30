@@ -22,7 +22,7 @@ Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps t
 
 - `sx-fast-chat`: New API `gpt-5.6-sol`, then VecoAI `gemini-3.6-flash`
 - `sx-chinese-text`: New API `claude-sonnet-4-6`, then VecoAI `gemini-3.6-flash`
-- `sx-image-vision`: VecoAI `gemini-3.8-flash`, then New API `gpt-5.6-sol`, then VecoAI `gemini-3.6-flash` / `gemini-3.7-flash`
+- `sx-image-vision`: VecoAI `gemini-3.8-flash`, then New API `gpt-5.6-sol` as the sole fallback
 - other text aliases: managed New API, then a VecoAI Gemini fallback (the alias remains stable, but the underlying model family changes on failover)
 - provider retry count is `0`: a failed primary immediately moves to the fallback chain instead of spending another request on the same unhealthy route
 

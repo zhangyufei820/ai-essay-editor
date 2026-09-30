@@ -166,7 +166,6 @@ describe("llm gateway provider routing policy", () => {
 
     expect(vecoFallbackModels.map((model) => model.litellm_params?.model).sort()).toEqual([
       "openai/gemini-3.6-flash",
-      "openai/gemini-3.7-flash",
       "openai/gemini-3.8-flash",
       "openai/gemini-3-pro-image-preview",
     ].sort())
@@ -189,11 +188,7 @@ describe("llm gateway provider routing policy", () => {
       const modelTargets = targets.get(model.model_name)
       expect(modelTargets?.length).toBeGreaterThan(0)
       if (model.model_name === "sx-image-vision") {
-        expect(modelTargets).toEqual([
-          "fallback-new-api-gpt-5-6-sol-vision",
-          "fallback-vecoai-gemini-3-6-flash",
-          "fallback-vecoai-gemini-3-7-flash",
-        ])
+        expect(modelTargets).toEqual(["fallback-new-api-gpt-5-6-sol-vision"])
       } else if (["sx-fast-chat", "sx-chinese-text"].includes(model.model_name)) {
         expect(modelTargets).toEqual(["fallback-vecoai-gemini-3-6-flash"])
       } else {
