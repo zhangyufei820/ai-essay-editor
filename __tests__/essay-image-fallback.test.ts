@@ -386,7 +386,7 @@ describe("essay image fallback", () => {
     expect(init.signal).toBeInstanceOf(AbortSignal)
     const body = JSON.parse(init.body)
     expect(body.model).toBe("gemini-3.8-flash")
-    expect(body.max_tokens).toBe(1_400)
+    expect(body.max_tokens).toBe(3_000)
     expect(body.messages[0].content).toContain("第一行必须严格使用")
     expect(body.messages[1].content).toContain("学段：初中")
     expect(callEssayAiSuiteMock).not.toHaveBeenCalled()
@@ -421,6 +421,25 @@ describe("essay image fallback", () => {
     expect(isValidEssayCorrectionResult(result.markdownReport)).toBe(true)
     expect(internalDifyFetchMock).toHaveBeenCalledTimes(1)
     expect(callEssayAiSuiteMock).not.toHaveBeenCalled()
+  })
+
+  it("does not present a token-truncated direct report as complete", async () => {
+    process.env.VECOAI_LLM_BASE_URL = "http://vecoai:3000/v1"
+    process.env.VECOAI_LLM_API_KEY = "test-vecoai-key"
+    internalDifyFetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ finish_reason: "length", message: { content: validReport } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }))
+
+    const result = await gradeEssayWithFallback({
+      text: "春天来了，我和同学一起去公园观察花草，记录了许多有趣的细节。",
+    })
+
+    expect(result).toMatchObject({
+      provider: "local",
+      model: null,
+      promptVersion: "local-essay-grading-v1",
+    })
+    expect(isValidEssayCorrectionResult(result.markdownReport)).toBe(true)
   })
 
   it("rejects unusable OCR text before calling the grading service", async () => {

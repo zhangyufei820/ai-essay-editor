@@ -583,7 +583,7 @@ async function callDirectEssayGrade(
       },
       body: JSON.stringify({
         model: DIRECT_ESSAY_GRADE_MODEL,
-        max_tokens: 1_400,
+        max_tokens: 3_000,
         messages: [
           {
             role: "system",
