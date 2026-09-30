@@ -1,6 +1,7 @@
 model_list:
-  # Essay-critical aliases use the tested VecoAI route; unrelated aliases keep
-  # their existing New API/Viva routing. Credentials are injected at runtime.
+  # Essay-critical aliases use VecoAI. Other aliases retain New API primaries
+  # with VecoAI fallbacks; vision can fail over to a tested New API GPT model.
+  # Credentials are injected at runtime.
   - model_name: sx-fast-chat
     litellm_params:
       model: openai/gemini-3.8-flash
@@ -349,128 +350,15 @@ model_list:
       mode: chat
       disable_background_health_check: true
 
-  # Viva is the sole direct supplier retained as fallback.
-  - model_name: fallback-viva-gpt-4o-mini
+  # VecoAI fallback groups use models present in its live catalog.
+  - model_name: fallback-vecoai-gemini-3-8-flash
     litellm_params:
-      model: openai/gpt-4o-mini
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-gpt-4o-mini, mode: chat, disable_background_health_check: true }
+      model: openai/gemini-3.8-flash
+      api_base: os.environ/VECOAI_LLM_BASE_URL
+      api_key: os.environ/VECOAI_LLM_API_KEY
+      timeout: 22
+    model_info: { id: fallback-vecoai-gemini-3-8-flash, mode: chat, disable_background_health_check: true }
 
-  - model_name: fallback-viva-gpt-5.2
-    litellm_params:
-      model: openai/gpt-5.2
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-gpt-5-2, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-gpt-5.4
-    litellm_params:
-      model: openai/gpt-5.4
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-gpt-5-4, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-gpt-5.4-mini
-    litellm_params:
-      model: openai/gpt-5.4-mini
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-gpt-5-4-mini, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-gpt-5.4-pro
-    litellm_params:
-      model: openai/gpt-5.4-pro
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 30
-    model_info: { id: fallback-viva-gpt-5-4-pro, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-gpt-5.5
-    litellm_params:
-      model: openai/gpt-5.5
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-gpt-5-5, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-claude-sonnet-4-6
-    litellm_params:
-      model: openai/claude-sonnet-4-6
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 30
-    model_info: { id: fallback-viva-claude-sonnet-4-6, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-claude-sonnet-4-6-thinking
-    litellm_params:
-      model: openai/claude-sonnet-4-6-thinking
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 40
-    model_info: { id: fallback-viva-claude-sonnet-4-6-thinking, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-claude-opus-4-6-thinking
-    litellm_params:
-      model: openai/claude-opus-4-6-thinking
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 40
-    model_info: { id: fallback-viva-claude-opus-4-6-thinking, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-claude-opus-4-7
-    litellm_params:
-      model: openai/claude-opus-4-7
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 40
-    model_info: { id: fallback-viva-claude-opus-4-7, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-gemini-2.5-flash
-    litellm_params:
-      model: openai/gemini-2.5-flash
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-gemini-2-5-flash, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-gemini-2.5-pro
-    litellm_params:
-      model: openai/gemini-2.5-pro
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-gemini-2-5-pro, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-gemini-3.1-pro-preview
-    litellm_params:
-      model: openai/gemini-3.1-pro-preview
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-gemini-3-1-pro-preview, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-gemini-3-pro-image-preview
-    litellm_params:
-      model: openai/gemini-3-pro-image-preview
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-gemini-3-pro-image-preview, mode: chat, disable_background_health_check: true }
-
-  - model_name: fallback-viva-grok-4.2
-    litellm_params:
-      model: openai/grok-4.2
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-    model_info: { id: fallback-viva-grok-4-2, mode: chat, disable_background_health_check: true }
-
-  # Use models present in VecoAI's live model catalog and verified for vision.
   - model_name: fallback-vecoai-gemini-3-6-flash
     litellm_params:
       model: openai/gemini-3.6-flash
@@ -487,6 +375,24 @@ model_list:
       timeout: 20
     model_info: { id: fallback-vecoai-gemini-3-7-flash, mode: chat, disable_background_health_check: true }
 
+  - model_name: fallback-vecoai-gemini-3-pro-image-preview
+    litellm_params:
+      model: openai/gemini-3-pro-image-preview
+      api_base: os.environ/VECOAI_LLM_BASE_URL
+      api_key: os.environ/VECOAI_LLM_API_KEY
+      timeout: 45
+    model_info: { id: fallback-vecoai-gemini-3-pro-image-preview, mode: chat, disable_background_health_check: true }
+
+  # Cross-provider vision fallback verified with an image and output budget.
+  - model_name: fallback-new-api-gpt-5-6-sol-vision
+    litellm_params:
+      model: openai/gpt-5.6-sol
+      api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
+      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
+      extra_headers: *managed_new_api_headers
+      timeout: 30
+    model_info: { id: fallback-new-api-gpt-5-6-sol-vision, mode: chat, disable_background_health_check: true }
+
 guardrails:
   - guardrail_name: sx-global-sensitive-content
     litellm_params:
@@ -502,33 +408,33 @@ guardrails:
 router_settings:
   fallbacks:
     - sx-fast-chat: ["fallback-vecoai-gemini-3-6-flash"]
-    - sx-super-agent: ["fallback-viva-gpt-5.5"]
+    - sx-super-agent: ["fallback-vecoai-gemini-3-8-flash"]
     - sx-chinese-text: ["fallback-vecoai-gemini-3-6-flash"]
-    - sx-math-text: ["fallback-viva-gpt-5.5"]
-    - sx-general-text: ["fallback-viva-gpt-5.4-mini"]
-    - sx-image-vision: ["fallback-vecoai-gemini-3-6-flash", "fallback-vecoai-gemini-3-7-flash"]
-    - sx-claude-sonnet-4-6: ["fallback-viva-claude-sonnet-4-6"]
-    - sx-claude-opus-4-6-thinking: ["fallback-viva-claude-opus-4-6-thinking"]
-    - sx-gemini-3.1-pro: ["fallback-viva-gemini-3.1-pro-preview"]
-    - gpt-4o-mini: ["fallback-viva-gpt-4o-mini"]
-    - gpt-5.2: ["fallback-viva-gpt-5.2"]
-    - gpt-5.3: ["fallback-viva-gpt-5.5"]
-    - gpt-5.3-spark: ["fallback-viva-gpt-5.5"]
-    - gpt-5.4: ["fallback-viva-gpt-5.4"]
-    - gpt-5.4-mini: ["fallback-viva-gpt-5.4-mini"]
-    - gpt-5.4-pro: ["fallback-viva-gpt-5.4-pro"]
-    - gpt-5.5: ["fallback-viva-gpt-5.5"]
-    - claude-opus-4-7: ["fallback-viva-claude-opus-4-7"]
-    - claude-sonnet-4-6: ["fallback-viva-claude-sonnet-4-6"]
-    - claude-3-7-sonnet-20250219: ["fallback-viva-claude-sonnet-4-6"]
-    - claude-sonnet-4-6-thinking: ["fallback-viva-claude-sonnet-4-6-thinking"]
-    - claude-opus-4-6-thinking: ["fallback-viva-claude-opus-4-6-thinking"]
-    - gemini-3.1-flash-lite-preview: ["fallback-viva-gemini-2.5-flash"]
-    - gemini-3-pro-image-preview: ["fallback-viva-gemini-3-pro-image-preview"]
-    - gemini-3.1-pro-preview: ["fallback-viva-gemini-3.1-pro-preview"]
-    - gemini-2.5-flash: ["fallback-viva-gemini-2.5-flash"]
-    - gemini-2.5-pro: ["fallback-viva-gemini-2.5-pro"]
-    - grok-4.2: ["fallback-viva-grok-4.2"]
+    - sx-math-text: ["fallback-vecoai-gemini-3-8-flash"]
+    - sx-general-text: ["fallback-vecoai-gemini-3-6-flash"]
+    - sx-image-vision: ["fallback-new-api-gpt-5-6-sol-vision", "fallback-vecoai-gemini-3-6-flash", "fallback-vecoai-gemini-3-7-flash"]
+    - sx-claude-sonnet-4-6: ["fallback-vecoai-gemini-3-8-flash"]
+    - sx-claude-opus-4-6-thinking: ["fallback-vecoai-gemini-3-8-flash"]
+    - sx-gemini-3.1-pro: ["fallback-vecoai-gemini-3-8-flash"]
+    - gpt-4o-mini: ["fallback-vecoai-gemini-3-6-flash"]
+    - gpt-5.2: ["fallback-vecoai-gemini-3-8-flash"]
+    - gpt-5.3: ["fallback-vecoai-gemini-3-8-flash"]
+    - gpt-5.3-spark: ["fallback-vecoai-gemini-3-6-flash"]
+    - gpt-5.4: ["fallback-vecoai-gemini-3-8-flash"]
+    - gpt-5.4-mini: ["fallback-vecoai-gemini-3-6-flash"]
+    - gpt-5.4-pro: ["fallback-vecoai-gemini-3-8-flash"]
+    - gpt-5.5: ["fallback-vecoai-gemini-3-8-flash"]
+    - claude-opus-4-7: ["fallback-vecoai-gemini-3-8-flash"]
+    - claude-sonnet-4-6: ["fallback-vecoai-gemini-3-8-flash"]
+    - claude-3-7-sonnet-20250219: ["fallback-vecoai-gemini-3-8-flash"]
+    - claude-sonnet-4-6-thinking: ["fallback-vecoai-gemini-3-8-flash"]
+    - claude-opus-4-6-thinking: ["fallback-vecoai-gemini-3-8-flash"]
+    - gemini-3.1-flash-lite-preview: ["fallback-vecoai-gemini-3-6-flash"]
+    - gemini-3-pro-image-preview: ["fallback-vecoai-gemini-3-pro-image-preview"]
+    - gemini-3.1-pro-preview: ["fallback-vecoai-gemini-3-8-flash"]
+    - gemini-2.5-flash: ["fallback-vecoai-gemini-3-6-flash"]
+    - gemini-2.5-pro: ["fallback-vecoai-gemini-3-8-flash"]
+    - grok-4.2: ["fallback-vecoai-gemini-3-8-flash"]
   routing_strategy: latency-based-routing
   routing_strategy_args:
     ttl: 30

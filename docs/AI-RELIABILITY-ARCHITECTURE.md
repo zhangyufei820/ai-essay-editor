@@ -70,7 +70,7 @@ The LLM gateway uses LiteLLM's background health checks and health-check-driven 
 
 This is true dynamic failover on the request path, not random load spreading. The product objective is fastest stable responses: hold the fastest healthy primary, then switch away quickly when it is unhealthy.
 
-As of 2026-09-30, the essay-critical aliases `sx-fast-chat` and `sx-chinese-text` use VecoAI `gemini-3.8-flash` with `gemini-3.6-flash` fallback. `sx-image-vision` uses the same primary, followed by `gemini-3.6-flash` and `gemini-3.7-flash`. This isolates grading from the recent New API timeout and Viva quota failure. Other GPT and Claude aliases retain the managed New API primary and Viva fallback. LiteLLM changes to the next route only on an upstream failure, timeout, or circuit event; it does not switch based on OCR quality.
+As of 2026-09-30, the essay-critical aliases `sx-fast-chat` and `sx-chinese-text` use VecoAI `gemini-3.8-flash` with `gemini-3.6-flash` fallback. `sx-image-vision` uses the same primary, followed by New API `gpt-5.6-sol`, then VecoAI `gemini-3.6-flash` and `gemini-3.7-flash`. Other GPT and Claude aliases retain the managed New API primary with VecoAI Gemini fallback; the stable alias may resolve to a different model family during failover. The LLM gateway no longer uses Viva. LiteLLM changes to the next route only on an upstream failure, timeout, or circuit event; it does not switch based on OCR quality.
 
 Long-running image generation stays on durable task gateways rather than the realtime LiteLLM process. Those gateways follow the same ownership rule: the designated New API image token is primary and Viva is the only fallback.
 

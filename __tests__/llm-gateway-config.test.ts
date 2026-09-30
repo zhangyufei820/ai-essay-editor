@@ -156,51 +156,55 @@ describe("llm gateway provider routing policy", () => {
     }
   })
 
-  it("keeps tested VecoAI essay fallbacks and Viva fallbacks for unrelated aliases", () => {
+  it("uses VecoAI fallbacks instead of Viva and prioritizes New API for vision failover", () => {
     const config = loadConfig()
     const targets = fallbackMap(config)
     const productionModels = config.model_list.filter((item) => !item.model_name.startsWith("fallback-"))
-    const fallbackModels = config.model_list.filter((item) => item.model_name.startsWith("fallback-viva-"))
-    const visionFallbackModels = config.model_list.filter((item) => item.model_name.startsWith("fallback-vecoai-"))
+    const vecoFallbackModels = config.model_list.filter((item) => item.model_name.startsWith("fallback-vecoai-"))
+    const newApiVisionFallback = modelsByName(config, "fallback-new-api-gpt-5-6-sol-vision")
 
-    expect(fallbackModels.length).toBeGreaterThanOrEqual(10)
-    for (const model of fallbackModels) {
-      expect(model.litellm_params?.api_base).toBe("os.environ/VIVAAPI_LLM_BASE_URL")
-      expect(model.litellm_params?.api_key).toBe("os.environ/VIVAAPI_LLM_API_KEY")
-    }
-
-    expect(visionFallbackModels).toHaveLength(2)
-    expect(visionFallbackModels.map((model) => model.litellm_params?.model).sort()).toEqual([
+    expect(vecoFallbackModels.map((model) => model.litellm_params?.model).sort()).toEqual([
       "openai/gemini-3.6-flash",
       "openai/gemini-3.7-flash",
-    ])
-    for (const model of visionFallbackModels) {
+      "openai/gemini-3.8-flash",
+      "openai/gemini-3-pro-image-preview",
+    ].sort())
+    for (const model of vecoFallbackModels) {
       expect(model.litellm_params?.api_base).toBe("os.environ/VECOAI_LLM_BASE_URL")
       expect(model.litellm_params?.api_key).toBe("os.environ/VECOAI_LLM_API_KEY")
       expect(model.model_info?.disable_background_health_check).toBe(true)
     }
+    expect(newApiVisionFallback).toHaveLength(1)
+    expect(newApiVisionFallback[0]?.litellm_params).toMatchObject({
+      model: "openai/gpt-5.6-sol",
+      api_base: "os.environ/SHENXIANG_NEW_API_BASE_URL",
+      api_key: "os.environ/SHENXIANG_NEW_API_TEXT_API_KEY",
+      timeout: 30,
+    })
+    expect(newApiVisionFallback[0]?.litellm_params?.extra_headers?.["User-Agent"])
+      .toBe("shenxiang-llm-gateway/1.0")
 
     for (const model of productionModels) {
       const modelTargets = targets.get(model.model_name)
       expect(modelTargets?.length).toBeGreaterThan(0)
       if (model.model_name === "sx-image-vision") {
         expect(modelTargets).toEqual([
+          "fallback-new-api-gpt-5-6-sol-vision",
           "fallback-vecoai-gemini-3-6-flash",
           "fallback-vecoai-gemini-3-7-flash",
         ])
       } else if (["sx-fast-chat", "sx-chinese-text"].includes(model.model_name)) {
         expect(modelTargets).toEqual(["fallback-vecoai-gemini-3-6-flash"])
       } else {
-        expect(modelTargets?.every((target) => target.startsWith("fallback-viva-"))).toBe(true)
+        expect(modelTargets?.every((target) => target.startsWith("fallback-vecoai-"))).toBe(true)
       }
     }
 
     const serialized = fs.readFileSync(configPath, "utf8")
-    expect(serialized).not.toMatch(/TOKENFLUX|MOONAPIX/i)
+    expect(serialized).not.toMatch(/TOKENFLUX|MOONAPIX|VIVAAPI|fallback-viva-/i)
     expect(new Set(config.model_list.map((item) => item.litellm_params?.api_base))).toEqual(
       new Set([
         "os.environ/SHENXIANG_NEW_API_BASE_URL",
-        "os.environ/VIVAAPI_LLM_BASE_URL",
         "os.environ/VECOAI_LLM_BASE_URL",
       ]),
     )
@@ -306,13 +310,13 @@ describe("llm gateway provider routing policy", () => {
     expect(dockerfile).toContain("fetch('http://127.0.0.1:3000')")
   })
 
-  it("documents only the active New API primary and Viva fallback credentials", () => {
+  it("documents the active gateway New API and VecoAI credentials", () => {
     const example = fs.readFileSync(path.join(process.cwd(), ".env.example"), "utf8")
     expect(example).toContain("SHENXIANG_NEW_API_BASE_URL=")
     expect(example).toContain("SHENXIANG_NEW_API_TEXT_API_KEY=")
     expect(example).toContain("SHENXIANG_NEW_API_CLAUDE_API_KEY=")
     expect(example).toContain("SHENXIANG_NEW_API_IMAGE_API_KEY=")
-    expect(example).toContain("VIVAAPI_LLM_API_KEY=")
+    expect(example).toContain("VECOAI_LLM_API_KEY=")
     expect(example).not.toMatch(/TOKENFLUX_LLM|MOONAPIX_LLM/)
   })
 

@@ -195,7 +195,7 @@ const CASES = [
   { name: "gateway-gpt-5.4-mini", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "gpt-5.4-mini" },
   { name: "gateway-sx-general-text", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "sx-general-text" },
   { name: "gateway-sx-fast-chat", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "sx-fast-chat" },
-  { name: "gateway-fallback-viva-gpt-5.4-mini", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "fallback-viva-gpt-5.4-mini" },
+  { name: "gateway-fallback-vecoai-gemini-3-6-flash", baseUrl: gatewayBaseUrl, apiKey: gatewayKey, model: "fallback-vecoai-gemini-3-6-flash" },
   {
     name: "direct-new-api-gpt-5.4-mini",
     baseUrl: process.env.SHENXIANG_NEW_API_BASE_URL || "",
@@ -208,7 +208,7 @@ const CASES = [
     apiKey: process.env.SHENXIANG_NEW_API_TEXT_API_KEY || "",
     model: "gpt-5.5",
   },
-  { name: "direct-vivaapi-gpt-5.4-mini", baseUrl: process.env.VIVAAPI_LLM_BASE_URL || "", apiKey: process.env.VIVAAPI_LLM_API_KEY || "", model: "gpt-5.4-mini" },
+  { name: "direct-vecoai-gemini-3.6-flash", baseUrl: process.env.VECOAI_LLM_BASE_URL || "", apiKey: process.env.VECOAI_LLM_API_KEY || "", model: "gemini-3.6-flash" },
 ]
 
 const ACTIVE_CASES = ONLY_CASES.length

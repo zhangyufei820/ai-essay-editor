@@ -103,12 +103,12 @@ const CASES = [
   { name: "route-sx-fast-chat", promptKey: "route", model: "sx-fast-chat", maxTokens: 128, temperature: 0 },
   { name: "route-gpt-5.5", promptKey: "route", model: "gpt-5.5", maxTokens: 128, temperature: 0 },
   { name: "route-gemini-3.1-pro-preview", promptKey: "route", model: "gemini-3.1-pro-preview", maxTokens: 128, temperature: 0 },
-  { name: "route-fallback-viva-gpt-5.5", promptKey: "route", model: "fallback-viva-gpt-5.5", maxTokens: 128, temperature: 0 },
+  { name: "route-fallback-vecoai-gemini-3-8-flash", promptKey: "route", model: "fallback-vecoai-gemini-3-8-flash", maxTokens: 128, temperature: 0 },
   { name: "route-sx-gemini-3.1-pro", promptKey: "route", model: "sx-gemini-3.1-pro", maxTokens: 128, temperature: 0 },
   { name: "solve-sx-math-text", promptKey: "solve", model: "sx-math-text", maxTokens: 512, temperature: 0.7 },
   { name: "solve-gpt-5.5", promptKey: "solve", model: "gpt-5.5", maxTokens: 512, temperature: 0.7 },
   { name: "solve-gemini-3.1-pro-preview", promptKey: "solve", model: "gemini-3.1-pro-preview", maxTokens: 512, temperature: 0.7 },
-  { name: "solve-fallback-viva-gpt-5.5", promptKey: "solve", model: "fallback-viva-gpt-5.5", maxTokens: 512, temperature: 0.7 },
+  { name: "solve-fallback-vecoai-gemini-3-8-flash", promptKey: "solve", model: "fallback-vecoai-gemini-3-8-flash", maxTokens: 512, temperature: 0.7 },
   { name: "solve-sx-gemini-3.1-pro", promptKey: "solve", model: "sx-gemini-3.1-pro", maxTokens: 512, temperature: 0.7 },
 ]
 

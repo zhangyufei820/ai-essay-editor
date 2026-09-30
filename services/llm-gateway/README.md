@@ -1,6 +1,6 @@
 # LLM Gateway
 
-Self-hosted OpenAI-compatible routing layer for realtime text and image-recognition calls. It keeps upstream keys server-side and exposes stable business aliases. Essay-critical text and vision aliases use VecoAI; unrelated aliases retain the managed New API primary with Viva fallbacks.
+Self-hosted OpenAI-compatible routing layer for realtime text and image-recognition calls. It keeps upstream keys server-side and exposes stable business aliases. Essay-critical text and vision aliases use VecoAI; unrelated aliases retain the managed New API primary with VecoAI fallbacks.
 
 - `sx-fast-chat`
 - `sx-chinese-text`
@@ -21,8 +21,8 @@ Self-hosted OpenAI-compatible routing layer for realtime text and image-recognit
 Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps the primary healthy with background checks, and failover happens through explicit `router_settings.fallbacks` chains:
 
 - `sx-fast-chat` and `sx-chinese-text`: VecoAI `gemini-3.8-flash`, then `gemini-3.6-flash`
-- `sx-image-vision`: VecoAI `gemini-3.8-flash`, then `gemini-3.6-flash`, then `gemini-3.7-flash`
-- other text aliases: managed New API, then the matching Viva fallback
+- `sx-image-vision`: VecoAI `gemini-3.8-flash`, then New API `gpt-5.6-sol`, then VecoAI `gemini-3.6-flash` / `gemini-3.7-flash`
+- other text aliases: managed New API, then a VecoAI Gemini fallback (the alias remains stable, but the underlying model family changes on failover)
 - provider retry count is `0`: a failed primary immediately moves to the fallback chain instead of spending another request on the same unhealthy route
 
 Deployment `model_info.id` values are shared across equivalent text aliases where the same provider/model pair is reused. This makes cooldown and circuit state follow the real upstream deployment instead of one alias only.
@@ -117,14 +117,12 @@ LITELLM_MASTER_KEY=replace-with-internal-gateway-key
 SHENXIANG_NEW_API_BASE_URL=https://api.aiphui.top/v1
 SHENXIANG_NEW_API_TEXT_API_KEY=replace-with-user-text-key
 SHENXIANG_NEW_API_CLAUDE_API_KEY=replace-with-user-claude-key
-VIVAAPI_LLM_BASE_URL=https://www.vivaapi.cn/v1
-VIVAAPI_LLM_API_KEY=replace-with-vivaapi-key
 VECOAI_LLM_BASE_URL=https://api.vecoai.cn/v1
 VECOAI_LLM_API_KEY=replace-with-vecoai-key
 ```
 
-`config.yaml` contains the managed New API, Viva, and the dedicated VecoAI visual-recognition chain. Keep real credentials only in the server production environment.
+`config.yaml` contains only the managed New API and VecoAI providers. The vision fallback uses the New API text credential, which was verified with an image request. Keep real credentials only in the server production environment.
 
 The managed public endpoint requires a descriptive service `User-Agent`; the text gateway sets `shenxiang-llm-gateway/1.0`, while direct image calls set `shenxiang-image-gateway/1.0`. The external durable image gateway applies the versioned patch in `deploy/patches/dify-image-gateway-user-agent.patch` for the same reason.
 
-Keep media generation on the media task stack. GPT Image uses the durable image gateway and Gemini image uses its OpenAI-compatible task route; both follow New API primary -> Viva fallback. This LiteLLM service remains for low-latency text and lightweight visual understanding.
+Keep media generation on the media task stack. GPT Image uses the durable image gateway and Gemini image uses its OpenAI-compatible task route; their separate New API -> Viva fallback configuration is not changed by this gateway policy. This LiteLLM service remains for low-latency text and lightweight visual understanding.
