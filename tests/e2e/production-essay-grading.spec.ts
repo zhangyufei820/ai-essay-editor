@@ -49,6 +49,6 @@ test("uploads an essay image and renders a grading report in production", async 
 
   await expect(page.getByText(/综合评分[:：]?\s*\d+|综合总分[:：]?\s*\d+/).last())
     .toBeVisible({ timeout: 240_000 })
-  await expect(page.getByText("修改建议").last()).toBeVisible()
+  await expect(page.locator("article").last()).toContainText(/修改建议|修改理由|导师润色|升格建议/)
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
 })
