@@ -64,10 +64,27 @@ const VALID_ESSAY_INDICATORS = [
 
 const SCORE_FIELD_PATTERN =
   /(?:综合)?(?:总分|得分|分数|评分|score)(?:\s*[*_`~]{1,3})?\s*(?:为\s*)?[:：|]?\s*(\d+(?:\.\d+)?)(?=\s*(?:[/／]\s*\d+(?:\.\d+)?)?\s*(?:[*_`~]{1,3}\s*)?(?:分|分数|$|[，,。；;\n]))/gi
+const TABLE_SCORE_LABEL_PATTERN = /^(?:综合)?(?:总分|得分|分数|评分)$/
+const TABLE_SCORE_CELL_PATTERN = /^(\d+(?:\.\d+)?)(?:\s*[/／]\s*\d+(?:\.\d+)?)?\s*分?$/
 
 function extractScoreValues(text: string) {
-  return Array.from(text.matchAll(SCORE_FIELD_PATTERN), (match) => Number(match[1]))
-    .filter(Number.isFinite)
+  const inlineScores = Array.from(text.matchAll(SCORE_FIELD_PATTERN), (match) => Number(match[1]))
+  const tableScores = text.split(/\r?\n/).flatMap((line) => {
+    const row = line.trim()
+    if (!row.startsWith("|") || !row.endsWith("|")) return []
+
+    const cells = row.slice(1, -1).split("|")
+      .map((cell) => cell.replace(/[*_`~]/g, "").trim())
+    if (!TABLE_SCORE_LABEL_PATTERN.test(cells[0] || "")) return []
+
+    // The score follows a weight or maximum-score cell in grading tables.
+    const score = cells.slice(1).map((cell) => cell.match(TABLE_SCORE_CELL_PATTERN))
+      .filter((match): match is RegExpMatchArray => match !== null)
+      .at(-1)
+    return score ? [Number(score[1])] : []
+  })
+
+  return [...inlineScores, ...tableScores].filter(Number.isFinite)
 }
 
 export function isValidEssayCorrectionResult(responseText: string): boolean {

@@ -37,6 +37,28 @@ describe("essay correction result validation", () => {
     expect(isValidEssayCorrectionResult(validReport.replace("综合总分：86/100", scoreLine))).toBe(true)
   })
 
+  it("accepts the production Markdown table score format", () => {
+    const table = [
+      "| 维度 | 权重 | 得分 (0-25) | 诊断 |",
+      "| --- | --- | --- | --- |",
+      "| **综合总分** | **100%** | **72** | 主题明确，结构完整 |",
+    ].join("\n")
+
+    expect(isValidEssayCorrectionResult(validReport.replace("综合总分：86/100", table))).toBe(true)
+  })
+
+  it("does not treat the table weight as earned points when the score is zero", () => {
+    const table = "| **综合总分** | **100%** | **0** | 暂无有效批改 |"
+
+    expect(isValidEssayCorrectionResult(validReport.replace("综合总分：86/100", table))).toBe(false)
+  })
+
+  it("does not accept an unrelated table row as a total score", () => {
+    const table = "| **结构** | **100%** | **72** | 段落清晰 |"
+
+    expect(isValidEssayCorrectionResult(validReport.replace("综合总分：86/100", table))).toBe(false)
+  })
+
   it("rejects an all-zero report even when it contains grading headings", () => {
     const report = [
       "# 作文批改报告",
