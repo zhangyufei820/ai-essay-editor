@@ -193,7 +193,7 @@ describe("llm gateway provider routing policy", () => {
       } else if (model.model_name === "sx-fast-chat") {
         expect(modelTargets).toEqual(["fallback-vecoai-gpt-4-1-mini"])
       } else if (model.model_name === "sx-chinese-text") {
-        expect(modelTargets).toEqual(["fallback-vecoai-gemini-3-6-flash"])
+        expect(modelTargets).toEqual(["fallback-vecoai-gpt-4-1-mini"])
       } else {
         expect(modelTargets?.every((target) => target.startsWith("fallback-vecoai-"))).toBe(true)
       }
@@ -241,6 +241,15 @@ describe("llm gateway provider routing policy", () => {
       timeout: 30,
       stream_timeout: 30,
     }))
+  })
+
+  it("keeps long-form writing on a stream-compatible fallback", () => {
+    const config = loadConfig()
+    expect(modelsByName(config, "sx-chinese-text")[0]?.litellm_params).toEqual(expect.objectContaining({
+      timeout: 45,
+      stream_timeout: 45,
+    }))
+    expect(fallbackMap(config).get("sx-chinese-text")).toEqual(["fallback-vecoai-gpt-4-1-mini"])
   })
 
   it("keeps bounded active health checks and proactive routing", () => {

@@ -21,7 +21,7 @@ Self-hosted OpenAI-compatible routing layer for realtime text and image-recognit
 Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps the primary healthy with background checks, and failover happens through explicit `router_settings.fallbacks` chains:
 
 - `sx-fast-chat`: New API `claude-sonnet-4-6`, then VecoAI `gpt-4.1-mini` (supports streamed assistant-turn continuation)
-- `sx-chinese-text`: New API `claude-sonnet-4-6`, then VecoAI `gemini-3.6-flash`
+- `sx-chinese-text`: New API `claude-sonnet-4-6`, then VecoAI `gpt-4.1-mini` for long-form streamed responses
 - `sx-image-vision`: VecoAI `gemini-3.8-flash`, then New API `gpt-5.6-sol` as the sole fallback
 - other text aliases: managed New API, then a VecoAI Gemini fallback (the alias remains stable, but the underlying model family changes on failover)
 - provider retry count is `0`: a failed primary immediately moves to the fallback chain instead of spending another request on the same unhealthy route
