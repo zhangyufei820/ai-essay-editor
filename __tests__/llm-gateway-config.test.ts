@@ -227,6 +227,14 @@ describe("llm gateway provider routing policy", () => {
     expect(modelsByName(config, "claude-opus-4-7")[0]?.litellm_params?.model).toBe("openai/claude-opus-4-7")
   })
 
+  it("allows the writing skill intent router to wait for a complete streamed response", () => {
+    const config = loadConfig()
+    expect(modelsByName(config, "sx-fast-chat")[0]?.litellm_params).toEqual(expect.objectContaining({
+      timeout: 60,
+      stream_timeout: 60,
+    }))
+  })
+
   it("keeps bounded active health checks and proactive routing", () => {
     const config = loadConfig()
     expect(config.general_settings.background_health_checks).toBe(true)

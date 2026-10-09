@@ -80,3 +80,36 @@ test("completes an essay-related request through the general chat entry", async 
   await expect(page.locator("article").last()).toContainText(/作文|批改|修改/, { timeout: 120_000 })
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
 })
+
+test("completes a long essay through the writing skill route", async ({ page }) => {
+  test.setTimeout(360_000)
+
+  const { phone, password } = readE2eCredentials()
+  test.skip(!password, "SHENXIANG_E2E_TEST_PASSWORD is not configured")
+
+  await page.goto("/login?redirect=%2Fchat%3Fagent%3Dshenxiang-zuowen-shengge", { waitUntil: "domcontentloaded" })
+  await page.getByRole("tab", { name: "Password" }).click({ timeout: 30_000 })
+  await page.locator("#passworLogin_account").fill(phone, { timeout: 30_000 })
+  await page.locator("#passworLogin_password").fill(password, { timeout: 30_000 })
+  await page.locator("button[type='submit']").filter({ hasText: "Sign In" }).click()
+  await page.waitForURL(/\/chat\?agent=shenxiang-zuowen-shengge/, { timeout: 45_000 })
+
+  const paragraph = "那本错题本一直放在书桌最下面的抽屉里。第一次月考后，我把做错的题抄上去，只想快点交差。老师提醒我写清错误原因，我却只在旁边画了一个圈。第二次遇到相似的题，我仍然按旧办法计算，结果又错了。回家后我重新翻开错题本，才发现自己一直没有理解题目里的条件。"
+  const essay = Array.from({ length: 6 }, (_, index) => `第${index + 1}段：${paragraph}`).join("\n")
+  const query = `请对下面这篇作文做具体的升格修改，指出结构和语言问题，并给出修改后的段落。\n${essay}`
+  expect(query.length).toBeGreaterThan(800)
+
+  await page.getByPlaceholder("输入内容开始对话...").fill(query)
+  const chatResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/dify-chat") && response.request().method() === "POST",
+    { timeout: 60_000 },
+  )
+  await page.getByRole("button", { name: "发送消息" }).click()
+  const response = await chatResponse
+  const requestBody = response.request().postDataJSON()
+  expect(requestBody.workflowSkillId).toBe("shenxiang-zuowen-shengge")
+  expect(response.ok()).toBe(true)
+  expect(await response.text()).not.toContain("DIFY_UPSTREAM_UNAVAILABLE")
+  await expect(page.locator("article").last()).toContainText(/修改|升格|结构|语言/, { timeout: 300_000 })
+  await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
+})
