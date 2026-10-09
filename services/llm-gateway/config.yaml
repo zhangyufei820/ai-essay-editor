@@ -4,15 +4,15 @@ model_list:
   # Credentials are injected at runtime.
   - model_name: sx-fast-chat
     litellm_params:
-      model: openai/gpt-5.6-sol
+      model: openai/claude-sonnet-4-6
       api_base: os.environ/SHENXIANG_NEW_API_BASE_URL
-      api_key: os.environ/SHENXIANG_NEW_API_TEXT_API_KEY
+      api_key: os.environ/SHENXIANG_NEW_API_CLAUDE_API_KEY
       extra_headers: &managed_new_api_headers
         User-Agent: shenxiang-llm-gateway/1.0
-      timeout: 60
-      stream_timeout: 60
+      timeout: 45
+      stream_timeout: 45
     model_info:
-      id: deploy-new-api-gpt-5-6-sol
+      id: deploy-new-api-claude-sonnet-4-6-fast
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
@@ -355,6 +355,15 @@ model_list:
       disable_background_health_check: true
 
   # VecoAI fallback groups use models present in its live catalog.
+  - model_name: fallback-vecoai-gpt-4-1-mini
+    litellm_params:
+      model: openai/gpt-4.1-mini
+      api_base: os.environ/VECOAI_LLM_BASE_URL
+      api_key: os.environ/VECOAI_LLM_API_KEY
+      timeout: 30
+      stream_timeout: 30
+    model_info: { id: fallback-vecoai-gpt-4-1-mini, mode: chat, disable_background_health_check: true }
+
   - model_name: fallback-vecoai-gemini-3-8-flash
     litellm_params:
       model: openai/gemini-3.8-flash
@@ -403,7 +412,7 @@ guardrails:
 
 router_settings:
   fallbacks:
-    - sx-fast-chat: ["fallback-vecoai-gemini-3-6-flash"]
+    - sx-fast-chat: ["fallback-vecoai-gpt-4-1-mini"]
     - sx-super-agent: ["fallback-vecoai-gemini-3-8-flash"]
     - sx-chinese-text: ["fallback-vecoai-gemini-3-6-flash"]
     - sx-math-text: ["fallback-vecoai-gemini-3-8-flash"]
