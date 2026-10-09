@@ -47,6 +47,17 @@ describe("essay correction result validation", () => {
     expect(isValidEssayCorrectionResult(validReport.replace("综合总分：86/100", table))).toBe(true)
   })
 
+  it("accepts a complete scored report that discusses missing text in its feedback", () => {
+    const report = [
+      validReport.replace("综合总分：86/100", "| **综合总分** | **100%** | **74** | 结构完整 |"),
+      "## 具体修改",
+      "原稿没有交代题目中的文字线索，读者难以理解人物的动机。",
+      "下一步需要结合作文的原始文本，补充场景细节，再检查段落衔接。",
+    ].join("\n")
+
+    expect(isValidEssayCorrectionResult(report)).toBe(true)
+  })
+
   it("does not treat the table weight as earned points when the score is zero", () => {
     const table = "| **综合总分** | **100%** | **0** | 暂无有效批改 |"
 

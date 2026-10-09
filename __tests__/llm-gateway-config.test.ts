@@ -218,7 +218,11 @@ describe("llm gateway provider routing policy", () => {
   it("keeps the requested primary model mappings explicit", () => {
     const config = loadConfig()
     expect(modelsByName(config, "sx-fast-chat")[0]?.litellm_params?.model).toBe("openai/gpt-5.6-sol")
-    expect(modelsByName(config, "sx-general-text")[0]?.litellm_params?.model).toBe("openai/gpt-5.4-mini")
+    expect(modelsByName(config, "sx-general-text")[0]?.litellm_params).toEqual(expect.objectContaining({
+      model: "openai/gpt-5.6-terra",
+      timeout: 45,
+      stream_timeout: 45,
+    }))
     expect(modelsByName(config, "sx-chinese-text")[0]?.litellm_params?.model).toBe("openai/claude-sonnet-4-6")
     expect(modelsByName(config, "claude-opus-4-7")[0]?.litellm_params?.model).toBe("openai/claude-opus-4-7")
   })
