@@ -125,6 +125,8 @@ describe("llm gateway provider routing policy", () => {
       model: "openai/gemini-3.8-flash",
       api_base: "os.environ/VECOAI_LLM_BASE_URL",
       api_key: "os.environ/VECOAI_LLM_API_KEY",
+      timeout: 20,
+      stream_timeout: 20,
     })
     expect(deployment[0]?.model_info).toMatchObject({
       id: "deploy-vecoai-gemini-3-8-flash",
@@ -181,6 +183,7 @@ describe("llm gateway provider routing policy", () => {
       api_base: "os.environ/SHENXIANG_NEW_API_BASE_URL",
       api_key: "os.environ/SHENXIANG_NEW_API_TEXT_API_KEY",
       timeout: 30,
+      stream_timeout: 30,
     })
     expect(newApiVisionFallback[0]?.litellm_params?.extra_headers?.["User-Agent"])
       .toBe("shenxiang-llm-gateway/1.0")
@@ -189,7 +192,10 @@ describe("llm gateway provider routing policy", () => {
       const modelTargets = targets.get(model.model_name)
       expect(modelTargets?.length).toBeGreaterThan(0)
       if (model.model_name === "sx-image-vision") {
-        expect(modelTargets).toEqual(["fallback-new-api-gpt-5-6-sol-vision"])
+        expect(modelTargets).toEqual([
+          "fallback-new-api-gpt-5-6-sol-vision",
+          "fallback-vecoai-gpt-4-1-mini",
+        ])
       } else if (model.model_name === "sx-fast-chat") {
         expect(modelTargets).toEqual(["fallback-vecoai-gpt-4-1-mini"])
       } else if (model.model_name === "sx-chinese-text") {

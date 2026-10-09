@@ -45,12 +45,20 @@ test("uploads an essay image and renders a grading report in production", async 
   expect((await uploadResponse).ok()).toBe(true)
   await expect(page.getByText("e2e-essay.png").first()).toBeVisible({ timeout: 30_000 })
 
+  const gradingResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/dify-chat") && response.request().method() === "POST",
+    { timeout: 60_000 },
+  )
   await page.getByRole("button", { name: "发送消息" }).click()
 
   await expect(page.getByText(/综合评分[:：]?\s*\d+|综合总分[:：]?\s*\d+/).last())
     .toBeVisible({ timeout: 240_000 })
   await expect(page.locator("article").last()).toContainText(/修改建议|修改理由|导师润色|升格建议/)
+  await expect(page.locator("article").last()).toContainText(/种花|花苗|松土|浇水/)
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
+  const response = await gradingResponse
+  expect(response.ok()).toBe(true)
+  expect(await response.text()).not.toMatch(/"essay_fallback_used"\s*:\s*true/)
 })
 
 test("completes an essay-related request through the general chat entry", async ({ page }) => {

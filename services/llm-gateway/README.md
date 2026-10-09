@@ -22,7 +22,7 @@ Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps t
 
 - `sx-fast-chat`: New API `claude-sonnet-4-6`, then VecoAI `gpt-4.1-mini` (supports streamed assistant-turn continuation)
 - `sx-chinese-text`: New API `claude-sonnet-4-6`, then VecoAI `gpt-4.1-mini` for long-form streamed responses
-- `sx-image-vision`: VecoAI `gemini-3.8-flash`, then New API `gpt-5.6-sol` as the sole fallback
+- `sx-image-vision`: VecoAI `gemini-3.8-flash`, then New API `gpt-5.6-sol`, then VecoAI `gpt-4.1-mini`; both fallbacks accept image input and assistant-turn continuation
 - other text aliases: managed New API, then a VecoAI Gemini fallback (the alias remains stable, but the underlying model family changes on failover)
 - provider retry count is `0`: a failed primary immediately moves to the fallback chain instead of spending another request on the same unhealthy route
 
@@ -122,7 +122,7 @@ VECOAI_LLM_BASE_URL=https://api.vecoai.cn/v1
 VECOAI_LLM_API_KEY=replace-with-vecoai-key
 ```
 
-`config.yaml` contains only the managed New API and VecoAI providers. The vision fallback uses the New API text credential, which was verified with an image request. Keep real credentials only in the server production environment.
+`config.yaml` contains only the managed New API and VecoAI providers. The first vision fallback uses the New API text credential; both vision fallbacks were verified with an image and an assistant-turn continuation. Keep real credentials only in the server production environment.
 
 The managed public endpoint requires a descriptive service `User-Agent`; the text gateway sets `shenxiang-llm-gateway/1.0`, while direct image calls set `shenxiang-image-gateway/1.0`. The external durable image gateway applies the versioned patch in `deploy/patches/dify-image-gateway-user-agent.patch` for the same reason.
 
