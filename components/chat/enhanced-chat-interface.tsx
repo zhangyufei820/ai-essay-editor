@@ -643,6 +643,38 @@ function createClientRequestId(prefix = "chat") {
 
 const PENDING_TASK_STORAGE_KEY = "shenxiang.pendingAiTasks"
 const savedMessageKeys = new Set<string>()
+const essayRecoveryInFlight = new Map<string, Promise<{ answer: string; sessionId: string } | null>>()
+
+function waitForRecoveredEssayResult(requestId: string) {
+  const existing = essayRecoveryInFlight.get(requestId)
+  if (existing) return existing
+  const pending = (async () => {
+    const startedAt = Date.now()
+    const deadline = Date.now() + 180_000
+    while (Date.now() < deadline) {
+      try {
+        const response = await fetch(`/api/essay-result/recover?requestId=${encodeURIComponent(requestId)}`, {
+          headers: await getVerifiedAuthHeaders(),
+          cache: "no-store",
+          signal: AbortSignal.timeout(10_000),
+        })
+        if (response.status === 400 || (response.status === 404 && Date.now() - startedAt > 20_000)) return null
+        if (response.ok) {
+          const payload = await response.json()
+          if (payload.ready && typeof payload.answer === "string" && typeof payload.sessionId === "string") {
+            return { answer: payload.answer, sessionId: payload.sessionId }
+          }
+        }
+      } catch {
+        // A brief browser disconnect should not discard a completed Dify report.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 4_000))
+    }
+    return null
+  })().finally(() => essayRecoveryInFlight.delete(requestId))
+  essayRecoveryInFlight.set(requestId, pending)
+  return pending
+}
 
 async function saveMessageOnce(key: string, save: () => Promise<unknown>) {
   if (savedMessageKeys.has(key)) return
@@ -709,7 +741,33 @@ async function saveChatMessageViaApi(params: {
     }),
   })
   if (!res.ok) throw new Error(`chat_message_save_failed_${res.status}`)
-  return res.json()
+  const payload = await res.json()
+  if (payload.saved === false) throw new Error(`chat_message_save_degraded_${payload.code || res.status}`)
+  return payload
+}
+
+async function saveRecoveredEssayResult(params: {
+  requestId: string
+  sessionId: string
+  answer: string
+  clientMessageId?: string
+}) {
+  const history = await fetch(`/api/chat-session?sessionId=${encodeURIComponent(params.sessionId)}`, {
+    headers: await getVerifiedAuthHeaders(),
+    cache: "no-store",
+  })
+  if (!history.ok) throw new Error(`essay_recovery_history_lookup_failed_${history.status}`)
+  const payload = await history.json()
+  if (Array.isArray(payload.messages) && payload.messages.some((message: any) =>
+    message.role === "assistant" && message.content === params.answer)) return false
+
+  await saveMessageOnce(`${params.requestId}:assistant`, () => saveChatMessageViaApi({
+    sessionId: params.sessionId,
+    role: "assistant",
+    content: params.answer,
+    metadata: { requestId: params.requestId, clientMessageId: params.clientMessageId },
+  }))
+  return true
 }
 
 function scheduleChatPerfRenderMark(requestId: string, stage: string, startedAt: number) {
@@ -1567,30 +1625,77 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	    try {
 	      const pending = JSON.parse(localStorage.getItem(PENDING_TASK_STORAGE_KEY) || "[]")
 	      const pendingTasks = Array.isArray(pending) ? pending : []
-	      if (pendingTasks.length === 0) return
-
 	      const recentPending = pendingTasks.filter((task: any) => {
 	        const ageMs = Date.now() - Number(task?.createdAt || 0)
 	        return task?.requestId && ageMs > 0 && ageMs < 24 * 60 * 60 * 1000
 	      })
 	      if (recentPending.length === 0) {
 	        localStorage.removeItem(PENDING_TASK_STORAGE_KEY)
-	        return
 	      }
 
-	      const res = await fetch(`/api/task-status?limit=10`, {
+	      for (const task of recentPending) {
+	        if (task.model !== "standard" || typeof task.sessionId !== "string") continue
+	        void (async () => {
+	          const recovered = await waitForRecoveredEssayResult(String(task.requestId))
+	          if (!recovered || recovered.sessionId !== task.sessionId) return
+	          try {
+	            await saveRecoveredEssayResult({
+	              requestId: String(task.requestId),
+	              sessionId: recovered.sessionId,
+	              answer: recovered.answer,
+	            })
+	            forgetPendingTask(String(task.requestId))
+	            if (currentSessionId === recovered.sessionId) {
+	              await loadHistorySessionRef.current(recovered.sessionId)
+	            }
+	            toast.success("已找回并保存完整作文批改结果")
+	          } catch (error) {
+	            console.warn("[Essay Recovery] Pending result save failed", error)
+	          }
+	        })()
+	      }
+
+	      const res = await fetch(`/api/task-status?limit=50`, {
 	        headers: await getVerifiedAuthHeaders(),
 	      })
 	      if (!res.ok) return
 	      const payload = await res.json()
 	      const tasks = Array.isArray(payload.tasks) ? payload.tasks : []
+	      for (const task of tasks) {
+	        if (task.status !== "cancelled" || task.error_code !== "CLIENT_STREAM_ABORTED" ||
+	          typeof task.request_id !== "string" ||
+	          recentPending.some((pending: any) => pending.requestId === task.request_id) ||
+	          !Number.isFinite(Date.parse(task.created_at || "")) ||
+	          Date.now() - Date.parse(task.created_at) > 24 * 60 * 60 * 1000) continue
+	        void (async () => {
+	          const recovered = await waitForRecoveredEssayResult(task.request_id)
+	          if (!recovered) return
+	          try {
+	            const newlySaved = await saveRecoveredEssayResult({
+	              requestId: task.request_id,
+	              sessionId: recovered.sessionId,
+	              answer: recovered.answer,
+	            })
+	            if (newlySaved) {
+	              if (currentSessionId === recovered.sessionId) {
+	                await loadHistorySessionRef.current(recovered.sessionId)
+	              }
+	              toast.success("已找回并保存之前中断的作文批改结果")
+	            }
+	          } catch (error) {
+	            console.warn("[Essay Recovery] Recent result save failed", error)
+	          }
+	        })()
+	      }
 	      const activeTasks = tasks.filter((task: any) => ["queued", "running"].includes(task.status))
 	      const finishedRequestIds = new Set(tasks
 	        .filter((task: any) => ["succeeded", "failed", "timeout", "cancelled"].includes(task.status))
 	        .map((task: any) => task.request_id))
 
 	      for (const requestId of finishedRequestIds) {
-	        forgetPendingTask(String(requestId))
+	        if (!recentPending.some((task: any) => task.requestId === requestId && task.model === "standard")) {
+	          forgetPendingTask(String(requestId))
+	        }
 	      }
 
 	      if (activeTasks.length > 0) {
@@ -2985,6 +3090,35 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         )
         const rawError = e instanceof Error ? e.message : String(e || "")
         const mayRecoverFromHistory = !taskFailure && isNetworkStreamError(rawError, rawError.toLowerCase())
+        if (selectedModel === "standard" && (
+          mayRecoverFromHistory || /abort|aborted/i.test(rawError) || ["cancelled", "succeeded"].includes(taskFailure?.status || "")
+        )) {
+          setMessages((previous) => previous.map((message) => message.id === botId
+            ? { ...message, content: "作文批改连接中断，正在找回完整结果，请保持页面打开…" }
+            : message))
+          const recovered = await waitForRecoveredEssayResult(requestId)
+          if (recovered) {
+            await persistUserMessagePromise
+            let saved = false
+            try {
+              await saveRecoveredEssayResult({
+                requestId,
+                sessionId: recovered.sessionId,
+                answer: recovered.answer,
+                clientMessageId: botId,
+              })
+              saved = true
+            } catch (saveError) {
+              console.warn("[Essay Recovery] History save failed", saveError)
+            }
+            setMessages((previous) => previous.map((message) => message.id === botId
+              ? { ...message, content: recovered.answer }
+              : message))
+            if (saved) forgetPendingTask(requestId)
+            toast.success(saved ? "已找回完整作文批改结果" : "已找回批改结果，历史记录保存仍在重试")
+            return
+          }
+        }
         toast.error(errorMsg, {
           description: selectedModel === "gemini-image" ? "图片生成失败，请检查提示词" : undefined,
           duration: 5000
@@ -2999,7 +3133,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 		          // 没有任何内容时也保留错误消息，避免用户看到消息突然消失。
 		          setMessages(p => p.map(m => m.id === botId ? { ...m, content: buildChatErrorContent(getSafeAssistantErrorContent(errorMsg)) } : m))
 		        }
-		        if (!mayRecoverFromHistory && !["queued", "running"].includes(taskFailure?.status || "")) {
+		        if (selectedModel !== "standard" && !mayRecoverFromHistory && !["queued", "running"].includes(taskFailure?.status || "")) {
 		          forgetPendingTask(requestId)
 		        }
 		    } finally {

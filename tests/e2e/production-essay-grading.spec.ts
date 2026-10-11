@@ -61,6 +61,47 @@ test("uploads an essay image and renders a grading report in production", async 
   expect(await response.text()).not.toMatch(/"essay_fallback_used"\s*:\s*true/)
 })
 
+test("recovers a completed grading report when the browser response is lost", async ({ page }) => {
+  test.setTimeout(360_000)
+  const { phone, password } = readE2eCredentials()
+  test.skip(!password, "SHENXIANG_E2E_TEST_PASSWORD is not configured")
+
+  await page.goto("/login?redirect=/chat/standard", { waitUntil: "domcontentloaded" })
+  await page.getByRole("tab", { name: "Password" }).click({ timeout: 30_000 })
+  await page.locator("#passworLogin_account").fill(phone, { timeout: 30_000 })
+  await page.locator("#passworLogin_password").fill(password, { timeout: 30_000 })
+  await page.locator("button[type='submit']").filter({ hasText: "Sign In" }).click()
+  await page.waitForURL(/\/chat\/standard(?:$|\?)/, { timeout: 45_000 })
+
+  let sessionId = ""
+  await page.route("**/api/dify-chat", async (route) => {
+    sessionId = route.request().postDataJSON().sessionId
+    const response = await route.fetch({ timeout: 240_000 })
+    expect(response.ok()).toBe(true)
+    await route.abort("failed")
+  })
+
+  const essay = [
+    "那本错题本一直放在书桌最下面的抽屉里。第一次月考后，老师要求我们整理错题，我把答案工整地抄了一遍，以为这样就算弄懂了。",
+    "第二周的随堂测验又出现一道相似的题。我认出了熟悉的图形，提笔便写下上次记住的公式。试卷发回来，我才发现题目多了一个条件，而我连它都没有看清。",
+    "放学路上，同桌问我为什么又在同一处失分。我说自己粗心，话一出口却觉得心虚。我从来没有想过公式究竟从哪里来，又在什么情况下才能使用。",
+    "晚上，我终于翻开错题本。纸上只有题目、答案和一个红叉，错误原因一栏空着。我拿出草稿纸，从已知条件画起，试着不用答案重新推导。",
+    "第二天，我带着草稿去问老师。老师让我解释每一步为什么成立。说到那个被我忽略的条件时，我终于能用自己的话讲清它的作用。",
+    "此后每整理一道错题，我都会写下当时的想法，再找一题稍有变化的练习检验自己。错题本提醒我，认真面对不会的地方，比装作已经会了更需要勇气。",
+  ].join("\n")
+  await page.getByPlaceholder("输入内容开始对话...").fill(`请完整批改这篇作文，给出具体评分、优点和修改建议：\n${essay}`)
+  await page.getByRole("button", { name: "发送消息" }).click()
+
+  await expect(page.getByText(/综合评分[:：]?\s*\d+|综合总分[:：]?\s*\d+/).last())
+    .toBeVisible({ timeout: 270_000 })
+  await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
+  expect(sessionId).toMatch(/^[0-9a-f-]{36}$/i)
+
+  await page.goto(`/chat?sessionId=${encodeURIComponent(sessionId)}&agent=standard`, { waitUntil: "domcontentloaded" })
+  await expect(page.getByText(/综合评分[:：]?\s*\d+|综合总分[:：]?\s*\d+/).last())
+    .toBeVisible({ timeout: 30_000 })
+})
+
 test("completes an essay-related request through the general chat entry", async ({ page }) => {
   test.setTimeout(180_000)
 

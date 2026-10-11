@@ -4599,6 +4599,7 @@ export async function POST(request: NextRequest) {
     let promptTokens = 0
     let completionTokens = 0
     let conversationId = ""
+    let difyMessageId = ""
     let fullResponseText = ""  // 🔥 收集完整响应内容用于验证
     let workflowImageUrls: string[] = []  // 🎨 收集 Dify 工作流生成的图片 URL
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
@@ -5574,6 +5575,9 @@ export async function POST(request: NextRequest) {
 	              }
 
 	              // 提取 conversation_id
+	              if (model === "standard" && typeof json.message_id === "string") {
+	                difyMessageId = json.message_id
+	              }
 	              if (json.conversation_id) {
 	                conversationId = json.conversation_id
                   enqueueSseEvent(controller, {
@@ -5583,6 +5587,7 @@ export async function POST(request: NextRequest) {
 	                updateTaskRun(taskRun.id, {
 	                  status: "running",
 	                  conversationId,
+	                  upstreamTaskId: difyMessageId || undefined,
 	                  progress: hasReceivedContent ? 60 : 25,
 	                }).catch((error) => console.warn("[AI Task Trace] conversation update failed:", error))
 	              }
@@ -5775,6 +5780,9 @@ export async function POST(request: NextRequest) {
               if (json.conversation_id) {
                 conversationId = json.conversation_id
               }
+              if (model === "standard" && typeof json.message_id === "string") {
+                difyMessageId = json.message_id
+              }
 	              if (json.metadata?.usage) {
 	                const parsedUsage = parseDifyUsage(json)
 	                latestParsedUsage = parsedUsage
@@ -5959,6 +5967,7 @@ export async function POST(request: NextRequest) {
         stage: "客户端连接中断",
         progress: hasReceivedContent ? 80 : 100,
         conversationId: conversationId || undefined,
+        upstreamTaskId: difyMessageId || undefined,
         errorMessage: `浏览器或网络连接在 ${modelLabel} 响应完成前中断`,
         errorCode: "CLIENT_STREAM_ABORTED",
         metadata: {
