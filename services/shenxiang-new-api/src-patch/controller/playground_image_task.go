@@ -381,8 +381,31 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 	}
 	if normalizedBody, ok := normalizePlaygroundImageTaskPayload(bodyBytes, &imageReq); ok {
 		bodyBytes = normalizedBody
-		if storage, err := common.CreateBodyStorage(bodyBytes); err == nil {
-			c.Set(common.KeyBodyStorage, storage)
+		if err := replacePlaygroundRequestBody(c, bodyBytes, c.Request.Header.Get("Content-Type")); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to prepare image request"})
+			return
+		}
+	}
+	if path == "/pg/images/edits" {
+		materializedBody, contentType, changed, status, materializeErr := materializePlaygroundStoredImageEdit(c, bodyBytes)
+		if materializeErr != nil {
+			if status == 0 {
+				status = http.StatusBadRequest
+			}
+			c.JSON(status, gin.H{"success": false, "message": materializeErr.Error()})
+			return
+		}
+		if changed {
+			bodyBytes = materializedBody
+			if err := replacePlaygroundRequestBody(c, bodyBytes, contentType); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to prepare stored image request"})
+				return
+			}
+			imageReq = dto.ImageRequest{}
+			if err := parsePlaygroundImageTaskRequest(c, &imageReq); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid stored image request"})
+				return
+			}
 		}
 	}
 	usingGroup, userGroup, err := resolvePlaygroundImageTaskGroup(c, &imageReq)

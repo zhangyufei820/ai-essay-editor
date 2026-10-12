@@ -4,6 +4,14 @@
     "run": "^TestPlaygroundMoon25PromptLimitMatchesModelContract$"
   },
   {
+    "package": "./controller",
+    "run": "^Test(PlaygroundMediaPolicyUsesProviderSpecificImageLimits|PlaygroundUploadMediaStreamsImageIntoUserStorage|PlaygroundUploadMediaRejectsMismatchedContent|MaterializePlaygroundStoredImageEditAcceptsCurrentUserURLsOnly)$"
+  },
+  {
+    "package": "./router",
+    "run": "^TestPlaygroundMediaCacheRouteDoesNotUseRelayPerformanceGate$"
+  },
+  {
     "package": "./.",
     "run": "^(TestBuildXingrenCodexTokenResponse.*|TestXingrenCodexTokenNameIncludesAccountID|TestXingrenOnboardingCodexTokenHandler.*|TestXingrenCodexModelAcceptsAstra|TestXingrenCodexFrontendRejectsInvalidPayloadBeforeConfiguration|TestXingrenHomeChatResponseSafetyContract)$"
   },

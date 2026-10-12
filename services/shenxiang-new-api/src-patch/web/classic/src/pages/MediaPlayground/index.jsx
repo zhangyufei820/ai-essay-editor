@@ -73,8 +73,19 @@ const OPENAI_IMAGE_ASPECT_RATIOS = [
 
 const GPT_IMAGE_2_RESOLUTIONS = ['auto', '1K', '2K', '4K', 'custom'];
 const GPT_IMAGE_25_ASPECT_RATIOS = [
-  '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3',
-  '5:4', '4:5', '21:9', '9:21', '2:1', '1:2',
+  '1:1',
+  '16:9',
+  '9:16',
+  '4:3',
+  '3:4',
+  '3:2',
+  '2:3',
+  '5:4',
+  '4:5',
+  '21:9',
+  '9:21',
+  '2:1',
+  '1:2',
 ];
 const DISCOUNT_IMAGE_2_RESOLUTIONS = ['1K', '2K', '4K'];
 
@@ -110,12 +121,7 @@ const GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS = [
   '21:9',
 ];
 
-const XAI_GROK_IMAGE_ASPECT_RATIOS = [
-  '1:1',
-  '9:16',
-  '16:9',
-  '2:3',
-];
+const XAI_GROK_IMAGE_ASPECT_RATIOS = ['1:1', '9:16', '16:9', '2:3'];
 
 const XAI_GROK_46_IMAGE_ASPECT_RATIOS = [
   'auto',
@@ -544,22 +550,49 @@ const GPT_IMAGE_2_SIZE_BY_RESOLUTION = {
 // Extreme 1:3 / 3:1 sizes remain available through the custom WxH input.
 const GPT_IMAGE_25_SIZE_BY_RESOLUTION = {
   '1K': {
-    '1:1': '1024x1024', '16:9': '1280x720', '9:16': '720x1280',
-    '4:3': '1152x864', '3:4': '864x1152', '3:2': '1536x1024',
-    '2:3': '1024x1536', '5:4': '1120x896', '4:5': '896x1120',
-    '21:9': '1456x624', '9:21': '624x1456', '2:1': '1536x768', '1:2': '768x1536',
+    '1:1': '1024x1024',
+    '16:9': '1280x720',
+    '9:16': '720x1280',
+    '4:3': '1152x864',
+    '3:4': '864x1152',
+    '3:2': '1536x1024',
+    '2:3': '1024x1536',
+    '5:4': '1120x896',
+    '4:5': '896x1120',
+    '21:9': '1456x624',
+    '9:21': '624x1456',
+    '2:1': '1536x768',
+    '1:2': '768x1536',
   },
   '2K': {
-    '1:1': '1920x1920', '16:9': '2048x1152', '9:16': '1152x2048',
-    '4:3': '2304x1728', '3:4': '1728x2304', '3:2': '2048x1360',
-    '2:3': '1360x2048', '5:4': '2240x1792', '4:5': '1792x2240',
-    '21:9': '2912x1248', '9:21': '1248x2912', '2:1': '3072x1536', '1:2': '1536x3072',
+    '1:1': '1920x1920',
+    '16:9': '2048x1152',
+    '9:16': '1152x2048',
+    '4:3': '2304x1728',
+    '3:4': '1728x2304',
+    '3:2': '2048x1360',
+    '2:3': '1360x2048',
+    '5:4': '2240x1792',
+    '4:5': '1792x2240',
+    '21:9': '2912x1248',
+    '9:21': '1248x2912',
+    '2:1': '3072x1536',
+    '1:2': '1536x3072',
   },
   '4K': {
-    '1:1': '2880x2880', '16:9': '3840x2160', '9:16': '2160x3840',
-    '4:3': '3264x2448', '3:4': '2448x3264', '3:2': '3240x2160',
-    '2:3': '2160x3240', '5:4': '3200x2560', '4:5': '2560x3200',
-    '21:9': '3840x1648', '9:21': '1648x3840', '2:1': '3840x1920', '1:2': '1920x3840',
+    '1:1': '2880x2880',
+    '16:9': '3840x2160',
+    '9:16': '2160x3840',
+    '4:3': '3264x2448',
+    '3:4': '2448x3264',
+    '3:2': '3240x2160',
+    '2:3': '2160x3240',
+    '5:4': '3200x2560',
+    '4:5': '2560x3200',
+    '21:9': '3840x1648',
+    '9:21': '1648x3840',
+    '2:1': '3840x1920',
+    '1:2': '1920x3840',
   },
 };
 
@@ -634,10 +667,32 @@ const IMAGE_GENERATION_GROUP = {
 const IMAGE_EDIT_REFERENCE_LIMIT = 10;
 const VIDEO_REFERENCE_LIMIT = 5;
 const REFERENCE_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
-const REFERENCE_MEDIA_TOTAL_MAX_BYTES = 48 * 1024 * 1024;
+const REFERENCE_MEDIA_TOTAL_MAX_BYTES = 60 * 1024 * 1024;
+const DEFAULT_MEDIA_UPLOAD_POLICY = {
+  max_image_bytes: REFERENCE_MEDIA_MAX_BYTES,
+  max_file_bytes: REFERENCE_MEDIA_MAX_BYTES,
+  max_total_bytes: REFERENCE_MEDIA_TOTAL_MAX_BYTES,
+  global_total_bytes: REFERENCE_MEDIA_TOTAL_MAX_BYTES,
+  max_images: IMAGE_EDIT_REFERENCE_LIMIT,
+  auto_compress: true,
+  upload_transport: 'stored_url',
+  provider_limit_note: '按当前模型供应商限制执行。',
+};
 const VIDEO_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
-const VIDEO_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'];
-const VIDEO_AUDIO_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/aac'];
+const VIDEO_VIDEO_TYPES = [
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-m4v',
+];
+const VIDEO_AUDIO_TYPES = [
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/mp4',
+  'audio/aac',
+];
 const VIDEO_REFERENCE_ACCEPT = [
   ...VIDEO_IMAGE_TYPES,
   ...VIDEO_VIDEO_TYPES,
@@ -814,7 +869,9 @@ function gcd(left, right) {
 }
 
 function parsePixelSize(value) {
-  const match = String(value || '').trim().match(/^(\d{2,5})\s*x\s*(\d{2,5})$/i);
+  const match = String(value || '')
+    .trim()
+    .match(/^(\d{2,5})\s*x\s*(\d{2,5})$/i);
   if (!match) return null;
   return {
     width: Number(match[1]),
@@ -856,7 +913,10 @@ async function imageAspectRatioFromFile(file) {
     const objectUrl = URL.createObjectURL(file);
     const image = new Image();
     image.onload = () => {
-      const ratio = imageAspectRatioFromDimensions(image.naturalWidth, image.naturalHeight);
+      const ratio = imageAspectRatioFromDimensions(
+        image.naturalWidth,
+        image.naturalHeight,
+      );
       URL.revokeObjectURL(objectUrl);
       resolve(ratio);
     };
@@ -882,7 +942,10 @@ function gptImage2CustomSizeError(value) {
   if (width % 16 !== 0 || height % 16 !== 0) {
     return 'GPT Image 的宽高都必须是 16px 的倍数。';
   }
-  if (Math.max(width, height) / Math.min(width, height) > GPT_IMAGE_2_MAX_RATIO) {
+  if (
+    Math.max(width, height) / Math.min(width, height) >
+    GPT_IMAGE_2_MAX_RATIO
+  ) {
     return 'GPT Image 的长短边比例不能超过 3:1。';
   }
   if (pixels < GPT_IMAGE_2_MIN_PIXELS || pixels > GPT_IMAGE_2_MAX_PIXELS) {
@@ -902,7 +965,8 @@ function gptImage2SizeFor(aspectRatio, imageSize, customSize = '') {
   if (imageSize === 'auto') {
     return 'auto';
   }
-  const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K';
+  const normalizedResolution =
+    imageSize && imageSize !== 'auto' ? imageSize : '1K';
   return (
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ||
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.['1:1'] ||
@@ -921,15 +985,25 @@ function gptImage25SizeFor(aspectRatio, imageSize, customSize = '') {
   );
 }
 
-function flexibleGptImageSizeFor(modelValue, aspectRatio, imageSize, customSize = '') {
+function flexibleGptImageSizeFor(
+  modelValue,
+  aspectRatio,
+  imageSize,
+  customSize = '',
+) {
   return isGptImage25Model(modelValue)
     ? gptImage25SizeFor(aspectRatio, imageSize, customSize)
     : gptImage2SizeFor(aspectRatio, imageSize, customSize);
 }
 
 function geminiProImageSizeFor(aspectRatio, imageSize) {
-  const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K';
-  return GOOGLE_GEMINI_PRO_IMAGE_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] || '';
+  const normalizedResolution =
+    imageSize && imageSize !== 'auto' ? imageSize : '1K';
+  return (
+    GOOGLE_GEMINI_PRO_IMAGE_SIZE_BY_RESOLUTION[normalizedResolution]?.[
+      aspectRatio
+    ] || ''
+  );
 }
 
 function grokImageRequestSizeFor(aspectRatio) {
@@ -940,10 +1014,18 @@ function grokImageOutputSizeFor(aspectRatio) {
   return XAI_GROK_IMAGE_OUTPUT_SIZE_BY_ASPECT_RATIO[aspectRatio] || '';
 }
 
-function imagePixelSizeForModel(modelValue, aspectRatio, imageSize, customSize = '') {
+function imagePixelSizeForModel(
+  modelValue,
+  aspectRatio,
+  imageSize,
+  customSize = '',
+) {
   if (isFlexibleGptImageSizeModel(modelValue)) {
     const pixelSize = flexibleGptImageSizeFor(
-      modelValue, aspectRatio, imageSize, customSize,
+      modelValue,
+      aspectRatio,
+      imageSize,
+      customSize,
     );
     if (pixelSize === 'auto') return '';
     return pixelSize || '自定义尺寸待输入';
@@ -967,7 +1049,12 @@ function aspectOrientation(aspectRatio) {
   const [rawWidth, rawHeight] = String(aspectRatio || '').split(':');
   const width = Number(rawWidth);
   const height = Number(rawHeight);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
     return 'square';
   }
   if (width === height) return 'square';
@@ -987,7 +1074,9 @@ function googleImageEditSizeFor(aspectRatio, imageSize, modelValue) {
   const sizeMap =
     GOOGLE_IMAGE_EDIT_SIZE_BY_RESOLUTION[normalizedResolution] ||
     GOOGLE_IMAGE_EDIT_SIZE_BY_RESOLUTION['1K'];
-  return sizeMap[aspectOrientation(aspectRatio)] || sizeMap.square || '1024x1024';
+  return (
+    sizeMap[aspectOrientation(aspectRatio)] || sizeMap.square || '1024x1024'
+  );
 }
 
 const VIDEO_MODELS = [
@@ -1307,7 +1396,9 @@ const BUILTIN_NEGATIVE_PROMPTS = [
 const EMPTY_MODELS = [];
 
 function defaultNegativePromptForMode(mode) {
-  return mode === 'video' ? DEFAULT_VIDEO_NEGATIVE_PROMPT : DEFAULT_IMAGE_NEGATIVE_PROMPT;
+  return mode === 'video'
+    ? DEFAULT_VIDEO_NEGATIVE_PROMPT
+    : DEFAULT_IMAGE_NEGATIVE_PROMPT;
 }
 
 function isBuiltinNegativePrompt(value) {
@@ -1316,10 +1407,13 @@ function isBuiltinNegativePrompt(value) {
 }
 
 function toCountSelectOptions(maxCount = 1) {
-  return Array.from({ length: Math.max(1, Number(maxCount) || 1) }, (_, index) => {
-    const value = index + 1;
-    return { value, label: `${value} 张` };
-  });
+  return Array.from(
+    { length: Math.max(1, Number(maxCount) || 1) },
+    (_, index) => {
+      const value = index + 1;
+      return { value, label: `${value} 张` };
+    },
+  );
 }
 const IMAGE_REQUEST_TIMEOUT_MS = 240000;
 const IMAGE_POLL_REQUEST_TIMEOUT_MS = 30000;
@@ -1332,7 +1426,6 @@ const IMAGE_VERY_LONG_WAIT_MS = 180 * 1000;
 const IMAGE_VERY_LONG_WAIT_MESSAGE =
   '图像任务已进入长尾等待，系统仍会继续轮询并保留任务结果。请保持当前页面或稍后用任务 ID 查询。';
 const REVERSE_PROMPT_MODEL = 'gpt-5.5';
-const REVERSE_PROMPT_MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const REVERSE_PROMPT_REFERENCE_PREFIX = '我需要按参考图生成图片：';
 const REVERSE_PROMPT_INSTRUCTION_BASE =
   '请根据上传图片反推出可用于图像生成的详细提示词，并按最终输出规则返回。请用中文写作，目标是让后续图像生成尽可能接近参考图，而不是生成同题材的新图。必须优先锁定以下可复现因素：1. 画幅比例、裁切边界、主体在画面中的大小、头顶/脚底/左右留白、相机高度、拍摄距离和镜头焦段感；2. 主体姿态、朝向、步态、手臂位置、腿部交叉关系、手持物位置、表情、视线、发型走向和头发遮挡；3. 服装版型、颜色、材质、纹理、褶皱、领口、腰线、裙摆形状、鞋包首饰等具体细节；4. 背景真实元素的位置关系，包括街道/斑马线/路沿/店招/广告牌/桌椅/遮阳伞/植物/墙柱/路人，说明哪些元素必须保留、在哪一侧、虚化程度如何；5. 光线方向、阴影强弱、肤色质感、清晰度、景深、色温、对比度、真实街拍感或商业精修感。请避免泛化成“美女街拍、咖啡店背景”这类宽泛描述，不要擅自替换背景、删除路人、改变裁切、改变衣服结构或把画面过度棚拍化。不要解释过程，不要输出 Markdown。';
@@ -1345,21 +1438,57 @@ const REVERSE_PROMPT_FINAL_OUTPUT_GUARD =
 const REVERSE_PROMPT_INSTRUCTION = `${REVERSE_PROMPT_INSTRUCTION_BASE}${REVERSE_PROMPT_INSTRUCTION_EXTENSION}${REVERSE_PROMPT_MATERIAL_CARD_EXTENSION}${REVERSE_PROMPT_FINAL_OUTPUT_GUARD}`;
 
 const REVERSE_PROMPT_SOURCE_PHRASE_REPLACEMENTS = [
-  [/以上传图片中的成年女性为人物原型[，,、\s]*/g, '以同一成年女性人物识别特征为基础，'],
-  [/以上传图片中的成年男性为人物原型[，,、\s]*/g, '以同一成年男性人物识别特征为基础，'],
-  [/以上传图片中的成年人物为人物原型[，,、\s]*/g, '以同一成年人物识别特征为基础，'],
+  [
+    /以上传图片中的成年女性为人物原型[，,、\s]*/g,
+    '以同一成年女性人物识别特征为基础，',
+  ],
+  [
+    /以上传图片中的成年男性为人物原型[，,、\s]*/g,
+    '以同一成年男性人物识别特征为基础，',
+  ],
+  [
+    /以上传图片中的成年人物为人物原型[，,、\s]*/g,
+    '以同一成年人物识别特征为基础，',
+  ],
   [/以上传图片中的人物为人物原型[，,、\s]*/g, '以同一人物识别特征为基础，'],
-  [/以输入图中的成年女性为人物原型[，,、\s]*/g, '以同一成年女性人物识别特征为基础，'],
-  [/以输入图中的成年男性为人物原型[，,、\s]*/g, '以同一成年男性人物识别特征为基础，'],
-  [/以输入图中的成年人物为人物原型[，,、\s]*/g, '以同一成年人物识别特征为基础，'],
+  [
+    /以输入图中的成年女性为人物原型[，,、\s]*/g,
+    '以同一成年女性人物识别特征为基础，',
+  ],
+  [
+    /以输入图中的成年男性为人物原型[，,、\s]*/g,
+    '以同一成年男性人物识别特征为基础，',
+  ],
+  [
+    /以输入图中的成年人物为人物原型[，,、\s]*/g,
+    '以同一成年人物识别特征为基础，',
+  ],
   [/以输入图中的人物为人物原型[，,、\s]*/g, '以同一人物识别特征为基础，'],
-  [/以上传图中的成年女性为人物原型[，,、\s]*/g, '以同一成年女性人物识别特征为基础，'],
-  [/以上传图中的成年男性为人物原型[，,、\s]*/g, '以同一成年男性人物识别特征为基础，'],
-  [/以上传图中的成年人物为人物原型[，,、\s]*/g, '以同一成年人物识别特征为基础，'],
+  [
+    /以上传图中的成年女性为人物原型[，,、\s]*/g,
+    '以同一成年女性人物识别特征为基础，',
+  ],
+  [
+    /以上传图中的成年男性为人物原型[，,、\s]*/g,
+    '以同一成年男性人物识别特征为基础，',
+  ],
+  [
+    /以上传图中的成年人物为人物原型[，,、\s]*/g,
+    '以同一成年人物识别特征为基础，',
+  ],
   [/以上传图中的人物为人物原型[，,、\s]*/g, '以同一人物识别特征为基础，'],
-  [/以参考图中的成年女性为人物原型[，,、\s]*/g, '以同一成年女性人物识别特征为基础，'],
-  [/以参考图中的成年男性为人物原型[，,、\s]*/g, '以同一成年男性人物识别特征为基础，'],
-  [/以参考图中的成年人物为人物原型[，,、\s]*/g, '以同一成年人物识别特征为基础，'],
+  [
+    /以参考图中的成年女性为人物原型[，,、\s]*/g,
+    '以同一成年女性人物识别特征为基础，',
+  ],
+  [
+    /以参考图中的成年男性为人物原型[，,、\s]*/g,
+    '以同一成年男性人物识别特征为基础，',
+  ],
+  [
+    /以参考图中的成年人物为人物原型[，,、\s]*/g,
+    '以同一成年人物识别特征为基础，',
+  ],
   [/以参考图中的人物为人物原型[，,、\s]*/g, '以同一人物识别特征为基础，'],
   [/保持原图超长竖向裁切/g, '保持同一超长竖向裁切'],
   [/保留原图超长竖向裁切/g, '保留同一超长竖向裁切'],
@@ -1456,7 +1585,8 @@ function aspectRatioPreview(value) {
   if (!Number.isFinite(ratio) || ratio <= 0) return null;
   const maxEdge = 22;
   const width = ratio >= 1 ? maxEdge : Math.max(5, Math.round(maxEdge * ratio));
-  const height = ratio >= 1 ? Math.max(5, Math.round(maxEdge / ratio)) : maxEdge;
+  const height =
+    ratio >= 1 ? Math.max(5, Math.round(maxEdge / ratio)) : maxEdge;
   return (
     <span
       className='mp-aspect-preview'
@@ -1481,7 +1611,8 @@ function toAspectRatioSelectOptions(values) {
 function toResolutionSelectOptions(values) {
   return values.map((value) => ({
     value,
-    label: value === 'auto' ? '默认' : value === 'custom' ? '自定义' : String(value),
+    label:
+      value === 'auto' ? '默认' : value === 'custom' ? '自定义' : String(value),
   }));
 }
 
@@ -1501,7 +1632,9 @@ function toSizeSelectOptions(values, model) {
 
 function userFacingGenerationError(error) {
   const message =
-    typeof error === 'string' ? error || '生成失败' : error?.message || '生成失败';
+    typeof error === 'string'
+      ? error || '生成失败'
+      : error?.message || '生成失败';
   const lower = String(message).toLowerCase();
   const code =
     typeof error === 'string' ? '' : String(error?.code || '').toLowerCase();
@@ -1572,7 +1705,7 @@ function userFacingReversePromptError(error) {
     lower.includes('payload') ||
     lower.includes('413')
   ) {
-    return '参考图过大，请压缩到 12MB 以内后重试。';
+    return '参考图超过当前识别模型限制，系统已尝试自动压缩；请降低图片尺寸后重试。';
   }
   if (
     lower.includes('content policy') ||
@@ -1634,19 +1767,13 @@ function persistResults(results) {
       })
       .filter(Boolean)
       .slice(0, 60);
-    window.localStorage.setItem(MEDIA_RESULT_STORAGE_KEY, JSON.stringify(storable));
+    window.localStorage.setItem(
+      MEDIA_RESULT_STORAGE_KEY,
+      JSON.stringify(storable),
+    );
   } catch (error) {
     // Local persistence is a convenience; generation should not fail if it is unavailable.
   }
-}
-
-function fileToDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('读取图片失败'));
-    reader.readAsDataURL(file);
-  });
 }
 
 function dataURLToBlobURL(dataURL) {
@@ -1668,10 +1795,199 @@ function validateReversePromptImage(file) {
   if (!allowedTypes.includes(file.type)) {
     return '仅支持 PNG / JPG / WebP 图片。';
   }
-  if (file.size > REVERSE_PROMPT_MAX_IMAGE_BYTES) {
-    return '参考图不能超过 12MB，请压缩后再上传。';
-  }
   return '';
+}
+
+function normalizeMediaUploadPolicy(raw, model = '', workflow = '') {
+  const data = raw?.data || raw || {};
+  const positiveNumber = (value, fallback) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  };
+  return {
+    ...DEFAULT_MEDIA_UPLOAD_POLICY,
+    ...data,
+    model: data.model || model,
+    workflow: data.workflow || workflow,
+    max_image_bytes: positiveNumber(
+      data.max_image_bytes,
+      DEFAULT_MEDIA_UPLOAD_POLICY.max_image_bytes,
+    ),
+    max_file_bytes: positiveNumber(
+      data.max_file_bytes,
+      DEFAULT_MEDIA_UPLOAD_POLICY.max_file_bytes,
+    ),
+    max_total_bytes: positiveNumber(
+      data.max_total_bytes,
+      DEFAULT_MEDIA_UPLOAD_POLICY.max_total_bytes,
+    ),
+    global_total_bytes: positiveNumber(
+      data.global_total_bytes,
+      DEFAULT_MEDIA_UPLOAD_POLICY.global_total_bytes,
+    ),
+    max_images: positiveNumber(
+      data.max_images,
+      DEFAULT_MEDIA_UPLOAD_POLICY.max_images,
+    ),
+  };
+}
+
+async function loadMediaUploadPolicy(model, workflow) {
+  try {
+    const res = await API.get('/pg/media/policy', {
+      params: { model, workflow },
+      skipErrorHandler: true,
+      disableDuplicate: true,
+    });
+    if (res.data?.success && res.data?.data) {
+      return normalizeMediaUploadPolicy(res.data.data, model, workflow);
+    }
+  } catch {
+    // The backend enforces the same conservative fallback if policy discovery fails.
+  }
+  return normalizeMediaUploadPolicy({}, model, workflow);
+}
+
+function mediaBytesLabel(bytes) {
+  const mb = Number(bytes || 0) / (1024 * 1024);
+  return `${mb >= 10 ? Math.round(mb) : mb.toFixed(1)}MB`;
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('图片压缩失败'))),
+      type,
+      quality,
+    );
+  });
+}
+
+async function compressImageForPolicy(file, targetBytes, options = {}) {
+  if (!file || file.size <= targetBytes) {
+    return { file, compressed: false, originalBytes: Number(file?.size || 0) };
+  }
+  if (!String(file.type || '').startsWith('image/')) {
+    throw new Error(`${file.name || '素材'} 不是可压缩图片。`);
+  }
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error(
+      `${file.name || '图片'} 无法在浏览器中解码，请转换为标准 PNG / JPG / WebP 后重试。`,
+    );
+  }
+  try {
+    let width = bitmap.width;
+    let height = bitmap.height;
+    const maxCanvasEdge = 8192;
+    const edgeScale = Math.min(1, maxCanvasEdge / Math.max(width, height));
+    width = Math.max(1, Math.round(width * edgeScale));
+    height = Math.max(1, Math.round(height * edgeScale));
+    const preservePng = Boolean(options.preservePng);
+    const outputType = preservePng ? 'image/png' : 'image/webp';
+    const extension = preservePng ? 'png' : 'webp';
+    const baseName =
+      String(file.name || 'image').replace(/\.[^.]+$/, '') || 'image';
+    let quality = preservePng ? undefined : 0.88;
+    let lastBlob = null;
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d', { alpha: true });
+      if (!context) throw new Error('浏览器无法创建图片压缩画布。');
+      context.drawImage(bitmap, 0, 0, width, height);
+      lastBlob = await canvasToBlob(canvas, outputType, quality);
+      canvas.width = 1;
+      canvas.height = 1;
+      if (lastBlob.size <= targetBytes) {
+        return {
+          file: new File([lastBlob], `${baseName}.${extension}`, {
+            type: outputType,
+            lastModified: Date.now(),
+          }),
+          compressed: true,
+          originalBytes: file.size,
+        };
+      }
+
+      const ratio = Math.sqrt(targetBytes / Math.max(lastBlob.size, 1));
+      const scale = Math.max(0.55, Math.min(0.86, ratio * 0.94));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+      if (!preservePng) quality = Math.max(0.5, Number(quality || 0.88) - 0.06);
+    }
+    throw new Error(
+      `${file.name || '图片'} 自动压缩后仍超过 ${mediaBytesLabel(targetBytes)}，请降低图片尺寸后重试。`,
+    );
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+async function prepareImagesForUpload(files, policy, maskIndex = -1) {
+  const sourceFiles = Array.from(files || []).filter(Boolean);
+  if (sourceFiles.length === 0) return { files: [], compressed: [] };
+  const effectiveTotal = Math.min(
+    Number(policy.max_total_bytes),
+    Number(policy.global_total_bytes),
+  );
+  const perFileBudget = Math.max(
+    256 * 1024,
+    Math.floor(
+      Math.min(
+        Number(policy.max_image_bytes),
+        effectiveTotal / sourceFiles.length,
+      ) * 0.96,
+    ),
+  );
+  const prepared = [];
+  const compressed = [];
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    const result = await compressImageForPolicy(
+      sourceFiles[index],
+      perFileBudget,
+      {
+        preservePng: index === maskIndex,
+      },
+    );
+    prepared.push(result.file);
+    if (result.compressed) compressed.push(result);
+  }
+  const totalBytes = prepared.reduce(
+    (sum, file) => sum + Number(file.size || 0),
+    0,
+  );
+  if (totalBytes > effectiveTotal) {
+    throw new Error(
+      `自动压缩后图片总量仍超过当前模型 ${mediaBytesLabel(effectiveTotal)} 限制，请减少参考图。`,
+    );
+  }
+  return { files: prepared, compressed };
+}
+
+async function uploadMediaFile(file, options = {}) {
+  const form = new FormData();
+  form.set('file', file);
+  form.set('role', options.role || 'reference');
+  form.set('metadata', JSON.stringify(options.metadata || {}));
+  const res = await API.post('/pg/media/upload', form, {
+    params: {
+      kind: options.kind || fileMediaType(file),
+      model: options.model || '',
+      workflow: options.workflow || '',
+    },
+    skipErrorHandler: true,
+    timeout: IMAGE_REQUEST_TIMEOUT_MS,
+  });
+  if (!res.data?.success || !res.data?.data?.url) {
+    throw new Error(res.data?.message || '参考素材上传失败。');
+  }
+  return res.data.data;
 }
 
 function extractReversePromptText(payload) {
@@ -1698,7 +2014,10 @@ function extractReversePromptText(payload) {
 
 function sanitizeReversePromptOutput(value) {
   let text = String(value || '').trim();
-  for (const [pattern, replacement] of REVERSE_PROMPT_SOURCE_PHRASE_REPLACEMENTS) {
+  for (const [
+    pattern,
+    replacement,
+  ] of REVERSE_PROMPT_SOURCE_PHRASE_REPLACEMENTS) {
     text = text.replace(pattern, replacement);
   }
   return text
@@ -1718,8 +2037,13 @@ function sanitizeReversePromptOutput(value) {
 }
 
 function normalizeReferenceReversePrompt(value) {
-  let text = String(value || '').replace(/\s+/g, ' ').trim();
-  for (const [pattern, replacement] of REVERSE_PROMPT_REFERENCE_PHRASE_REPLACEMENTS) {
+  let text = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  for (const [
+    pattern,
+    replacement,
+  ] of REVERSE_PROMPT_REFERENCE_PHRASE_REPLACEMENTS) {
     text = text.replace(pattern, replacement);
   }
   if (!text) return '';
@@ -1734,7 +2058,8 @@ function parseReversePromptResult(payload) {
 
   const candidates = [rawText];
   const objectMatch = rawText.match(/\{[\s\S]*\}/);
-  if (objectMatch && objectMatch[0] !== rawText) candidates.push(objectMatch[0]);
+  if (objectMatch && objectMatch[0] !== rawText)
+    candidates.push(objectMatch[0]);
 
   for (const candidate of candidates) {
     try {
@@ -1752,8 +2077,12 @@ function parseReversePromptResult(payload) {
         '';
       if (referencePrompt || textPrompt) {
         return {
-          referencePrompt: normalizeReferenceReversePrompt(referencePrompt || textPrompt),
-          textPrompt: sanitizeReversePromptOutput(textPrompt || referencePrompt),
+          referencePrompt: normalizeReferenceReversePrompt(
+            referencePrompt || textPrompt,
+          ),
+          textPrompt: sanitizeReversePromptOutput(
+            textPrompt || referencePrompt,
+          ),
         };
       }
     } catch (error) {
@@ -1783,8 +2112,13 @@ function askReversePromptReferenceMode() {
 
 function promptWithReferenceImages(value, count) {
   if (count <= 0) return clampPromptText(value);
-  const markers = Array.from({ length: count }, (_, index) => `@image${index + 1}`);
-  const missing = markers.filter((marker) => !String(value || '').includes(marker));
+  const markers = Array.from(
+    { length: count },
+    (_, index) => `@image${index + 1}`,
+  );
+  const missing = markers.filter(
+    (marker) => !String(value || '').includes(marker),
+  );
   if (missing.length === 0) return clampPromptText(value);
   return clampPromptText(`${missing.join(' ')} ${value || ''}`.trim());
 }
@@ -1794,7 +2128,9 @@ function promptWithReferenceAliases(value, aliases) {
     .map((alias) => String(alias || '').trim())
     .filter(Boolean)
     .map((alias) => `@${alias}`);
-  const missing = markers.filter((marker) => !String(value || '').includes(marker));
+  const missing = markers.filter(
+    (marker) => !String(value || '').includes(marker),
+  );
   if (missing.length === 0) return clampPromptText(value);
   return clampPromptText(`${missing.join(' ')} ${value || ''}`.trim());
 }
@@ -1822,12 +2158,19 @@ function toAbsoluteMediaURL(url) {
 
 function toDownloadMediaURL(url) {
   const absoluteUrl = toAbsoluteMediaURL(normalizeURL(url));
-  if (!absoluteUrl || typeof window === 'undefined' || !window.location?.origin) {
+  if (
+    !absoluteUrl ||
+    typeof window === 'undefined' ||
+    !window.location?.origin
+  ) {
     return absoluteUrl;
   }
   try {
     const parsed = new URL(absoluteUrl, window.location.origin);
-    if (parsed.origin === window.location.origin && /^\/pg\/media\/files\//i.test(parsed.pathname)) {
+    if (
+      parsed.origin === window.location.origin &&
+      /^\/pg\/media\/files\//i.test(parsed.pathname)
+    ) {
       parsed.searchParams.set('download', '1');
       return parsed.href;
     }
@@ -1856,25 +2199,31 @@ function referenceFileOf(item) {
   return item?.file || item;
 }
 
-function referenceUploadBudgetError(items) {
-  const files = Array.from(items || []).map(referenceFileOf).filter(Boolean);
+function referenceUploadBudgetError(
+  items,
+  policy = DEFAULT_MEDIA_UPLOAD_POLICY,
+) {
+  const files = Array.from(items || [])
+    .map(referenceFileOf)
+    .filter(Boolean);
   for (const file of files) {
     const mediaType = fileMediaType(file);
-    const maxBytes =
-      mediaType === 'image'
-        ? REVERSE_PROMPT_MAX_IMAGE_BYTES
-        : REFERENCE_MEDIA_MAX_BYTES;
+    if (mediaType === 'image') continue;
+    const maxBytes = Number(policy.max_file_bytes || REFERENCE_MEDIA_MAX_BYTES);
     if (Number(file?.size || 0) > maxBytes) {
       const limitMb = Math.floor(maxBytes / (1024 * 1024));
       return `${file?.name || '参考素材'} 超过 ${limitMb}MB，请压缩后再上传。`;
     }
   }
-  const totalBytes = files.reduce(
-    (sum, file) => sum + Number(file?.size || 0),
-    0,
+  const nonImageBytes = files
+    .filter((file) => fileMediaType(file) !== 'image')
+    .reduce((sum, file) => sum + Number(file?.size || 0), 0);
+  const maxTotalBytes = Math.min(
+    Number(policy.max_total_bytes || REFERENCE_MEDIA_TOTAL_MAX_BYTES),
+    Number(policy.global_total_bytes || REFERENCE_MEDIA_TOTAL_MAX_BYTES),
   );
-  if (totalBytes > REFERENCE_MEDIA_TOTAL_MAX_BYTES) {
-    return '参考素材总大小不能超过 48MB，请移除重复素材或压缩后再上传。';
+  if (nonImageBytes > maxTotalBytes) {
+    return `非图片参考素材总量不能超过 ${mediaBytesLabel(maxTotalBytes)}；图片会在提交前自动压缩。`;
   }
   return '';
 }
@@ -1884,11 +2233,13 @@ function referenceMediaTypeOf(item) {
 }
 
 function referenceAliasPrefix(mediaType) {
-  return {
-    image: '图片',
-    video: '视频',
-    audio: '音频',
-  }[mediaType] || '素材';
+  return (
+    {
+      image: '图片',
+      video: '视频',
+      audio: '音频',
+    }[mediaType] || '素材'
+  );
 }
 
 function createReferenceItem(file, counters = {}) {
@@ -1922,7 +2273,10 @@ function referenceMentionMarker(alias) {
 }
 
 function referenceMentionPattern(alias) {
-  const marker = referenceMentionMarker(alias).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const marker = referenceMentionMarker(alias).replace(
+    /[.*+?^${}()|[\]\\]/g,
+    '\\$&',
+  );
   return new RegExp(`(^|\\s)${marker}(?=\\s|$)`, 'u');
 }
 
@@ -1936,7 +2290,10 @@ function sortedReferenceMentions(promptValue, references) {
       position: text.search(referenceMentionPattern(item.alias)),
     }))
     .filter((entry) => entry.position >= 0)
-    .sort((left, right) => left.position - right.position || left.index - right.index)
+    .sort(
+      (left, right) =>
+        left.position - right.position || left.index - right.index,
+    )
     .map((entry) => entry.item);
 }
 
@@ -1962,24 +2319,38 @@ function mentionQueryAtCursor(value, cursor) {
 }
 
 function isOfficialSeedanceReferenceModel(modelValue) {
-  return Boolean(VIDEO_MODELS.find((item) => item.value === modelValue)?.officialSeedanceReferences) ||
-    modelValue === 'seedance-2.0-ld-17';
+  return (
+    Boolean(
+      VIDEO_MODELS.find((item) => item.value === modelValue)
+        ?.officialSeedanceReferences,
+    ) || modelValue === 'seedance-2.0-ld-17'
+  );
 }
 
 function isExtendedSeedanceVideoModel(modelValue) {
-  return Boolean(VIDEO_MODELS.find((item) => item.value === modelValue)?.extendedSeedance);
+  return Boolean(
+    VIDEO_MODELS.find((item) => item.value === modelValue)?.extendedSeedance,
+  );
 }
 
 function reservedLastFrameImageSlots(modelValue, workflow) {
-  return (isOfficialSeedanceReferenceModel(modelValue) || isExtendedSeedanceVideoModel(modelValue)) &&
+  return (isOfficialSeedanceReferenceModel(modelValue) ||
+    isExtendedSeedanceVideoModel(modelValue)) &&
     workflow === 'first-last'
     ? 1
     : 0;
 }
 
 function videoReferencePolicy(model, options = {}) {
-  const baseLimits = model?.referenceLimits || { image: VIDEO_REFERENCE_LIMIT, video: 0, audio: 0 };
-  const reservedImageSlots = Math.max(0, Number(options.reservedImageSlots) || 0);
+  const baseLimits = model?.referenceLimits || {
+    image: VIDEO_REFERENCE_LIMIT,
+    video: 0,
+    audio: 0,
+  };
+  const reservedImageSlots = Math.max(
+    0,
+    Number(options.reservedImageSlots) || 0,
+  );
   const limits = {
     ...baseLimits,
     image: Math.max(0, (Number(baseLimits.image) || 0) - reservedImageSlots),
@@ -2003,7 +2374,10 @@ function videoReferencePolicy(model, options = {}) {
   const limitLabel = allowedTypes
     .map((type) => `${limits[type]} ${typeLabel[type]}`)
     .join(' / ');
-  const reservedHint = reservedImageSlots > 0 ? `；尾帧会占用 ${reservedImageSlots} 张图片额度` : '';
+  const reservedHint =
+    reservedImageSlots > 0
+      ? `；尾帧会占用 ${reservedImageSlots} 张图片额度`
+      : '';
   const accept = [
     ...(limits.image ? VIDEO_IMAGE_TYPES : []),
     ...(limits.video ? VIDEO_VIDEO_TYPES : []),
@@ -2062,11 +2436,7 @@ function pickPreviewURL(result) {
 }
 
 function getPreviewURLs(result) {
-  const urls = [
-    result.cachedUrl,
-    result.displayUrl,
-    result.url,
-  ]
+  const urls = [result.cachedUrl, result.displayUrl, result.url]
     .map(normalizeURL)
     .filter(Boolean)
     .filter(isBrowserPreviewableURL);
@@ -2074,7 +2444,8 @@ function getPreviewURLs(result) {
 }
 
 async function resultMediaFile(result, purpose = 'reference') {
-  const sourceUrl = getPreviewURLs(result)[0] || normalizeURL(result?.url || '');
+  const sourceUrl =
+    getPreviewURLs(result)[0] || normalizeURL(result?.url || '');
   if (!sourceUrl) throw new Error('这个结果没有可复用的媒体链接。');
   const absoluteUrl = toAbsoluteMediaURL(sourceUrl);
   const response = await fetch(absoluteUrl, { credentials: 'include' });
@@ -2085,12 +2456,17 @@ async function resultMediaFile(result, purpose = 'reference') {
   if (!blob.size) throw new Error('结果文件为空，请下载后手动上传。');
   const fallbackType = result?.kind === 'video' ? 'video/mp4' : 'image/png';
   const mime = blob.type || fallbackType;
-  const ext =
-    mime.includes('webp') ? 'webp' :
-      mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' :
-        mime.includes('mp4') ? 'mp4' :
-          mime.includes('webm') ? 'webm' :
-            result?.kind === 'video' ? 'mp4' : 'png';
+  const ext = mime.includes('webp')
+    ? 'webp'
+    : mime.includes('jpeg') || mime.includes('jpg')
+      ? 'jpg'
+      : mime.includes('mp4')
+        ? 'mp4'
+        : mime.includes('webm')
+          ? 'webm'
+          : result?.kind === 'video'
+            ? 'mp4'
+            : 'png';
   const prefix = result?.kind === 'video' ? 'video-result' : purpose;
   return new File([blob], `${prefix}-${Date.now()}.${ext}`, { type: mime });
 }
@@ -2147,10 +2523,14 @@ function getImageTaskId(response) {
 }
 
 function getImageTaskStatus(response) {
-  const status = String(response?.data?.status || response?.status || '').toLowerCase();
-  if (['success', 'completed', 'succeeded'].includes(status)) return 'completed';
+  const status = String(
+    response?.data?.status || response?.status || '',
+  ).toLowerCase();
+  if (['success', 'completed', 'succeeded'].includes(status))
+    return 'completed';
   if (['failure', 'failed', 'error'].includes(status)) return 'failed';
-  if (['in_progress', 'processing', 'running'].includes(status)) return 'processing';
+  if (['in_progress', 'processing', 'running'].includes(status))
+    return 'processing';
   return status || 'queued';
 }
 
@@ -2197,7 +2577,10 @@ function imageTaskToResult(
   ).trim();
   const metadata = item.metadata || item.Metadata || {};
   const actualSize = firstPromptText(metadata.actual_size);
-  const requestedSize = firstPromptText(metadata.effective_size, metadata.requested_size);
+  const requestedSize = firstPromptText(
+    metadata.effective_size,
+    metadata.requested_size,
+  );
   return {
     id: `image-${task.task_id}`,
     kind: 'image',
@@ -2222,7 +2605,9 @@ function imageTaskToResult(
     taskId: task.task_id,
     actualSize,
     requestedSize,
-    sizeMismatch: Boolean(actualSize && requestedSize && actualSize !== requestedSize),
+    sizeMismatch: Boolean(
+      actualSize && requestedSize && actualSize !== requestedSize,
+    ),
     status: 'ready',
     cacheStatus: 'ready',
     createdAt: Date.now(),
@@ -2313,7 +2698,13 @@ function isTransientVideoPollError(error) {
 
   const code = String(error?.code || '').toLowerCase();
   if (
-    ['econnaborted', 'err_network', 'err_connection_reset', 'etimedout', 'econnreset'].includes(code)
+    [
+      'econnaborted',
+      'err_network',
+      'err_connection_reset',
+      'etimedout',
+      'econnreset',
+    ].includes(code)
   ) {
     return true;
   }
@@ -2554,18 +2945,11 @@ function OptionChips({
   agentKey,
   className = '',
 }) {
-  const classes = [
-    'mp-chip-field',
-    compact ? 'is-compact' : '',
-    className,
-  ]
+  const classes = ['mp-chip-field', compact ? 'is-compact' : '', className]
     .filter(Boolean)
     .join(' ');
   return (
-    <div
-      className={classes}
-      data-xr-agent={agentKey || undefined}
-    >
+    <div className={classes} data-xr-agent={agentKey || undefined}>
       <span>{label}</span>
       <div className='mp-chip-row'>
         {options.map((option) => {
@@ -2579,7 +2963,9 @@ function OptionChips({
               disabled={disabled}
               className={active ? 'mp-param-chip active' : 'mp-param-chip'}
               data-xr-agent={
-                agentKey ? `${agentKey}-${agentSelectorValue(optionValue)}` : undefined
+                agentKey
+                  ? `${agentKey}-${agentSelectorValue(optionValue)}`
+                  : undefined
               }
               onClick={() => onChange(optionValue)}
             >
@@ -2700,11 +3086,17 @@ function ReferenceThumbCard({ item, index, onInsertMention, onRemove }) {
 
   return (
     <div className='mp-upload-thumb-card'>
-      <div className={`mp-upload-thumb-media is-${mediaType}`}>{renderMedia()}</div>
+      <div className={`mp-upload-thumb-media is-${mediaType}`}>
+        {renderMedia()}
+      </div>
       <div className='mp-upload-thumb-meta'>
         <div className='mp-upload-thumb-head'>
-          <strong className={`mp-reference-alias is-${mediaType}`}>{alias}</strong>
-          <span className='mp-upload-thumb-type'>{referenceAliasPrefix(mediaType)}</span>
+          <strong className={`mp-reference-alias is-${mediaType}`}>
+            {alias}
+          </strong>
+          <span className='mp-upload-thumb-type'>
+            {referenceAliasPrefix(mediaType)}
+          </span>
         </div>
         <span className='mp-upload-thumb-name' title={file?.name || ''}>
           {file?.name || '未命名文件'}
@@ -2712,7 +3104,11 @@ function ReferenceThumbCard({ item, index, onInsertMention, onRemove }) {
       </div>
       <div className='mp-upload-thumb-actions'>
         {onInsertMention ? (
-          <Button size='small' theme='borderless' onClick={() => onInsertMention(item)}>
+          <Button
+            size='small'
+            theme='borderless'
+            onClick={() => onInsertMention(item)}
+          >
             @引用
           </Button>
         ) : null}
@@ -2777,7 +3173,8 @@ function MultiFileDrop({
         )}
         <span className='mp-upload-title'>{label}</span>
         <span className='mp-upload-hint'>
-          {hint || `已选 ${files.length} / ${maxFiles} 张，拖入或点击上传 PNG / JPG / WebP`}
+          {hint ||
+            `已选 ${files.length} / ${maxFiles} 张，拖入或点击上传 PNG / JPG / WebP`}
         </span>
         <input
           type='file'
@@ -2810,14 +3207,7 @@ function MultiFileDrop({
   );
 }
 
-function MentionMenu({
-  visible,
-  items,
-  activeIndex,
-  query,
-  onPick,
-  onClose,
-}) {
+function MentionMenu({ visible, items, activeIndex, query, onPick, onClose }) {
   if (!visible) return null;
   return (
     <div className='mp-mention-menu' role='listbox' aria-label='可能@的内容'>
@@ -2833,14 +3223,22 @@ function MentionMenu({
               type='button'
               role='option'
               aria-selected={activeIndex === index}
-              className={activeIndex === index ? 'mp-mention-option active' : 'mp-mention-option'}
+              className={
+                activeIndex === index
+                  ? 'mp-mention-option active'
+                  : 'mp-mention-option'
+              }
               onMouseDown={(event) => {
                 event.preventDefault();
                 onPick(item);
               }}
             >
               <span className={`mp-mention-icon is-${item.mediaType}`}>
-                {item.mediaType === 'audio' ? '音' : item.mediaType === 'video' ? '视' : '图'}
+                {item.mediaType === 'audio'
+                  ? '音'
+                  : item.mediaType === 'video'
+                    ? '视'
+                    : '图'}
               </span>
               <span>
                 <strong>{item.alias}</strong>
@@ -3005,7 +3403,11 @@ function ResultCard({
         <span>72 小时内有效</span>
       </div>
       {displayPrompt ? (
-        <div className={promptExpanded ? 'mp-result-prompt is-expanded' : 'mp-result-prompt'}>
+        <div
+          className={
+            promptExpanded ? 'mp-result-prompt is-expanded' : 'mp-result-prompt'
+          }
+        >
           <div className='mp-result-prompt-head'>
             <span>Prompt 摘要</span>
             {promptFoldable ? (
@@ -3146,13 +3548,17 @@ const MediaPlayground = () => {
   const [enhancePrompt, setEnhancePrompt] = useState(true);
   const [watermark, setWatermark] = useState(false);
   const [referenceFiles, setReferenceFiles] = useState([]);
-  const [referenceImageAspectRatio, setReferenceImageAspectRatio] = useState('');
+  const [referenceImageAspectRatio, setReferenceImageAspectRatio] =
+    useState('');
   const [reversePromptFile, setReversePromptFile] = useState(null);
   const [reversePromptText, setReversePromptText] = useState('');
   const [reversePromptRunning, setReversePromptRunning] = useState(false);
   const [reversePromptMessage, setReversePromptMessage] = useState('');
   const [lastFrameFile, setLastFrameFile] = useState(null);
   const [maskFile, setMaskFile] = useState(null);
+  const [mediaUploadPolicy, setMediaUploadPolicy] = useState(
+    DEFAULT_MEDIA_UPLOAD_POLICY,
+  );
   const [results, setResults] = useState([]);
   const [resultsLoaded, setResultsLoaded] = useState(false);
   const [selectedResultIds, setSelectedResultIds] = useState([]);
@@ -3177,7 +3583,10 @@ const MediaPlayground = () => {
         ...task,
         createdAt: task.createdAt || existing?.createdAt || Date.now(),
       };
-      return [nextTask, ...current.filter((item) => item.id !== task.id)].slice(0, 12);
+      return [nextTask, ...current.filter((item) => item.id !== task.id)].slice(
+        0,
+        12,
+      );
     });
   }
 
@@ -3214,34 +3623,46 @@ const MediaPlayground = () => {
   const isImageModelAllowed = (modelValue) =>
     models.length === 0 || models.some((item) => item === modelValue);
   const isVideoModelAllowed = (modelValue) =>
-    models.length === 0 ||
-    models.some((item) => item === modelValue);
+    models.length === 0 || models.some((item) => item === modelValue);
   const activeModel = mode === 'image' ? activeImageModel : activeVideoModel;
   const currentModelId = mode === 'image' ? imageModel : videoModel;
   const modelAllowed =
-    mode === 'image' ? isImageModelAllowed(imageModel) : isVideoModelAllowed(videoModel);
+    mode === 'image'
+      ? isImageModelAllowed(imageModel)
+      : isVideoModelAllowed(videoModel);
   const effectiveGroup =
     mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
   const reversePromptGroup = IMAGE_GENERATION_GROUP.value;
-  const visibleGroupOptions = mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
+  const visibleGroupOptions =
+    mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
   const defaultNegativePrompt = defaultNegativePromptForMode(mode);
-  const activeNegativePrompt = negativePromptEnabled ? negativePrompt.trim() : '';
+  const activeNegativePrompt = negativePromptEnabled
+    ? negativePrompt.trim()
+    : '';
   const visibleResults = useMemo(() => {
     const sorted = [...results].sort((left, right) => {
       const leftTime = Number(left.createdAt || 0);
       const rightTime = Number(right.createdAt || 0);
-      return resultSort === 'oldest' ? leftTime - rightTime : rightTime - leftTime;
+      return resultSort === 'oldest'
+        ? leftTime - rightTime
+        : rightTime - leftTime;
     });
     return sorted;
   }, [results, resultSort]);
   const inspectorResult = useMemo(
     () =>
-      visibleResults.find((item) => selectedResultIds.includes(item.id)) || null,
+      visibleResults.find((item) => selectedResultIds.includes(item.id)) ||
+      null,
     [selectedResultIds, visibleResults],
   );
 
   useEffect(() => {
-    if (mode !== 'video' || models.length === 0 || isVideoModelAllowed(videoModel)) return;
+    if (
+      mode !== 'video' ||
+      models.length === 0 ||
+      isVideoModelAllowed(videoModel)
+    )
+      return;
     const nextModel = VIDEO_MODELS.find(
       (item) =>
         (!item.private || models.some((model) => model === item.value)) &&
@@ -3250,18 +3671,28 @@ const MediaPlayground = () => {
     if (!nextModel?.value || nextModel.value === videoModel) return;
     const previousLabel = videoModelConfig(videoModel)?.label || videoModel;
     setVideoModel(nextModel.value);
-    Toast.info(`当前分组未开放 ${previousLabel}，已切换到 ${nextModel.label}。`);
+    Toast.info(
+      `当前分组未开放 ${previousLabel}，已切换到 ${nextModel.label}。`,
+    );
   }, [mode, models, videoModel]);
 
-  const reservedVideoImageSlots = reservedLastFrameImageSlots(videoModel, videoWorkflow);
+  const reservedVideoImageSlots = reservedLastFrameImageSlots(
+    videoModel,
+    videoWorkflow,
+  );
   const videoRefPolicy = useMemo(
-    () => videoReferencePolicy(activeVideoModel, { reservedImageSlots: reservedVideoImageSlots }),
+    () =>
+      videoReferencePolicy(activeVideoModel, {
+        reservedImageSlots: reservedVideoImageSlots,
+      }),
     [activeVideoModel, reservedVideoImageSlots],
   );
   const mentionCandidates = useMemo(() => {
     if (mode !== 'video' || videoWorkflow === 'text') return [];
     return referenceFiles
-      .filter((item) => videoRefPolicy.allowedTypes.includes(referenceMediaTypeOf(item)))
+      .filter((item) =>
+        videoRefPolicy.allowedTypes.includes(referenceMediaTypeOf(item)),
+      )
       .map((item) => ({
         ...item,
         mediaType: referenceMediaTypeOf(item),
@@ -3273,20 +3704,22 @@ const MediaPlayground = () => {
     return mentionCandidates.filter((item) => {
       const file = referenceFileOf(item);
       return (
-        String(item.alias || '').toLowerCase().includes(query) ||
-        String(file?.name || '').toLowerCase().includes(query)
+        String(item.alias || '')
+          .toLowerCase()
+          .includes(query) ||
+        String(file?.name || '')
+          .toLowerCase()
+          .includes(query)
       );
     });
   }, [mentionCandidates, mentionState.query]);
   const referenceFileLimit =
     mode === 'image' ? IMAGE_EDIT_REFERENCE_LIMIT : videoRefPolicy.maxFiles;
-  const imageRatioOptions =
-    activeImageModel.aspectRatios?.length
-      ? activeImageModel.aspectRatios
-      : activeImageModel.sizes || [];
+  const imageRatioOptions = activeImageModel.aspectRatios?.length
+    ? activeImageModel.aspectRatios
+    : activeImageModel.sizes || [];
   const canUseAutoEditAspectRatio =
-    mode === 'image' &&
-    imageWorkflow === 'edit';
+    mode === 'image' && imageWorkflow === 'edit';
   const imageRatioSelectOptions =
     canUseAutoEditAspectRatio && !imageRatioOptions.includes('auto')
       ? ['auto', ...imageRatioOptions]
@@ -3296,7 +3729,12 @@ const MediaPlayground = () => {
     : size;
   const imagePixelLabel =
     mode === 'image'
-      ? imagePixelSizeForModel(imageModel, imageRatioValue, resolution, customImageSize)
+      ? imagePixelSizeForModel(
+          imageModel,
+          imageRatioValue,
+          resolution,
+          customImageSize,
+        )
       : '';
   const inspectorImagePixelLabel =
     inspectorResult?.actualSize ||
@@ -3326,12 +3764,17 @@ const MediaPlayground = () => {
     if (current.textAreaRef?.current) return current.textAreaRef.current;
     if (current.textAreaRef) return current.textAreaRef;
     if (current.input) return current.input;
-    if (typeof current.querySelector === 'function') return current.querySelector('textarea');
+    if (typeof current.querySelector === 'function')
+      return current.querySelector('textarea');
     return null;
   }
 
   function closeMentionMenu() {
-    setMentionState((current) => ({ ...current, visible: false, activeIndex: 0 }));
+    setMentionState((current) => ({
+      ...current,
+      visible: false,
+      activeIndex: 0,
+    }));
   }
 
   function syncMentionAtCursor(nextPrompt = prompt) {
@@ -3364,8 +3807,14 @@ const MediaPlayground = () => {
     const needsLeadingSpace = before && !/\s$/.test(before);
     const needsTrailingSpace = after && !/^\s/.test(after);
     const insertion = `${needsLeadingSpace ? ' ' : ''}${text}${needsTrailingSpace ? ' ' : ''}`;
-    const nextPrompt = clampPromptText(`${before}${insertion}${after}`, mode === 'video' ? activeVideoModel.promptMaxLength : undefined);
-    const nextCursor = Math.min(before.length + insertion.length, nextPrompt.length);
+    const nextPrompt = clampPromptText(
+      `${before}${insertion}${after}`,
+      mode === 'video' ? activeVideoModel.promptMaxLength : undefined,
+    );
+    const nextCursor = Math.min(
+      before.length + insertion.length,
+      nextPrompt.length,
+    );
     setPrompt(nextPrompt);
     closeMentionMenu();
     window.requestAnimationFrame(() => {
@@ -3385,7 +3834,10 @@ const MediaPlayground = () => {
   }
 
   function handlePromptChange(value) {
-    const nextPrompt = clampPromptText(value, mode === 'video' ? activeVideoModel.promptMaxLength : undefined);
+    const nextPrompt = clampPromptText(
+      value,
+      mode === 'video' ? activeVideoModel.promptMaxLength : undefined,
+    );
     setPrompt(nextPrompt);
     window.requestAnimationFrame(() => syncMentionAtCursor(nextPrompt));
   }
@@ -3393,7 +3845,9 @@ const MediaPlayground = () => {
   function handleNegativePromptEnabledChange(checked) {
     setNegativePromptEnabled(checked);
     if (checked) {
-      setNegativePrompt((current) => current.trim() || defaultNegativePromptForMode(mode));
+      setNegativePrompt(
+        (current) => current.trim() || defaultNegativePromptForMode(mode),
+      );
     }
   }
 
@@ -3415,14 +3869,21 @@ const MediaPlayground = () => {
       setMentionState((current) => ({
         ...current,
         activeIndex: mentionMenuItems.length
-          ? (current.activeIndex - 1 + mentionMenuItems.length) % mentionMenuItems.length
+          ? (current.activeIndex - 1 + mentionMenuItems.length) %
+            mentionMenuItems.length
           : 0,
       }));
       return;
     }
-    if ((event.key === 'Enter' || event.key === 'Tab') && mentionMenuItems.length > 0) {
+    if (
+      (event.key === 'Enter' || event.key === 'Tab') &&
+      mentionMenuItems.length > 0
+    ) {
       event.preventDefault();
-      insertReferenceMention(mentionMenuItems[mentionState.activeIndex] || mentionMenuItems[0], mentionState);
+      insertReferenceMention(
+        mentionMenuItems[mentionState.activeIndex] || mentionMenuItems[0],
+        mentionState,
+      );
       return;
     }
     if (event.key === 'Escape') {
@@ -3458,6 +3919,23 @@ const MediaPlayground = () => {
       .then((res) => setModels(res.data?.data || []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const model = mode === 'image' ? imageModel : videoModel;
+    const workflow =
+      mode === 'image'
+        ? imageWorkflow === 'edit'
+          ? 'image_edit'
+          : 'image_generate'
+        : `video_${videoWorkflow}`;
+    loadMediaUploadPolicy(model, workflow).then((policy) => {
+      if (!cancelled) setMediaUploadPolicy(policy);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [imageModel, imageWorkflow, mode, videoModel, videoWorkflow]);
 
   useEffect(() => {
     setSize(activeModel.defaultSize || activeModel.sizes?.[0] || '1024x1024');
@@ -3518,7 +3996,9 @@ const MediaPlayground = () => {
     );
     if (imageWorkflow !== 'edit' || !imageReference) {
       setReferenceImageAspectRatio('');
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+      };
     }
     imageAspectRatioFromFile(referenceFileOf(imageReference))
       .then((ratio) => {
@@ -3527,7 +4007,9 @@ const MediaPlayground = () => {
       .catch(() => {
         if (!cancelled) setReferenceImageAspectRatio('');
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [imageWorkflow, referenceFiles]);
 
   useEffect(() => {
@@ -3562,7 +4044,9 @@ const MediaPlayground = () => {
 
   useEffect(() => {
     pollingCancelledRef.current = false;
-    return () => { pollingCancelledRef.current = true; };
+    return () => {
+      pollingCancelledRef.current = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -3576,7 +4060,9 @@ const MediaPlayground = () => {
       return undefined;
     }
     const updateElapsed = () =>
-      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - submitStartedAt) / 1000)));
+      setElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - submitStartedAt) / 1000)),
+      );
     updateElapsed();
     const timer = window.setInterval(updateElapsed, 1000);
     return () => window.clearInterval(timer);
@@ -3585,10 +4071,10 @@ const MediaPlayground = () => {
   function addReferenceFiles(fileList) {
     const incoming = Array.from(fileList || []);
     if (incoming.length === 0) return;
-    const budgetError = referenceUploadBudgetError([
-      ...referenceFiles,
-      ...incoming,
-    ]);
+    const budgetError = referenceUploadBudgetError(
+      [...referenceFiles, ...incoming],
+      mediaUploadPolicy,
+    );
     if (budgetError) {
       Toast.error(budgetError);
       return;
@@ -3648,11 +4134,29 @@ const MediaPlayground = () => {
         `最多支持上传 ${referenceFileLimit} 张参考图，已保留前 ${referenceFileLimit} 张。`,
       );
     }
+    const incomingBytes = accepted.reduce(
+      (sum, item) => sum + Number(referenceFileOf(item)?.size || 0),
+      0,
+    );
+    if (
+      accepted.some(
+        (item) =>
+          Number(referenceFileOf(item)?.size || 0) >
+          mediaUploadPolicy.max_image_bytes,
+      ) ||
+      incomingBytes > mediaUploadPolicy.max_total_bytes
+    ) {
+      Toast.info(
+        `图片已加入；提交前会按 ${mediaUploadPolicy.provider_limit_note || '当前模型限制'} 自动压缩，并先上传媒体存储。`,
+      );
+    }
   }
 
   function removeReferenceFile(idOrIndex) {
     setReferenceFiles((files) =>
-      files.filter((item, itemIndex) => item.id !== idOrIndex && itemIndex !== idOrIndex),
+      files.filter(
+        (item, itemIndex) => item.id !== idOrIndex && itemIndex !== idOrIndex,
+      ),
     );
   }
 
@@ -3664,7 +4168,8 @@ const MediaPlayground = () => {
       return;
     }
     setReferenceFiles((current) => {
-      if (current.some((item) => referenceFileOf(item) === file)) return current;
+      if (current.some((item) => referenceFileOf(item) === file))
+        return current;
       if (current.length >= IMAGE_EDIT_REFERENCE_LIMIT) return current;
       const counters = nextReferenceCounters(current);
       return [...current, createReferenceItem(file, counters)];
@@ -3692,8 +4197,10 @@ const MediaPlayground = () => {
         if (!isGrok46ImageModel(imageModel)) {
           payload.size = grokImageRequestSizeFor(effectiveAspectRatio);
         }
-        if (resolution && resolution !== 'auto') payload.resolution = resolution;
-        if (isGrok46ImageModel(imageModel) && quality) payload.quality = quality;
+        if (resolution && resolution !== 'auto')
+          payload.resolution = resolution;
+        if (isGrok46ImageModel(imageModel) && quality)
+          payload.quality = quality;
         if (format && format !== 'url') payload.response_format = format;
         return payload;
       }
@@ -3704,13 +4211,20 @@ const MediaPlayground = () => {
             payload.resolution = String(resolution).toUpperCase();
             payload.image_size = String(resolution).toUpperCase();
           }
-          payload.size = googleImageEditSizeFor(effectiveAspectRatio, resolution, imageModel);
+          payload.size = googleImageEditSizeFor(
+            effectiveAspectRatio,
+            resolution,
+            imageModel,
+          );
           if (quality) payload.quality = quality;
           if (activeNegativePrompt)
             payload.extra_fields = { negative_prompt: activeNegativePrompt };
           return payload;
         }
-        const responseFormat = imageResponseFormat(effectiveAspectRatio, resolution);
+        const responseFormat = imageResponseFormat(
+          effectiveAspectRatio,
+          resolution,
+        );
         const imageConfig = geminiImageConfig(effectiveAspectRatio, resolution);
         if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio;
         if (resolution && resolution !== 'auto') {
@@ -3735,7 +4249,10 @@ const MediaPlayground = () => {
       payload.n = effectiveCount;
       payload.size = isFlexibleGptImageSize
         ? flexibleGptImageSizeFor(
-            imageModel, effectiveAspectRatio, resolution, customImageSize,
+            imageModel,
+            effectiveAspectRatio,
+            resolution,
+            customImageSize,
           )
         : size;
       // `resolution` is a Media Workshop tier label, not an OpenAI Image API
@@ -3750,7 +4267,11 @@ const MediaPlayground = () => {
         payload.resolution = resolution;
       if (quality) payload.quality = quality;
       if (format && format !== 'url') payload.output_format = format;
-      if (activeImageModel.sizeParam === 'size' && format !== 'png' && format !== 'url')
+      if (
+        activeImageModel.sizeParam === 'size' &&
+        format !== 'png' &&
+        format !== 'url'
+      )
         payload.output_compression = compression;
       if (
         activeImageModel.backgroundOptions?.includes(background) &&
@@ -3768,7 +4289,10 @@ const MediaPlayground = () => {
       return payload;
     }
 
-    if (videoModel === 'moon-video-2.5-720p' || videoModel === 'moon-video-2.5-480p') {
+    if (
+      videoModel === 'moon-video-2.5-720p' ||
+      videoModel === 'moon-video-2.5-480p'
+    ) {
       return {
         model: videoModel,
         group: effectiveGroup,
@@ -3793,11 +4317,12 @@ const MediaPlayground = () => {
       enhance_prompt: enhancePrompt,
       watermark,
       ratio: SIZE_TO_ASPECT_RATIO[size] || undefined,
-      resolution: activeVideoModel.value === 'seedance-sd2-fast-720p'
-        ? '720P'
-        : activeVideoModel.resolutions?.includes(resolution)
-          ? resolution
-          : undefined,
+      resolution:
+        activeVideoModel.value === 'seedance-sd2-fast-720p'
+          ? '720P'
+          : activeVideoModel.resolutions?.includes(resolution)
+            ? resolution
+            : undefined,
       metadata: {},
     };
     if (seed.trim()) payload.seed = Number(seed);
@@ -3824,7 +4349,10 @@ const MediaPlayground = () => {
         ...(payload.metadata || {}),
         last_frame_image: '上传的尾帧图片会在提交时自动填入',
         frames: [
-          { role: 'first_frame', image: '上传的第一张首帧图片会在提交时自动填入' },
+          {
+            role: 'first_frame',
+            image: '上传的第一张首帧图片会在提交时自动填入',
+          },
           { role: 'last_frame', image: '上传的尾帧图片会在提交时自动填入' },
         ],
       };
@@ -3894,61 +4422,64 @@ const MediaPlayground = () => {
   }
 
   async function cacheReferenceMedia(reference, mediaType, role, index) {
-    const file = referenceFileOf(reference);
-    const dataUrl = await fileToDataURL(file);
-    const res = await API.post(
-      '/pg/media/cache',
-      {
-        url: dataUrl,
-        kind: mediaType,
-        metadata: {
-          role: 'reference',
-          media_type: mediaType,
-          reference_role: role,
-          reference_index: index + 1,
-          reference_alias: reference?.alias || '',
-          hidden: true,
-          public_reference: true,
-          source: 'video_input',
-          model: videoModel,
-          workflow: videoWorkflow,
-        },
-      },
-      { skipErrorHandler: true },
-    );
-    if (!res.data?.success || !res.data?.data?.url) {
-      throw new Error(res.data?.message || '参考素材缓存失败。');
+    let file = referenceFileOf(reference);
+    if (mediaType === 'image') {
+      const policy = await loadMediaUploadPolicy(
+        videoModel,
+        `video_${videoWorkflow}`,
+      );
+      const prepared = await prepareImagesForUpload([file], policy);
+      file = prepared.files[0];
+      if (prepared.compressed.length > 0) {
+        Toast.info(
+          `${referenceFileOf(reference).name || '参考图'} 已从 ${mediaBytesLabel(referenceFileOf(reference).size)} 自动压缩到 ${mediaBytesLabel(file.size)}。`,
+        );
+      }
     }
+    const uploaded = await uploadMediaFile(file, {
+      kind: mediaType,
+      model: videoModel,
+      workflow: `video_${videoWorkflow}`,
+      role,
+      metadata: {
+        media_type: mediaType,
+        reference_role: role,
+        reference_index: index + 1,
+        reference_alias: reference?.alias || '',
+        source: 'video_input',
+      },
+    });
     return toAbsoluteMediaURL(
-      res.data.data.upstream_url || res.data.data.public_url || res.data.data.url,
+      uploaded.upstream_url || uploaded.public_url || uploaded.url,
     );
   }
 
   async function cacheReversePromptImage(file) {
-    const dataUrl = await fileToDataURL(file);
-    const res = await API.post(
-      '/pg/media/cache',
-      {
-        url: dataUrl,
-        kind: 'image',
-        metadata: {
-          role: 'reference',
-          reference_role: 'reverse_prompt',
-          hidden: true,
-          public_reference: true,
-          public_reference_reason: 'reverse_prompt_upstream_url',
-          source: 'reverse_prompt',
-          model: REVERSE_PROMPT_MODEL,
-          target_model: imageModel,
-        },
-      },
-      { skipErrorHandler: true },
+    const policy = await loadMediaUploadPolicy(
+      REVERSE_PROMPT_MODEL,
+      'reverse_prompt',
     );
-    if (!res.data?.success || !res.data?.data?.url) {
-      throw new Error(res.data?.message || '参考图缓存失败。');
+    const prepared = await prepareImagesForUpload([file], policy);
+    const uploadFile = prepared.files[0];
+    if (prepared.compressed.length > 0) {
+      Toast.info(
+        `超大参考图已从 ${mediaBytesLabel(file.size)} 自动压缩到 ${mediaBytesLabel(uploadFile.size)}，正在上传媒体存储。`,
+      );
     }
+    const uploaded = await uploadMediaFile(uploadFile, {
+      kind: 'image',
+      model: REVERSE_PROMPT_MODEL,
+      workflow: 'reverse_prompt',
+      role: 'reverse_prompt',
+      metadata: {
+        reference_role: 'reverse_prompt',
+        public_reference_reason: 'reverse_prompt_upstream_url',
+        source: 'reverse_prompt',
+        target_model: imageModel,
+      },
+    });
     return toAbsoluteMediaURL(
-      res.data.data.upstream_url || res.data.data.public_url || res.data.data.url,
+      uploaded.upstream_url || uploaded.public_url || uploaded.url,
     );
   }
 
@@ -4033,11 +4564,15 @@ const MediaPlayground = () => {
   }
 
   async function applyVideoReferences(payload) {
-    if (videoWorkflow !== 'image' && videoWorkflow !== 'first-last') return payload;
+    if (videoWorkflow !== 'image' && videoWorkflow !== 'first-last')
+      return payload;
 
     const isOfficialReferencesModel =
-      isOfficialSeedanceReferenceModel(videoModel) || isExtendedSeedanceVideoModel(videoModel);
-    const imageReferenceItems = referenceFiles.filter((item) => referenceMediaTypeOf(item) === 'image');
+      isOfficialSeedanceReferenceModel(videoModel) ||
+      isExtendedSeedanceVideoModel(videoModel);
+    const imageReferenceItems = referenceFiles.filter(
+      (item) => referenceMediaTypeOf(item) === 'image',
+    );
     const referenceItemsForModel =
       videoWorkflow === 'first-last'
         ? imageReferenceItems.slice(0, 1)
@@ -4053,7 +4588,9 @@ const MediaPlayground = () => {
 
     const references = await Promise.all(
       orderedReferenceItems.map(async (item, index) => {
-        const mediaType = isOfficialReferencesModel ? referenceMediaTypeOf(item) : 'image';
+        const mediaType = isOfficialReferencesModel
+          ? referenceMediaTypeOf(item)
+          : 'image';
         const role =
           mediaType === 'video'
             ? 'reference_video'
@@ -4075,7 +4612,12 @@ const MediaPlayground = () => {
         mediaType: 'image',
         role: 'last_frame',
         alias: `尾帧${references.length + 1}`,
-        url: await cacheReferenceMedia(lastFrameFile, 'image', 'last_frame', references.length),
+        url: await cacheReferenceMedia(
+          lastFrameFile,
+          'image',
+          'last_frame',
+          references.length,
+        ),
       });
     }
     if (references.length === 0) return payload;
@@ -4096,18 +4638,26 @@ const MediaPlayground = () => {
       return {
         ...payload,
         references: officialReferences,
-        prompt: videoModel === 'moon-video-2.5-720p' || videoModel === 'moon-video-2.5-480p'
-          ? payload.prompt || ''
-          : shouldForwardReferenceAliases
-          ? promptWithReferenceAliases(payload.prompt || '', referenceAliases)
-          : payload.prompt || '',
+        prompt:
+          videoModel === 'moon-video-2.5-720p' ||
+          videoModel === 'moon-video-2.5-480p'
+            ? payload.prompt || ''
+            : shouldForwardReferenceAliases
+              ? promptWithReferenceAliases(
+                  payload.prompt || '',
+                  referenceAliases,
+                )
+              : payload.prompt || '',
         metadata: {
           ...(payload.metadata || {}),
           ...(shouldForwardReferenceAliases
             ? {
-              reference_aliases: referenceAliases,
-              reference_mentions: sortedReferenceMentions(payload.prompt || '', orderedReferenceItems).map((item) => item.alias),
-            }
+                reference_aliases: referenceAliases,
+                reference_mentions: sortedReferenceMentions(
+                  payload.prompt || '',
+                  orderedReferenceItems,
+                ).map((item) => item.alias),
+              }
             : {}),
         },
       };
@@ -4132,7 +4682,10 @@ const MediaPlayground = () => {
 
     return {
       ...payload,
-      prompt: promptWithReferenceImages(payload.prompt || '', references.length),
+      prompt: promptWithReferenceImages(
+        payload.prompt || '',
+        references.length,
+      ),
       image: references[0].url,
       images: references.map((item) => item.url),
       metadata,
@@ -4155,7 +4708,9 @@ const MediaPlayground = () => {
       let detectedRatio = '';
       if (imageReference) {
         try {
-          detectedRatio = await imageAspectRatioFromFile(referenceFileOf(imageReference));
+          detectedRatio = await imageAspectRatioFromFile(
+            referenceFileOf(imageReference),
+          );
         } catch {
           detectedRatio = '';
         }
@@ -4201,37 +4756,93 @@ const MediaPlayground = () => {
       }
       return payload;
     })();
-    const submittedPrompt = firstPromptText(effectiveRequestPayload.prompt, prompt);
+    const submittedPrompt = firstPromptText(
+      effectiveRequestPayload.prompt,
+      prompt,
+    );
     const submittedModel = effectiveRequestPayload.model || imageModel;
     const submittedModelLabel =
       imageModelConfig(submittedModel)?.label ||
       activeImageModel.label ||
       submittedModel;
     if (imageWorkflow === 'edit') {
-      const form = new FormData();
-      Object.entries(effectiveRequestPayload).forEach(([key, value]) => {
-        if (value === undefined || value === null) return;
-        form.set(
-          key,
-          typeof value === 'object' ? JSON.stringify(value) : String(value),
+      const policy = await loadMediaUploadPolicy(submittedModel, 'image_edit');
+      const sourceFiles = referenceFiles.map(referenceFileOf);
+      const filesWithMask = maskFile ? [...sourceFiles, maskFile] : sourceFiles;
+      setTaskMessage(
+        `正在按 ${submittedModelLabel} 的供应商限制检查图片；超大图片会自动压缩后上传。`,
+      );
+      const prepared = await prepareImagesForUpload(
+        filesWithMask,
+        policy,
+        maskFile ? filesWithMask.length - 1 : -1,
+      );
+      if (prepared.compressed.length > 0) {
+        const before = prepared.compressed.reduce(
+          (sum, item) => sum + Number(item.originalBytes || 0),
+          0,
         );
-      });
-      referenceFiles.forEach((item) => form.append('image', referenceFileOf(item)));
-      if (maskFile) form.set('mask', maskFile);
-      response = await API.post('/pg/images/tasks/edits', form, {
+        const after = prepared.compressed.reduce(
+          (sum, item) => sum + Number(item.file?.size || 0),
+          0,
+        );
+        Toast.info(
+          `已按模型限制自动压缩 ${prepared.compressed.length} 张图片：${mediaBytesLabel(before)} → ${mediaBytesLabel(after)}。`,
+        );
+      }
+      setTaskMessage('图片正在上传媒体存储；生成请求只会提交 URL。');
+      const preparedReferences = prepared.files.slice(0, sourceFiles.length);
+      const uploadedReferences = await Promise.all(
+        preparedReferences.map((file, index) =>
+          uploadMediaFile(file, {
+            kind: 'image',
+            model: submittedModel,
+            workflow: 'image_edit',
+            role: 'edit_source',
+            metadata: {
+              reference_role: 'edit_source',
+              reference_index: index + 1,
+              source: 'image_edit',
+            },
+          }),
+        ),
+      );
+      let uploadedMask = null;
+      if (maskFile) {
+        uploadedMask = await uploadMediaFile(
+          prepared.files[prepared.files.length - 1],
+          {
+            kind: 'image',
+            model: submittedModel,
+            workflow: 'image_edit',
+            role: 'mask',
+            metadata: { reference_role: 'mask', source: 'image_edit' },
+          },
+        );
+      }
+      const storedRequest = {
+        ...effectiveRequestPayload,
+        image_urls: uploadedReferences.map((item) => item.url),
+        ...(uploadedMask?.url ? { mask_url: uploadedMask.url } : {}),
+      };
+      response = await API.post('/pg/images/tasks/edits', storedRequest, {
         skipErrorHandler: true,
-        headers: { 'Content-Type': 'multipart/form-data' },
         timeout: IMAGE_REQUEST_TIMEOUT_MS,
       });
     } else {
-      response = await API.post('/pg/images/tasks/generations', effectiveRequestPayload, {
-        skipErrorHandler: true,
-        timeout: IMAGE_REQUEST_TIMEOUT_MS,
-      });
+      response = await API.post(
+        '/pg/images/tasks/generations',
+        effectiveRequestPayload,
+        {
+          skipErrorHandler: true,
+          timeout: IMAGE_REQUEST_TIMEOUT_MS,
+        },
+      );
     }
     const payload = response.data;
     if (payload?.error?.message) throw new Error(payload.error.message);
-    if (!payload?.success) throw new Error(payload?.message || '图像任务提交失败。');
+    if (!payload?.success)
+      throw new Error(payload?.message || '图像任务提交失败。');
     const taskId = getImageTaskId(payload);
     if (!taskId) throw new Error('图像任务提交成功但没有返回任务 ID。');
     setImageTaskLookup(taskId);
@@ -4291,11 +4902,14 @@ const MediaPlayground = () => {
       if (pollingCancelledRef.current) return null;
       const elapsedMs = Date.now() - startedAt;
       try {
-        const res = await API.get(`/pg/images/tasks/${encodeURIComponent(taskId)}`, {
-          skipErrorHandler: true,
-          disableDuplicate: true,
-          timeout: IMAGE_POLL_REQUEST_TIMEOUT_MS,
-        });
+        const res = await API.get(
+          `/pg/images/tasks/${encodeURIComponent(taskId)}`,
+          {
+            skipErrorHandler: true,
+            disableDuplicate: true,
+            timeout: IMAGE_POLL_REQUEST_TIMEOUT_MS,
+          },
+        );
         if (res.data?.error?.message) throw new Error(res.data.error.message);
         if (!res.data?.success || !res.data?.data) {
           throw new Error(res.data?.message || '图像任务查询失败。');
@@ -4397,10 +5011,13 @@ const MediaPlayground = () => {
     setSubmitting(true);
     setTaskMessage(`正在查询图像任务：${taskId}`);
     try {
-      const res = await API.get(`/pg/images/tasks/${encodeURIComponent(taskId)}`, {
-        skipErrorHandler: true,
-        disableDuplicate: true,
-      });
+      const res = await API.get(
+        `/pg/images/tasks/${encodeURIComponent(taskId)}`,
+        {
+          skipErrorHandler: true,
+          disableDuplicate: true,
+        },
+      );
       if (res.data?.error?.message) throw new Error(res.data.error.message);
       if (!res.data?.success || !res.data?.data) {
         throw new Error(res.data?.message || '图像任务查询失败。');
@@ -4409,7 +5026,10 @@ const MediaPlayground = () => {
       if (status === 'completed') {
         const result = imageTaskToResult(res.data.data);
         if (!result) throw new Error('图像任务完成但没有返回持久化图片。');
-        setResults((prev) => [result, ...prev.filter((item) => item.id !== result.id)]);
+        setResults((prev) => [
+          result,
+          ...prev.filter((item) => item.id !== result.id),
+        ]);
         setSelectedResultIds((prev) =>
           prev.includes(result.id) ? prev : [result.id, ...prev],
         );
@@ -4451,13 +5071,17 @@ const MediaPlayground = () => {
         const elapsedMs = Date.now() - startedAt;
         let waitSuffix = '';
         if (!longWaitNotified && elapsedMs >= VIDEO_LONG_WAIT_MS) {
-          Toast.info('视频任务仍在生成中，请不要重复提交，完成后会自动回写日志和媒体工坊。');
+          Toast.info(
+            '视频任务仍在生成中，请不要重复提交，完成后会自动回写日志和媒体工坊。',
+          );
           longWaitNotified = true;
         }
         if (elapsedMs >= VIDEO_BACKGROUND_WAIT_MS) {
           waitSuffix = '，已转入长时间后台轮询，生成完成后会回写日志和媒体工坊';
           if (!backgroundNotified) {
-            Toast.info('视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。');
+            Toast.info(
+              '视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。',
+            );
             backgroundNotified = true;
           }
         }
@@ -4473,13 +5097,14 @@ const MediaPlayground = () => {
           progress,
           message: nextMessage,
         });
-        if (url) return createVideoResult(
-          res.data,
-          url,
-          taskId,
-          videoModel,
-          activeVideoModel.label,
-        );
+        if (url)
+          return createVideoResult(
+            res.data,
+            url,
+            taskId,
+            videoModel,
+            activeVideoModel.label,
+          );
         if (status === 'failed') {
           upsertLiveQueueTask({
             id: taskId,
@@ -4491,7 +5116,9 @@ const MediaPlayground = () => {
             progress: 100,
             message: extractVideoFailureReason(res.data) || '视频任务失败。',
           });
-          throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
+          throw new Error(
+            extractVideoFailureReason(res.data) || '视频任务失败。',
+          );
         }
         if (status === 'completed') {
           throw new Error('视频完成但没有返回视频地址。');
@@ -4501,13 +5128,17 @@ const MediaPlayground = () => {
         const elapsedMs = Date.now() - startedAt;
         let waitSuffix = '，页面会继续轮询，不会中断生成任务';
         if (!longWaitNotified && elapsedMs >= VIDEO_LONG_WAIT_MS) {
-          Toast.info('视频任务仍在生成中，请不要重复提交，完成后会自动回写日志和媒体工坊。');
+          Toast.info(
+            '视频任务仍在生成中，请不要重复提交，完成后会自动回写日志和媒体工坊。',
+          );
           longWaitNotified = true;
         }
         if (elapsedMs >= VIDEO_BACKGROUND_WAIT_MS) {
           waitSuffix = '，已转入长时间后台轮询，生成完成后会回写日志和媒体工坊';
           if (!backgroundNotified) {
-            Toast.info('视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。');
+            Toast.info(
+              '视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。',
+            );
             backgroundNotified = true;
           }
         }
@@ -4545,7 +5176,12 @@ const MediaPlayground = () => {
       );
       const file = referenceFileOf(reference);
       if (!file) throw new Error('图生视频需要上传一张参考图片。');
-      const imageUrl = await cacheReferenceMedia(reference, 'image', 'reference_image', 0);
+      const imageUrl = await cacheReferenceMedia(
+        reference,
+        'image',
+        'reference_image',
+        0,
+      );
       payload = {
         model: videoModel,
         prompt: prompt.trim(),
@@ -4600,7 +5236,9 @@ const MediaPlayground = () => {
       spec: outputSpec,
     });
     setVideoPolling(true);
-    setTaskMessage(`视频任务已提交：${taskId}，页面保持打开时会后台自动轮询结果。`);
+    setTaskMessage(
+      `视频任务已提交：${taskId}，页面保持打开时会后台自动轮询结果。`,
+    );
     upsertLiveQueueTask({
       id: taskId,
       title: '视频生成中',
@@ -4618,8 +5256,12 @@ const MediaPlayground = () => {
       try {
         const result = await pollVideo(taskId);
         if (!result) {
-          Toast.info('页面轮询已暂停，任务仍在后台继续生成，完成后会写入日志和媒体工坊。');
-          setTaskMessage(`视频任务 ${taskId} 已转入后台生成，完成后可在任务日志和媒体工坊查看。`);
+          Toast.info(
+            '页面轮询已暂停，任务仍在后台继续生成，完成后会写入日志和媒体工坊。',
+          );
+          setTaskMessage(
+            `视频任务 ${taskId} 已转入后台生成，完成后可在任务日志和媒体工坊查看。`,
+          );
           keepTaskMessage = true;
           return;
         }
@@ -4642,7 +5284,9 @@ const MediaPlayground = () => {
           message: generationErrorMessage(error),
         });
         Toast.error(userFacingGenerationError(generationErrorMessage(error)));
-        setTaskMessage(`视频任务 ${taskId} 后台轮询结束：${generationErrorMessage(error)}`);
+        setTaskMessage(
+          `视频任务 ${taskId} 后台轮询结束：${generationErrorMessage(error)}`,
+        );
         keepTaskMessage = true;
       } finally {
         setVideoPolling(false);
@@ -4658,8 +5302,13 @@ const MediaPlayground = () => {
   async function handleSubmit() {
     if (submitting) return;
     if (!modelAllowed) return Toast.error('当前用户分组暂未开放这个模型。');
-    if (mode === 'image' && !imageModelSupportsWorkflow(activeImageModel, imageWorkflow)) {
-      return Toast.warning('当前模型仅支持文生图，请切换到文生图或更换支持图片编辑的模型。');
+    if (
+      mode === 'image' &&
+      !imageModelSupportsWorkflow(activeImageModel, imageWorkflow)
+    ) {
+      return Toast.warning(
+        '当前模型仅支持文生图，请切换到文生图或更换支持图片编辑的模型。',
+      );
     }
     if (!prompt.trim()) return Toast.error('请先写一句你想生成什么。');
     if (
@@ -4678,9 +5327,17 @@ const MediaPlayground = () => {
     ) {
       return Toast.error('透明背景仅支持 PNG 或 WebP 输出格式。');
     }
-    if (mode === 'image' && imageWorkflow === 'edit' && referenceFiles.length === 0)
+    if (
+      mode === 'image' &&
+      imageWorkflow === 'edit' &&
+      referenceFiles.length === 0
+    )
       return Toast.error('图像修改需要先上传参考图。');
-    if (mode === 'video' && videoWorkflow !== 'text' && referenceFiles.length === 0)
+    if (
+      mode === 'video' &&
+      videoWorkflow !== 'text' &&
+      referenceFiles.length === 0
+    )
       return Toast.error('图生视频需要先上传首帧或参考素材。');
     if (mode === 'video' && videoWorkflow !== 'text') {
       const counts = videoReferenceCounts(referenceFiles);
@@ -4688,7 +5345,9 @@ const MediaPlayground = () => {
         return Toast.error('首尾帧视频需要先上传首帧图片。');
       }
       if (videoModel === 'seedance-sd2-fast-720p' && counts.image === 0) {
-        return Toast.error('Seedance SD Fast 只支持图片参考，请先上传图片素材。');
+        return Toast.error(
+          'Seedance SD Fast 只支持图片参考，请先上传图片素材。',
+        );
       }
       if (videoModel === 'grok-video-1.5' && counts.image !== 1) {
         return Toast.error('Grok Video 1.5 图生模式必须且只能上传一张图片。');
@@ -4696,17 +5355,21 @@ const MediaPlayground = () => {
       if (videoModel === 'grok-video-1.5-1080p' && counts.image !== 1) {
         return Toast.error('Grok Video 1.5 1080P 必须且只能上传一张图片。');
       }
-      if (videoModel === 'seedance-2.0-ld-17' && counts.image + counts.video === 0) {
-        return Toast.error('Seedance LD-17 需要至少上传一张图片或一个视频素材。');
+      if (
+        videoModel === 'seedance-2.0-ld-17' &&
+        counts.image + counts.video === 0
+      ) {
+        return Toast.error(
+          'Seedance LD-17 需要至少上传一张图片或一个视频素材。',
+        );
       }
     }
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile)
       return Toast.error('首尾帧视频需要同时上传首帧和尾帧。');
-    const budgetError = referenceUploadBudgetError([
-      ...referenceFiles,
-      lastFrameFile,
-      maskFile,
-    ]);
+    const budgetError = referenceUploadBudgetError(
+      [...referenceFiles, lastFrameFile, maskFile],
+      mediaUploadPolicy,
+    );
     if (budgetError) return Toast.error(budgetError);
 
     setSubmitting(true);
@@ -4737,10 +5400,10 @@ const MediaPlayground = () => {
     : '';
   const inspectorResultPrompt = inspectorResult
     ? firstPromptText(
-      inspectorResult.displayPrompt,
-      inspectorResult.revisedPrompt,
-      inspectorResult.prompt,
-    )
+        inspectorResult.displayPrompt,
+        inspectorResult.revisedPrompt,
+        inspectorResult.prompt,
+      )
     : '';
   const allVisibleResultsSelected =
     visibleResults.length > 0 &&
@@ -4807,7 +5470,10 @@ const MediaPlayground = () => {
       Toast.warning('当前区域只支持图片素材。');
       return false;
     }
-    const budgetError = referenceUploadBudgetError([...referenceFiles, file]);
+    const budgetError = referenceUploadBudgetError(
+      [...referenceFiles, file],
+      mediaUploadPolicy,
+    );
     if (budgetError) {
       Toast.error(budgetError);
       return false;
@@ -4819,7 +5485,10 @@ const MediaPlayground = () => {
     setReferenceFiles((current) => {
       if (current.length >= IMAGE_EDIT_REFERENCE_LIMIT) return current;
       const counters = nextReferenceCounters(current);
-      return [...current, createReferenceItem(file, counters)].slice(0, IMAGE_EDIT_REFERENCE_LIMIT);
+      return [...current, createReferenceItem(file, counters)].slice(
+        0,
+        IMAGE_EDIT_REFERENCE_LIMIT,
+      );
     });
     if (successMessage) Toast.success(successMessage);
     return true;
@@ -4827,7 +5496,10 @@ const MediaPlayground = () => {
 
   function appendVideoReferenceFile(file, successMessage) {
     if (!file) return false;
-    const budgetError = referenceUploadBudgetError([...referenceFiles, file]);
+    const budgetError = referenceUploadBudgetError(
+      [...referenceFiles, file],
+      mediaUploadPolicy,
+    );
     if (budgetError) {
       Toast.error(budgetError);
       return false;
@@ -4847,9 +5519,13 @@ const MediaPlayground = () => {
     }
     setReferenceFiles((current) => {
       const currentCounts = videoReferenceCounts(current);
-      if (currentCounts[type] >= (targetPolicy.limits[type] || 0)) return current;
+      if (currentCounts[type] >= (targetPolicy.limits[type] || 0))
+        return current;
       const counters = nextReferenceCounters(current);
-      return [...current, createReferenceItem(file, counters)].slice(0, targetPolicy.maxFiles);
+      return [...current, createReferenceItem(file, counters)].slice(
+        0,
+        targetPolicy.maxFiles,
+      );
     });
     if (successMessage) Toast.success(successMessage);
     return true;
@@ -4860,10 +5536,13 @@ const MediaPlayground = () => {
     if (sourceModelValue) return sourceModelValue;
     if (!result?.taskId) return '';
     try {
-      const res = await API.get(`/pg/images/tasks/${encodeURIComponent(result.taskId)}`, {
-        skipErrorHandler: true,
-        disableDuplicate: true,
-      });
+      const res = await API.get(
+        `/pg/images/tasks/${encodeURIComponent(result.taskId)}`,
+        {
+          skipErrorHandler: true,
+          disableDuplicate: true,
+        },
+      );
       const task = res.data?.data || {};
       const item = task.item || task.data?.item || {};
       const modelValue = String(
@@ -4899,14 +5578,17 @@ const MediaPlayground = () => {
     try {
       const sourceModelValue = resultImageModelValue(result);
       const hydratedSourceModelValue =
-        sourceModelValue || (action === 'edit' || action === 'reference'
+        sourceModelValue ||
+        (action === 'edit' || action === 'reference'
           ? await loadResultImageModelValue(result)
           : '');
       const sourceModel = imageModelConfig(hydratedSourceModelValue);
       const targetImageModel = sourceModel || activeImageModel;
       if (action === 'edit' || action === 'reference') {
         if (!hydratedSourceModelValue) {
-          Toast.warning('结果缺少原模型标记，请先用任务 ID 查询或重新选择原模型后再提交。');
+          Toast.warning(
+            '结果缺少原模型标记，请先用任务 ID 查询或重新选择原模型后再提交。',
+          );
           return;
         }
         if (!sourceModel || !isImageModelAllowed(hydratedSourceModelValue)) {
@@ -4956,7 +5638,9 @@ const MediaPlayground = () => {
         Toast.success('已放入反推图。');
       }
     } catch (error) {
-      Toast.error(generationErrorMessage(error) || '结果复用失败，请下载后手动上传。');
+      Toast.error(
+        generationErrorMessage(error) || '结果复用失败，请下载后手动上传。',
+      );
     }
   }
 
@@ -4970,20 +5654,24 @@ const MediaPlayground = () => {
   const workflowSelectOptions =
     mode === 'video'
       ? [
-        { value: 'text', label: '文生视频' },
-        { value: 'image', label: '图生视频' },
-        { value: 'first-last', label: '首尾帧' },
-      ].filter((item) => !activeVideoModel.workflows || activeVideoModel.workflows.includes(item.value))
+          { value: 'text', label: '文生视频' },
+          { value: 'image', label: '图生视频' },
+          { value: 'first-last', label: '首尾帧' },
+        ].filter(
+          (item) =>
+            !activeVideoModel.workflows ||
+            activeVideoModel.workflows.includes(item.value),
+        )
       : creativeTask === 'image-edit'
         ? [{ value: 'edit', label: '图像修改' }]
         : [
-          { value: 'generate', label: '文生图' },
-          {
-            value: 'edit',
-            label: activeImageModel.edit ? '图生图' : '图生图不可用',
-            disabled: !activeImageModel.edit,
-          },
-        ];
+            { value: 'generate', label: '文生图' },
+            {
+              value: 'edit',
+              label: activeImageModel.edit ? '图生图' : '图生图不可用',
+              disabled: !activeImageModel.edit,
+            },
+          ];
   const handleWorkflowSelect = (value) => {
     if (mode === 'video') {
       setVideoWorkflow(value);
@@ -5023,22 +5711,26 @@ const MediaPlayground = () => {
   const qualityLabel =
     mode === 'image' ? quality || '默认' : `${duration} 秒 · ${fps} fps`;
   const videoReferenceText = `${referenceFiles.length} / ${referenceFileLimit} 素材`;
-  const formatLabel = mode === 'image' ? String(format || 'url').toUpperCase() : 'URL / MP4';
-  const runningQueueItems = liveQueueTasks.filter((item) => item.status !== 'failed');
+  const formatLabel =
+    mode === 'image' ? String(format || 'url').toUpperCase() : 'URL / MP4';
+  const runningQueueItems = liveQueueTasks.filter(
+    (item) => item.status !== 'failed',
+  );
   const activeQueueItem =
     runningQueueItems[0] ||
     (submitting || videoPolling
       ? {
-        id: activeVideoTask?.taskId || imageTaskLookup || 'current-generation',
-        title: workflowLabel,
-        kind: mode,
-        model: activeModel.label,
-        status: videoPolling ? 'polling' : 'running',
-        statusText: videoPolling ? '轮询中' : '生成中',
-        progress: parseProgressPercent(taskMessage),
-        createdAt: submitStartedAt || Date.now(),
-        message: taskMessage || '任务已提交，等待生成结果。',
-      }
+          id:
+            activeVideoTask?.taskId || imageTaskLookup || 'current-generation',
+          title: workflowLabel,
+          kind: mode,
+          model: activeModel.label,
+          status: videoPolling ? 'polling' : 'running',
+          statusText: videoPolling ? '轮询中' : '生成中',
+          progress: parseProgressPercent(taskMessage),
+          createdAt: submitStartedAt || Date.now(),
+          message: taskMessage || '任务已提交，等待生成结果。',
+        }
       : null);
   const queueItems = [
     ...liveQueueTasks,
@@ -5051,11 +5743,15 @@ const MediaPlayground = () => {
       statusText: '已完成',
       createdAt: item.createdAt,
       result: item,
-      message: firstPromptText(item.displayPrompt, item.prompt, item.revisedPrompt) || '结果已进入作品区。',
+      message:
+        firstPromptText(item.displayPrompt, item.prompt, item.revisedPrompt) ||
+        '结果已进入作品区。',
     })),
   ];
   const queueCounts = {
-    running: liveQueueTasks.filter((item) => item.status === 'running' || item.status === 'polling').length,
+    running: liveQueueTasks.filter(
+      (item) => item.status === 'running' || item.status === 'polling',
+    ).length,
     pending: liveQueueTasks.filter((item) => item.status === 'queued').length,
     completed: visibleResults.length,
     failed: liveQueueTasks.filter((item) => item.status === 'failed').length,
@@ -5077,12 +5773,9 @@ const MediaPlayground = () => {
     (creativeTask === 'video' && videoWorkflow !== 'text');
   const outputSpec =
     mode === 'image'
-      ? [
-        ratioLabel,
-        sizeLabel,
-        imagePixelLabel,
-        qualityLabel,
-      ].filter(Boolean).join(' · ')
+      ? [ratioLabel, sizeLabel, imagePixelLabel, qualityLabel]
+          .filter(Boolean)
+          .join(' · ')
       : `${ratioLabel} · ${qualityLabel}`;
   const creativeNavItems = [
     {
@@ -5205,31 +5898,42 @@ const MediaPlayground = () => {
   return (
     <div className='mp-page classic-page-fill'>
       <div className='mp-shell'>
-        <header className='mp-workbench-topbar' aria-label='媒体创作工作台顶部栏'>
+        <header
+          className='mp-workbench-topbar'
+          aria-label='媒体创作工作台顶部栏'
+        >
           <Button
             theme='borderless'
             type='tertiary'
             className='mp-home-back'
             onClick={() => navigate('/')}
           >
-            <span className='mp-home-back-icon' aria-hidden='true'>‹</span>
+            <span className='mp-home-back-icon' aria-hidden='true'>
+              ‹
+            </span>
             返回主页
           </Button>
           <div className='mp-topbar-title-block'>
             <img className='mp-site-logo' src='/logo.png' alt='星人' />
             <div>
               <strong>媒体创作工作台</strong>
-              <span>{workflowLabel} · {activeModel.label}</span>
+              <span>
+                {workflowLabel} · {activeModel.label}
+              </span>
             </div>
           </div>
           <div className='mp-topbar-summary' aria-label='当前任务摘要'>
             <div className='mp-topbar-primary-spec'>
               <span>当前模型 / 输出规格</span>
-              <strong>{activeModel.label} · {outputSpec}</strong>
+              <strong>
+                {activeModel.label} · {outputSpec}
+              </strong>
             </div>
             <div className='mp-topbar-pills'>
               <span>作品 {results.length} 个</span>
-              <span>素材 {referenceFiles.length} / {referenceFileLimit}</span>
+              <span>
+                素材 {referenceFiles.length} / {referenceFileLimit}
+              </span>
               <span>保留 72 小时</span>
             </div>
           </div>
@@ -5253,11 +5957,11 @@ const MediaPlayground = () => {
               theme='solid'
               icon={<IconRefresh />}
               className='mp-new-creation-btn'
-                onClick={() => {
-                  handlePromptChange(DEFAULT_PROMPT);
-                  setNegativePromptEnabled(false);
-                  setNegativePrompt('');
-                  setReferenceFiles([]);
+              onClick={() => {
+                handlePromptChange(DEFAULT_PROMPT);
+                setNegativePromptEnabled(false);
+                setNegativePrompt('');
+                setReferenceFiles([]);
                 setReversePromptFile(null);
                 setReversePromptText('');
                 setReversePromptMessage('');
@@ -5296,7 +6000,9 @@ const MediaPlayground = () => {
                 selectedModel={currentModelId}
                 onSelectModel={(value) => {
                   imageEditModelLockRef.current = '';
-                  mode === 'image' ? setImageModel(value) : setVideoModel(value);
+                  mode === 'image'
+                    ? setImageModel(value)
+                    : setVideoModel(value);
                 }}
                 mode={mode}
               />
@@ -5330,7 +6036,9 @@ const MediaPlayground = () => {
                 <strong>{results.length} 个</strong>
               </div>
               <div className='mp-resource-meter'>
-                <span style={{ width: `${Math.min(results.length * 12, 100)}%` }} />
+                <span
+                  style={{ width: `${Math.min(results.length * 12, 100)}%` }}
+                />
               </div>
               <p>临时预览保留 72 小时，请及时下载保存。</p>
             </div>
@@ -5342,7 +6050,9 @@ const MediaPlayground = () => {
                 <button
                   key={step.key}
                   type='button'
-                  className={step.active ? 'mp-flow-step is-active' : 'mp-flow-step'}
+                  className={
+                    step.active ? 'mp-flow-step is-active' : 'mp-flow-step'
+                  }
                   onClick={step.onClick}
                 >
                   <span>{step.number}</span>
@@ -5356,7 +6066,11 @@ const MediaPlayground = () => {
               <div className='mp-task-type-tabs' aria-label='创作类型'>
                 {[
                   { key: 'image-generate', label: '图片生成' },
-                  { key: 'image-edit', label: '图片编辑', disabled: !activeImageModel.edit },
+                  {
+                    key: 'image-edit',
+                    label: '图片编辑',
+                    disabled: !activeImageModel.edit,
+                  },
                   { key: 'reverse', label: '图像反推提示词' },
                   { key: 'video', label: '视频生成' },
                 ].map((item) => (
@@ -5373,15 +6087,28 @@ const MediaPlayground = () => {
               </div>
             </section>
 
-            <div className={creativeTask === 'reverse' ? 'mp-prompt-zone is-muted' : 'mp-prompt-zone'}>
+            <div
+              className={
+                creativeTask === 'reverse'
+                  ? 'mp-prompt-zone is-muted'
+                  : 'mp-prompt-zone'
+              }
+            >
               <PromptComposer
                 prompt={prompt}
                 onPromptChange={handlePromptChange}
-                promptMaxLength={mode === 'video' ? activeVideoModel.promptMaxLength || MEDIA_PROMPT_MAX_LENGTH : MEDIA_PROMPT_MAX_LENGTH}
+                promptMaxLength={
+                  mode === 'video'
+                    ? activeVideoModel.promptMaxLength ||
+                      MEDIA_PROMPT_MAX_LENGTH
+                    : MEDIA_PROMPT_MAX_LENGTH
+                }
                 negativePrompt={negativePrompt}
                 onNegativePromptChange={setNegativePrompt}
                 negativePromptEnabled={negativePromptEnabled}
-                onNegativePromptEnabledChange={handleNegativePromptEnabledChange}
+                onNegativePromptEnabledChange={
+                  handleNegativePromptEnabledChange
+                }
                 negativePromptPreset={defaultNegativePrompt}
                 onCopy={async () => {
                   const ok = await copy(prompt);
@@ -5403,7 +6130,9 @@ const MediaPlayground = () => {
                     items={mentionMenuItems}
                     activeIndex={mentionState.activeIndex}
                     query={mentionState.query}
-                    onPick={(item) => insertReferenceMention(item, mentionState)}
+                    onPick={(item) =>
+                      insertReferenceMention(item, mentionState)
+                    }
                     onClose={closeMentionMenu}
                   />
                 }
@@ -5414,7 +6143,9 @@ const MediaPlayground = () => {
               <section id='mp-assets-workbench' className='mp-assets-section'>
                 <div className='mp-section-head'>
                   <SectionTitle meta='Source'>素材输入</SectionTitle>
-                  <span>{workflowLabel} · {referenceLabel}</span>
+                  <span>
+                    {workflowLabel} · {referenceLabel}
+                  </span>
                 </div>
                 <div className='mp-material-grid is-upload-only'>
                   {creativeTask === 'image-edit' ? (
@@ -5430,7 +6161,7 @@ const MediaPlayground = () => {
                           accept='image/png,image/jpeg,image/webp'
                           onFiles={addReferenceFiles}
                           onRemove={removeReferenceFile}
-                          hint={`支持 JPG / PNG / WebP，最多 ${referenceFileLimit} 张。`}
+                          hint={`支持 JPG / PNG / WebP，最多 ${referenceFileLimit} 张；${mediaUploadPolicy.provider_limit_note} 超大图片会自动压缩并先上传媒体存储，生成请求仅传 URL；平台总安全阈值约 60MB，供应商更低限制优先。`}
                         />
                         <FileDrop
                           label='遮罩图，可选'
@@ -5459,11 +6190,19 @@ const MediaPlayground = () => {
                   {creativeTask === 'video' && videoWorkflow !== 'text' ? (
                     <div className='mp-material-zone is-primary is-video-source'>
                       <div className='mp-material-zone-head'>
-                        <strong>{videoWorkflow === 'first-last' ? '首尾帧素材' : '视频参考素材'}</strong>
+                        <strong>
+                          {videoWorkflow === 'first-last'
+                            ? '首尾帧素材'
+                            : '视频参考素材'}
+                        </strong>
                       </div>
                       <div className='mp-field-grid is-material'>
                         <MultiFileDrop
-                          label={videoWorkflow === 'first-last' ? '首帧 / 参考素材' : '上传视频参考素材'}
+                          label={
+                            videoWorkflow === 'first-last'
+                              ? '首帧 / 参考素材'
+                              : '上传视频参考素材'
+                          }
                           files={referenceFiles}
                           maxFiles={referenceFileLimit}
                           accept={videoRefPolicy.accept}
@@ -5487,7 +6226,10 @@ const MediaPlayground = () => {
             ) : null}
 
             {creativeTask === 'reverse' ? (
-              <section id='mp-reverse-workbench' className='mp-reverse-workbench'>
+              <section
+                id='mp-reverse-workbench'
+                className='mp-reverse-workbench'
+              >
                 <ReversePromptPanel
                   file={reversePromptFile}
                   onFileChange={setReversePromptFile}
@@ -5520,13 +6262,15 @@ const MediaPlayground = () => {
               </section>
             ) : null}
 
-              <div id='mp-parameter-workbench' className='mp-parameter-panel'>
-                <div className='mp-control-bar' aria-label='创作控制条'>
-                  <div className='mp-control-bar-title'>
-                    <SectionTitle meta='Control'>创作控制条</SectionTitle>
-                    <span>{workflowLabel} · {outputSpec}</span>
-                  </div>
-                  <div className='mp-control-grid'>
+            <div id='mp-parameter-workbench' className='mp-parameter-panel'>
+              <div className='mp-control-bar' aria-label='创作控制条'>
+                <div className='mp-control-bar-title'>
+                  <SectionTitle meta='Control'>创作控制条</SectionTitle>
+                  <span>
+                    {workflowLabel} · {outputSpec}
+                  </span>
+                </div>
+                <div className='mp-control-grid'>
                   {creativeTask !== 'reverse' ? (
                     <NativeSelect
                       label='生成方式'
@@ -5543,7 +6287,9 @@ const MediaPlayground = () => {
                     options={toModelSelectOptions(modelOptions)}
                     onChange={(value) => {
                       imageEditModelLockRef.current = '';
-                      mode === 'image' ? setImageModel(value) : setVideoModel(value);
+                      mode === 'image'
+                        ? setImageModel(value)
+                        : setVideoModel(value);
                     }}
                     agentKey='media-inline-model'
                     className='mp-param-control is-model'
@@ -5552,7 +6298,9 @@ const MediaPlayground = () => {
                     <NativeSelect
                       label='尺寸'
                       value={resolution}
-                      options={toResolutionSelectOptions(activeImageModel.resolutions)}
+                      options={toResolutionSelectOptions(
+                        activeImageModel.resolutions,
+                      )}
                       onChange={setResolution}
                       agentKey='media-resolution'
                       className='mp-param-control'
@@ -5561,7 +6309,10 @@ const MediaPlayground = () => {
                     <NativeSelect
                       label={mode === 'image' ? '尺寸' : '视频尺寸'}
                       value={size}
-                      options={toSizeSelectOptions(activeModel.sizes, activeModel)}
+                      options={toSizeSelectOptions(
+                        activeModel.sizes,
+                        activeModel,
+                      )}
                       onChange={setSize}
                       agentKey='media-size'
                       className='mp-param-control'
@@ -5571,7 +6322,9 @@ const MediaPlayground = () => {
                     <NativeSelect
                       label='比例'
                       value={imageRatioValue}
-                      options={toAspectRatioSelectOptions(imageRatioSelectOptions)}
+                      options={toAspectRatioSelectOptions(
+                        imageRatioSelectOptions,
+                      )}
                       onChange={handleImageRatioChange}
                       agentKey='media-aspect-ratio'
                       className='mp-param-control is-ratio'
@@ -5581,8 +6334,12 @@ const MediaPlayground = () => {
                     <NativeSelect
                       label='数量'
                       value={clampCount(count, activeImageModel)}
-                      options={toCountSelectOptions(activeImageModel.maxCount || 1)}
-                      onChange={(value) => setCount(clampCount(Number(value), activeImageModel))}
+                      options={toCountSelectOptions(
+                        activeImageModel.maxCount || 1,
+                      )}
+                      onChange={(value) =>
+                        setCount(clampCount(Number(value), activeImageModel))
+                      }
                       className='mp-param-control'
                       agentKey='media-count'
                     />
@@ -5612,10 +6369,12 @@ const MediaPlayground = () => {
                     <NativeSelect
                       label='帧率'
                       value={fps}
-                      options={(activeVideoModel.fpsOptions || [24, 30]).map((value) => ({
-                        value,
-                        label: `${value} fps`,
-                      }))}
+                      options={(activeVideoModel.fpsOptions || [24, 30]).map(
+                        (value) => ({
+                          value,
+                          label: `${value} fps`,
+                        }),
+                      )}
                       onChange={setFps}
                       agentKey='media-fps'
                       className='mp-param-control'
@@ -5650,21 +6409,27 @@ const MediaPlayground = () => {
                     type='tertiary'
                     className='mp-advanced-toggle mp-btn-ghost'
                     onClick={() => setShowAdvancedParams((value) => !value)}
-                    >
-                      {showAdvancedParams ? '收起高级' : '高级设置'}
-                    </Button>
-                  </div>
-                  <div className='mp-control-submit'>
+                  >
+                    {showAdvancedParams ? '收起高级' : '高级设置'}
+                  </Button>
+                </div>
+                <div className='mp-control-submit'>
                   <Button
                     type='primary'
-                    loading={creativeTask === 'reverse' ? reversePromptRunning : false}
+                    loading={
+                      creativeTask === 'reverse' ? reversePromptRunning : false
+                    }
                     disabled={
                       creativeTask === 'reverse'
                         ? reversePromptRunning || !reversePromptFile
                         : !modelAllowed
                     }
                     className='mp-generate-main-button mp-btn-primary'
-                    onClick={creativeTask === 'reverse' ? reverseImagePrompt : handleSubmit}
+                    onClick={
+                      creativeTask === 'reverse'
+                        ? reverseImagePrompt
+                        : handleSubmit
+                    }
                   >
                     {creativeTask === 'reverse'
                       ? '开始反推'
@@ -5672,120 +6437,130 @@ const MediaPlayground = () => {
                         ? '立即生成视频'
                         : '立即生成图片'}
                   </Button>
-                  </div>
                 </div>
-                {showAdvancedParams ? (
-                  <div className='mp-advanced-params mp-advanced-params-drawer'>
-                    {mode === 'video' && activeVideoModel.supportsAdvancedVideoParams !== false ? (
-                      <NativeSelect
-                        label='分组'
-                        value={effectiveGroup}
-                        options={visibleGroupOptions}
-                        onChange={setGroup}
-                        agentKey='media-group'
+              </div>
+              {showAdvancedParams ? (
+                <div className='mp-advanced-params mp-advanced-params-drawer'>
+                  {mode === 'video' &&
+                  activeVideoModel.supportsAdvancedVideoParams !== false ? (
+                    <NativeSelect
+                      label='分组'
+                      value={effectiveGroup}
+                      options={visibleGroupOptions}
+                      onChange={setGroup}
+                      agentKey='media-group'
+                    />
+                  ) : null}
+                  {showGptImage2CustomSize ? (
+                    <label
+                      className='mp-field'
+                      data-xr-agent='media-custom-size'
+                    >
+                      <span>自定义尺寸</span>
+                      <Input
+                        value={customImageSize}
+                        onChange={setCustomImageSize}
+                        placeholder='3840x2160'
                       />
-                    ) : null}
-                    {showGptImage2CustomSize ? (
-                      <label className='mp-field' data-xr-agent='media-custom-size'>
-                        <span>自定义尺寸</span>
+                    </label>
+                  ) : null}
+                  {mode === 'image' &&
+                  imageWorkflow === 'edit' &&
+                  activeImageModel.supportsInputFidelity ? (
+                    <OptionChips
+                      label='参考图保真度'
+                      value={inputFidelity}
+                      options={toSelectOptions(['auto', 'low', 'high'])}
+                      onChange={setInputFidelity}
+                      compact
+                      agentKey='media-input-fidelity'
+                    />
+                  ) : null}
+                  {mode === 'image' &&
+                  activeImageModel.backgroundOptions?.length ? (
+                    <OptionChips
+                      label='背景'
+                      value={background}
+                      options={toSelectOptions(
+                        activeImageModel.backgroundOptions,
+                      )}
+                      onChange={setBackground}
+                      compact
+                      agentKey='media-background'
+                    />
+                  ) : null}
+                  {mode === 'image' && format !== 'png' && format !== 'url' ? (
+                    <div className='mp-slider-field'>
+                      <div>
+                        <span>压缩质量</span>
+                        <b>{compression}</b>
+                      </div>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={compression}
+                        data-xr-agent='media-compression'
+                        onChange={setCompression}
+                      />
+                    </div>
+                  ) : null}
+                  {mode === 'video' ? (
+                    <>
+                      <label className='mp-field'>
+                        <span>Seed</span>
                         <Input
-                          value={customImageSize}
-                          onChange={setCustomImageSize}
-                          placeholder='3840x2160'
+                          value={seed}
+                          onChange={setSeed}
+                          placeholder='留空随机'
                         />
                       </label>
-                    ) : null}
-                    {mode === 'image' &&
-                    imageWorkflow === 'edit' &&
-                    activeImageModel.supportsInputFidelity ? (
-                      <OptionChips
-                        label='参考图保真度'
-                        value={inputFidelity}
-                        options={toSelectOptions(['auto', 'low', 'high'])}
-                        onChange={setInputFidelity}
-                        compact
-                        agentKey='media-input-fidelity'
-                      />
-                    ) : null}
-                    {mode === 'image' && activeImageModel.backgroundOptions?.length ? (
-                      <OptionChips
-                        label='背景'
-                        value={background}
-                        options={toSelectOptions(activeImageModel.backgroundOptions)}
-                        onChange={setBackground}
-                        compact
-                        agentKey='media-background'
-                      />
-                    ) : null}
-                    {mode === 'image' && format !== 'png' && format !== 'url' ? (
-                      <div className='mp-slider-field'>
+                      <div className='mp-switch-line'>
                         <div>
-                          <span>压缩质量</span>
-                          <b>{compression}</b>
+                          <strong>智能润色提示词</strong>
+                          <span>适合小白用户，默认开启</span>
                         </div>
-                        <Slider
-                          min={0}
-                          max={100}
-                          value={compression}
-                          data-xr-agent='media-compression'
-                          onChange={setCompression}
+                        <Switch
+                          checked={enhancePrompt}
+                          onChange={setEnhancePrompt}
                         />
                       </div>
-                    ) : null}
-                    {mode === 'video' ? (
-                      <>
-                        <label className='mp-field'>
-                          <span>Seed</span>
-                          <Input
-                            value={seed}
-                            onChange={setSeed}
-                            placeholder='留空随机'
-                          />
-                        </label>
-                        <div className='mp-switch-line'>
-                          <div>
-                            <strong>智能润色提示词</strong>
-                            <span>适合小白用户，默认开启</span>
-                          </div>
-                          <Switch checked={enhancePrompt} onChange={setEnhancePrompt} />
+                      <div className='mp-switch-line'>
+                        <div>
+                          <strong>添加水印</strong>
+                          <span>默认关闭，方便直接保存成品</span>
                         </div>
-                        <div className='mp-switch-line'>
-                          <div>
-                            <strong>添加水印</strong>
-                            <span>默认关闭，方便直接保存成品</span>
-                          </div>
-                          <Switch checked={watermark} onChange={setWatermark} />
-                        </div>
-                      </>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              {mode === 'image' ? (
-                <div className='mp-task-lookup'>
-                  <Input
-                    value={imageTaskLookup}
-                    placeholder='task_id'
-                    onChange={setImageTaskLookup}
-                  />
-                  <Button
-                    theme='borderless'
-                    type='tertiary'
-                    icon={<IconRefresh />}
-                    disabled={submitting}
-                    onClick={lookupImageTask}
-                  >
-                    查询
-                  </Button>
+                        <Switch checked={watermark} onChange={setWatermark} />
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
-              {!modelAllowed ? (
-                <Banner
-                  type='danger'
-                  closeIcon={null}
-                  description='当前用户分组暂未开放这个模型。'
+            </div>
+            {mode === 'image' ? (
+              <div className='mp-task-lookup'>
+                <Input
+                  value={imageTaskLookup}
+                  placeholder='task_id'
+                  onChange={setImageTaskLookup}
                 />
-              ) : null}
+                <Button
+                  theme='borderless'
+                  type='tertiary'
+                  icon={<IconRefresh />}
+                  disabled={submitting}
+                  onClick={lookupImageTask}
+                >
+                  查询
+                </Button>
+              </div>
+            ) : null}
+            {!modelAllowed ? (
+              <Banner
+                type='danger'
+                closeIcon={null}
+                description='当前用户分组暂未开放这个模型。'
+              />
+            ) : null}
             <section id='mp-results-workbench' className='mp-results-section'>
               {results.length === 0 ? (
                 <div className='mp-empty-canvas'>
@@ -5808,21 +6583,34 @@ const MediaPlayground = () => {
                     <div>
                       <Title heading={4}>生成结果</Title>
                       <Paragraph>
-                        共 {results.length} 个作品 · 已选 {selectedResultIds.length} 个 ·
-                        {resultSort === 'newest' ? '按最新生成排序' : '按最早生成排序'}
+                        共 {results.length} 个作品 · 已选{' '}
+                        {selectedResultIds.length} 个 ·
+                        {resultSort === 'newest'
+                          ? '按最新生成排序'
+                          : '按最早生成排序'}
                       </Paragraph>
                     </div>
                     <Space spacing={8}>
                       <Button
-                        theme={allVisibleResultsSelected ? 'solid' : 'borderless'}
-                        type={allVisibleResultsSelected ? 'primary' : 'tertiary'}
-                        className={allVisibleResultsSelected ? 'mp-btn-secondary is-strong' : 'mp-btn-tool'}
+                        theme={
+                          allVisibleResultsSelected ? 'solid' : 'borderless'
+                        }
+                        type={
+                          allVisibleResultsSelected ? 'primary' : 'tertiary'
+                        }
+                        className={
+                          allVisibleResultsSelected
+                            ? 'mp-btn-secondary is-strong'
+                            : 'mp-btn-tool'
+                        }
                         onClick={toggleAllVisibleResults}
                       >
                         {allVisibleResultsSelected ? '取消全选' : '全选'}
                       </Button>
                       <Button
-                        theme={resultViewMode === 'grid' ? 'solid' : 'borderless'}
+                        theme={
+                          resultViewMode === 'grid' ? 'solid' : 'borderless'
+                        }
                         type='tertiary'
                         icon={<IconImage />}
                         className='mp-btn-tool'
@@ -5831,7 +6619,9 @@ const MediaPlayground = () => {
                         网格
                       </Button>
                       <Button
-                        theme={resultViewMode === 'list' ? 'solid' : 'borderless'}
+                        theme={
+                          resultViewMode === 'list' ? 'solid' : 'borderless'
+                        }
                         type='tertiary'
                         className='mp-btn-tool'
                         onClick={() => setResultViewMode('list')}
@@ -5876,8 +6666,15 @@ const MediaPlayground = () => {
                       <ResultCard
                         key={result.id}
                         result={result}
-                        onContinueEdit={(item) => reuseResultMedia(item, 'edit')}
-                        onUseAsReference={(item) => reuseResultMedia(item, item.kind === 'video' ? 'video' : 'reference')}
+                        onContinueEdit={(item) =>
+                          reuseResultMedia(item, 'edit')
+                        }
+                        onUseAsReference={(item) =>
+                          reuseResultMedia(
+                            item,
+                            item.kind === 'video' ? 'video' : 'reference',
+                          )
+                        }
                         onInspect={inspectResult}
                         selected={selectedResultIds.includes(result.id)}
                         onToggleSelect={toggleResultSelection}
@@ -5887,7 +6684,8 @@ const MediaPlayground = () => {
                 </>
               )}
               <div className='mp-retention-note'>
-                生成后的临时预览文件保留 72 小时，到期自动清理；请在有效期内下载保存。
+                生成后的临时预览文件保留 72
+                小时，到期自动清理；请在有效期内下载保存。
               </div>
             </section>
           </main>
@@ -5912,14 +6710,35 @@ const MediaPlayground = () => {
                   </div>
                   <div className='mp-queue-stats'>
                     {[
-                      { label: '运行中', value: queueCounts.running, key: 'running' },
-                      { label: '等待中', value: queueCounts.pending, key: 'pending' },
-                      { label: '已完成', value: queueCounts.completed, key: 'completed' },
-                      { label: '失败', value: queueCounts.failed, key: 'failed' },
+                      {
+                        label: '运行中',
+                        value: queueCounts.running,
+                        key: 'running',
+                      },
+                      {
+                        label: '等待中',
+                        value: queueCounts.pending,
+                        key: 'pending',
+                      },
+                      {
+                        label: '已完成',
+                        value: queueCounts.completed,
+                        key: 'completed',
+                      },
+                      {
+                        label: '失败',
+                        value: queueCounts.failed,
+                        key: 'failed',
+                      },
                     ].map((item) => (
-                      <div key={item.key} className={`mp-queue-stat-item is-${item.key}`}>
+                      <div
+                        key={item.key}
+                        className={`mp-queue-stat-item is-${item.key}`}
+                      >
                         <span className='mp-queue-count'>{item.value}</span>
-                        <Text type='tertiary' size='small'>{item.label}</Text>
+                        <Text type='tertiary' size='small'>
+                          {item.label}
+                        </Text>
                       </div>
                     ))}
                   </div>
@@ -5932,16 +6751,26 @@ const MediaPlayground = () => {
                   {activeQueueItem ? (
                     <div className='mp-current-queue-task'>
                       <div className='mp-queue-task-icon'>
-                        {activeQueueItem.kind === 'video' ? <IconPlay /> : <IconImage />}
+                        {activeQueueItem.kind === 'video' ? (
+                          <IconPlay />
+                        ) : (
+                          <IconImage />
+                        )}
                       </div>
                       <div className='mp-queue-task-main'>
                         <strong>{activeQueueItem.title}</strong>
                         <span>{activeQueueItem.model}</span>
                         <p>{activeQueueItem.message}</p>
                         <div className='mp-queue-progress'>
-                          <span style={{ width: `${activeQueueItem.progress || 18}%` }} />
+                          <span
+                            style={{
+                              width: `${activeQueueItem.progress || 18}%`,
+                            }}
+                          />
                         </div>
-                        <em>{activeQueueElapsedSeconds} 秒 · {activeQueueItem.id}</em>
+                        <em>
+                          {activeQueueElapsedSeconds} 秒 · {activeQueueItem.id}
+                        </em>
                       </div>
                     </div>
                   ) : (
@@ -5954,14 +6783,23 @@ const MediaPlayground = () => {
 
                 <div className='mp-queue-card is-list'>
                   <div className='mp-queue-card-head'>
-                    <SectionTitle meta={`${queueItems.length}`}>队列列表</SectionTitle>
+                    <SectionTitle meta={`${queueItems.length}`}>
+                      队列列表
+                    </SectionTitle>
                   </div>
                   {queueItems.length ? (
                     <div className='mp-queue-list'>
                       {queueItems.map((item) => (
-                        <div key={item.id} className={`mp-queue-item is-${item.status}`}>
+                        <div
+                          key={item.id}
+                          className={`mp-queue-item is-${item.status}`}
+                        >
                           <div className='mp-queue-kind'>
-                            {item.kind === 'video' ? <IconPlay /> : <IconImage />}
+                            {item.kind === 'video' ? (
+                              <IconPlay />
+                            ) : (
+                              <IconImage />
+                            )}
                           </div>
                           <div className='mp-queue-item-body'>
                             <div className='mp-queue-item-title'>
@@ -5970,7 +6808,9 @@ const MediaPlayground = () => {
                             </div>
                             <p>{item.model}</p>
                             <em>{formatResultTime(item.createdAt)}</em>
-                            {item.message ? <small>{item.message}</small> : null}
+                            {item.message ? (
+                              <small>{item.message}</small>
+                            ) : null}
                           </div>
                           <div className='mp-queue-item-actions'>
                             {item.result ? (
@@ -6006,8 +6846,16 @@ const MediaPlayground = () => {
                 <SectionTitle meta='Detail'>结果详情</SectionTitle>
                 {inspectorResult ? (
                   <div className='mp-result-inspector-head-actions'>
-                    <Tag color={inspectorResult.cacheStatus === 'failed' ? 'orange' : 'green'}>
-                      {inspectorResult.cacheStatus === 'failed' ? '原始链接' : '已完成'}
+                    <Tag
+                      color={
+                        inspectorResult.cacheStatus === 'failed'
+                          ? 'orange'
+                          : 'green'
+                      }
+                    >
+                      {inspectorResult.cacheStatus === 'failed'
+                        ? '原始链接'
+                        : '已完成'}
                     </Tag>
                     <Button
                       size='small'
@@ -6022,12 +6870,20 @@ const MediaPlayground = () => {
               </div>
               {inspectorResult ? (
                 <div className='mp-result-inspector'>
-                  <strong>{inspectorResult.kind === 'image' ? '图片作品' : '视频作品'}</strong>
+                  <strong>
+                    {inspectorResult.kind === 'image' ? '图片作品' : '视频作品'}
+                  </strong>
                   <div className='mp-result-inspector-preview'>
-                    {inspectorResultPreview && inspectorResult.kind === 'image' ? (
+                    {inspectorResultPreview &&
+                    inspectorResult.kind === 'image' ? (
                       <img src={inspectorResultPreview} alt='结果详情预览' />
                     ) : inspectorResultPreview ? (
-                      <video src={inspectorResultPreview} muted playsInline preload='metadata' />
+                      <video
+                        src={inspectorResultPreview}
+                        muted
+                        playsInline
+                        preload='metadata'
+                      />
                     ) : (
                       <div className='mp-result-inspector-empty'>
                         <IconEyeOpened />
@@ -6038,26 +6894,44 @@ const MediaPlayground = () => {
                   <div className='mp-result-inspector-meta'>
                     <div>
                       <span>完成时间</span>
-                      <strong>{formatResultTime(inspectorResult.createdAt)}</strong>
+                      <strong>
+                        {formatResultTime(inspectorResult.createdAt)}
+                      </strong>
                     </div>
                     <div>
                       <span>模型</span>
-                      <strong>{resultModelLabel(inspectorResult, activeImageModel, activeVideoModel)}</strong>
+                      <strong>
+                        {resultModelLabel(
+                          inspectorResult,
+                          activeImageModel,
+                          activeVideoModel,
+                        )}
+                      </strong>
                     </div>
                     <div>
                       <span>规格</span>
-                      <strong>{inspectorResult.kind === 'image' ? inspectorImagePixelLabel : outputSpec}</strong>
+                      <strong>
+                        {inspectorResult.kind === 'image'
+                          ? inspectorImagePixelLabel
+                          : outputSpec}
+                      </strong>
                     </div>
                     <div>
                       <span>格式</span>
-                      <strong>{inspectorResult.kind === 'image' ? formatLabel : 'MP4 / URL'}</strong>
+                      <strong>
+                        {inspectorResult.kind === 'image'
+                          ? formatLabel
+                          : 'MP4 / URL'}
+                      </strong>
                     </div>
                   </div>
-                  {inspectorResult.kind === 'image' && inspectorResult.sizeMismatch ? (
+                  {inspectorResult.kind === 'image' &&
+                  inspectorResult.sizeMismatch ? (
                     <div className='mp-result-inspector-size-notice'>
                       <strong>尺寸说明</strong>
                       <span>
-                        本次请求 {inspectorResult.requestedSize}，实际生成 {inspectorResult.actualSize}。已保留该结果，可直接下载。
+                        本次请求 {inspectorResult.requestedSize}，实际生成{' '}
+                        {inspectorResult.actualSize}。已保留该结果，可直接下载。
                       </span>
                     </div>
                   ) : null}
@@ -6074,28 +6948,36 @@ const MediaPlayground = () => {
                         <Button
                           size='small'
                           className='mp-btn-secondary'
-                          onClick={() => reuseResultMedia(inspectorResult, 'reference')}
+                          onClick={() =>
+                            reuseResultMedia(inspectorResult, 'reference')
+                          }
                         >
                           作为参考图
                         </Button>
                         <Button
                           size='small'
                           className='mp-btn-secondary'
-                          onClick={() => reuseResultMedia(inspectorResult, 'video')}
+                          onClick={() =>
+                            reuseResultMedia(inspectorResult, 'video')
+                          }
                         >
                           生成视频
                         </Button>
                         <Button
                           size='small'
                           className='mp-btn-secondary'
-                          onClick={() => reuseResultMedia(inspectorResult, 'reverse')}
+                          onClick={() =>
+                            reuseResultMedia(inspectorResult, 'reverse')
+                          }
                         >
                           图像反推
                         </Button>
                         <Button
                           size='small'
                           className='mp-btn-secondary'
-                          onClick={() => reuseResultMedia(inspectorResult, 'edit')}
+                          onClick={() =>
+                            reuseResultMedia(inspectorResult, 'edit')
+                          }
                         >
                           再次编辑
                         </Button>
@@ -6104,7 +6986,9 @@ const MediaPlayground = () => {
                       <Button
                         size='small'
                         className='mp-btn-secondary'
-                        onClick={() => reuseResultMedia(inspectorResult, 'video')}
+                        onClick={() =>
+                          reuseResultMedia(inspectorResult, 'video')
+                        }
                       >
                         作为视频参考
                       </Button>
@@ -6132,7 +7016,8 @@ const MediaPlayground = () => {
                       icon={<IconDownload />}
                       onClick={() =>
                         downloadURL(
-                          inspectorResultPreview || normalizeURL(inspectorResult.url),
+                          inspectorResultPreview ||
+                            normalizeURL(inspectorResult.url),
                           inspectorResult.kind === 'image'
                             ? 'xingren-image.png'
                             : 'xingren-video.mp4',
@@ -6147,7 +7032,10 @@ const MediaPlayground = () => {
                       className='mp-btn-tool'
                       icon={<IconCopy />}
                       onClick={async () => {
-                        const ok = await copy(inspectorResultPreview || normalizeURL(inspectorResult.url));
+                        const ok = await copy(
+                          inspectorResultPreview ||
+                            normalizeURL(inspectorResult.url),
+                        );
                         if (ok) Toast.success('链接已复制');
                       }}
                     >
@@ -6170,7 +7058,9 @@ const MediaPlayground = () => {
               ) : (
                 <div className='mp-queue-empty'>
                   <IconImage />
-                  <span>生成或选择一个作品后，这里会显示详情与下一步操作。</span>
+                  <span>
+                    生成或选择一个作品后，这里会显示详情与下一步操作。
+                  </span>
                 </div>
               )}
             </div>

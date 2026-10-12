@@ -89,6 +89,14 @@ func TestPlaygroundMediaCacheRouteDoesNotUseRelayPerformanceGate(t *testing.T) {
 			require.Equal(t, "web", c.GetString(middleware.RouteTagKey))
 			c.String(http.StatusOK, "cache")
 		})
+		playgroundMediaAPIRouter.POST("/upload", func(c *gin.Context) {
+			require.Equal(t, "web", c.GetString(middleware.RouteTagKey))
+			c.String(http.StatusOK, "upload")
+		})
+		playgroundMediaAPIRouter.GET("/policy", func(c *gin.Context) {
+			require.Equal(t, "web", c.GetString(middleware.RouteTagKey))
+			c.String(http.StatusOK, "policy")
+		})
 	}
 
 	playgroundRouter := server.Group("/pg")
@@ -107,6 +115,18 @@ func TestPlaygroundMediaCacheRouteDoesNotUseRelayPerformanceGate(t *testing.T) {
 	server.ServeHTTP(cacheResp, cacheReq)
 	require.Equal(t, http.StatusOK, cacheResp.Code)
 	require.Equal(t, "cache", cacheResp.Body.String())
+
+	uploadReq := httptest.NewRequest(http.MethodPost, "/pg/media/upload", nil)
+	uploadResp := httptest.NewRecorder()
+	server.ServeHTTP(uploadResp, uploadReq)
+	require.Equal(t, http.StatusOK, uploadResp.Code)
+	require.Equal(t, "upload", uploadResp.Body.String())
+
+	policyReq := httptest.NewRequest(http.MethodGet, "/pg/media/policy", nil)
+	policyResp := httptest.NewRecorder()
+	server.ServeHTTP(policyResp, policyReq)
+	require.Equal(t, http.StatusOK, policyResp.Code)
+	require.Equal(t, "policy", policyResp.Body.String())
 
 	videoReq := httptest.NewRequest(http.MethodPost, "/pg/videos", nil)
 	videoResp := httptest.NewRecorder()

@@ -78,6 +78,8 @@ func SetRelayRouter(router *gin.Engine) {
 	playgroundMediaAPIRouter.Use(middleware.ModelRequestRateLimit())
 	{
 		playgroundMediaAPIRouter.POST("/cache", controller.PlaygroundCacheMedia)
+		playgroundMediaAPIRouter.POST("/upload", controller.PlaygroundUploadMedia)
+		playgroundMediaAPIRouter.GET("/policy", controller.PlaygroundMediaPolicy)
 		playgroundMediaAPIRouter.GET("/list", controller.PlaygroundListMedia)
 	}
 

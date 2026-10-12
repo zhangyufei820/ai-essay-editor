@@ -36,8 +36,8 @@ function arrayBlock(text, name) {
   const marker = `const ${name} = [`
   const start = text.indexOf(marker)
   if (start === -1) return ''
-  const end = text.indexOf('\n];', start)
-  return end === -1 ? text.slice(start) : text.slice(start, end)
+  const end = text.indexOf('];', start)
+  return end === -1 ? text.slice(start) : text.slice(start, end + 2)
 }
 
 function functionBlock(text, name) {
@@ -254,16 +254,18 @@ async function main() {
   for (const marker of [
     "function isGrok46ImageModel(model)",
     "if (!isGrok46ImageModel(imageModel))",
-    "if (isGrok46ImageModel(imageModel) && quality) payload.quality = quality",
   ]) {
     if (!classic.includes(marker)) {
       errors.push(`grok 4.6图片 payload guard missing marker: ${marker}`)
     }
   }
+  if (!/if\s*\(isGrok46ImageModel\(imageModel\)\s*&&\s*quality\)\s*payload\.quality\s*=\s*quality/.test(classic)) {
+    errors.push('grok 4.6图片 payload guard missing quality forwarding')
+  }
 
   errors.push(
     ...markerErrors('Visible pixel output spec', classic, [
-      'function imagePixelSizeForModel(modelValue, aspectRatio, imageSize, customSize',
+      'function imagePixelSizeForModel(',
       'const imagePixelLabel =',
       'imagePixelLabel,',
     ]),
@@ -353,7 +355,7 @@ async function main() {
   if (/if\s*\(\s*isFlexibleGptImageSize\s*&&\s*resolution/.test(classic)) {
     errors.push('classic must not forward the UI-only resolution tier to GPT Image 2.5')
   }
-  if (!classic.includes("'1:1': '1920x1920', '16:9': '2048x1152'")) {
+  if (!/'1:1':\s*'1920x1920',\s*'16:9':\s*'2048x1152'/.test(classic)) {
     errors.push('classic GPT Image 2.5 2K square must use the verified 1920x1920 upstream size')
   }
   if (!classic.includes("'3:2': '3240x2160'") || !classic.includes("'2:3': '2160x3240'")) {
@@ -399,12 +401,14 @@ async function main() {
   for (const marker of [
     'function imageModelSupportsWorkflow(modelConfig, workflow)',
     'imageModelSupportsWorkflow(item, imageWorkflow)',
-    'if (mode === \'image\' && !imageModelSupportsWorkflow(activeImageModel, imageWorkflow))',
     '当前模型仅支持文生图，请切换到文生图或更换支持图片编辑的模型。',
   ]) {
     if (!classic.includes(marker)) {
       errors.push(`image workflow/model guard missing marker: ${marker}`)
     }
+  }
+  if (!/if\s*\(\s*mode\s*===\s*'image'\s*&&\s*!imageModelSupportsWorkflow\(activeImageModel,\s*imageWorkflow\)\s*\)/.test(classic)) {
+    errors.push('image workflow/model guard missing formatted submit guard')
   }
   if (!discountImage2Block.includes('maxCount: 1')) {
     errors.push('特价 image-2 must limit image generations to one')
@@ -447,6 +451,28 @@ async function main() {
 
   if (grokBlock.includes("sizes: ['960x960'")) {
     errors.push('Grok UI must not expose legacy fixed pixel size table as primary control')
+  }
+
+  errors.push(
+    ...markerErrors('Stored URL image upload contract', classic, [
+      'const REFERENCE_MEDIA_TOTAL_MAX_BYTES = 60 * 1024 * 1024;',
+      "upload_transport: 'stored_url'",
+      "API.get('/pg/media/policy'",
+      "API.post('/pg/media/upload'",
+      'async function compressImageForPolicy(file, targetBytes, options = {})',
+      'image_urls: uploadedReferences.map((item) => item.url)',
+      '生成请求只会提交 URL',
+      '总安全阈值约 60MB',
+    ]),
+  )
+  for (const forbidden of [
+    'REVERSE_PROMPT_MAX_IMAGE_BYTES',
+    '参考图不能超过 12MB',
+    '参考素材总大小不能超过 48MB',
+  ]) {
+    if (classic.includes(forbidden)) {
+      errors.push(`legacy fixed upload limit must stay removed: ${forbidden}`)
+    }
   }
 
   if (errors.length) return fail(errors)
