@@ -1,7 +1,9 @@
 package router
 
 import (
+	"crypto/sha256"
 	"embed"
+	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -19,6 +21,11 @@ import (
 
 const defaultCodexWorkspaceUpstream = "http://shenxiang-codex-workspace:8000"
 
+const legacyServiceWorkerCleanup = `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.registration.unregister());
+});`
+
 // ThemeAssets holds the embedded frontend assets for both themes.
 type ThemeAssets struct {
 	DefaultBuildFS   embed.FS
@@ -34,8 +41,12 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())
-	router.Use(middleware.Cache())
+	versionInput := sha256.New()
+	_, _ = versionInput.Write(assets.DefaultIndexPage)
+	_, _ = versionInput.Write(assets.ClassicIndexPage)
+	router.Use(middleware.Cache(fmt.Sprintf("%x", versionInput.Sum(nil))))
 	router.Use(denySensitiveWebPaths())
+	router.Use(serveLegacyServiceWorkerCleanup())
 	setCodexWorkspaceProxy(router)
 	router.Use(static.Serve("/", themeFS))
 	router.NoRoute(func(c *gin.Context) {
@@ -51,6 +62,20 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 			c.Data(http.StatusOK, "text/html; charset=utf-8", assets.DefaultIndexPage)
 		}
 	})
+}
+
+func serveLegacyServiceWorkerCleanup() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.URL.Path != "/service-worker.js" && c.Request.URL.Path != "/sw.js" {
+			c.Next()
+			return
+		}
+		c.Set(middleware.RouteTagKey, "web")
+		c.Header("Cache-Control", "no-store, max-age=0")
+		c.Header("Service-Worker-Allowed", "/")
+		c.Data(http.StatusOK, "application/javascript; charset=utf-8", []byte(legacyServiceWorkerCleanup))
+		c.Abort()
+	}
 }
 
 func denySensitiveWebPaths() gin.HandlerFunc {

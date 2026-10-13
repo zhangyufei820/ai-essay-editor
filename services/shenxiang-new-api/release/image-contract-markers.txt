@@ -27,6 +27,7 @@ mp-video-preview-modal
 /pg/media/policy
 生成请求只会提交 URL
 总安全阈值约 60MB
+媒体工坊已更新。为避免继续使用旧上传限制
 xingren-grok-video-15-6s
 xingren-grok-video-15-10s
 user.register

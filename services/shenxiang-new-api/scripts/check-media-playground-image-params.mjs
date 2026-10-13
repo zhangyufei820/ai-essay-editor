@@ -58,6 +58,10 @@ async function main() {
     root,
     'classic/src/pages/MediaPlayground/image-aspect-ratio.js',
   )
+  const webBuildEntryPath = path.join(
+    root,
+    'classic/src/pages/MediaPlayground/web-build-entry.js',
+  )
   const contractPath = path.resolve(scriptDir, '../release/image-model-contract.json')
   const openAIAdaptorPath = path.join(sourceRoot, 'relay/channel/openai/adaptor.go')
   const taskControllerPath = path.join(sourceRoot, 'controller/playground_image_task.go')
@@ -67,6 +71,9 @@ async function main() {
   }
   if (!fs.existsSync(imageAspectRatioPath)) {
     return fail([`missing required file: ${imageAspectRatioPath}`])
+  }
+  if (!fs.existsSync(webBuildEntryPath)) {
+    return fail([`missing required file: ${webBuildEntryPath}`])
   }
   for (const requiredPath of [contractPath, openAIAdaptorPath, taskControllerPath]) {
     if (!fs.existsSync(requiredPath)) {
@@ -80,6 +87,9 @@ async function main() {
   const imageModelContract = JSON.parse(readText(contractPath))
   const { closestSupportedImageAspectRatio } = await import(
     `${pathToFileURL(imageAspectRatioPath).href}?mtime=${fs.statSync(imageAspectRatioPath).mtimeMs}`
+  )
+  const { webBuildEntryFromHtml } = await import(
+    `${pathToFileURL(webBuildEntryPath).href}?mtime=${fs.statSync(webBuildEntryPath).mtimeMs}`
   )
   const gptImage2Block = modelBlock(classic, 'gpt-image-2-4K')
   const stableImage2Block = modelBlock(classic, '官转image 2稳定')
@@ -465,6 +475,21 @@ async function main() {
       '总安全阈值约 60MB',
     ]),
   )
+  errors.push(
+    ...markerErrors('Media workbench stale-build protection', classic, [
+      'webBuildEntryFromHtml(document.documentElement.outerHTML)',
+      'sx_build_check=',
+      'setStaleBuild(true)',
+      'if (staleBuild) return Toast.warning',
+      '为避免继续使用旧上传限制，请刷新页面后再生成。',
+    ]),
+  )
+  if (
+    webBuildEntryFromHtml('<script src="/static/js/index.abc123.js"></script>') !==
+    '/static/js/index.abc123.js'
+  ) {
+    errors.push('media workbench build-entry detector no longer recognizes the deployed bundle')
+  }
   for (const forbidden of [
     'REVERSE_PROMPT_MAX_IMAGE_BYTES',
     '参考图不能超过 12MB',

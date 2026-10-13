@@ -9,7 +9,7 @@
   },
   {
     "package": "./router",
-    "run": "^TestPlaygroundMediaCacheRouteDoesNotUseRelayPerformanceGate$"
+    "run": "^Test(PlaygroundMediaCacheRouteDoesNotUseRelayPerformanceGate|SetWebRouterServesLegacyServiceWorkerCleanupBeforeSpaFallback|SetWebRouterCacheVersionChangesWithEmbeddedFrontend)$"
   },
   {
     "package": "./.",

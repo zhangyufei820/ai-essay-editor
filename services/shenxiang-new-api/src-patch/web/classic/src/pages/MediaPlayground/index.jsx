@@ -52,6 +52,7 @@ import {
   ModelSelector,
 } from '../../components/media-workbench';
 import { closestSupportedImageAspectRatio } from './image-aspect-ratio';
+import { webBuildEntryFromHtml } from './web-build-entry';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -3565,6 +3566,7 @@ const MediaPlayground = () => {
   const [resultViewMode, setResultViewMode] = useState('grid');
   const [resultSort, setResultSort] = useState('newest');
   const [submitting, setSubmitting] = useState(false);
+  const [staleBuild, setStaleBuild] = useState(false);
   const [videoPolling, setVideoPolling] = useState(false);
   const [activeVideoTask, setActiveVideoTask] = useState(null);
   const [liveQueueTasks, setLiveQueueTasks] = useState([]);
@@ -3918,6 +3920,45 @@ const MediaPlayground = () => {
     API.get('/api/user/models')
       .then((res) => setModels(res.data?.data || []))
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const loadedEntry = webBuildEntryFromHtml(document.documentElement.outerHTML);
+    if (!loadedEntry) return undefined;
+    let cancelled = false;
+    let checking = false;
+    const checkBuild = async () => {
+      if (checking || document.visibilityState === 'hidden') return;
+      checking = true;
+      try {
+        const response = await fetch(
+          `/console/media-playground?sx_build_check=${Date.now()}`,
+          { cache: 'no-store', credentials: 'same-origin' },
+        );
+        if (!response.ok) return;
+        const latestEntry = webBuildEntryFromHtml(await response.text());
+        if (!cancelled && latestEntry && latestEntry !== loadedEntry) {
+          setStaleBuild(true);
+        }
+      } catch {
+        // A transient network error must not interrupt an in-progress task.
+      } finally {
+        checking = false;
+      }
+    };
+    const onResume = () => {
+      if (document.visibilityState !== 'hidden') void checkBuild();
+    };
+    void checkBuild();
+    window.addEventListener('focus', onResume);
+    document.addEventListener('visibilitychange', onResume);
+    const timer = window.setInterval(onResume, 60_000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onResume);
+      document.removeEventListener('visibilitychange', onResume);
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -5300,6 +5341,7 @@ const MediaPlayground = () => {
   }
 
   async function handleSubmit() {
+    if (staleBuild) return Toast.warning('媒体工坊已更新，请刷新页面后再生成。');
     if (submitting) return;
     if (!modelAllowed) return Toast.error('当前用户分组暂未开放这个模型。');
     if (
@@ -5898,6 +5940,20 @@ const MediaPlayground = () => {
   return (
     <div className='mp-page classic-page-fill'>
       <div className='mp-shell'>
+        {staleBuild ? (
+          <Banner
+            type='warning'
+            closeIcon={null}
+            description={
+              <span>
+                媒体工坊已更新。为避免继续使用旧上传限制，请刷新页面后再生成。刷新会清空当前未提交的输入。
+                <Button size='small' onClick={() => window.location.reload()}>
+                  刷新页面
+                </Button>
+              </span>
+            }
+          />
+        ) : null}
         <header
           className='mp-workbench-topbar'
           aria-label='媒体创作工作台顶部栏'

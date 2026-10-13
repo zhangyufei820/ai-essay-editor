@@ -45,6 +45,51 @@ func TestSetWebRouterDeniesDotfileBeforeSpaFallback(t *testing.T) {
 	require.NotContains(t, resp.Body.String(), "<html>")
 }
 
+func TestSetWebRouterServesLegacyServiceWorkerCleanupBeforeSpaFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	server := gin.New()
+	SetWebRouter(server, ThemeAssets{
+		DefaultBuildFS:   webDefaultFS,
+		DefaultIndexPage: []byte("<html>default</html>"),
+		ClassicBuildFS:   webClassicFS,
+		ClassicIndexPage: []byte("<html>classic</html>"),
+	})
+
+	for _, target := range []string{"/service-worker.js", "/sw.js"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		resp := httptest.NewRecorder()
+		server.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusOK, resp.Code)
+		require.Equal(t, "application/javascript; charset=utf-8", resp.Header().Get("Content-Type"))
+		require.Equal(t, "no-store, max-age=0", resp.Header().Get("Cache-Control"))
+		require.Equal(t, "/", resp.Header().Get("Service-Worker-Allowed"))
+		require.Contains(t, resp.Body.String(), "skipWaiting")
+		require.Contains(t, resp.Body.String(), "registration.unregister")
+		require.NotContains(t, resp.Body.String(), "<html>")
+	}
+}
+
+func TestSetWebRouterCacheVersionChangesWithEmbeddedFrontend(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	versionFor := func(index string) string {
+		server := gin.New()
+		SetWebRouter(server, ThemeAssets{
+			DefaultBuildFS:   webDefaultFS,
+			DefaultIndexPage: []byte(index),
+			ClassicBuildFS:   webClassicFS,
+			ClassicIndexPage: []byte("<html>classic</html>"),
+		})
+		resp := httptest.NewRecorder()
+		server.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/console/media-playground", nil))
+		require.Equal(t, http.StatusOK, resp.Code)
+		return resp.Header().Get("Cache-Version")
+	}
+	first := versionFor("<html>first</html>")
+	require.Len(t, first, 64)
+	require.NotEqual(t, first, versionFor("<html>second</html>"))
+}
+
 func TestRegisterPlaygroundMediaFilesRouteDoesNotUseRelayPerformanceGate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	server := gin.New()
