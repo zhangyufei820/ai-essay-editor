@@ -53,6 +53,7 @@ import {
 } from '../../components/media-workbench';
 import { closestSupportedImageAspectRatio } from './image-aspect-ratio';
 import { webBuildEntryFromHtml } from './web-build-entry';
+import { planImageUploadTargets } from './image-upload-budget';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -1888,14 +1889,17 @@ async function compressImageForPolicy(file, targetBytes, options = {}) {
     width = Math.max(1, Math.round(width * edgeScale));
     height = Math.max(1, Math.round(height * edgeScale));
     const preservePng = Boolean(options.preservePng);
-    const outputType = preservePng ? 'image/png' : 'image/webp';
-    const extension = preservePng ? 'png' : 'webp';
+    let outputType = preservePng
+      ? 'image/png'
+      : ['image/png', 'image/jpeg', 'image/webp'].includes(file.type)
+        ? file.type
+        : 'image/webp';
     const baseName =
       String(file.name || 'image').replace(/\.[^.]+$/, '') || 'image';
-    let quality = preservePng ? undefined : 0.88;
+    let quality = preservePng || outputType === 'image/png' ? undefined : 0.98;
     let lastBlob = null;
 
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < 16; attempt += 1) {
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
@@ -1906,6 +1910,7 @@ async function compressImageForPolicy(file, targetBytes, options = {}) {
       canvas.width = 1;
       canvas.height = 1;
       if (lastBlob.size <= targetBytes) {
+        const extension = outputType === 'image/jpeg' ? 'jpg' : outputType.split('/')[1];
         return {
           file: new File([lastBlob], `${baseName}.${extension}`, {
             type: outputType,
@@ -1916,11 +1921,27 @@ async function compressImageForPolicy(file, targetBytes, options = {}) {
         };
       }
 
+      if (preservePng) {
+        const ratio = Math.sqrt(targetBytes / Math.max(lastBlob.size, 1));
+        const scale = Math.max(0.55, Math.min(0.86, ratio * 0.94));
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+        continue;
+      }
+      if (outputType === 'image/png') {
+        outputType = 'image/webp';
+        quality = 0.98;
+        continue;
+      }
+      if (quality > 0.78) {
+        quality = Math.max(0.78, Number((quality - 0.04).toFixed(2)));
+        continue;
+      }
       const ratio = Math.sqrt(targetBytes / Math.max(lastBlob.size, 1));
       const scale = Math.max(0.55, Math.min(0.86, ratio * 0.94));
       width = Math.max(1, Math.round(width * scale));
       height = Math.max(1, Math.round(height * scale));
-      if (!preservePng) quality = Math.max(0.5, Number(quality || 0.88) - 0.06);
+      quality = 0.94;
     }
     throw new Error(
       `${file.name || '图片'} 自动压缩后仍超过 ${mediaBytesLabel(targetBytes)}，请降低图片尺寸后重试。`,
@@ -1933,25 +1954,21 @@ async function compressImageForPolicy(file, targetBytes, options = {}) {
 async function prepareImagesForUpload(files, policy, maskIndex = -1) {
   const sourceFiles = Array.from(files || []).filter(Boolean);
   if (sourceFiles.length === 0) return { files: [], compressed: [] };
+  const targets = planImageUploadTargets(
+    sourceFiles.map((file) => file.size),
+    policy,
+    maskIndex,
+  );
   const effectiveTotal = Math.min(
     Number(policy.max_total_bytes),
     Number(policy.global_total_bytes),
-  );
-  const perFileBudget = Math.max(
-    256 * 1024,
-    Math.floor(
-      Math.min(
-        Number(policy.max_image_bytes),
-        effectiveTotal / sourceFiles.length,
-      ) * 0.96,
-    ),
   );
   const prepared = [];
   const compressed = [];
   for (let index = 0; index < sourceFiles.length; index += 1) {
     const result = await compressImageForPolicy(
       sourceFiles[index],
-      perFileBudget,
+      targets[index],
       {
         preservePng: index === maskIndex,
       },

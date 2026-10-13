@@ -62,6 +62,10 @@ async function main() {
     root,
     'classic/src/pages/MediaPlayground/web-build-entry.js',
   )
+  const imageUploadBudgetPath = path.join(
+    root,
+    'classic/src/pages/MediaPlayground/image-upload-budget.js',
+  )
   const contractPath = path.resolve(scriptDir, '../release/image-model-contract.json')
   const openAIAdaptorPath = path.join(sourceRoot, 'relay/channel/openai/adaptor.go')
   const taskControllerPath = path.join(sourceRoot, 'controller/playground_image_task.go')
@@ -74,6 +78,9 @@ async function main() {
   }
   if (!fs.existsSync(webBuildEntryPath)) {
     return fail([`missing required file: ${webBuildEntryPath}`])
+  }
+  if (!fs.existsSync(imageUploadBudgetPath)) {
+    return fail([`missing required file: ${imageUploadBudgetPath}`])
   }
   for (const requiredPath of [contractPath, openAIAdaptorPath, taskControllerPath]) {
     if (!fs.existsSync(requiredPath)) {
@@ -90,6 +97,9 @@ async function main() {
   )
   const { webBuildEntryFromHtml } = await import(
     `${pathToFileURL(webBuildEntryPath).href}?mtime=${fs.statSync(webBuildEntryPath).mtimeMs}`
+  )
+  const { planImageUploadTargets } = await import(
+    `${pathToFileURL(imageUploadBudgetPath).href}?mtime=${fs.statSync(imageUploadBudgetPath).mtimeMs}`
   )
   const gptImage2Block = modelBlock(classic, 'gpt-image-2-4K')
   const stableImage2Block = modelBlock(classic, '官转image 2稳定')
@@ -470,11 +480,33 @@ async function main() {
       "API.get('/pg/media/policy'",
       "API.post('/pg/media/upload'",
       'async function compressImageForPolicy(file, targetBytes, options = {})',
+      'planImageUploadTargets(',
       'image_urls: uploadedReferences.map((item) => item.url)',
       '生成请求只会提交 URL',
       '总安全阈值约 60MB',
     ]),
   )
+  const mb = 1024 * 1024
+  const uploadPolicy = {
+    max_image_bytes: 18 * mb,
+    max_total_bytes: 18 * mb,
+    global_total_bytes: 60 * mb,
+  }
+  const withinLimits = planImageUploadTargets([11 * mb, 1 * mb], uploadPolicy)
+  if (withinLimits[0] !== 11 * mb || withinLimits[1] !== 1 * mb) {
+    errors.push('image upload budget must preserve originals within single-image and total limits')
+  }
+  const overTotal = planImageUploadTargets([11 * mb, 10 * mb], uploadPolicy)
+  if (
+    overTotal[0] >= 11 * mb ||
+    overTotal[1] !== 10 * mb ||
+    overTotal.reduce((sum, bytes) => sum + bytes, 0) > 18 * mb
+  ) {
+    errors.push('image upload budget must reduce only the actual combined overflow')
+  }
+  if (classic.includes('effectiveTotal / sourceFiles.length')) {
+    errors.push('image upload budget must not divide the combined limit equally across files')
+  }
   errors.push(
     ...markerErrors('Media workbench stale-build protection', classic, [
       'webBuildEntryFromHtml(document.documentElement.outerHTML)',
