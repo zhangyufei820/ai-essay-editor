@@ -81,6 +81,13 @@ else
   optional_failures+=("gpt-6-sol:${exit_code}")
   printf 'warning: optional model reconcile failed model=%s exit_code=%s\n' "gpt-6-sol" "$exit_code" >&2
 fi
+if env GPT6_MODEL_PROFILE=sol61 GPT61_SOL_CHANNEL_SYNC_LOCK_HELD=1 python3 "$GPT6_ASTRA_SCRIPT" --reconcile-if-configured; then
+  :
+else
+  exit_code=$?
+  optional_failures+=("gpt-6.1-sol:${exit_code}")
+  printf 'warning: optional model reconcile failed model=%s exit_code=%s\n' "gpt-6.1-sol" "$exit_code" >&2
+fi
 run_optional_reconcile "grok-4.5" "GROK45_MODEL_SYNC_LOCK_HELD" "$GROK45_SCRIPT"
 run_optional_reconcile "grok-4.6" "GROK46_MODEL_SYNC_LOCK_HELD" "$GROK46_SCRIPT"
 

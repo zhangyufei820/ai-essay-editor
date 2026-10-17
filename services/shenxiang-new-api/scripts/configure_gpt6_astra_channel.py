@@ -24,24 +24,24 @@ import sync_app_model_permissions as sync
 import provider_monitor
 
 PROFILE_NAME = os.environ.get("GPT6_MODEL_PROFILE", "astra").strip().lower()
-if PROFILE_NAME not in {"astra", "sol"}:
-    raise RuntimeError("GPT6_MODEL_PROFILE must be astra or sol")
+if PROFILE_NAME not in {"astra", "sol", "sol61"}:
+    raise RuntimeError("GPT6_MODEL_PROFILE must be astra, sol or sol61")
 
 ASTRA_SOURCE_TAG = "xingren-gpt6-astra"
 AIHUB_SOURCE_TAG = "xingren-discount-text-aihub"
 WANGWANG_SOURCE_TAG = "xingren-plus-text-wangwang"
 PDHLZY_SOURCE_TAG = "xingren-plus-text-pdhlzy"
 
-if PROFILE_NAME == "sol":
-    MODEL_NAME = "gpt-6-sol"
-    DISPLAY_NAME = "GPT-6 Sol"
+if PROFILE_NAME in {"sol", "sol61"}:
+    MODEL_NAME = "gpt-6.1-sol" if PROFILE_NAME == "sol61" else "gpt-6-sol"
+    DISPLAY_NAME = "GPT-6.1 Sol" if PROFILE_NAME == "sol61" else "GPT-6 Sol"
     SOURCE_CHANNEL_TAGS = (AIHUB_SOURCE_TAG, WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG, ASTRA_SOURCE_TAG)
-    MANAGED_TAG_PREFIX = "xingren-gpt6-sol-"
+    MANAGED_TAG_PREFIX = "xingren-gpt61-sol-" if PROFILE_NAME == "sol61" else "xingren-gpt6-sol-"
     DISCOUNT_PRIMARY_SOURCE_TAG = AIHUB_SOURCE_TAG
     DEPRECATED_CHANNEL_TAG = None
-    LOCK_PATH = "/tmp/shenxiang-new-api-gpt6-sol-channel.lock"
-    LOCK_HELD_ENV = "GPT6_SOL_CHANNEL_SYNC_LOCK_HELD"
-    SQL_VAR_PREFIX = "sol"
+    LOCK_PATH = "/tmp/shenxiang-new-api-gpt61-sol-channel.lock" if PROFILE_NAME == "sol61" else "/tmp/shenxiang-new-api-gpt6-sol-channel.lock"
+    LOCK_HELD_ENV = "GPT61_SOL_CHANNEL_SYNC_LOCK_HELD" if PROFILE_NAME == "sol61" else "GPT6_SOL_CHANNEL_SYNC_LOCK_HELD"
+    SQL_VAR_PREFIX = "sol61" if PROFILE_NAME == "sol61" else "sol"
 else:
     MODEL_NAME = "gpt-6-astra"
     DISPLAY_NAME = "GPT-6 Astra"
@@ -56,7 +56,7 @@ else:
 LEGACY_CHANNEL_TAG = ASTRA_SOURCE_TAG
 # Public tiers prefer their configured sources, but only completed probes can
 # enable them. Legacy tiers retain their established order above.
-GROUP_SOURCE_TAG_ORDER_OVERRIDES = {} if PROFILE_NAME == "sol" else {
+GROUP_SOURCE_TAG_ORDER_OVERRIDES = {} if PROFILE_NAME != "astra" else {
     "discount": (PDHLZY_SOURCE_TAG, WANGWANG_SOURCE_TAG, AIHUB_SOURCE_TAG, ASTRA_SOURCE_TAG),
     "plus": (WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG, AIHUB_SOURCE_TAG, ASTRA_SOURCE_TAG),
     "default": (WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG, AIHUB_SOURCE_TAG, ASTRA_SOURCE_TAG),
@@ -497,8 +497,8 @@ def main() -> int:
             for result in probe_results
             if PROFILE_NAME == "astra" or result.get("discount_healthy") is True
         }
-        if PROFILE_NAME == "sol" and not verified_source_tags:
-            raise ConfigurationError("no GPT-6 Sol source passed repeated Codex tool verification")
+        if PROFILE_NAME != "astra" and not verified_source_tags:
+            raise ConfigurationError(f"no {DISPLAY_NAME} source passed repeated Codex tool verification")
         if args.apply and unavailable_tags:
             raise ConfigurationError(f"one or more {DISPLAY_NAME} sources failed verification")
         configured = sync.mysql("SELECT COUNT(*) FROM channels WHERE tag LIKE " + sql_quote(MANAGED_TAG_PREFIX + "%"))

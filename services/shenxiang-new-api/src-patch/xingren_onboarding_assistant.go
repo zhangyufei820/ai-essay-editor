@@ -58,6 +58,7 @@ var (
 		"gpt-5.4-mini": true,
 		"gpt-6-astra":  true,
 		"gpt-6-sol":    true,
+		"gpt-6.1-sol":  true,
 	}
 )
 

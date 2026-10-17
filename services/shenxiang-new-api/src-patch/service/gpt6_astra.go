@@ -9,6 +9,7 @@ import (
 const (
 	Gpt6AstraModelName = "gpt-6-astra"
 	Gpt6SolModelName   = "gpt-6-sol"
+	Gpt61SolModelName  = "gpt-6.1-sol"
 	// Gpt6AstraPricingGroupName is retained for legacy-channel migration only.
 	// Astra still routes through the caller's selected public group.
 	Gpt6AstraPricingGroupName = "astra"
@@ -23,7 +24,7 @@ func IsGpt6AstraModel(modelName string) bool {
 
 func IsGpt6FixedMarketplaceModel(modelName string) bool {
 	name := strings.TrimSpace(modelName)
-	return strings.EqualFold(name, Gpt6AstraModelName) || strings.EqualFold(name, Gpt6SolModelName)
+	return strings.EqualFold(name, Gpt6AstraModelName) || strings.EqualFold(name, Gpt6SolModelName) || strings.EqualFold(name, Gpt61SolModelName)
 }
 
 // IsGpt6AstraPricingGroup is retained for source compatibility only. Astra

@@ -104,6 +104,8 @@ case "$name" in
   configure_gpt6_astra_channel.py)
     if [ "${GPT6_MODEL_PROFILE:-}" = "sol" ]; then
       exit_code="${TEST_SOL_EXIT:-0}"
+    elif [ "${GPT6_MODEL_PROFILE:-}" = "sol61" ]; then
+      exit_code="${TEST_SOL61_EXIT:-0}"
     else
       exit_code="${TEST_ASTRA_EXIT:-0}"
     fi
@@ -162,6 +164,7 @@ exit "$exit_code"
                 "configure_kimi_k3_channel.py",
                 "configure_gpt6_astra_channel.py",
                 "configure_gpt6_astra_channel.py",
+                "configure_gpt6_astra_channel.py",
                 "configure_grok45_model.py",
                 "configure_grok46_model.py",
             ],
@@ -174,6 +177,7 @@ exit "$exit_code"
             ("TEST_KIMI_EXIT", "kimi-k3"),
             ("TEST_ASTRA_EXIT", "gpt-6-astra"),
             ("TEST_SOL_EXIT", "gpt-6-sol"),
+            ("TEST_SOL61_EXIT", "gpt-6.1-sol"),
             ("TEST_GROK45_EXIT", "grok-4.5"),
             ("TEST_GROK46_EXIT", "grok-4.6"),
         )
@@ -183,7 +187,7 @@ exit "$exit_code"
                 result = self._run(**{exit_variable: "3"})
 
                 self.assertEqual(0, result.returncode, result.stderr)
-                self.assertEqual(6, len(self._python_calls()))
+                self.assertEqual(7, len(self._python_calls()))
                 self.assertIn(
                     f"warning: optional model reconcile failed model={model} exit_code=3",
                     result.stderr,
@@ -194,7 +198,7 @@ exit "$exit_code"
         result = self._run(TEST_KIMI_EXIT="3", TEST_GROK46_EXIT="4")
 
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(6, len(self._python_calls()))
+        self.assertEqual(7, len(self._python_calls()))
         self.assertIn("optional_failures=kimi-k3:3,grok-4.6:4", result.stderr)
 
     def test_missing_optional_script_is_non_blocking(self) -> None:
@@ -203,7 +207,7 @@ exit "$exit_code"
         result = self._run()
 
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(6, len(self._python_calls()))
+        self.assertEqual(7, len(self._python_calls()))
         self.assertIn(
             "warning: optional model reconcile failed model=kimi-k3 exit_code=2",
             result.stderr,
@@ -229,8 +233,9 @@ exit "$exit_code"
         self.assertIn("|profile=|kimi=1|astra=|sol=|grok45=|grok46=", calls[1])
         self.assertIn("|profile=|kimi=|astra=1|sol=|grok45=|grok46=", calls[2])
         self.assertIn("|profile=sol|kimi=|astra=|sol=1|grok45=|grok46=", calls[3])
-        self.assertIn("|profile=|kimi=|astra=|sol=|grok45=1|grok46=", calls[4])
-        self.assertIn("|profile=|kimi=|astra=|sol=|grok45=|grok46=1", calls[5])
+        self.assertIn("|profile=sol61|", calls[4])
+        self.assertIn("|profile=|kimi=|astra=|sol=|grok45=1|grok46=", calls[5])
+        self.assertIn("|profile=|kimi=|astra=|sol=|grok45=|grok46=1", calls[6])
 
     def test_lock_contention_remains_fatal_before_any_sync(self) -> None:
         result = self._run(TEST_FLOCK_EXIT="75")

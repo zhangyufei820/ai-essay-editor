@@ -36,6 +36,7 @@ var monthlyCardAllowedModels = []string{
 	model.ImageBenefitModelName,
 	"gpt-6-astra",
 	"gpt-6-sol",
+	"gpt-6.1-sol",
 	"gpt-5.6",
 	"gpt-5.5",
 	"gpt-5.4-mini",
@@ -50,6 +51,7 @@ var monthlyCardTextDiscountModels = []string{
 	// Astra is subscription-eligible but always billed at its marketplace price.
 	// Sol follows the normal monthly-card text discount policy.
 	"gpt-6-sol",
+	"gpt-6.1-sol",
 	"gpt-5.6",
 	"gpt-5.5",
 	"gpt-5.4-mini",
