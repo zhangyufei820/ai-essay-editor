@@ -19,10 +19,12 @@ SKILL_SOURCE = pathlib.Path(__file__).with_name("dify-writing-skill-router.py")
 
 
 def query(server, sql):
-    command = [
-        "ssh", "-o", "ConnectTimeout=8", server,
+    docker_command = [
         "docker", "exec", "-i", "docker-db_postgres-1", "psql",
         "-U", "shenxiang", "-d", "shenxiang", "-At", "-v", "ON_ERROR_STOP=1",
+    ]
+    command = docker_command if server == "local" else [
+        "ssh", "-o", "ConnectTimeout=8", server, *docker_command,
     ]
     result = subprocess.run(command, input=sql, text=True, capture_output=True, check=True)
     return result.stdout.strip()
