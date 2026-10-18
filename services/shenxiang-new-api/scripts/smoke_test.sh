@@ -118,6 +118,25 @@ header = "Authorization: Bearer ${api_key}"
 EOF
 }
 
+# Select from the token's public, routable model list. Restricted admin keys
+# need not retain the historical default model; never widen their permissions
+# merely to make a smoke test pass.
+if [ "$TOKEN_PROFILE" = "codex" ] && [ "$REQUEST_MODE" != "models" ]; then
+  visible_models="$(curl_with_admin_auth "${PUBLIC_BASE%/}/v1/models")"
+  MODEL="$(printf '%s' "$visible_models" | python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+models = {item.get("id") for item in payload.get("data", []) if isinstance(item, dict)}
+for candidate in ("gpt-5.5", "gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.6", "gpt-5.6-terra", "gpt-5.4-mini", "gpt-5.4"):
+    if candidate in models:
+        print(candidate)
+        break
+else:
+    raise SystemExit("no permitted routable Codex text model for smoke test")
+')"
+  echo "Selected permitted smoke model: ${MODEL}"
+fi
+
 case "$REQUEST_MODE" in
   models)
     echo "Testing /v1/models"
