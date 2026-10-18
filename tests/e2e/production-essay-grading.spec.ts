@@ -172,3 +172,34 @@ test("completes a long essay through the writing skill route", async ({ page }) 
   await expect(page.locator("article").last()).toContainText(/修改|升格|结构|语言/, { timeout: 300_000 })
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
 })
+
+test("routes a long quoted argument essay to the selected writing skill", async ({ page }) => {
+  test.setTimeout(360_000)
+  const { phone, password } = readE2eCredentials()
+  test.skip(!password, "SHENXIANG_E2E_TEST_PASSWORD is not configured")
+
+  await page.goto("/login?redirect=%2Fchat%3Fagent%3Dshenxiang-gaozhong-lunshuowen", { waitUntil: "domcontentloaded" })
+  await page.getByRole("tab", { name: "Password" }).click({ timeout: 30_000 })
+  await page.locator("#passworLogin_account").fill(phone, { timeout: 30_000 })
+  await page.locator("#passworLogin_password").fill(password, { timeout: 30_000 })
+  await page.locator("button[type='submit']").filter({ hasText: "Sign In" }).click()
+  await page.waitForURL(/\/chat\?agent=shenxiang-gaozhong-lunshuowen/, { timeout: 45_000 })
+
+  const paragraph = "‘和’并非放弃原则，而是寻找共同生活的秩序。有人说‘退一步海阔天空’，但面对公共问题，仅仅退让并不能解决分歧。个人需要先辨明自己的立场，再听见他人的理由；社会需要通过制度容纳不同声音。"
+  const essay = `《以和致和》\n${paragraph.repeat(9)}\n因此，和的价值在于让不同的人仍能共同面对现实。`
+  expect(essay.length).toBeGreaterThan(800)
+  await page.getByPlaceholder("输入内容开始对话...").fill(essay)
+  const chatResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/dify-chat") && response.request().method() === "POST",
+    { timeout: 60_000 },
+  )
+  await page.getByRole("button", { name: "发送消息" }).click()
+  const response = await chatResponse
+  expect(response.request().postDataJSON().workflowSkillId).toBe("shenxiang-gaozhong-lunshuowen")
+  expect(response.ok()).toBe(true)
+  const assistant = page.locator("article").last()
+  await expect(assistant).toContainText(/论证|结构|升格|修改|建议/, { timeout: 300_000 })
+  await expect(assistant).not.toContainText("你想先处理哪一类内容")
+  expect((await assistant.innerText()).length).toBeGreaterThan(200)
+  await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
+})

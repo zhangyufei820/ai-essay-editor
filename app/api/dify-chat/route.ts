@@ -37,6 +37,7 @@ import { hasUsefulOpenClawResult, sanitizeDifyAnswerForModel } from "@/lib/dify-
 import { getSafeUpstreamErrorMessage, sanitizePublicAiError, sanitizePublicAiErrorCode, sanitizePublicAiStatus, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
 import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
+import { isInvalidWorkflowSkillResult } from "@/lib/workflow-skill-result"
 import {
   buildDifyLocalFileObjects,
   buildWorkflowSkillQuery,
@@ -3389,6 +3390,7 @@ export async function POST(request: NextRequest) {
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
     const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL || model === SUPER_ALL_IN_ONE_AGENT_MODEL
     const effectiveQuery = query || "你好"
+    const shouldBufferWorkflowSkill = Boolean(workflowSkillId && effectiveQuery.trim().length >= 80)
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} workflowSkill=${workflowSkillId || "none"} files=${difyFileIds.length} urls=${fileUrls.length}`)
@@ -4963,7 +4965,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (answer.trim()) {
-        if (!shouldBufferEssayCorrection) {
+        if (!shouldBufferEssayCorrection && !shouldBufferWorkflowSkill) {
           enqueueSseAnswer(controller, answer)
         }
         fullResponseText = answer
@@ -5035,6 +5037,22 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      if (shouldBufferWorkflowSkill && !workflowNodeFailure) {
+        if (!hasReceivedContent && finalNodeOutputText.trim()) {
+          fullResponseText = finalNodeOutputText
+          hasReceivedContent = true
+        }
+        if (isInvalidWorkflowSkillResult(workflowSkillId, effectiveQuery, fullResponseText)) {
+          workflowNodeFailure = {
+            message: "写作技能未返回有效结果，请重新提交。本次未扣费。",
+            code: "DIFY_INVALID_WORKFLOW_SKILL_RESULT",
+          }
+          enqueueSseError(controller, workflowNodeFailure.message, workflowNodeFailure.code)
+        } else if (fullResponseText.trim()) {
+          enqueueSseAnswer(controller, fullResponseText)
+        }
+      }
+
       if (actualDifyResponseMode === "streaming") {
         if (shouldBufferForDisplay && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
           enqueueAllInOneDisplayOnce(controller, fullResponseText)
@@ -5044,7 +5062,7 @@ export async function POST(request: NextRequest) {
           if (openClawDisplayText) {
             console.log(`🎨 [OpenClaw] ${stagePrefix}前展示内容:`, { length: openClawDisplayText.length })
           }
-        } else if (!shouldBufferEssayCorrection && !hasReceivedContent && finalNodeOutputText.trim()) {
+        } else if (!shouldBufferEssayCorrection && !shouldBufferWorkflowSkill && !hasReceivedContent && finalNodeOutputText.trim()) {
           const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
           enqueueSseAnswer(controller, displayText)
           fullResponseText = displayText
@@ -5401,7 +5419,7 @@ export async function POST(request: NextRequest) {
             console.log("🎨 [Workflow完成] 收集到输出文本:", { length: outputText.length })
             if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
               enqueueAllInOneDisplayOnce(controller, outputText)
-            } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !workflowNodeFailure) {
+            } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !shouldBufferWorkflowSkill && !workflowNodeFailure) {
               enqueueSseEvent(controller, {
                 event: "workflow_finished",
                 data: { outputs: { text: outputText } },
@@ -5615,7 +5633,7 @@ export async function POST(request: NextRequest) {
                   } else if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
                     allInOneStreamedAnswer = true
                     enqueueSseAnswer(controller, answerText)
-                  } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !workflowNodeFailure) {
+                  } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !shouldBufferWorkflowSkill && !workflowNodeFailure) {
                     enqueueSseAnswer(controller, answerText)
                   }
               }
@@ -5632,7 +5650,7 @@ export async function POST(request: NextRequest) {
                       if (model === "vocab-card") {
                         const cleanedAnswer = cleanVocabAnswer(text)
                         if (cleanedAnswer) enqueueSseAnswer(controller, cleanedAnswer)
-                      } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !workflowNodeFailure) {
+                      } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !shouldBufferWorkflowSkill && !workflowNodeFailure) {
                         enqueueSseEvent(controller, {
                           event: json.event,
                           text,
@@ -5663,7 +5681,7 @@ export async function POST(request: NextRequest) {
                 if (openClawDisplayText) {
                   console.log(`🎨 [OpenClaw] 消息结束后展示内容:`, { length: openClawDisplayText.length })
                 }
-              } else if (json.event === "message_end" && !shouldBufferEssayCorrection && !hasReceivedContent && finalNodeOutputText.trim()) {
+              } else if (json.event === "message_end" && !shouldBufferEssayCorrection && !shouldBufferWorkflowSkill && !hasReceivedContent && finalNodeOutputText.trim()) {
                 const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
                 enqueueSseAnswer(controller, displayText)
                 fullResponseText = displayText
@@ -5772,7 +5790,7 @@ export async function POST(request: NextRequest) {
                   } else if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
                     allInOneStreamedAnswer = true
                     enqueueSseAnswer(controller, answerText)
-                  } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !workflowNodeFailure) {
+                  } else if (!shouldBufferForDisplay && !shouldBufferEssayCorrection && !shouldBufferWorkflowSkill && !workflowNodeFailure) {
                     enqueueSseAnswer(controller, answerText)
                   }
                 }

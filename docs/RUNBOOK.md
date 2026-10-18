@@ -48,3 +48,10 @@
 3. 查看网关容器 `/app/config.yaml` 的实际挂载源，确认与仓库 `services/llm-gateway/config.yaml` 一致；`sx-fast-chat`、`sx-chinese-text`、`sx-image-vision` 必须能完成真实请求。仅有模型清单或健康检查通过不算验收。
 4. 修复发布后，在本机运行 `RUN_PRODUCTION_E2E=1 npx playwright test tests/e2e/production-essay-grading.spec.ts --project=chromium`。测试账号密码仅从 `SHENXIANG_E2E_TEST_PASSWORD` 或本机 secret 文件读取；用例会真实上传合成作文图片并消耗少量测试积分。
 5. 若浏览器用例失败，先看失败步骤和页面快照；若模型请求失败，再检查供应商当前模型列表、额度和网关 fallback。不要因 `/api/health` 为绿色就结束排查。
+
+### 写作技能把长作文回复成欢迎语
+
+- 检查 Dify「写作技能统一路由助手」本次 `workflow_node_executions`：若「统一意图路由模型」输出了正确技能，但「路由JSON解析」输出 `direct_reply`，通常是作文中的引号使路由 JSON 非法，旧解析器因此走了寒暄兜底。
+- 修复代码位于 `scripts/dify-writing-skill-router.py`。先运行 `python3 scripts/test-dify-writing-skill-router.py` 和 `python3 scripts/repair-dify-writing-router.py` 预演，再运行 `python3 scripts/repair-dify-writing-router.py --apply`。脚本仅更新当前写作技能应用的发布版与草稿版解析节点，并在同一事务中把旧图保存到 `codex_dify_workflow_graph_backups`；输出的 `backup_label` 用于回滚。
+- 回滚时按 `backup_label` 从备份表取出两个 `workflow_id` 和 `graph`，确认当前发布版仍是其中之一，再在事务中恢复 `workflows.graph`。不要修改 Dify PostgreSQL 数据目录或其他应用工作流。
+- 发布 Next.js 后运行 `RUN_PRODUCTION_E2E=1 npx playwright test tests/e2e/production-essay-grading.spec.ts --project=chromium`；确认长作文进入指定技能、返回实质修改建议、历史记录没有欢迎语，且失败时任务不会记为成功或扣费。
