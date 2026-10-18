@@ -20,8 +20,8 @@ class Gpt61SolTests(unittest.TestCase):
         prices = sync.PUBLIC_OPENAI_TEXT_MODELS['gpt-6.1-sol']
         for key, value in {'input_cny': '2', 'output_cny': '10',
                            'longcontext_input_cny': '4', 'longcontext_output_cny': '15',
-                           'cache_read_cny': '2', 'cache_create_cny': '2',
-                           'longcontext_cache_read_cny': '4', 'longcontext_cache_create_cny': '4'}.items():
+                           'cache_read_cny': '0.1', 'cache_create_cny': '2.5',
+                           'longcontext_cache_read_cny': '0.2', 'longcontext_cache_create_cny': '5'}.items():
             self.assertEqual(prices[key], sync.Decimal(value))
         expr = sync.openai_text_billing_expr(prices, sync.Decimal('7.3'))
         self.assertTrue(expr.startswith('len <= 272000 ? tier("base", p * '))

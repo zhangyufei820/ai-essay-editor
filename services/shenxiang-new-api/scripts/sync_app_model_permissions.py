@@ -672,18 +672,18 @@ PUBLIC_OPENAI_TEXT_MODELS = {
         "longcontext_cache_create_cny": Decimal("12.5000"),
     },
     "gpt-6.1-sol": {
-        "description": "GPT-6.1 Sol 推理与代码模型。每百万 Token 人民币输入 ¥2、输出 ¥10；输入超过 272,000 Token 后，整轮输入 ¥4、输出 ¥15。缓存按对应档位输入价计费。各路由分组按模型广场固定牌价结算。",
+        "description": "GPT-6.1 Sol 推理与代码模型。每百万 Token 人民币输入 ¥2、输出 ¥10、缓存写入 ¥2.50、缓存读取 ¥0.10；输入超过 272,000 Token 后，整轮输入 ¥4、输出 ¥15、缓存写入 ¥5、缓存读取 ¥0.20。各路由分组按模型广场固定牌价结算。",
         "icon": "OpenAI",
         "tags": "text,openai,codex,reasoning",
         "endpoints": '{"openai":"/v1/chat/completions","openai-response":"/v1/responses"}',
         "input_cny": Decimal("2"),
         "output_cny": Decimal("10"),
-        "cache_read_cny": Decimal("2"),
-        "cache_create_cny": Decimal("2"),
+        "cache_read_cny": Decimal("0.1"),
+        "cache_create_cny": Decimal("2.5"),
         "longcontext_input_cny": Decimal("4"),
         "longcontext_output_cny": Decimal("15"),
-        "longcontext_cache_read_cny": Decimal("4"),
-        "longcontext_cache_create_cny": Decimal("4"),
+        "longcontext_cache_read_cny": Decimal("0.2"),
+        "longcontext_cache_create_cny": Decimal("5"),
     },
 }
 PUBLIC_OPENAI_TEXT_MODELS[CODEX_AUTO_REVIEW_MODEL] = {
