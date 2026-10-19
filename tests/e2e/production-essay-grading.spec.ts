@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { readFile } from "node:fs/promises"
 import { readE2eCredentials } from "./e2e-secrets"
 
 test.use({ channel: "chrome", screenshot: "off", trace: "off", video: "off" })
@@ -59,6 +60,19 @@ test("uploads an essay image and renders a grading report in production", async 
   const response = await gradingResponse
   expect(response.ok()).toBe(true)
   expect(await response.text()).not.toMatch(/"essay_fallback_used"\s*:\s*true/)
+
+  const downloadPromise = page.waitForEvent("download")
+  await page.getByRole("button", { name: "导出 PDF" }).last().click()
+  const download = await downloadPromise
+  if (process.env.PDF_EXPORT_ARTIFACT_PATH) {
+    await download.saveAs(process.env.PDF_EXPORT_ARTIFACT_PATH)
+  }
+  const pdf = (await readFile(await download.path())).toString("latin1")
+  expect(pdf.startsWith("%PDF-")).toBe(true)
+  const imageWidths = [...pdf.matchAll(/\/Width\s+(\d+)\s*\/Height\s+\d+/g)].map((match) => Number(match[1]))
+  expect(Math.max(...imageWidths)).toBeGreaterThanOrEqual(2200)
+  const imageHeights = [...pdf.matchAll(/\/Width\s+\d+\s*\/Height\s+(\d+)/g)].map((match) => Number(match[1]))
+  expect(Math.max(...imageHeights)).toBeLessThan(4000)
 })
 
 test("recovers a completed grading report when the browser response is lost", async ({ page }) => {

@@ -4,6 +4,7 @@ import path from "path"
 import {
   chatPdfStyles,
   chooseChatPdfSliceHeight,
+  getChatPdfCanvasScale,
   markdownToSafeHtml,
   prepareChatMarkdown,
 } from "@/lib/chat-pdf-export"
@@ -104,6 +105,14 @@ $$`)
         safeBreaks: [2050],
       })
     ).toBe(520)
+  })
+
+  it("renders A4 text at 300 DPI regardless of screen pixel ratio", () => {
+    const cssWidth = 794
+    const printWidthPt = 595.28 - 48
+    const scale = getChatPdfCanvasScale(cssWidth, printWidthPt)
+    expect(Math.round(cssWidth * scale)).toBeGreaterThanOrEqual(2200)
+    expect((cssWidth * scale) / (printWidthPt / 72)).toBeCloseTo(300)
   })
 
   it("essay review template renders the complete raw response through EnhancedMarkdown", () => {

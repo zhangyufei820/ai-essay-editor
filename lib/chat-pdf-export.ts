@@ -355,6 +355,12 @@ type ChatPdfSliceOptions = {
 
 const MIN_SAFE_SLICE_RATIO = 0.58
 const SAFE_BREAK_PADDING = 10
+const PRINT_DPI = 300
+
+export function getChatPdfCanvasScale(sourceWidthCss: number, outputWidthPt: number) {
+  if (sourceWidthCss <= 0 || outputWidthPt <= 0) throw new Error("PDF 页面宽度无效")
+  return (PRINT_DPI * outputWidthPt) / (72 * sourceWidthCss)
+}
 
 export function chooseChatPdfSliceHeight({
   sourceY,
@@ -374,7 +380,7 @@ export function chooseChatPdfSliceHeight({
   return Math.max(1, Math.floor((safeEnd ?? targetEnd) - sourceY))
 }
 
-function collectChatPdfSafeBreaks(reportRoot: HTMLDivElement, canvasScale: number) {
+function collectChatPdfSafeBreaks(reportRoot: HTMLDivElement) {
   const rootRect = reportRoot.getBoundingClientRect()
   const selector = [
     ".header",
@@ -393,7 +399,7 @@ function collectChatPdfSafeBreaks(reportRoot: HTMLDivElement, canvasScale: numbe
   ].join(", ")
 
   return Array.from(reportRoot.querySelectorAll<HTMLElement>(selector))
-    .map((node) => Math.round((node.getBoundingClientRect().bottom - rootRect.top) * canvasScale))
+    .map((node) => Math.round(node.getBoundingClientRect().bottom - rootRect.top))
     .filter((breakY) => Number.isFinite(breakY) && breakY > 0)
     .sort((a, b) => a - b)
 }
@@ -431,45 +437,45 @@ export async function exportChatContentToPDF(raw: string, options?: { title?: st
     }
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
-    const canvas = await html2canvas(reportRoot, {
-      backgroundColor: "#ffffff",
-      logging: false,
-      scale: Math.min(2, window.devicePixelRatio || 1.5),
-      useCORS: true,
-      windowWidth: reportRoot.scrollWidth,
-      windowHeight: reportRoot.scrollHeight,
-    })
-
-    const canvasScale = canvas.width / reportRoot.scrollWidth
-    const safeBreaks = collectChatPdfSafeBreaks(reportRoot, canvasScale)
     const pdf = new jsPDF({ orientation: "p", unit: "pt", format: "a4", compress: true })
     const pageWidth = pdf.internal.pageSize.getWidth()
     const pageHeight = pdf.internal.pageSize.getHeight()
     const margin = 24
     const outputWidth = pageWidth - margin * 2
     const outputHeight = pageHeight - margin * 2
-    const pageHeightPx = Math.floor((outputHeight / outputWidth) * canvas.width)
-    const pageCanvas = document.createElement("canvas")
-    const pageContext = pageCanvas.getContext("2d")
-    if (!pageContext) throw new Error("无法创建 PDF 分页画布")
-
-    pageCanvas.width = canvas.width
+    const sourceWidth = reportRoot.scrollWidth
+    const sourceHeight = reportRoot.scrollHeight
+    const scale = getChatPdfCanvasScale(sourceWidth, outputWidth)
+    const pageHeightCss = Math.floor((outputHeight / outputWidth) * sourceWidth)
+    const safeBreaks = collectChatPdfSafeBreaks(reportRoot)
     let sourceY = 0
     let pageIndex = 0
-    while (sourceY < canvas.height) {
-      const sliceHeightPx = chooseChatPdfSliceHeight({
+    while (sourceY < sourceHeight) {
+      const sliceHeightCss = chooseChatPdfSliceHeight({
         sourceY,
-        maxSliceHeight: pageHeightPx,
-        canvasHeight: canvas.height,
+        maxSliceHeight: pageHeightCss,
+        canvasHeight: sourceHeight,
         safeBreaks,
       })
-      pageCanvas.height = sliceHeightPx
-      pageContext.clearRect(0, 0, pageCanvas.width, pageCanvas.height)
-      pageContext.drawImage(canvas, 0, sourceY, canvas.width, sliceHeightPx, 0, 0, pageCanvas.width, sliceHeightPx)
+      const pageCanvas = await html2canvas(reportRoot, {
+        backgroundColor: "#ffffff",
+        logging: false,
+        scale,
+        x: 0,
+        y: sourceY,
+        width: sourceWidth,
+        height: sliceHeightCss,
+        useCORS: true,
+        windowWidth: sourceWidth,
+        windowHeight: sourceHeight,
+      })
+      if (pageCanvas.width < Math.floor(sourceWidth * scale * 0.99)) {
+        throw new Error("PDF 页面分辨率不足")
+      }
       if (pageIndex > 0) pdf.addPage()
-      const renderedHeight = (sliceHeightPx / canvas.width) * outputWidth
+      const renderedHeight = (sliceHeightCss / sourceWidth) * outputWidth
       pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, outputWidth, renderedHeight)
-      sourceY += sliceHeightPx
+      sourceY += sliceHeightCss
       pageIndex += 1
     }
 
