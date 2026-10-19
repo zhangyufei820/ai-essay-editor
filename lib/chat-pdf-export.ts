@@ -383,7 +383,6 @@ export function chooseChatPdfSliceHeight({
 function collectChatPdfSafeBreaks(reportRoot: HTMLDivElement) {
   const rootRect = reportRoot.getBoundingClientRect()
   const selector = [
-    ".header",
     ".footer",
     ".content > h1",
     ".content > h2",
@@ -396,10 +395,15 @@ function collectChatPdfSafeBreaks(reportRoot: HTMLDivElement) {
     ".content > table",
     ".content > pre",
     ".content > hr",
+    ".content table tr",
+    ".content li",
   ].join(", ")
 
   return Array.from(reportRoot.querySelectorAll<HTMLElement>(selector))
-    .map((node) => Math.round(node.getBoundingClientRect().bottom - rootRect.top))
+    // Break before the next block rather than at its bottom. A separate
+    // html2canvas clone is rendered for each page, so leave a small allowance
+    // for font metrics to differ between the live DOM and the cloned page.
+    .map((node) => Math.floor(node.getBoundingClientRect().top - rootRect.top - 20))
     .filter((breakY) => Number.isFinite(breakY) && breakY > 0)
     .sort((a, b) => a - b)
 }
