@@ -908,3 +908,43 @@ func TestOaiResponsesStreamHandlerBoundsWhitespacePrelude(t *testing.T) {
 	assert.Zero(t, usage.TotalTokens)
 	assert.Empty(t, recorder.Body.String())
 }
+
+func TestOaiResponsesStreamHandlerAllowsDelayedOutputAfterWhitespacePrelude(t *testing.T) {
+	t.Setenv("RESPONSES_INITIAL_RESPONSE_TIMEOUT", "1")
+	gin.SetMode(gin.TestMode)
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+	reader, writer := io.Pipe()
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	done := make(chan *types.NewAPIError, 1)
+	go func() {
+		_, apiErr := OaiResponsesStreamHandler(c, &relaycommon.RelayInfo{OriginModelName: "gpt-4o", ChannelMeta: &relaycommon.ChannelMeta{}}, &http.Response{
+			StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: reader,
+		})
+		done <- apiErr
+	}()
+	_, err := io.WriteString(writer, "data: "+`{"type":"response.created","response":{"id":"resp_long_reasoning"}}`+"\n"+
+		"data: "+`{"type":"response.output_text.delta","delta":" "}`+"\n")
+	require.NoError(t, err)
+	select {
+	case apiErr := <-done:
+		t.Fatalf("long reasoning after metadata must remain allowed: %v", apiErr)
+	case <-time.After(1200 * time.Millisecond):
+	}
+	_, err = io.WriteString(writer, "data: "+`{"type":"response.output_text.delta","delta":"OK"}`+"\n"+
+		"data: "+`{"type":"response.completed","response":{"id":"resp_long_reasoning"}}`+"\n")
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	select {
+	case apiErr := <-done:
+		require.Nil(t, apiErr)
+	case <-time.After(2 * time.Second):
+		t.Fatal("delayed successful response did not finish")
+	}
+	assert.True(t, c.GetBool("response_stream_output_sent"))
+	assert.Contains(t, recorder.Body.String(), "event: response.completed")
+}

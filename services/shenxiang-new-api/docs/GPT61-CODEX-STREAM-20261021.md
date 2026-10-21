@@ -15,13 +15,13 @@ The production logs do not retain raw user requests or SSE bodies. The exact byt
 - Buffer the initial Responses metadata and whitespace until effective text, reasoning, tool, audio, or image output appears. Preserve the original event data and order when flushing.
 - Bound the prelude to 256 KiB and 128 events per attempt.
 - Return the existing retryable empty-response error for a prelude-only EOF/timeout, before fallback token estimation. Failed attempts do not enter successful usage billing.
-- Keep the existing 45-second initial Responses deadline until effective output or a terminal completion is seen, rather than cancelling it for metadata or placeholder spaces.
+- Preserve the existing scanner timeout semantics, including long reasoning after initial metadata; successful high-reasoning probes can take longer than 45 seconds.
 - Preserve existing behavior for genuine partial output, tool-only output, missing usage after real output, and client-disconnection usage draining. Never replay a stream after effective output has been sent.
 
 This does not change model permissions, public model names, prices, subscriptions, or main-site code. Historical charges are not modified by this patch.
 
 ## Verification
 
-The new fixtures fail before the patch and pass after it. Targeted Go verification covers the Responses handler, scanner deadline, retry guards, explicit SSE errors, and output tracking. The release contracts additionally require the whitespace rejection, event-order preservation, buffer bound, and useful-output deadline tests.
+The new fixtures fail before the patch and pass after it. Targeted Go verification covers the Responses handler, scanner deadline, retry guards, explicit SSE errors, and output tracking. The release contracts additionally require the whitespace rejection, event-order preservation, buffer bound, and delayed-output preservation tests.
 
 Production verification must use only the admin-owned system token, through the public `/v1/responses` endpoint, and check both a completed text answer and a completed function-call/output round trip. This simulates the Codex protocol, not the affected user's desktop UI. Supplier redundancy remains limited to the suppliers that pass the existing strict health gate.

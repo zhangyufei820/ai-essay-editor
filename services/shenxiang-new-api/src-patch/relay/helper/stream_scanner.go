@@ -240,13 +240,6 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				defer writeMutex.Unlock()
 				ExtendWriteDeadline(c)
 				dataHandler(data, sr)
-				// Native Responses metadata and placeholder spaces do not satisfy
-				// the first useful-output deadline. The adaptor owns that marker.
-				if c.GetBool("responses_stream_output_tracking") &&
-					(c.GetBool("response_stream_output_sent") || c.GetBool("response_completed_seen")) &&
-					initialResponseTimer != nil {
-					initialResponseTimer.Stop()
-				}
 			}()
 			if sr.IsStopped() {
 				return
@@ -294,7 +287,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				continue
 			}
 			if !strings.HasPrefix(data, "[DONE]") {
-				if !c.GetBool("responses_stream_output_tracking") && initialResponseTimer != nil && !initialResponseTimer.Stop() {
+				if initialResponseTimer != nil && !initialResponseTimer.Stop() {
 					select {
 					case <-initialResponseTimer.C:
 					default:

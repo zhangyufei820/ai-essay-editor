@@ -141,10 +141,6 @@
   },
   {
     "package": "./relay/channel/openai",
-    "run": "^TestOaiResponsesStreamHandler(RejectsWhitespacePrelude|PreservesWhitespaceBeforeEffectiveOutput|BoundsWhitespacePrelude)$"
-  },
-  {
-    "package": "./relay/helper",
-    "run": "^TestStreamScannerResponsesPreludeDoesNotCancelUsefulOutputDeadline$"
+    "run": "^TestOaiResponsesStreamHandler(RejectsWhitespacePrelude|PreservesWhitespaceBeforeEffectiveOutput|BoundsWhitespacePrelude|AllowsDelayedOutputAfterWhitespacePrelude)$"
   }
 ]
