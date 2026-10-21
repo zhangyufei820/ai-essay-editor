@@ -138,5 +138,13 @@
   {
     "package": "./relay/helper",
     "run": "^TestGpt61SolMarketplacePricingBoundary$"
+  },
+  {
+    "package": "./relay/channel/openai",
+    "run": "^TestOaiResponsesStreamHandler(RejectsWhitespacePrelude|PreservesWhitespaceBeforeEffectiveOutput|BoundsWhitespacePrelude)$"
+  },
+  {
+    "package": "./relay/helper",
+    "run": "^TestStreamScannerResponsesPreludeDoesNotCancelUsefulOutputDeadline$"
   }
 ]

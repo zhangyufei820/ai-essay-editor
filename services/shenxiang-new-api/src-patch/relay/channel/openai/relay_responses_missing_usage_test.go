@@ -813,3 +813,98 @@ func TestOaiResponsesStreamHandlerDrainsFinalUsageAfterClientGone(t *testing.T) 
 	assert.True(t, ginContext.GetBool("response_completed_seen"))
 	assert.NotContains(t, recorder.Body.String(), "response.completed")
 }
+
+func TestOaiResponsesStreamHandlerRejectsWhitespacePrelude(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	for _, terminal := range []string{"", `data: {"type":"response.completed","response":{"id":"resp_empty","output":[{"type":"message","content":[{"type":"output_text","text":" "}]}]}}` + "\n"} {
+		t.Run(fmt.Sprintf("terminal=%t", terminal != ""), func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			info := &relaycommon.RelayInfo{OriginModelName: "gpt-4o", ChannelMeta: &relaycommon.ChannelMeta{}}
+			prefix := "data: " + `{"type":"response.created","response":{"id":"resp_empty","status":"in_progress"}}` + "\n" +
+				"data: " + `{"type":"response.output_text.delta","delta":" \n\t"}` + "\n"
+			usage, apiErr := OaiResponsesStreamHandler(c, info, &http.Response{
+				StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body: io.NopCloser(strings.NewReader(prefix + terminal)),
+			})
+			require.NotNil(t, apiErr)
+			assert.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
+			assert.Zero(t, usage.TotalTokens)
+			assert.False(t, c.GetBool("response_stream_output_sent"))
+			assert.Empty(t, recorder.Body.String(), "failed prelude must not leak into the fallback response")
+
+			fallback := "data: " + `{"type":"response.created","response":{"id":"resp_ok"}}` + "\n" +
+				"data: " + `{"type":"response.output_text.delta","delta":"OK"}` + "\n" +
+				"data: " + `{"type":"response.completed","response":{"id":"resp_ok"}}` + "\n"
+			_, apiErr = OaiResponsesStreamHandler(c, info, &http.Response{
+				StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body: io.NopCloser(strings.NewReader(fallback)),
+			})
+			require.Nil(t, apiErr)
+			assert.NotContains(t, recorder.Body.String(), "resp_empty")
+			assert.Equal(t, 1, strings.Count(recorder.Body.String(), "event: response.created\n"))
+			assert.Equal(t, 1, strings.Count(recorder.Body.String(), "event: response.completed\n"))
+		})
+	}
+}
+
+func TestOaiResponsesStreamHandlerPreservesWhitespaceBeforeEffectiveOutput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+	for _, output := range []string{
+		`{"type":"response.output_text.delta","delta":"OK"}`,
+		`{"type":"response.function_call_arguments.done","name":"audit_sum","arguments":"{}"}`,
+		`{"type":"response.custom_tool_call_input.done","input":"echo OK"}`,
+	} {
+		t.Run(output, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			payloads := []string{
+				`{"type":"response.created","response":{"id":"resp_ok"}}`,
+				`{"type":"response.output_text.delta","delta":" "}`,
+				output,
+				`{"type":"response.completed","response":{"id":"resp_ok"}}`,
+			}
+			_, apiErr := OaiResponsesStreamHandler(c, &relaycommon.RelayInfo{OriginModelName: "gpt-4o", ChannelMeta: &relaycommon.ChannelMeta{}}, &http.Response{
+				StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body: io.NopCloser(strings.NewReader("data: " + strings.Join(payloads, "\ndata: ") + "\n")),
+			})
+			require.Nil(t, apiErr)
+			assert.True(t, c.GetBool("response_stream_output_sent"))
+			body := recorder.Body.String()
+			previous := -1
+			for _, payload := range payloads {
+				next := strings.Index(body, "data: "+payload+"\n")
+				assert.Greater(t, next, previous, "event order must be preserved")
+				previous = next
+			}
+		})
+	}
+}
+
+func TestOaiResponsesStreamHandlerBoundsWhitespacePrelude(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	payload := fmt.Sprintf(`{"type":"response.output_text.delta","delta":%q}`, strings.Repeat(" ", responsesStreamPreludeMaxBytes+1))
+	usage, apiErr := OaiResponsesStreamHandler(c, &relaycommon.RelayInfo{OriginModelName: "gpt-4o", ChannelMeta: &relaycommon.ChannelMeta{}}, &http.Response{
+		StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader("data: " + payload + "\n")),
+	})
+	require.NotNil(t, apiErr)
+	assert.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
+	assert.Zero(t, usage.TotalTokens)
+	assert.Empty(t, recorder.Body.String())
+}

@@ -33,12 +33,17 @@ type responsesStreamFallbackCollector struct {
 	order []string
 }
 
-type responsesStreamPendingTerminal struct {
+type responsesStreamPendingEvent struct {
 	response dto.ResponsesStreamResponse
 	data     string
 }
 
 const responsesStreamEmptyTerminalSuppressedContextKey = "responses_stream_empty_terminal_suppressed"
+
+// Bound metadata/whitespace held before the first useful event. A failed
+// attempt must not commit a response ID or placeholder output to the client.
+const responsesStreamPreludeMaxBytes = 256 << 10
+const responsesStreamPreludeMaxEvents = 128
 
 func newResponsesStreamFallbackCollector() *responsesStreamFallbackCollector {
 	return &responsesStreamFallbackCollector{
@@ -225,21 +230,31 @@ func isResponsesStreamCompletionEvent(eventType string) bool {
 	return eventType == "response.completed" || eventType == "response.done"
 }
 
+func responsesStreamEventHasEffectiveOutput(streamResponse dto.ResponsesStreamResponse) bool {
+	for _, part := range responsesStreamFallbackParts(streamResponse) {
+		if strings.TrimSpace(part.content) != "" {
+			return true
+		}
+	}
+	return (streamResponse.Type == "response.audio.delta" && streamResponse.Delta != "") ||
+		streamResponse.Type == "response.image_generation_call.partial_image"
+}
+
 func hasResponsesStreamEffectiveOutput(c *gin.Context, collector *responsesStreamFallbackCollector, streamResponse dto.ResponsesStreamResponse) bool {
 	if c != nil && c.GetBool("response_stream_output_sent") {
 		return true
 	}
-	if collector != nil && collector.String() != "" {
+	if collector != nil && strings.TrimSpace(collector.String()) != "" {
 		return true
 	}
-	return len(responsesStreamFallbackParts(streamResponse)) > 0
+	return responsesStreamEventHasEffectiveOutput(streamResponse)
 }
 
-func shouldReplaceResponsesStreamPendingTerminal(pending *responsesStreamPendingTerminal, candidate dto.ResponsesStreamResponse) bool {
+func shouldReplaceResponsesStreamPendingTerminal(pending *responsesStreamPendingEvent, candidate dto.ResponsesStreamResponse) bool {
 	if pending == nil {
 		return true
 	}
-	return len(responsesStreamFallbackParts(pending.response)) == 0 && len(responsesStreamFallbackParts(candidate)) > 0
+	return !responsesStreamEventHasEffectiveOutput(pending.response) && responsesStreamEventHasEffectiveOutput(candidate)
 }
 
 func markResponsesStreamOutputSent(c *gin.Context, streamResponse dto.ResponsesStreamResponse) {
@@ -249,9 +264,7 @@ func markResponsesStreamOutputSent(c *gin.Context, streamResponse dto.ResponsesS
 	if isResponsesStreamCompletionEvent(streamResponse.Type) {
 		c.Set("response_completed_seen", true)
 	}
-	if len(responsesStreamFallbackParts(streamResponse)) > 0 ||
-		(streamResponse.Type == "response.audio.delta" && streamResponse.Delta != "") ||
-		streamResponse.Type == "response.image_generation_call.partial_image" {
+	if responsesStreamEventHasEffectiveOutput(streamResponse) {
 		c.Set("response_stream_output_sent", true)
 	}
 }
@@ -320,10 +333,27 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 
 	var usage = &dto.Usage{}
 	fallbackCollector := newResponsesStreamFallbackCollector()
-	var pendingTerminal *responsesStreamPendingTerminal
+	var pendingTerminal *responsesStreamPendingEvent
+	var prelude []responsesStreamPendingEvent
+	preludeBytes := 0
+	bufferingPrelude := true
 	c.Set("responses_stream_output_tracking", true)
+	c.Set("response_completed_seen", false)
 	c.Set(responsesStreamEmptyTerminalSuppressedContextKey, false)
 	c.Set(helper.ResponsesStreamDrainUsageAfterClientGoneContextKey, true)
+	forwardEvent := func(event dto.ResponsesStreamResponse, data string) {
+		if err := helper.ResponseChunkData(c, event, data); err == nil {
+			markResponsesStreamOutputSent(c, event)
+			fallbackCollector.Collect(event)
+		}
+	}
+	flushPrelude := func() {
+		bufferingPrelude = false
+		for _, event := range prelude {
+			forwardEvent(event.response, event.data)
+		}
+		prelude = nil
+	}
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 
@@ -336,11 +366,20 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		}
 		if isResponsesStreamCompletionEvent(streamResponse.Type) {
 			if shouldReplaceResponsesStreamPendingTerminal(pendingTerminal, streamResponse) {
-				pendingTerminal = &responsesStreamPendingTerminal{response: streamResponse, data: data}
+				pendingTerminal = &responsesStreamPendingEvent{response: streamResponse, data: data}
 			}
-		} else if err := helper.ResponseChunkData(c, streamResponse, data); err == nil {
-			markResponsesStreamOutputSent(c, streamResponse)
-			fallbackCollector.Collect(streamResponse)
+		} else if bufferingPrelude && !responsesStreamEventHasEffectiveOutput(streamResponse) {
+			if preludeBytes+len(data) > responsesStreamPreludeMaxBytes || len(prelude) >= responsesStreamPreludeMaxEvents {
+				sr.Stop(fmt.Errorf("responses stream prelude exceeds limit without effective output"))
+				return
+			}
+			preludeBytes += len(data)
+			prelude = append(prelude, responsesStreamPendingEvent{response: streamResponse, data: data})
+		} else {
+			if bufferingPrelude {
+				flushPrelude()
+			}
+			forwardEvent(streamResponse, data)
 		}
 		switch streamResponse.Type {
 		case "response.completed", "response.done", "response.incomplete":
@@ -386,15 +425,23 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	})
 	if pendingTerminal != nil {
 		if hasResponsesStreamEffectiveOutput(c, fallbackCollector, pendingTerminal.response) {
-			if err := helper.ResponseChunkData(c, pendingTerminal.response, pendingTerminal.data); err == nil {
-				markResponsesStreamOutputSent(c, pendingTerminal.response)
-				fallbackCollector.Collect(pendingTerminal.response)
+			if bufferingPrelude {
+				flushPrelude()
 			}
+			forwardEvent(pendingTerminal.response, pendingTerminal.data)
 		} else {
 			c.Set(responsesStreamEmptyTerminalSuppressedContextKey, true)
 		}
 	}
 	service.CopyResponseHeaderCostFields(usage, resp.Header)
+	if bufferingPrelude && pendingTerminal == nil {
+		// EOF/timeouts after a whitespace heartbeat are not a successful answer.
+		// Return before token estimation so placeholder spaces cannot be billed.
+		if info.StreamStatus != nil {
+			info.StreamStatus.RecordError("responses stream ended before effective output")
+		}
+		return usage, service.TextEmptyOutputRetryError()
+	}
 
 	if usage.CompletionTokens == 0 {
 		// 计算输出文本的 token 数量
