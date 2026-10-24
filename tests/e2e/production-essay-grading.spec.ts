@@ -141,7 +141,8 @@ test("routes the default chat entry to deep chat and completes an essay request"
   expect(response.ok()).toBe(true)
   expect(response.request().postDataJSON().model).toBe("gpt-5")
   expect(await response.text()).not.toContain("DIFY_UPSTREAM_UNAVAILABLE")
-  await expect(page.locator("article").last()).toContainText(/作文|批改|修改/, { timeout: 120_000 })
+  await expect(page.locator("article").last()).toContainText(/松土|花苗/, { timeout: 120_000 })
+  await expect(page.locator("article").last()).toContainText(/合作/, { timeout: 120_000 })
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
 })
 
