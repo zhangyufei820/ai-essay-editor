@@ -41,12 +41,12 @@ export type CustomAPIConfig = {
 }
 
 export function getAPIConfig(provider: string): CustomAPIConfig | null {
-  // 通用聊天只允许使用专用 Key；CUSTOM_API_KEY 仅保留给明确的自定义接入。
-  const apiKey = process.env.DIFY_GENERAL_CHAT_API_KEY || process.env.CUSTOM_API_KEY || ""
+  // 默认对话使用深度对话应用；CUSTOM_API_KEY 仅保留给明确的自定义接入。
+  const apiKey = process.env.DIFY_API_KEY_GPT5 || process.env.CUSTOM_API_KEY || ""
   const baseURL = process.env.DIFY_BASE_URL || process.env.CUSTOM_BASE_URL || "http://172.23.0.3:5001/v1"
 
   if (!apiKey) {
-    console.error("[v0] DIFY_GENERAL_CHAT_API_KEY is not configured")
+    console.error("[v0] DIFY_API_KEY_GPT5 is not configured")
     return null
   }
 

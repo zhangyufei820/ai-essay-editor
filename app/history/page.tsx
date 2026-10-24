@@ -89,10 +89,11 @@ function cleanText(value: string | null | undefined, fallback: string) {
 
 function normalizeSession(session: ChatSession): HistoryItem {
   const model = resolveChatSessionRouteModel(session)
+  const historicalLabel = session.ai_model === "general-chat" ? "网站助手" : MODEL_DISPLAY_NAMES[model]
   return {
     type: "session",
     id: session.id,
-    title: cleanText(session.title, sanitizePublicAiLabel(MODEL_DISPLAY_NAMES[model] || model, "AI 对话")),
+    title: cleanText(session.title, sanitizePublicAiLabel(historicalLabel || model, "AI 对话")),
     preview: cleanText(session.preview, "继续打开这次对话，查看完整上下文和生成结果。"),
     model,
     createdAt: session.created_at,

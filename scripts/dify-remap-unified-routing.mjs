@@ -11,7 +11,6 @@ const PRESERVED_APP_NAMES = new Set([
 ])
 
 const TARGET_ENV_KEYS = [
-  "DIFY_GENERAL_CHAT_API_KEY",
   "DIFY_API_KEY_GPT5",
   "DIFY_API_KEY_CLAUDE",
   "DIFY_API_KEY_GEMINI",
@@ -73,9 +72,6 @@ const APP_RULES = {
   },
   "gpt2图像提示词优化": {
     defaultModelName: "沈翔通用文本",
-  },
-  "网站助手": {
-    defaultModelName: "沈翔快速对话",
   },
   "网页搜索专用助手": {
     defaultModelName: "沈翔快速对话",

@@ -116,21 +116,21 @@ test("recovers a completed grading report when the browser response is lost", as
     .toBeVisible({ timeout: 30_000 })
 })
 
-test("completes an essay-related request through the general chat entry", async ({ page }) => {
+test("routes the default chat entry to deep chat and completes an essay request", async ({ page }) => {
   test.setTimeout(180_000)
 
   const { phone, password } = readE2eCredentials()
   test.skip(!password, "SHENXIANG_E2E_TEST_PASSWORD is not configured")
 
-  await page.goto("/login?redirect=/chat/general-chat", { waitUntil: "domcontentloaded" })
+  await page.goto("/login?redirect=/chat", { waitUntil: "domcontentloaded" })
   await page.getByRole("tab", { name: "Password" }).click({ timeout: 30_000 })
   await page.locator("#passworLogin_account").fill(phone, { timeout: 30_000 })
   await page.locator("#passworLogin_password").fill(password, { timeout: 30_000 })
   await page.locator("button[type='submit']").filter({ hasText: "Sign In" }).click()
-  await page.waitForURL(/\/chat\/general-chat(?:$|\?)/, { timeout: 45_000 })
+  await page.waitForURL(/\/chat\/gpt-5(?:$|\?)/, { timeout: 45_000 })
 
   await page.getByPlaceholder("输入内容开始对话...").fill(
-    "我写了一篇关于校园种花的作文：周六早上，我和同学到校园种花。我们先松土，再放入花苗，最后浇水。看到整齐的花苗，我明白合作的重要。请告诉我应该如何使用本站作文批改功能，并给出两条具体修改方向。",
+    "我写了一篇关于校园种花的作文：周六早上，我和同学到校园种花。我们先松土，再放入花苗，最后浇水。看到整齐的花苗，我明白合作的重要。请给出两条具体修改方向。",
   )
   const chatResponse = page.waitForResponse(
     (response) => response.url().includes("/api/dify-chat") && response.request().method() === "POST",
@@ -139,6 +139,7 @@ test("completes an essay-related request through the general chat entry", async 
   await page.getByRole("button", { name: "发送消息" }).click()
   const response = await chatResponse
   expect(response.ok()).toBe(true)
+  expect(response.request().postDataJSON().model).toBe("gpt-5")
   expect(await response.text()).not.toContain("DIFY_UPSTREAM_UNAVAILABLE")
   await expect(page.locator("article").last()).toContainText(/作文|批改|修改/, { timeout: 120_000 })
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)

@@ -87,7 +87,7 @@ describe("Dify credential selection", () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_API_KEY_GPT5 is required"))
   })
 
-  it("uses the dedicated general-chat key when configured", () => {
+  it("routes retired general-chat requests to the deep-chat key", () => {
     const selection = getDifyCredentialForModel("general-chat", {
       NODE_ENV: "production",
       DIFY_GENERAL_CHAT_API_KEY: "general-chat-key",
@@ -96,12 +96,12 @@ describe("Dify credential selection", () => {
     })
 
     expect(selection).toEqual({
-      credential: "general-chat-key",
-      source: "DIFY_GENERAL_CHAT_API_KEY",
+      credential: "heavy-key",
+      source: "DIFY_API_KEY_GPT5",
     })
   })
 
-  it("does not use the legacy DIFY_API_KEY for general-chat", () => {
+  it("does not use the legacy DIFY_API_KEY for retired general-chat", () => {
     const selection = getDifyCredentialForModel("general-chat", {
       NODE_ENV: "production",
       DIFY_API_KEY: "legacy-general-chat-key",
@@ -110,10 +110,9 @@ describe("Dify credential selection", () => {
     })
 
     expect(selection).toEqual({
-      credential: "",
-      source: "DIFY_GENERAL_CHAT_API_KEY",
+      credential: "heavy-key",
+      source: "DIFY_API_KEY_GPT5",
     })
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GENERAL_CHAT_API_KEY is required"))
   })
 
   it("uses the dedicated worksheet diagnosis workflow key when configured", () => {
@@ -247,7 +246,7 @@ describe("Dify credential selection", () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_WORKSHEET_DIAGNOSIS_API_KEY is required"))
   })
 
-  it("does not silently fall back to a heavy key for general-chat in production", () => {
+  it("requires the deep-chat key for retired general-chat in production", () => {
     const selection = getDifyCredentialForModel("general-chat", {
       NODE_ENV: "production",
       DIFY_API_KEY_GPT5: "heavy-key",
@@ -255,10 +254,9 @@ describe("Dify credential selection", () => {
     })
 
     expect(selection).toEqual({
-      credential: "",
-      source: "DIFY_GENERAL_CHAT_API_KEY",
+      credential: "heavy-key",
+      source: "DIFY_API_KEY_GPT5",
     })
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GENERAL_CHAT_API_KEY is required"))
   })
 
   it("uses the dedicated essay correction key for the standard model", () => {

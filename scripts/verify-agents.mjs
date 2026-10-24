@@ -5,7 +5,7 @@ const BEARER = process.env.AGENT_VERIFY_BEARER || ""
 
 const AGENTS = [
   "standard",
-  "general-chat",
+  "gpt-5",
   "teaching-pro",
   "ai-writing-paper",
   "zhongying-essay",

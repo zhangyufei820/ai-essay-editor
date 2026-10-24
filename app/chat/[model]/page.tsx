@@ -10,7 +10,6 @@ import type { ModelType } from '@/lib/pricing'
 // 新增智能体时，只需在此处添加即可
 const BUILTIN_CHAT_MODELS = [
   'standard',        // 作文批改
-  'general-chat',    // 通用轻量对话
   'teaching-pro',    // 教学评助手
   'gpt-5',           // 深度对话
   'claude-opus',     // 长文分析

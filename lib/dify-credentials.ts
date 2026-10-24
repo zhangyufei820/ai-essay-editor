@@ -10,9 +10,9 @@ export function getDifyCredentialForModel(
   env: Env = process.env,
   _defaultCredential = "",
 ): DifyCredentialSelection {
-  switch (model || "general-chat") {
+  switch (model || "gpt-5") {
     case "general-chat":
-      return selectRequiredCredential(env.DIFY_GENERAL_CHAT_API_KEY, "DIFY_GENERAL_CHAT_API_KEY", env)
+      return selectRequiredCredential(env.DIFY_API_KEY_GPT5, "DIFY_API_KEY_GPT5", env)
     case "standard":
       return selectRequiredCredential(env.ESSAY_CORRECTION_API_KEY, "ESSAY_CORRECTION_API_KEY", env)
     case "workflow-skill":
@@ -65,7 +65,7 @@ export function getDifyCredentialForModel(
     case "experiment-report":
       return selectRequiredCredential(env.DIFY_EXPERIMENT_REPORT_API_KEY, "DIFY_EXPERIMENT_REPORT_API_KEY", env)
     default:
-      console.warn(`[Dify Credentials] Unsupported Dify model: ${model || "general-chat"}`)
+      console.warn(`[Dify Credentials] Unsupported Dify model: ${model || "gpt-5"}`)
       return { credential: "", source: "UNSUPPORTED_DIFY_MODEL" }
   }
 }

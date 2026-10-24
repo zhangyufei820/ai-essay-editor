@@ -54,14 +54,13 @@ import {
   IconSuperAgent,
   IconTeaching,
   IconVocab,
-  IconWebsiteAssistant,
   IconWriting,
 } from "@/components/icons/v2"
 import { CELLFORGE_EXTERNAL_URL } from "@/lib/tripo3d"
 import { getPublicAiLabel } from "@/lib/public-ai-labels"
 import { WORKFLOW_SKILL_IDS } from "@/lib/workflow-skill-agents"
 
-export const CORE_AGENT_IDS = ["super-all-in-one-agent", "open-claw", "general-chat"] as const
+export const CORE_AGENT_IDS = ["super-all-in-one-agent", "open-claw", "gpt-5"] as const
 
 export const AGENT_CATEGORIES = [
   { key: "recommended", label: "推荐" },
@@ -156,22 +155,6 @@ export const PLAZA_AGENTS: PlazaAgent[] = [
     featured: true,
   },
   {
-    id: "general-chat",
-    name: "网站助手",
-    category: "推荐",
-    description: "帮助用户了解网站功能、套餐权益、使用路径和常见问题，适合新用户快速上手。",
-    icon: IconWebsiteAssistant,
-    href: "/chat/general-chat",
-    routeId: "/chat/general-chat",
-    agent: "general-chat",
-    modelKey: "general-chat",
-    tags: ["网站功能", "套餐权益", "新手指引", "常见问题"],
-    badge: "核心",
-    priceLabel: "按字数计费",
-    featured: true,
-  },
-
-  {
     id: "all-in-one-agent",
     name: "数学图片与动画生成器",
     category: "通用助手",
@@ -208,7 +191,8 @@ export const PLAZA_AGENTS: PlazaAgent[] = [
     agent: "gpt-5",
     modelKey: "gpt-5",
     tags: ["深度对话", "推理", "写作"],
-    badge: "新",
+    badge: "核心",
+    featured: true,
   },
   {
     id: "claude-opus",

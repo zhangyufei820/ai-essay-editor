@@ -105,6 +105,11 @@ const nextConfig = {
         destination: '/',
         permanent: true,
       },
+      {
+        source: '/chat/general-chat',
+        destination: '/chat/gpt-5',
+        permanent: false,
+      },
     ]
   },
 

@@ -44,9 +44,11 @@ describe('chat session routes', () => {
     expect(buildChatSessionRoute('normal', 'teaching-pro')).toBe('/chat?sessionId=normal&agent=teaching-pro')
   })
 
-  it('defaults unspecified chat sessions to general-chat', () => {
-    expect(normalizeChatSessionModel(undefined)).toBe('general-chat')
-    expect(resolveChatSessionRouteModel({ id: 'new-chat' })).toBe('general-chat')
-    expect(buildChatSessionRoute('new-chat')).toBe('/chat?sessionId=new-chat&agent=general-chat')
+  it('routes new and retired website assistant sessions to deep chat', () => {
+    expect(normalizeChatSessionModel(undefined)).toBe('gpt-5')
+    expect(normalizeChatSessionModel('general-chat')).toBe('gpt-5')
+    expect(resolveChatSessionRouteModel({ id: 'new-chat' })).toBe('gpt-5')
+    expect(buildChatSessionRoute('new-chat')).toBe('/chat?sessionId=new-chat&agent=gpt-5')
+    expect(buildChatSessionRoute('old-chat', 'general-chat')).toBe('/chat?sessionId=old-chat&agent=gpt-5')
   })
 })

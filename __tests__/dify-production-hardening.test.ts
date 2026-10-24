@@ -74,20 +74,13 @@ describeProduction("production dify hardening guards", () => {
     }
   })
 
-  it("keeps site assistant and problem workflow tuning idempotent", () => {
+  it("keeps problem workflow tuning idempotent after site assistant retirement", () => {
     const payload = parseFirstJsonObject(runNodeScript(scriptPath))
 
     expect(payload.apply).toBe(false)
     expect(payload.planned_changes).toBe(0)
 
-    expect(payload.site_assistant.app_name).toBe("网站助手")
-    expect(payload.site_assistant.had_retrieval).toBe(true)
-    expect(payload.site_assistant.current_node_count).toBe(4)
-    expect(payload.site_assistant.target_retrieval_config).toMatchObject({
-      top_k: 3,
-      reranking_mode: "weighted_score",
-      reranking_enable: false,
-    })
+    expect(payload.site_assistant).toBeNull()
 
     expect(payload.problem.app_name).toBe("题目解析专用智能体")
     expect(payload.problem.after_completion_params).toMatchObject({

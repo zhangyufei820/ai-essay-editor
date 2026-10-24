@@ -21,7 +21,7 @@ describe("teacher agent chat routing", () => {
 
   it("routes plaza workflow skill cards through the shared chat app", () => {
     expect(resolveChatAgentParam("khazix-writer")).toEqual({
-      model: "general-chat",
+      model: "gpt-5",
       teacherAgentShareCode: null,
       workflowSkillId: "khazix-writer",
     })

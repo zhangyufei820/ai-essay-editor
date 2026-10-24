@@ -6,7 +6,7 @@
  */
 
 import { Image as ImageIcon } from "lucide-react"
-import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconMath, IconOpenClaw, IconProblem, IconSuperAgent, IconTeaching, IconVocab, IconWebsiteAssistant, IconWriting } from "@/components/icons/v2"
+import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconMath, IconOpenClaw, IconProblem, IconSuperAgent, IconTeaching, IconVocab, IconWriting } from "@/components/icons/v2"
 import { getPublicAiLabel } from "@/lib/public-ai-labels"
 import type { AgentDefinition } from "./types"
 
@@ -19,15 +19,6 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     artifactType: "essay-review",
     priceLabel: "100 积分/次",
     icon: IconEssay,
-  },
-  "general-chat": {
-    model: "general-chat",
-    name: "网站助手",
-    description: "功能入口、套餐权益和使用建议",
-    group: "general",
-    artifactType: "markdown",
-    priceLabel: "按字数计费",
-    icon: IconWebsiteAssistant,
   },
   "teaching-pro": {
     model: "teaching-pro",

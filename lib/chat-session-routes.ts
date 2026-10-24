@@ -23,8 +23,10 @@ export function buildChatSessionRoute(sessionId: string, model?: string | null, 
 }
 
 export function normalizeChatSessionModel(model?: string | null) {
-  const normalized = (model || "general-chat").trim().replaceAll("_", "-")
+  const normalized = (model || "gpt-5").trim().replaceAll("_", "-")
   const lower = normalized.toLowerCase()
+
+  if (lower === "general-chat") return "gpt-5"
 
   if (
     lower === "gpt-image-2" ||
@@ -59,7 +61,7 @@ export function normalizeChatSessionModel(model?: string | null) {
     return "gpt-image-2"
   }
 
-  return lower || "general-chat"
+  return lower || "gpt-5"
 }
 
 export function resolveChatSessionRouteModel(session: ChatSessionRouteSource) {

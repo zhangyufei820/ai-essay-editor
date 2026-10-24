@@ -30,12 +30,6 @@ const AI_CAPABILITY_GROUPS: AIProvider[] = [
         description: "通用推理、写作和复杂问题拆解",
         contextWindow: 128000,
       },
-      {
-        id: "general-chat",
-        name: "网站助手",
-        description: "快速问答、功能入口和套餐权益说明",
-        contextWindow: 128000,
-      },
     ],
     features: ["文本生成", "多语言支持", "复杂问题拆解", "快速响应"],
     status: "available",

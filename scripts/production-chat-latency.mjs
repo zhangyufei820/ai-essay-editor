@@ -9,9 +9,9 @@ const DEFAULT_TIMEOUT_MS = Number(process.env.PROD_CHAT_AUDIT_TIMEOUT_MS || 1800
 
 const TARGETS = [
   {
-    slug: "general-chat",
+    slug: "gpt-5",
     route: "/chat",
-    appName: "网站助手",
+    appName: "深度对话",
     placeholder: "输入内容开始对话...",
     prompt: (marker) => `请忽略方括号中的追踪码，只回复“收到”。[${marker}]`,
   },

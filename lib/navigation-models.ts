@@ -127,16 +127,6 @@ export const navigationModelGroups: NavigationModelGroup[] = [
     label: "智能能力专区",
     items: [
       {
-        key: "general-chat",
-        name: getPublicAiLabel("general-chat"),
-        description: "轻量快速问答",
-        href: "/chat/general-chat",
-        group: "智能能力",
-        color: BRAND_GREEN,
-        modelKey: "general-chat",
-        badge: "默认",
-      },
-      {
         key: "gpt-5",
         name: getPublicAiLabel("gpt-5"),
         description: "通用推理、写作和复杂问题拆解",
@@ -144,7 +134,7 @@ export const navigationModelGroups: NavigationModelGroup[] = [
         group: "智能能力",
         color: BRAND_GREEN,
         modelKey: "gpt-5",
-        badge: "新",
+        badge: "默认",
       },
       {
         key: "claude-opus",

@@ -3370,7 +3370,8 @@ export async function POST(request: NextRequest) {
     if (auth.response) return auth.response
     
     const body = await request.json()
-    const { query, conversation_id, fileIds, fileAttachments, inputs, model, imageSize, async_image_task, sessionId, messageId } = body
+    const { query, conversation_id, fileIds, fileAttachments, inputs, model: requestedModel, imageSize, async_image_task, sessionId, messageId } = body
+    const model = !requestedModel || requestedModel === "general-chat" ? "gpt-5" : requestedModel
     const workflowSkillId = isWorkflowSkillAgent(body.workflowSkillId) ? body.workflowSkillId : null
     const difyFileIds = Array.isArray(fileIds)
       ? fileIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
@@ -3385,8 +3386,8 @@ export async function POST(request: NextRequest) {
       ? "作文批改服务暂时不可用，请稍后重试。本次未扣费。"
       : "服务暂时不可用，请稍后重试。本次未扣费。"
 
-    const modelPrefix = workflowSkillId || model || "general-chat"
-    const requestedModelType = (model || "general-chat") as ModelType
+    const modelPrefix = workflowSkillId || model
+    const requestedModelType = model as ModelType
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
     const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL || model === SUPER_ALL_IN_ONE_AGENT_MODEL
     const effectiveQuery = query || "你好"

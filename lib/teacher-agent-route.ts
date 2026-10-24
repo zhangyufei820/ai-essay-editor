@@ -5,7 +5,7 @@ export const TEACHER_AGENT_MODEL: ModelType = "teacher-agent"
 
 const AGENT_TO_MODEL: Record<string, ModelType> = {
   standard: "standard",
-  "general-chat": "general-chat",
+  "general-chat": "gpt-5",
   "teaching-pro": "teaching-pro",
   "gpt-5": "gpt-5",
   "claude-opus": "claude-opus",
@@ -48,7 +48,7 @@ export function resolveChatAgentParam(agent?: string | null): {
   if (builtInModel) return { model: builtInModel, teacherAgentShareCode: null, workflowSkillId: null }
 
   if (isWorkflowSkillAgent(value)) {
-    return { model: "general-chat", teacherAgentShareCode: null, workflowSkillId: value }
+    return { model: "gpt-5", teacherAgentShareCode: null, workflowSkillId: value }
   }
 
   if (TEACHER_SHARE_CODE_PATTERN.test(value)) {

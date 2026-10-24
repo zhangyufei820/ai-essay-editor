@@ -24,7 +24,7 @@ const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
 
 // 获取模型对应的 API Key
 function getDifyApiKey(model?: string): { credential: string; source: string } {
-  return getDifyCredentialForModel(model || "general-chat", process.env)
+  return getDifyCredentialForModel(model || "gpt-5", process.env)
 }
 
 export async function POST(request: NextRequest) {

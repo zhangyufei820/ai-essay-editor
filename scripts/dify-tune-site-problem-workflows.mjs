@@ -331,26 +331,14 @@ def tune_quanquan_math(current_graph):
         },
     }
 
-site_workflow = load_workflow(SITE["workflowId"])
 problem_workflow = load_workflow(PROBLEM["workflowId"])
 quanquan_math_workflow = load_workflow(QUANQUAN_MATH["workflowId"])
 
-site_tuned = tune_site_assistant(site_workflow["graph"])
 problem_tuned = tune_problem_route(problem_workflow["graph"])
 problem_solver_tuned = tune_problem_solver(problem_tuned["target_graph"])
 quanquan_math_tuned = tune_quanquan_math(quanquan_math_workflow["graph"])
 
 changes = []
-
-if site_tuned["target_graph"] != site_workflow["graph"]:
-    changes.append({
-        "app_id": site_workflow["app_id"],
-        "app_name": site_workflow["app_name"],
-        "workflow_id": site_workflow["workflow_id"],
-        "before_graph_raw": site_workflow["graph_raw"],
-        "after_graph": site_tuned["target_graph"],
-        "reason": "restore_or_lighten_site_assistant_retrieval",
-    })
 
 if problem_solver_tuned["target_graph"] != problem_workflow["graph"]:
     changes.append({
@@ -375,14 +363,7 @@ if quanquan_math_tuned["target_graph"] != quanquan_math_workflow["graph"]:
 summary = {
     "apply": APPLY,
     "planned_changes": len(changes),
-    "site_assistant": {
-        "workflow_id": site_workflow["workflow_id"],
-        "app_name": site_workflow["app_name"],
-        "had_retrieval": site_tuned["had_retrieval"],
-        "current_node_count": len(site_workflow["graph"].get("nodes", [])),
-        "target_node_count": len(site_tuned["target_graph"].get("nodes", [])),
-        "target_retrieval_config": site_tuned["retrieval_config"],
-    },
+    "site_assistant": None,
     "problem": {
         "workflow_id": problem_workflow["workflow_id"],
         "app_name": problem_workflow["app_name"],

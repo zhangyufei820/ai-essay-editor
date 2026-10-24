@@ -11,7 +11,7 @@ describe("all-in-one route model sync", () => {
     // 2026-05-16 sprint 6 之后实现已变化，断言收紧到语义层。
     expect(text).toMatch(/["']all-in-one-agent["']\s*:/)
     expect(text).toContain("all-in-one-agent")
-    expect(text).toMatch(/const\s+lastUsedModelRef\s*=\s*useRef<ModelType>\(\(effectiveAgent as ModelType\)\s*\|\|\s*["']general-chat["']\)/)
+    expect(text).toMatch(/const\s+lastUsedModelRef\s*=\s*useRef<ModelType>\(\(effectiveAgent as ModelType\)\s*\|\|\s*["']gpt-5["']\)/)
     expect(text).toContain("lastUsedModelRef.current = targetModel")
     expect(text).toContain("lastUsedModelRef.current = initialModel")
   })

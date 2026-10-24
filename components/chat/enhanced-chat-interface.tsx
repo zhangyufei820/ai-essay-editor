@@ -86,7 +86,6 @@ import type { WorkflowState, WorkflowNodeStatus } from "@/lib/workflow-visual-co
 const BRAND_GREEN = "var(--ink-700)"
 
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
-  "general-chat": getPublicAiLabel("general-chat"),
   "standard": getPublicAiLabel("standard"),
   "teaching-pro": getPublicAiLabel("teaching-pro"),
   "gpt-5": getPublicAiLabel("gpt-5"),
@@ -1431,7 +1430,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🔥 修复：跟踪主动会话切换（侧边栏点击 vs URL 导航）
   // 🔥 now in Zustand store: useSelectedModelStore
   // 🔥 修复：记录用户上次使用的模型（用于新建对话时恢复）
-  const lastUsedModelRef = useRef<ModelType>((effectiveAgent as ModelType) || "general-chat")
+  const lastUsedModelRef = useRef<ModelType>((effectiveAgent as ModelType) || "gpt-5")
 
   // ✅ 全局状态：所有组件共享单一 selectedModel 真源
   const selectedModel = useSelectedModelStore((s) => s.selectedModel)
@@ -1776,7 +1775,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const prevUrlAgentRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const targetModel = urlAgent ? (resolvedUrlAgent.model || "general-chat") : (initialModel || "general-chat")
+    const targetModel = urlAgent ? (resolvedUrlAgent.model || "gpt-5") : (initialModel || "gpt-5")
 
     console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}, teacherAgent=${teacherAgentShareCode || ""}, workflowSkill=${workflowSkillId || ""}`)
 
@@ -1831,9 +1830,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       // store.isManualSessionSwitch 为 true 时表示侧边栏点击，此时用 sessionData.ai_model
       // store.isManualSessionSwitch 为 false 时表示 URL 导航，此时用 initialModel（保持分享链接兼容性）
       const isManual = useSelectedModelStore.getState().isManualSessionSwitch
-      const targetModel = isManual
-        ? (sessionData?.ai_model || "general-chat")
-        : (initialModel || sessionData?.ai_model || "general-chat")
+      const retiredSiteAssistant = sessionData?.ai_model === "general-chat"
+      const targetModel = retiredSiteAssistant
+        ? "gpt-5"
+        : isManual
+          ? (sessionData?.ai_model || "gpt-5")
+          : (initialModel || sessionData?.ai_model || "gpt-5")
       console.log(`🔄 [历史会话模型同步] isManual=${isManual}, initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
       setSelectedModel(targetModel as ModelType)
       console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
@@ -1849,7 +1851,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
            wordCard: m.metadata?.wordCard || normalizeDifyWordCardResponse(m.content)
         }))
         setMessages(historyMessages)
-        if (typeof sessionData?.dify_conversation_id === "string" && sessionData.dify_conversation_id) {
+        if (!retiredSiteAssistant && typeof sessionData?.dify_conversation_id === "string" && sessionData.dify_conversation_id) {
           adoptConversationState(sessionData.dify_conversation_id, targetModel as ModelType)
         } else {
           clearDifyConversationState()
@@ -2003,14 +2005,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // --- 模型配置（增强版：添加描述和标签） ---
   const fallbackModelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
-    "general-chat": {
-      name: getPublicAiLabel("general-chat"),
-      modelKey: "general-chat",
-      color: BRAND_GREEN,
-      description: "轻量快速问答",
-      badge: "默认",
-      group: "智能能力"
-    },
     "standard": {
       name: "作文批改",
       modelKey: "standard",
@@ -2209,7 +2203,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
     if (item?.workflowSkill) {
       const nextRoute = item.href || `/chat?agent=${encodeURIComponent(model)}`
-      const targetModel = "general-chat" as ModelType
+      const targetModel = "gpt-5" as ModelType
       if (selectedModel !== targetModel) {
         clearConversationState()
         setMessages([])
@@ -2616,7 +2610,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
     // 🔥 根据模型类型设置不同的默认提示词
     const defaultPrompts: Record<string, string> = {
-      "general-chat": "你好",
       "standard": "批改作文",
       "teaching-pro": "分析教学材料",
     }
