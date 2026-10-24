@@ -1,13 +1,14 @@
 import { expect, test, type Page } from "@playwright/test"
 import { readE2eCredentials } from "./e2e-secrets"
 
-test.use({ screenshot: "off", trace: "off", video: "off" })
+test.use({ channel: "chrome", screenshot: "off", trace: "off", video: "off" })
 
 async function login(page: Page) {
   const { phone, password } = readE2eCredentials()
   test.skip(!password, "SHENXIANG_E2E_TEST_PASSWORD is not configured")
 
   await page.goto("/login?redirect=/chat", { waitUntil: "domcontentloaded" })
+  await page.getByRole("tab", { name: "Password" }).click({ timeout: 30_000 })
   await page.locator("#passworLogin_account").fill(phone)
   await page.locator("#passworLogin_password").fill(password)
   await page.locator("button[type='submit']").filter({ hasText: "Sign In" }).click()
@@ -42,7 +43,7 @@ async function waitForProblemActions(page: Page) {
 }
 
 test.describe("production beike-pro and problem chat", () => {
-  test.setTimeout(180_000)
+  test.setTimeout(300_000)
 
   test("beike-pro hides teacher-kit control payloads and completes normally", async ({ page }) => {
     await login(page)
