@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         Promise.resolve(
           supabase
             .from("chat_sessions")
-            .select("id,user_id")
+            .select("id,user_id,ai_model")
             .eq("id", requestedId)
             .maybeSingle(),
         ),
@@ -133,11 +133,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "无权访问该会话" }, { status: 403 })
       }
       if (existing) {
+        const retiringSiteAssistant = existing.ai_model === "general-chat" && ai_model === "gpt-5"
         const updatePayload = {
           title: effectiveTitle,
           preview: effectivePreview,
           ai_model,
-          ...(difyConversationId ? { [DIFY_CONVERSATION_COLUMN]: difyConversationId } : {}),
+          ...((difyConversationId || retiringSiteAssistant)
+            ? { [DIFY_CONVERSATION_COLUMN]: retiringSiteAssistant ? null : difyConversationId }
+            : {}),
         }
         let { data: session, error } = await withTimeout(
           Promise.resolve(
@@ -153,7 +156,7 @@ export async function POST(request: NextRequest) {
           "chat-session.update",
         )
 
-        if (error && difyConversationId && isMissingDifyConversationColumn(error)) {
+        if (error && (difyConversationId || retiringSiteAssistant) && isMissingDifyConversationColumn(error)) {
           const fallback = await withTimeout(
             Promise.resolve(
               supabase
