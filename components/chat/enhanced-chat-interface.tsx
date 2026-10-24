@@ -2256,7 +2256,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   const calculateCost = () => {
     if (!userId) return 0
-    return calculatePreviewCost(selectedModel, {
+    return calculatePreviewCost(workflowSkillId ? "general-chat" : selectedModel, {
       estimatedInputTokens: input.length > 0 ? Math.ceil(input.length / 4) * 2 : undefined
     })
   }
