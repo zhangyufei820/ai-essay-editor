@@ -70,9 +70,9 @@ func TestFilterUserVisibleModelNamesRequiresManagedGrokEntitlementForGrok46(t *t
 		return userID == 46, nil
 	}
 
-	models := []string{service.Grok45ModelName, service.Grok46ModelName, "gpt-5.5"}
+	models := []string{service.Grok45ModelName, service.Grok46ModelName, "gpt-6.1-sol"}
 	require.Equal(t, models, filterUserVisibleModelNames(46, models))
-	require.Equal(t, []string{"gpt-5.5"}, filterUserVisibleModelNames(47, models))
+	require.Equal(t, []string{"gpt-6.1-sol"}, filterUserVisibleModelNames(47, models))
 }
 
 func TestPinManagedGrok45PricingUsesExactCNYRates(t *testing.T) {
@@ -154,7 +154,7 @@ func TestNormalizeUserVisibleModelsHidesClaudeFastAndFullGroups(t *testing.T) {
 
 func TestNormalizeUserVisibleModelsHidesSupplierExposedImageModels(t *testing.T) {
 	models := normalizeUserVisibleModels(2, []string{
-		"gpt-5.5",
+		"gpt-6.1-sol",
 		"geek2api-image-2",
 		"internal-image2-discount-v2",
 		"internal-image2-stable-v1",
@@ -166,7 +166,7 @@ func TestNormalizeUserVisibleModelsHidesSupplierExposedImageModels(t *testing.T)
 		"moonapix-image-leak",
 	})
 
-	require.Equal(t, []string{"gpt-5.5", "特价 image-2", "官转image 2稳定", "image 2电商商品图快速通道(1.5K)"}, models)
+	require.Equal(t, []string{"gpt-6.1-sol", "特价 image-2", "官转image 2稳定", "image 2电商商品图快速通道(1.5K)"}, models)
 	require.Contains(t, models, "特价 image-2")
 	require.NotContains(t, models, "geek2api-image-2")
 	require.NotContains(t, models, "internal-image2-discount-v2")
@@ -185,7 +185,7 @@ func TestFilterUserVisibleModelNamesHidesSeedancePrivateVideoForNonRootUsers(t *
 
 func TestFilterPricingByUsableGroupsHidesSupplierExposedModels(t *testing.T) {
 	pricing := filterPricingByUsableGroups([]model.Pricing{
-		{ModelName: "gpt-5.5", EnableGroup: []string{"default"}},
+		{ModelName: "gpt-6.1-sol", EnableGroup: []string{"default"}},
 		{ModelName: "geek2api-image-2", EnableGroup: []string{"default"}},
 		{
 			ModelName:   "image 2电商商品图快速通道(1.5K)",
@@ -198,7 +198,7 @@ func TestFilterPricingByUsableGroupsHidesSupplierExposedModels(t *testing.T) {
 	}, map[string]string{"default": "default"})
 
 	require.Equal(t, []model.Pricing{
-		{ModelName: "gpt-5.5", EnableGroup: []string{"default"}},
+		{ModelName: "gpt-6.1-sol", EnableGroup: []string{"default"}},
 		{ModelName: "image 2电商商品图快速通道(1.5K)", Tags: "image,1.5k", EnableGroup: []string{"default"}},
 	}, pricing)
 }
@@ -259,7 +259,7 @@ func TestFilterPricingByUsableGroupsSynthesizesDiscountImage2PublicPricing(t *te
 
 func TestFilterPricingByUsableGroupsRemovesLegacyGroupMetadata(t *testing.T) {
 	pricing := filterPricingByUsableGroups([]model.Pricing{
-		{ModelName: "gpt-5.5", EnableGroup: []string{"default", "internal", "discount"}},
+		{ModelName: "gpt-6.1-sol", EnableGroup: []string{"default", "internal", "discount"}},
 		{ModelName: "gpt-5.4", EnableGroup: []string{"all"}},
 	}, map[string]string{
 		"default":  "原价",
@@ -267,7 +267,7 @@ func TestFilterPricingByUsableGroupsRemovesLegacyGroupMetadata(t *testing.T) {
 	})
 
 	require.Equal(t, []model.Pricing{
-		{ModelName: "gpt-5.5", EnableGroup: []string{"default", "discount"}},
+		{ModelName: "gpt-6.1-sol", EnableGroup: []string{"default", "discount"}},
 		{ModelName: "gpt-5.4", EnableGroup: []string{"default"}},
 	}, pricing)
 }
@@ -347,7 +347,7 @@ func TestFilterPricingByUsableGroupsExposesDedicatedGrokPricing(t *testing.T) {
 func TestFilterPricingVendorsHidesSupplierExposedVendors(t *testing.T) {
 	pricing := []model.Pricing{
 		{ModelName: "image 2电商商品图快速通道(1.5K)", VendorID: 1},
-		{ModelName: "gpt-5.5", VendorID: 2},
+		{ModelName: "gpt-6.1-sol", VendorID: 2},
 	}
 	vendors := filterPricingVendors(pricing, []model.PricingVendor{
 		{ID: 1, Name: "dragtokens"},

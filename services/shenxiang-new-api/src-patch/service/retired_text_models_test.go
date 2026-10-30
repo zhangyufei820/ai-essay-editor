@@ -17,4 +17,7 @@ func TestIsRetiredTextModelNameMatchesOnlyRetiredProducts(t *testing.T) {
 			require.False(t, IsRetiredTextModelName(model), "bootstrap token must not advertise retired models")
 		}
 	}
+	for _, modelName := range MonthlyCardAllowedModels() {
+		require.False(t, IsRetiredTextModelName(modelName), "monthly-card token repair must not restore retired models")
+	}
 }

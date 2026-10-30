@@ -120,8 +120,14 @@ func userHasMonthlyCard(ctx context.Context, db *gorm.DB, userId int) (bool, err
 }
 
 func MonthlyCardAllowedModels() []string {
-	models := make([]string, len(monthlyCardAllowedModels))
-	copy(models, monthlyCardAllowedModels)
+	// Keep historical billing classification below, but never grant retired
+	// products when creating or repairing a monthly-card token.
+	models := make([]string, 0, len(monthlyCardAllowedModels))
+	for _, modelName := range monthlyCardAllowedModels {
+		if !IsRetiredTextModelName(modelName) {
+			models = append(models, modelName)
+		}
+	}
 	return models
 }
 

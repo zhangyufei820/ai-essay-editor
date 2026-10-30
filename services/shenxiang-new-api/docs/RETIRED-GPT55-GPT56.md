@@ -8,6 +8,7 @@ Effective 2026-10-30, the exact public IDs `gpt-5.5` and `gpt-5.6` are retired a
 - Default onboarding and reverse-image prompting use `gpt-6.1-sol`.
 - `codex-auto-review` keeps its existing public ID and retail prices. Its upstream mapping moves to `gpt-5.6-sol`, already configured on the same routes. Legacy GPT-5.5 price definitions remain as historical/reference data; catalog and price reconciliation explicitly skip retired IDs.
 - Preserve historical usage/billing records, balances, subscriptions, and the main site.
+- Monthly-card token creation and repair filter retired names; historical subscription billing classification is retained.
 
 Before applying the metadata retirement, save model status, ability status, channel model/mapping fields, affected token limit fields (never token keys), and the five model price options in a root-readable snapshot outside Git. Acquire the existing model-sync lock for application. Deploy application code only through the guarded release; load the retirement implementation from the released immutable checkout. Verify retirement again after reconciliation to prove it is persistent.
 

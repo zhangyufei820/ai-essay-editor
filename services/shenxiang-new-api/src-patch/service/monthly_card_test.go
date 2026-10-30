@@ -10,11 +10,11 @@ func TestMonthlyCardAllowedModelsMatchSubscriptionWhitelist(t *testing.T) {
 	allowed := MonthlyCardAllowedModels()
 	removedModel := "gpt-5.4-" + "pro"
 
-	require.Contains(t, allowed, "gpt-5.5")
+	require.NotContains(t, allowed, "gpt-5.5")
 	require.Contains(t, allowed, "gpt-6-astra")
 	require.Contains(t, allowed, "gpt-6-sol")
 	require.Contains(t, allowed, "gpt-6.1-sol")
-	require.Contains(t, allowed, "gpt-5.6")
+	require.NotContains(t, allowed, "gpt-5.6")
 	require.Contains(t, allowed, "gpt-5.4")
 	require.Contains(t, allowed, "gpt-5.4-mini")
 	require.Contains(t, allowed, "image 2电商商品图快速通道(1.5K)")
