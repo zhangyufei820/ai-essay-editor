@@ -89,14 +89,14 @@ class TextFamily:
 TEXT_FAMILIES = (
     TextFamily(
         name="openai_text",
-        models=("gpt-5.5", "gpt-5.4", "gpt-5.4-mini"),
+        models=("gpt-5.4", "gpt-5.4-mini"),
         channel_ids=(2, 14),
         baseline_priorities={2: 40, 14: 30},
     ),
     TextFamily(
         name="discount_text",
         optional_managed_tags=("xingren-discount-text-wangwang-codex",),
-        models=("gpt-5.6", "gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
+        models=("gpt-5.4-mini", "gpt-5.6-sol", "gpt-5.6-terra"),
         channel_ids=(),
         baseline_priorities={},
         allow_disable=False,
@@ -128,8 +128,6 @@ TEXT_FAMILIES = (
         models=(
             "gpt-5.4",
             "gpt-5.4-mini",
-            "gpt-5.5",
-            "gpt-5.6",
             "gpt-5.6-sol",
             "gpt-5.6-terra",
             "codex-auto-review",
@@ -152,7 +150,7 @@ TEXT_FAMILIES = (
     TextFamily(
         name="default_codex_text",
         optional_managed_tags=("xingren-default-text-wangwang-codex", "xingren-default-text-aihub-codex", "xingren-default-text-wangwang-fallback"),
-        models=("gpt-5.6", "gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
+        models=("gpt-5.4-mini", "gpt-5.6-sol", "gpt-5.6-terra"),
         channel_ids=(), baseline_priorities={}, allow_disable=False, standalone=True,
         request_format="responses", ability_group="default", manage_model_abilities=True,
         managed_tag_priorities=(
@@ -2041,7 +2039,7 @@ def evaluate_gateway_responses_canary(env: dict[str, str]) -> dict[str, Any]:
     ]
     if not models:
         raise RuntimeError("gateway canary admin token has no Codex text model")
-    model = "gpt-5.5" if "gpt-5.5" in models else models[0]
+    model = models[0]
     result = request_responses(GATEWAY_RESPONSES_BASE_URL, api_key, model)
     event = {
         "ts": now_iso(),

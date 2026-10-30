@@ -31,10 +31,8 @@ USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 ADMIN_SYSTEM_TOKEN_USER_ID = 1
 CODEX_AUTO_REVIEW_MODEL = "codex-auto-review"
 CODEX_ALLOWED_MODELS = (
-    "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
-    "gpt-5.6",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     "gpt-6-astra",
@@ -72,6 +70,8 @@ TOKEN_MODEL_REPLACEMENTS = {
     RAW_GPT_IMAGE2_MODEL: GPT_IMAGE2_PRODUCT_MODEL,
 }
 RETIRED_CODEX_TEXT_MODELS = (
+    "gpt-5.5",
+    "gpt-5.6",
     "gpt-5.3-codex-spark",
     "gpt-5.3-spark",
     "gpt-5.4-openai-compact",
@@ -612,7 +612,7 @@ def sql_quote(value: str) -> str:
 
 
 def is_retired_codex_text_model(model: str) -> bool:
-    return model.strip() in RETIRED_CODEX_TEXT_MODELS
+    return model.strip().lower() in RETIRED_CODEX_TEXT_MODELS
 
 
 def sanitize_token_models(models: list[str]) -> list[str]:

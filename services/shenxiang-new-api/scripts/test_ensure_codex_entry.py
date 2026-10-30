@@ -34,8 +34,8 @@ class EnsureCodexEntryTest(unittest.TestCase):
         self.assertIn("gpt-6-astra", self.module.CODEX_ALLOWED_MODELS)
         self.assertIn("gpt-6-sol", self.module.CODEX_ALLOWED_MODELS)
 
-    def test_gpt56_is_preserved_by_codex_token_guard(self) -> None:
-        self.assertIn("gpt-5.6", self.module.CODEX_ALLOWED_MODELS)
+    def test_retired_gpt56_is_excluded_by_codex_token_guard(self) -> None:
+        self.assertNotIn("gpt-5.6", self.module.CODEX_ALLOWED_MODELS)
 
     def write_file(self, relative_path: str, text: str) -> None:
         path = self.source_root / relative_path
@@ -221,11 +221,11 @@ API.get('/api/user/models');
         self.assertEqual(self.module.latest_source_root(app_root), good)
 
     def test_sanitize_model_limits_replaces_raw_gpt_image2(self) -> None:
-        raw = "gpt-image-2,gpt-image-2-4K,gpt-5.5,gpt-image-2,geek2api-image-2,gpt-5.3-codex-spark,gpt-5.3-spark,gpt-5.4-openai-compact,codex-auto-review"
+        raw = "gpt-image-2,gpt-image-2-4K,gpt-6.1-sol,gpt-image-2,geek2api-image-2,gpt-5.3-codex-spark,gpt-5.3-spark,gpt-5.4-openai-compact,codex-auto-review"
 
         self.assertEqual(
             self.module.sanitize_model_limits(raw),
-            "gpt-image-2-4K,gpt-5.5,codex-auto-review",
+            "gpt-image-2-4K,gpt-6.1-sol,codex-auto-review",
         )
 
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
@@ -233,7 +233,7 @@ API.get('/api/user/models');
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.5,gpt-5.4,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.4,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -241,7 +241,7 @@ API.get('/api/user/models');
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.6,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4,gpt-5.4-mini,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_supplier_exposed_model_limit_predicate_covers_known_markers(self) -> None:
@@ -286,7 +286,7 @@ API.get('/api/user/models');
                     '"image 2电商商品图快速通道(1.5K)":1500.0}\n'
                 )
             if "SELECT value FROM options" in query:
-                return "value\n{\"gpt-5.5\":1.0}\n"
+                return "value\n{\"gpt-6.1-sol\":1.0}\n"
             captured.append(query)
             return ""
 

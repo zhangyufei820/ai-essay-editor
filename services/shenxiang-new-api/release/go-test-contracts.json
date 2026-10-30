@@ -142,5 +142,17 @@
   {
     "package": "./relay/channel/openai",
     "run": "^TestOaiResponsesStreamHandler(RejectsWhitespacePrelude|PreservesWhitespaceBeforeEffectiveOutput|BoundsWhitespacePrelude|AllowsDelayedOutputAfterWhitespacePrelude)$"
+  },
+  {
+    "package": "./middleware",
+    "run": "^TestDistributeRejectsRetiredTextModelsBeforeAnyChannelSelection$"
+  },
+  {
+    "package": "./service",
+    "run": "^TestIsRetiredTextModelNameMatchesOnlyRetiredProducts$"
+  },
+  {
+    "package": "./controller",
+    "run": "^TestRetiredTextModelsAreHiddenFromPublicCatalogs$"
   }
 ]

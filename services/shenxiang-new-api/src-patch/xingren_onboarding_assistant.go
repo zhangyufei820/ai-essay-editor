@@ -33,7 +33,7 @@ const (
 	xingrenAssistantMaxCtx             = 2600
 	xingrenAssistantMaxScreenshotBytes = 3 * 1024 * 1024
 	xingrenAssistantRateMax            = 8
-	xingrenCodexDefaultModel           = "gpt-5.5"
+	xingrenCodexDefaultModel           = "gpt-6.1-sol"
 	xingrenCodexImage15KModel          = "image 2电商商品图快速通道(1.5K)"
 	xingrenAssistantFallback           = xingrenCodexDefaultModel
 )
@@ -53,7 +53,6 @@ var (
 		Timeout: 120 * time.Second,
 	}
 	xingrenCodexAllowedTextModels = map[string]bool{
-		"gpt-5.5":      true,
 		"gpt-5.4":      true,
 		"gpt-5.4-mini": true,
 		"gpt-6-astra":  true,
@@ -762,7 +761,7 @@ func xingrenAssistantSystemPrompt() string {
 	return strings.Join([]string{
 		"你是 AIPHUI 的站内 API 接入老师，优先帮助用户完成当前站内操作；只有用户明确提到 Codex、Codex CLI、Codex 桌面 App、config.toml、AIPHUI_API_KEY、wire_api、base_url 或 Working 排障时，才进入 Codex 接入辅导。",
 		"如果用户问图像生成日志、图片生成记录、最近任务、下载日志、用量、扣费、消耗、媒体工坊、模型价格、令牌管理、钱包或文档入口，必须按站内助手回答：说明应该打开哪个页面、看哪些列或筛选项，不要强行转成 Codex Key、401、config.toml 排障。",
-		"固定配置必须保持：provider id 是 aiphui，provider name 是 AIPHUI，base_url 是 https://api.aiphui.top/v1，env_key 是 AIPHUI_API_KEY，model 是 gpt-5.5，wire_api 是 responses。Windows 默认配置文件是 %USERPROFILE%\\.codex\\config.toml；Mac 终端默认配置文件是 ~/.codex/config.toml。",
+		"固定配置必须保持：provider id 是 aiphui，provider name 是 AIPHUI，base_url 是 https://api.aiphui.top/v1，env_key 是 AIPHUI_API_KEY，model 是 gpt-6.1-sol，wire_api 是 responses。Windows 默认配置文件是 %USERPROFILE%\\.codex\\config.toml；Mac 终端默认配置文件是 ~/.codex/config.toml。",
 		"config.toml 只写 env_key = \"AIPHUI_API_KEY\"，不要把明文 Key 写进 config.toml。Windows 把 API Key 写入 User 级环境变量；Mac 终端把 API Key 写入当前 shell 环境并追加到 ~/.zshrc。用户是零代码新手，所以生成命令必须包含完整 Key，执行后也必须打印读取到的完整 AIPHUI_API_KEY，避免让用户手动替换占位符。",
 		"核心判断：只接 Codex 桌面 App 不一定必须安装 Codex CLI。Codex CLI 只是验证工具。CLI 能回复通常说明 AIPHUI API 大概率没问题；CLI 能回但桌面 App 不回，优先判断 App 没读到默认 config.toml、User 级环境变量、没有完全退出重启、当前目录不适合或 trust/sandbox 问题。",
 		"Windows 方案要兼容 PowerShell 5.1。优先生成单行命令；不要用 heredoc、@'...'@、复杂 if/else 或多层大括号。npm 命令用 npm.cmd，Codex 命令用 codex.cmd，不识别时再用 & \"$env:APPDATA\\npm\\codex.cmd\"。Mac 终端按官方 Codex 配置形态写 ~/.codex/config.toml，使用 [model_providers.aiphui] 和 env_key。",
@@ -803,7 +802,7 @@ func xingrenAssistantKnowledgeReply(message string, pageContext *xingrenAssistan
 	case xingrenAssistantContainsAny(text, "added 2 packages"):
 		return "结论：npm 已经把 Codex CLI 安装成功了。现在不是继续安装，而是找 codex.cmd。\n\n下一步执行：\n\n$env:Path=\"$env:Path;$env:APPDATA\\npm;C:\\Program Files\\nodejs\"\ncodex.cmd --version\n& \"$env:APPDATA\\npm\\codex.cmd\" --version\n\n如果版本号出来了，再进入工作目录测试：\n\nNew-Item -ItemType Directory -Path \"C:\\codex-work\" -Force | Out-Null\ncd C:\\codex-work\ncodex.cmd \"只回复 OK\""
 	case xingrenAssistantContainsAny(text, "config/batchwrite failed", "failed to set trust", "get-content", "writealltext", "$configpath", "空路径名", "参数 path", "trust directory"):
-		return "结论：这是配置或 trust 写入失败，不是 AIPHUI API 本身失败。常见原因是脚本乱序、$configPath 为空、中文用户目录 trust 写失败，或者在 Codex TUI 里写配置失败。\n\n下一步：不要继续在 TUI 里反复点。手动写 %USERPROFILE%\\.codex\\config.toml，并使用 C:\\codex-work。\n\n配置必须包含：\nmodel = \"gpt-5.5\"\nmodel_provider = \"aiphui\"\n\n[model_providers.aiphui]\nname = \"AIPHUI\"\nbase_url = \"https://api.aiphui.top/v1\"\nenv_key = \"AIPHUI_API_KEY\"\nwire_api = \"responses\"\n\n[projects.\"C:\\\\codex-work\"]\ntrust_level = \"trusted\""
+		return "结论：这是配置或 trust 写入失败，不是 AIPHUI API 本身失败。常见原因是脚本乱序、$configPath 为空、中文用户目录 trust 写失败，或者在 Codex TUI 里写配置失败。\n\n下一步：不要继续在 TUI 里反复点。手动写 %USERPROFILE%\\.codex\\config.toml，并使用 C:\\codex-work。\n\n配置必须包含：\nmodel = \"gpt-6.1-sol\"\nmodel_provider = \"aiphui\"\n\n[model_providers.aiphui]\nname = \"AIPHUI\"\nbase_url = \"https://api.aiphui.top/v1\"\nenv_key = \"AIPHUI_API_KEY\"\nwire_api = \"responses\"\n\n[projects.\"C:\\\\codex-work\"]\ntrust_level = \"trusted\""
 	case xingrenAssistantContainsAny(text, "~/.codex/config.toml", ".zshrc", "$home/codex-work", "mac 终端", "mac终端"):
 		return "结论：Mac 终端接入 AIPHUI 时，按官方 Codex 配置形态走：用户级配置写 ~/.codex/config.toml，自定义供应商写 [model_providers.aiphui]，认证用 env_key = \"AIPHUI_API_KEY\"。\n\n下一步要确保三件事：\n1. 终端里能 echo 出完整 AIPHUI_API_KEY。\n2. ~/.codex/config.toml 里 base_url 是 https://api.aiphui.top/v1，wire_api 是 responses。\n3. 在 $HOME/codex-work 里运行 codex \"只回复 OK\"。\n\n如果 API Key 没读到，重新执行接入老师生成的完整 Mac 命令；它会把 Key 写进当前终端和 ~/.zshrc，并打印完整读取结果。"
 	case xingrenAssistantContainsAny(text, "wire_api = \"chat\"", "wire_api=chat", "model_provider = \"xingren\"", "[model_providers.xingren]", "--profile xingren"):
@@ -823,7 +822,7 @@ func xingrenAssistantKnowledgeReply(message string, pageContext *xingrenAssistan
 	case strings.Contains(messageText, "401"):
 		return "结论：401 通常是 Key 没传对、复制多了空格、令牌被禁用，或客户端没正确发送 Authorization。\n\n下一步：重新写入 AIPHUI_API_KEY，然后跑 /v1/responses 测试。测试命令要打印完整读取到的 AIPHUI_API_KEY，方便核对是否多空格或没读到。\n\n如果终端能回但桌面 App 不回，重启 Codex App 或系统。"
 	case strings.Contains(messageText, "403"):
-		return "结论：403 通常表示 Key 能读到，但模型权限、分组、套餐或余额不允许访问 gpt-5.5。\n\n下一步：检查令牌是否允许 gpt-5.5、账号余额和分组权限。权限修好后再跑 /v1/responses 测试。"
+		return "结论：403 通常表示 Key 能读到，但模型权限、分组、套餐或余额不允许访问 gpt-6.1-sol。\n\n下一步：检查令牌是否允许 gpt-6.1-sol、账号余额和分组权限。权限修好后再跑 /v1/responses 测试。"
 	case strings.Contains(messageText, "404"):
 		return "结论：404 优先查 base_url 和路径。\n\nAIPHUI 标准 base_url 是 https://api.aiphui.top/v1。不要写成 https://api.aiphui.top/v1/responses，因为 Codex 会自己拼 responses 路径。\n\n下一步：覆盖 config.toml，确认 wire_api = \"responses\"。"
 	case strings.Contains(messageText, "413") || xingrenAssistantContainsAny(messageText, "payload too large", "content too large", "request entity too large"):
@@ -975,7 +974,7 @@ func xingrenAssistantScreenshotFallbackReply(message string) string {
 	if clean == "" {
 		clean = "这张截图里的报错"
 	}
-	return "我已经收到截图，但图片识别模型这次响应超时了。\n\n我先按你描述的“" + clean + "”给你排查。\n\n下一步先做这 4 件事：\n1. 如果截图里露出了完整 API Key，公开传播前要遮住；已经外泄就到令牌管理重置或删除旧 Key。\n2. Windows 桌面 App 接入时，确认用户环境变量是 AIPHUI_API_KEY，配置文件在 %USERPROFILE%\\.codex\\config.toml；Mac 终端接入时，确认 ~/.codex/config.toml 和 ~/.zshrc。\n3. config.toml 里 provider 段必须写 [model_providers.aiphui]，base_url 写 https://api.aiphui.top/v1，wire_api 写 responses，不要把 base_url 写到 /responses。\n4. 终端测试命令要打印完整读取到的 AIPHUI_API_KEY，确认格式没错后再测试“只回复 OK”。\n\n常见问题：\n401：Key 没读到、Key 写错、复制多了空格或令牌被禁用。重新创建 Key，并打印读取到的 AIPHUI_API_KEY 检查。\n403：Key 能读到，但模型权限、分组或余额不足。检查令牌是否允许 gpt-5.5。\n404：base_url 写错，通常是误写成 /v1/responses。\ntimeout：先在终端里跑 /v1/responses 连通性检查；如果终端能回但桌面 App 不回，重启 Codex 或系统。\n\n你可以再上传一张只裁剪报错区域的清晰截图，或者直接把错误代码和报错文字发我，我继续带你修。"
+	return "我已经收到截图，但图片识别模型这次响应超时了。\n\n我先按你描述的“" + clean + "”给你排查。\n\n下一步先做这 4 件事：\n1. 如果截图里露出了完整 API Key，公开传播前要遮住；已经外泄就到令牌管理重置或删除旧 Key。\n2. Windows 桌面 App 接入时，确认用户环境变量是 AIPHUI_API_KEY，配置文件在 %USERPROFILE%\\.codex\\config.toml；Mac 终端接入时，确认 ~/.codex/config.toml 和 ~/.zshrc。\n3. config.toml 里 provider 段必须写 [model_providers.aiphui]，base_url 写 https://api.aiphui.top/v1，wire_api 写 responses，不要把 base_url 写到 /responses。\n4. 终端测试命令要打印完整读取到的 AIPHUI_API_KEY，确认格式没错后再测试“只回复 OK”。\n\n常见问题：\n401：Key 没读到、Key 写错、复制多了空格或令牌被禁用。重新创建 Key，并打印读取到的 AIPHUI_API_KEY 检查。\n403：Key 能读到，但模型权限、分组或余额不足。检查令牌是否允许 gpt-6.1-sol。\n404：base_url 写错，通常是误写成 /v1/responses。\ntimeout：先在终端里跑 /v1/responses 连通性检查；如果终端能回但桌面 App 不回，重启 Codex 或系统。\n\n你可以再上传一张只裁剪报错区域的清晰截图，或者直接把错误代码和报错文字发我，我继续带你修。"
 }
 
 func xingrenAssistantCleanContextList(items []string, maxItems int, maxEach int) []string {

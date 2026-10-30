@@ -49,10 +49,10 @@ else:
         self.assertEqual(model, 'gpt-6-sol')
         self.assertNotIn('sk-test-admin-fixture', result.stdout + result.stderr)
 
-    def test_historical_default_is_retained_when_permitted(self):
+    def test_retired_default_is_skipped_even_when_stale_metadata_permits_it(self):
         result, model = self.run_smoke(['gpt-6-sol', 'gpt-5.5'])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(model, 'gpt-5.5')
+        self.assertEqual(model, 'gpt-6-sol')
 
     def test_empty_or_non_codex_model_list_fails_before_inference(self):
         for models in ([], ['gpt-image-2-4K'], ['claude-sonnet-4-6']):

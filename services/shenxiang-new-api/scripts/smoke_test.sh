@@ -39,7 +39,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$TOKEN_PROFILE" in
-  codex) TOKEN_NAME="星人 Codex 文本令牌"; MODEL="gpt-5.5" ;;
+  codex) TOKEN_NAME="星人 Codex 文本令牌"; MODEL="gpt-6.1-sol" ;;
   image) TOKEN_NAME="星人图像生成令牌"; MODEL="gpt-image-2-4K" ;;
   claude) TOKEN_NAME="星人 Claude 高阶令牌"; MODEL="claude-sonnet-4-6" ;;
   video) TOKEN_NAME="星人视频生成令牌"; MODEL="seedance-2.0-cl-mini" ;;
@@ -127,7 +127,7 @@ if [ "$TOKEN_PROFILE" = "codex" ] && [ "$REQUEST_MODE" != "models" ]; then
 import json, sys
 payload = json.load(sys.stdin)
 models = {item.get("id") for item in payload.get("data", []) if isinstance(item, dict)}
-for candidate in ("gpt-5.5", "gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.6", "gpt-5.6-terra", "gpt-5.4-mini", "gpt-5.4"):
+for candidate in ("gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.4-mini", "gpt-5.4"):
     if candidate in models:
         print(candidate)
         break

@@ -9,7 +9,7 @@
     baseUrl: "https://api.aiphui.top/v1",
     claudeBaseUrl: "https://api.aiphui.top/claude",
     codexModel: "gpt-6-astra",
-    fallbackCodexModel: "gpt-5.5",
+    fallbackCodexModel: "gpt-6.1-sol",
     providerId: "aiphui",
     providerName: "AIPHUI",
     apiEnvKey: "AIPHUI_API_KEY",
@@ -521,7 +521,7 @@
       "，env_key=AIPHUI_API_KEY，wire_api=responses。\n\n" +
       "常见问题和修复：\n" +
       "401：Key 错、复制多了空格或令牌被禁用。重新创建 Key，再写入 User 环境变量。\n" +
-      "403：Key 可用但模型权限、分组或余额不足。检查令牌是否允许 gpt-5.5。\n" +
+      "403：Key 可用但模型权限、分组或余额不足。检查令牌是否允许 gpt-6.1-sol。\n" +
       "404：base_url 必须是 " +
       CONFIG.baseUrl +
       "，不要写成 /v1/responses。\n" +

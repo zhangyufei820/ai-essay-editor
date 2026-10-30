@@ -137,14 +137,12 @@ DISCOUNT_TEXT_CHANNEL_TAGS = (
     "xingren-discount-text-wangwang",
 )
 DISCOUNT_TEXT_ALLOWED_MODELS = (
-    "gpt-5.6",
     "gpt-5.4-mini",
-    "gpt-5.5",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
 )
 CODEX_AUTO_REVIEW_MODEL = "codex-auto-review"
-CODEX_AUTO_REVIEW_BACKING_MODEL = "gpt-5.5"
+CODEX_AUTO_REVIEW_BACKING_MODEL = "gpt-5.6-sol"
 CONTROLLED_CODEX_MODEL_ALIASES = {
     CODEX_AUTO_REVIEW_MODEL: CODEX_AUTO_REVIEW_BACKING_MODEL,
 }
@@ -163,8 +161,6 @@ SPECIAL_TEXT_CHANNEL_TAGS = (
 )
 SPECIAL_TEXT_ALLOWED_MODELS = (
     "gpt-5.4-mini",
-    "gpt-5.5",
-    "gpt-5.6",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
 )
@@ -184,10 +180,8 @@ PLUS_TEXT_CHANNEL_TAGS = (
     "xingren-plus-text-pdhlzy",
 )
 PLUS_TEXT_ALLOWED_MODELS = (
-    "gpt-5.6",
     "gpt-5.4",
     "gpt-5.4-mini",
-    "gpt-5.5",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "codex-auto-review",
@@ -332,10 +326,8 @@ TOKEN_MODEL_REPLACEMENTS = {
 }
 
 CODEX_ALLOWED_MODELS = [
-    "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
-    "gpt-5.6",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     "gpt-6-astra",
@@ -349,7 +341,7 @@ CODEX_ALLOWED_MODELS = [
 CODEX_STANDARD_ALLOWED_MODELS = [
     model for model in CODEX_ALLOWED_MODELS if model not in CONTROLLED_CODEX_MODEL_ALIASES
 ]
-CODEX_DEFAULT_MODEL = "gpt-5.5"
+CODEX_DEFAULT_MODEL = "gpt-6.1-sol"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
 CLAUDE_PRODUCT_GROUP = "kiro-stable"
 CLAUDE_OPUS5_MODEL = "claude-opus-5"
@@ -544,13 +536,12 @@ PUBLIC_VIDEO_CHANNEL_CONFIGS = (
 )
 CODEX_TEXT_CHANNEL_ID = "21"
 CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
-    "gpt-5.5",
     "gpt-5.4",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
     CODEX_AUTO_REVIEW_MODEL,
 ]
-RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact", "gpt-5.6-luna")
+RETIRED_CODEX_TEXT_MODELS = ("gpt-5.5", "gpt-5.6", "gpt-5.3-codex-spark", "gpt-5.3-spark", "gpt-5.4-openai-compact", "gpt-5.6-luna")
 PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M: dict[str, dict[str, Decimal]] = {}
 PUBLIC_VIDEO_FIXED_PRICES_CNY = {
     PUBLIC_MOON25_VIDEO_MODEL: Decimal("0.50"),
@@ -687,7 +678,7 @@ PUBLIC_OPENAI_TEXT_MODELS = {
     },
 }
 PUBLIC_OPENAI_TEXT_MODELS[CODEX_AUTO_REVIEW_MODEL] = {
-    **PUBLIC_OPENAI_TEXT_MODELS[CODEX_AUTO_REVIEW_BACKING_MODEL],
+    **PUBLIC_OPENAI_TEXT_MODELS["gpt-5.5"],  # Preserve review retail pricing when replacing its upstream model.
     "description": "Codex 自动审批审查模型，仅供已授权的 Codex 令牌调用。",
     "icon": "Codex",
     "tags": "text,codex,approval",
@@ -834,7 +825,7 @@ def special_text_models_allowed_sql(column: str) -> str:
 
 
 def is_retired_codex_text_model(model: str) -> bool:
-    return model.strip() in RETIRED_CODEX_TEXT_MODELS
+    return model.strip().lower() in RETIRED_CODEX_TEXT_MODELS
 
 
 def is_retired_image_model(model: str) -> bool:
@@ -998,7 +989,7 @@ def supplier_exposed_model_limit_predicate() -> str:
 
 def retired_codex_text_model_limit_predicate() -> str:
     clauses = [
-        "FIND_IN_SET(" + sql_quote(model) + ", COALESCE(model_limits, '')) > 0"
+        "FIND_IN_SET(" + sql_quote(model) + ", LOWER(REPLACE(COALESCE(model_limits, ''), ' ', ''))) > 0"
         for model in RETIRED_CODEX_TEXT_MODELS
     ]
     return " OR ".join(clauses)
@@ -1201,6 +1192,8 @@ def openai_text_billing_expr(prices: dict[str, object], exchange_rate: Decimal) 
 def ensure_public_openai_text_models() -> None:
     statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
     for model, config in PUBLIC_OPENAI_TEXT_MODELS.items():
+        if is_retired_codex_text_model(model):
+            continue
         statements.append(
             "SET @openai_text_model := "
             + sql_quote(model)
@@ -1260,6 +1253,8 @@ def sync_public_openai_text_pricing() -> None:
     exchange_rate = usd_exchange_rate()
 
     for model, prices in PUBLIC_OPENAI_TEXT_MODELS.items():
+        if is_retired_codex_text_model(model):
+            continue
         input_cny = prices["input_cny"]
         # Model plaza prices are the actual RMB sale prices. New API displays
         # input CNY per 1M as model_ratio * 2 * USDExchangeRate.
@@ -1423,7 +1418,7 @@ def retire_codex_text_models() -> dict[str, int]:
     )
     token_rows = mysql(
         "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, '') FROM tokens "
-        "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
+        "WHERE deleted_at IS NULL "
         "AND ("
         + retired_codex_text_model_limit_predicate()
         + ");"
@@ -1433,6 +1428,33 @@ def retire_codex_text_models() -> dict[str, int]:
         next_limits = sanitize_model_limits(raw_limits)
         if next_limits != raw_limits:
             token_updates.append((token_id, next_limits, token_key))
+
+    channel_updates: list[tuple[str, str, str, list[str]]] = []
+    for channel_id, raw_models, raw_mapping in mysql(
+        "SELECT id, COALESCE(models, ''), COALESCE(model_mapping, '') FROM channels"
+    ):
+        models = [item.strip() for item in raw_models.split(",") if item.strip()]
+        mapping = json.loads(raw_mapping) if raw_mapping.strip() else {}
+        if not isinstance(mapping, dict):
+            raise ValueError("channel model_mapping must be a JSON object")
+        next_mapping = dict(mapping)
+        removed_aliases: list[str] = []
+        for alias, target in mapping.items():
+            if is_retired_codex_text_model(str(alias)):
+                next_mapping.pop(alias, None)
+            elif is_retired_codex_text_model(str(target)):
+                if alias in CONTROLLED_CODEX_MODEL_ALIASES:
+                    next_mapping[alias] = CONTROLLED_CODEX_MODEL_ALIASES[alias]
+                else:
+                    next_mapping.pop(alias, None)
+                    removed_aliases.append(alias)
+        next_models = [item for item in models if not is_retired_codex_text_model(item) and item not in removed_aliases]
+        if next_models != models or next_mapping != mapping:
+            channel_updates.append((
+                channel_id, ",".join(next_models),
+                json.dumps(next_mapping, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                removed_aliases,
+            ))
 
     pricing_options_sanitized = 0
     for key in ("ModelRatio", "CompletionRatio", "CacheRatio", "CreateCacheRatio", "ModelPrice"):
@@ -1458,6 +1480,17 @@ def retire_codex_text_models() -> dict[str, int]:
         + retired_models
         + ");"
     )
+    for channel_id, next_models, next_mapping, removed_aliases in channel_updates:
+        statements.append(
+            "UPDATE channels SET models = " + sql_quote(next_models)
+            + ", model_mapping = " + sql_quote(next_mapping)
+            + " WHERE id = " + sql_quote(channel_id) + ";"
+        )
+        if removed_aliases:
+            statements.append(
+                "UPDATE abilities SET enabled = 0 WHERE channel_id = " + sql_quote(channel_id)
+                + " AND model IN (" + ",".join(sql_quote(alias) for alias in removed_aliases) + ");"
+            )
     for token_id, next_limits, _token_key in token_updates:
         statements.append(
             "UPDATE tokens SET model_limits = "
@@ -1475,6 +1508,7 @@ def retire_codex_text_models() -> dict[str, int]:
         "pricing_options_sanitized": pricing_options_sanitized,
         "tokens_rewritten": len(token_updates),
         "token_caches_deleted": caches_deleted,
+        "channels_rewritten": len(channel_updates),
     }
 
 

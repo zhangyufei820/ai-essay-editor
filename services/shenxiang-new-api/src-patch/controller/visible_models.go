@@ -50,7 +50,7 @@ func managedGrok45PricingVisible(parent context.Context, userID int) (bool, erro
 
 func isHiddenUserVisibleModel(modelName string) bool {
 	name := strings.ToLower(strings.TrimSpace(modelName))
-	if service.IsRetiredImageModelName(name) {
+	if service.IsRetiredImageModelName(name) || service.IsRetiredTextModelName(name) {
 		return true
 	}
 	if service.IsSupplierExposedModelName(name) {

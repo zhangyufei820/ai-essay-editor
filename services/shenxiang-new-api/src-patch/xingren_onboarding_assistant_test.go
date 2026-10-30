@@ -30,7 +30,7 @@ func TestXingrenCodexTokenModelLimitsAddsPublic15KImageModel(t *testing.T) {
 
 func TestXingrenCodexTokenModelLimitsFallsBackForInvalidTextModel(t *testing.T) {
 	got := xingrenCodexTokenModelLimits("image 2电商商品图快速通道(1.5K)")
-	want := "gpt-5.5,image 2电商商品图快速通道(1.5K)"
+	want := "gpt-6.1-sol,image 2电商商品图快速通道(1.5K)"
 	if got != want {
 		t.Fatalf("xingrenCodexTokenModelLimits() = %q, want %q", got, want)
 	}
@@ -62,7 +62,7 @@ func TestXingrenOnboardingExplains413WithoutRetryingSamePayload(t *testing.T) {
 }
 
 func TestXingrenCodexTokenGroupDefaultsLegacyUserGroup(t *testing.T) {
-	token := buildXingrenCodexUserToken(42, "test-key", "test-token", "gpt-5.5", "internal")
+	token := buildXingrenCodexUserToken(42, "test-key", "test-token", "gpt-6.1-sol", "internal")
 	if token.Group != "default" {
 		t.Fatalf("token group = %q, want default", token.Group)
 	}
@@ -92,7 +92,7 @@ func TestBuildXingrenCodexTokenResponseIncludesOwnerMetadata(t *testing.T) {
 func TestBuildXingrenCodexTokenResponseRejectsCrossUserToken(t *testing.T) {
 	token := &model.Token{Id: 9002, UserId: 202, Key: "test-key-abcdefghijklmnopqrstuvwxyz", Name: "星人 Codex 文本令牌"}
 
-	_, err := buildXingrenCodexTokenResponse(201, token, "standard", "account_preference", "gpt-5.5", "https://api.aiphui.top/v1")
+	_, err := buildXingrenCodexTokenResponse(201, token, "standard", "account_preference", "gpt-6.1-sol", "https://api.aiphui.top/v1")
 	if err == nil {
 		t.Fatal("expected cross-user token ownership to be rejected")
 	}
@@ -101,7 +101,7 @@ func TestBuildXingrenCodexTokenResponseRejectsCrossUserToken(t *testing.T) {
 func TestBuildXingrenCodexTokenResponseRejectsInvalidBillingMetadata(t *testing.T) {
 	token := &model.Token{Id: 9003, UserId: 203, Key: "test-key-abcdefghijklmnopqrstuvwxyz", Name: "月卡专用 Key"}
 
-	_, err := buildXingrenCodexTokenResponse(203, token, "monthly_card", "account_preference", "gpt-5.5", "https://api.aiphui.top/v1")
+	_, err := buildXingrenCodexTokenResponse(203, token, "monthly_card", "account_preference", "gpt-6.1-sol", "https://api.aiphui.top/v1")
 	if err == nil {
 		t.Fatal("expected invalid monthly-card billing metadata to be rejected")
 	}
@@ -110,7 +110,7 @@ func TestBuildXingrenCodexTokenResponseRejectsInvalidBillingMetadata(t *testing.
 func TestBuildXingrenCodexTokenResponseRejectsEmptyKey(t *testing.T) {
 	for _, key := range []string{"", " \t\n "} {
 		token := &model.Token{Id: 9004, UserId: 204, Key: key, Name: "月卡专用 Key"}
-		_, err := buildXingrenCodexTokenResponse(204, token, "monthly_card", "subscription_only", "gpt-5.5", "https://api.aiphui.top/v1")
+		_, err := buildXingrenCodexTokenResponse(204, token, "monthly_card", "subscription_only", "gpt-6.1-sol", "https://api.aiphui.top/v1")
 		if err == nil {
 			t.Fatal("expected empty token key to be rejected")
 		}
@@ -207,7 +207,7 @@ func callXingrenCodexTokenRoute(t *testing.T, sessionUserID int, headerUserID in
 	RegisterXingrenOnboardingAssistant(router)
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/xingren-onboarding-assistant/codex-token", strings.NewReader(`{"model":"gpt-5.5"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/xingren-onboarding-assistant/codex-token", strings.NewReader(`{"model":"gpt-6.1-sol"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("New-Api-User", fmt.Sprintf("%d", headerUserID))
 	router.ServeHTTP(recorder, request)
@@ -298,7 +298,7 @@ func TestXingrenCodexFrontendRejectsInvalidPayloadBeforeConfiguration(t *testing
 	text := string(source)
 	for _, marker := range []string{
 		"codexModel: \"gpt-6-astra\"",
-		"fallbackCodexModel: \"gpt-5.5\"",
+		"fallbackCodexModel: \"gpt-6.1-sol\"",
 		"model_provider = \"aiphui\"",
 		"function validateCodexTokenPayload(payload, userId)",
 		"return validateCodexTokenPayload(payload, userId);",

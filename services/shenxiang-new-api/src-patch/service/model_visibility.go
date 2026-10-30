@@ -58,6 +58,17 @@ func IsRetiredImageModelName(modelName string) bool {
 	return retiredImageModelNames[strings.ToLower(strings.TrimSpace(modelName))]
 }
 
+// Match exact retired product names; independently supported Sol, Terra and
+// compact variants remain available.
+func IsRetiredTextModelName(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case "gpt-5.5", "gpt-5.6":
+		return true
+	default:
+		return false
+	}
+}
+
 func NormalizeImageGenerationModelName(modelName string) (normalized string, publicAlias string, changed bool) {
 	trimmed := strings.TrimSpace(modelName)
 	if strings.EqualFold(trimmed, "gpt-image-2") {

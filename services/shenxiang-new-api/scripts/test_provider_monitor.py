@@ -119,7 +119,7 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         self.assertEqual(families["discount_text"].channel_ids, ())
         self.assertEqual(
             families["discount_text"].models,
-            ("gpt-5.6", "gpt-5.4-mini", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra"),
+            ("gpt-5.4-mini", "gpt-5.6-sol", "gpt-5.6-terra"),
         )
         self.assertEqual(
             families["discount_text"].managed_tag_priorities,
@@ -942,7 +942,7 @@ class ProviderMonitorModelCircuitTest(unittest.TestCase):
         request.assert_called_once_with(
             "https://api.aiphui.top",
             "sk-test-admin-secret",
-            "gpt-5.5",
+            "gpt-5.4-mini",
         )
         event = write_event.call_args.args[0]
         self.assertTrue(result["ok"])

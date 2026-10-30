@@ -50,7 +50,7 @@ func Distribute() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			return
 		}
-		if shouldSelectChannel && service.IsRetiredImageModelName(modelRequest.Model) {
+		if shouldSelectChannel && (service.IsRetiredImageModelName(modelRequest.Model) || service.IsRetiredTextModelName(modelRequest.Model)) {
 			abortWithOpenAiMessage(c, http.StatusNotFound, "该模型已下架，请选择其他模型。", types.ErrorCodeModelNotFound)
 			return
 		}
