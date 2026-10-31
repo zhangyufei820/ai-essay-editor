@@ -72,6 +72,14 @@ function fallbackMap(config: GatewayConfig) {
 }
 
 describe("llm gateway provider routing policy", () => {
+  it("retires GPT 5.5 from every gateway route", () => {
+    const config = loadConfig()
+    expect(config.model_list.some((item) => item.model_name === "gpt-5.5" || item.litellm_params?.model === "openai/gpt-5.5")).toBe(false)
+    expect(modelsByName(config, "gpt-5.6-sol")).toHaveLength(1)
+    expect(modelsByName(config, "gpt-5.6-sol")[0]?.litellm_params?.model).toBe("openai/gpt-5.6-sol")
+    expect(fallbackMap(config).has("gpt-5.5")).toBe(false)
+  })
+
   it("keeps every text and non-vision production alias on one New API deployment", () => {
     const config = loadConfig()
     const productionAliases = [
@@ -90,7 +98,7 @@ describe("llm gateway provider routing policy", () => {
       "gpt-5.4",
       "gpt-5.4-mini",
       "gpt-5.4-pro",
-      "gpt-5.5",
+      "gpt-5.6-sol",
       "claude-opus-4-7",
       "claude-sonnet-4-6",
       "claude-3-7-sonnet-20250219",
@@ -144,7 +152,7 @@ describe("llm gateway provider routing policy", () => {
   it("uses the dedicated user token family for OpenAI and Claude primaries", () => {
     const config = loadConfig()
 
-    for (const alias of ["sx-math-text", "sx-general-text", "gpt-5.4", "gpt-5.5"]) {
+    for (const alias of ["sx-math-text", "sx-general-text", "gpt-5.4", "gpt-5.6-sol"]) {
       expect(modelsByName(config, alias)[0]?.litellm_params?.api_key).toBe(
         "os.environ/SHENXIANG_NEW_API_TEXT_API_KEY",
       )

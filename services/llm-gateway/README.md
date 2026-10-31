@@ -12,7 +12,7 @@ Self-hosted OpenAI-compatible routing layer for realtime text and image-recognit
 - `gpt-5.4`
 - `gpt-5.4-mini`
 - `gpt-5.4-pro`
-- `gpt-5.5`
+- `gpt-5.6-sol`
 - `claude-sonnet-4-6`
 - `claude-opus-4-7`
 - `gemini-2.5-flash`

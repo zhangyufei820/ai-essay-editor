@@ -203,10 +203,10 @@ const CASES = [
     model: "gpt-5.4-mini",
   },
   {
-    name: "direct-new-api-gpt-5.5",
+    name: "direct-new-api-gpt-5.6-sol",
     baseUrl: process.env.SHENXIANG_NEW_API_BASE_URL || "",
     apiKey: process.env.SHENXIANG_NEW_API_TEXT_API_KEY || "",
-    model: "gpt-5.5",
+    model: "gpt-5.6-sol",
   },
   { name: "direct-vecoai-gemini-3.6-flash", baseUrl: process.env.VECOAI_LLM_BASE_URL || "", apiKey: process.env.VECOAI_LLM_API_KEY || "", model: "gemini-3.6-flash" },
 ]
