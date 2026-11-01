@@ -63,8 +63,9 @@ test("a DOCX and PNG in one essay request produce a complete grade", async ({ pa
   await expect(page.getByText("e2e-essay.png").first()).toBeVisible()
   await page.getByPlaceholder("输入内容开始对话...").fill("请同时参考文档和图片，完整批改这篇作文。")
   await page.getByRole("button", { name: "发送消息" }).click()
-  await expect(page.getByText(/综合评分[:：]?\s*\d+|综合总分[:：]?\s*\d+/).last())
-    .toBeVisible({ timeout: 240_000 })
-  await expect(page.locator("article").last()).toContainText(/种花|花苗/)
+  const report = page.locator("article").last()
+  await expect.poll(async () => (await report.innerText()).replace(/\s+/g, " "),
+    { timeout: 240_000 }).toMatch(/(?:综合评分|综合总分)\s*[:：]?\s*(?:100%\s+)?[1-9]\d*(?=\s|\/|分|$)/)
+  await expect(report).toContainText(/种花|花苗/)
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
 })
