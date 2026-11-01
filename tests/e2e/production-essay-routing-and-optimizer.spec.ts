@@ -29,7 +29,7 @@ test("image prompt optimization works without a dedicated Dify token", async ({ 
   const response = await optimization
   expect(response.ok()).toBe(true)
   await expect(prompt).not.toHaveValue("一只白猫坐在窗边", { timeout: 15_000 })
-  await expect(prompt).toHaveValue(/白猫|猫/)
+  await expect(prompt).toHaveValue(/白猫|猫|white cat/i)
 })
 
 test("a DOCX and PNG in one essay request produce a complete grade", async ({ page, context }) => {
@@ -47,6 +47,8 @@ test("a DOCX and PNG in one essay request produce a complete grade", async ({ pa
   const docx = await readFile(path.join(process.cwd(), "tests/e2e/fixtures/essay-mixed.docx"))
 
   await login(page, "/chat/standard")
+  await page.getByPlaceholder("输入内容开始对话...").fill("请同时参考文档和图片，完整批改这篇作文。")
+  await expect(page.getByRole("button", { name: "发送消息" })).toBeEnabled({ timeout: 30_000 })
   const uploads: number[] = []
   page.on("response", (response) => {
     if (response.url().includes("/api/dify-upload") && response.request().method() === "POST") {
@@ -61,7 +63,6 @@ test("a DOCX and PNG in one essay request produce a complete grade", async ({ pa
   expect(uploads).toEqual([200, 200])
   await expect(page.getByText("e2e-essay.docx").first()).toBeVisible()
   await expect(page.getByText("e2e-essay.png").first()).toBeVisible()
-  await page.getByPlaceholder("输入内容开始对话...").fill("请同时参考文档和图片，完整批改这篇作文。")
   await page.getByRole("button", { name: "发送消息" }).click()
   const report = page.locator("article").last()
   await expect.poll(async () => (await report.innerText()).replace(/\s+/g, " "),

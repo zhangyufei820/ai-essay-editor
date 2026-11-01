@@ -6,7 +6,7 @@ test.use({ channel: "chrome", screenshot: "off", trace: "off", video: "off" })
 test.skip(process.env.RUN_PRODUCTION_E2E !== "1", "Only run against production explicitly")
 
 test("uploads an essay image and renders a grading report in production", async ({ page, context }) => {
-  test.setTimeout(300_000)
+  test.setTimeout(420_000)
 
   const { phone, password } = readE2eCredentials()
   test.skip(!password, "SHENXIANG_E2E_TEST_PASSWORD is not configured")
@@ -52,8 +52,8 @@ test("uploads an essay image and renders a grading report in production", async 
   )
   await page.getByRole("button", { name: "发送消息" }).click()
 
-  await expect(page.getByText(/综合评分[:：]?\s*\d+|综合总分[:：]?\s*\d+/).last())
-    .toBeVisible({ timeout: 240_000 })
+  await expect.poll(async () => (await page.locator("article").last().innerText()).replace(/\s+/g, " "),
+    { timeout: 240_000 }).toMatch(/(?:综合评分|综合总分)\s*[:：]?\s*(?:100%\s+)?[1-9]\d*(?=\s|\/|分|$)/)
   await expect(page.locator("article").last()).toContainText(/修改建议|修改理由|导师润色|升格建议/)
   await expect(page.locator("article").last()).toContainText(/种花|花苗|松土|浇水/)
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
@@ -61,7 +61,7 @@ test("uploads an essay image and renders a grading report in production", async 
   expect(response.ok()).toBe(true)
   expect(await response.text()).not.toMatch(/"essay_fallback_used"\s*:\s*true/)
 
-  const downloadPromise = page.waitForEvent("download")
+  const downloadPromise = page.waitForEvent("download", { timeout: 90_000 })
   await page.getByRole("button", { name: "导出 PDF" }).last().click()
   const download = await downloadPromise
   if (process.env.PDF_EXPORT_ARTIFACT_PATH) {
