@@ -190,6 +190,29 @@ describe("POST /api/dify-upload essay OCR", () => {
     expect(signEssayOcrTextToken).not.toHaveBeenCalled()
   })
 
+  it("returns a controlled failure when the Dify upload exceeds its deadline", async () => {
+    const timeout = AbortSignal.timeout.bind(AbortSignal)
+    const timeoutSpy = jest.spyOn(AbortSignal, "timeout").mockImplementation((duration) =>
+      timeout(duration === 40_000 ? 5 : duration))
+    internalDifyFetch.mockImplementation((_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(new Error("upload timed out")))
+    }))
+    try {
+      const source = await sharp({
+        create: { width: 32, height: 32, channels: 3, background: "white" },
+      }).png().toBuffer()
+      const { POST } = await import("@/app/api/dify-upload/route")
+      const response = await POST(createUploadRequest(
+        new File([source], "reference.png", { type: "image/png" }),
+        "general-chat",
+      ))
+      expect(response.status).toBe(502)
+      expect(timeoutSpy).toHaveBeenCalledWith(40_000)
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+  })
+
   it("skips OCR byte and pixel limit violations without failing Dify upload", async () => {
     internalDifyFetch.mockImplementation(async () => successfulDifyUpload())
     const overByteLimit = new File(

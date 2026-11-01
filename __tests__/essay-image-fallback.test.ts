@@ -89,7 +89,7 @@ describe("essay image fallback", () => {
         file_name: "essay.jpg",
         image_base64: "aGVsbG8=",
       },
-      10_000,
+      8_000,
     )
     expect(internalDifyFetchMock).not.toHaveBeenCalled()
   })

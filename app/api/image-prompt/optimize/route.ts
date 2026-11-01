@@ -11,6 +11,7 @@ export const maxDuration = 120
 const DIFY_BASE_URL = (process.env.DIFY_INTERNAL_URL || process.env.DIFY_BASE_URL || "https://api.dify.ai/v1").replace(/\/+$/, "")
 const MAX_PROMPT_CHARS = 4000
 const MAX_OPTIMIZED_CHARS = 8000
+const OPTIMIZER_TIMEOUT_MS = 30_000
 
 type OptimizeRequestBody = {
   prompt?: unknown
@@ -122,6 +123,35 @@ async function callWorkflowApp(apiKey: string, userId: string, body: OptimizeReq
   return payload
 }
 
+async function callGatewayOptimizer(body: OptimizeRequestBody) {
+  const baseUrl = process.env.LLM_GATEWAY_BASE_URL?.trim().replace(/\/+$/, "")
+  const apiKey = process.env.LITELLM_MASTER_KEY?.trim()
+  if (!baseUrl || !apiKey) throw new Error("OPTIMIZER_GATEWAY_NOT_CONFIGURED")
+  const inputs = buildInputs(body)
+  const response = await internalDifyFetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "sx-chinese-text",
+      temperature: 0.5,
+      max_tokens: 1600,
+      messages: [
+        { role: "system", content: inputs.instruction },
+        { role: "user", content: inputs.prompt },
+      ],
+    }),
+    signal: AbortSignal.timeout(OPTIMIZER_TIMEOUT_MS),
+  })
+  if (!response.ok) throw new Error(`OPTIMIZER_GATEWAY_FAILED:${response.status}`)
+  const payload = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> }
+  return typeof payload.choices?.[0]?.message?.content === "string"
+    ? payload.choices[0].message.content
+    : ""
+}
+
 export async function POST(request: NextRequest) {
   const rateLimitResponse = applyRateLimit(request, {
     keyPrefix: "image-prompt-optimize",
@@ -149,23 +179,25 @@ export async function POST(request: NextRequest) {
   }
 
   const apiKey = process.env.DIFY_IMAGE_PROMPT_OPTIMIZER_API_KEY || ""
-  if (!apiKey) {
-    return NextResponse.json({ error: "提示词优化服务暂未配置", code: "OPTIMIZER_KEY_MISSING" }, { status: 503 })
-  }
-
   try {
     let payload: unknown
-    try {
-      payload = await callChatApp(apiKey, auth.user!.id, body)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (!/not found|workflow|app_unavailable|CHAT_APP_FAILED:404|CHAT_APP_FAILED:400/i.test(message)) {
-        throw error
+    if (apiKey) {
+      try {
+        payload = await callChatApp(apiKey, auth.user!.id, body)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (!/not found|workflow|app_unavailable|CHAT_APP_FAILED:404|CHAT_APP_FAILED:400/i.test(message)) {
+          throw error
+        }
+        payload = await callWorkflowApp(apiKey, auth.user!.id, body)
       }
-      payload = await callWorkflowApp(apiKey, auth.user!.id, body)
+    } else {
+      payload = await callGatewayOptimizer(body)
     }
 
-    const optimizedPrompt = extractOptimizedPrompt(payload)
+    const optimizedPrompt = typeof payload === "string"
+      ? payload.trim().slice(0, MAX_OPTIMIZED_CHARS)
+      : extractOptimizedPrompt(payload)
     if (!optimizedPrompt) {
       return NextResponse.json({ error: "提示词优化结果为空，请稍后重试", code: "EMPTY_OPTIMIZED_PROMPT" }, { status: 502 })
     }

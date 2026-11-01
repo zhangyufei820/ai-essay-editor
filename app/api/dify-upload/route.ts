@@ -52,6 +52,7 @@ const ESSAY_OCR_JPEG_QUALITY = 88
 const ESSAY_OCR_MAX_SOURCE_BYTES = 16 * 1024 * 1024
 const ESSAY_OCR_MAX_SOURCE_PIXELS = 40_000_000
 const ESSAY_OCR_MAX_CONCURRENCY_PER_USER = 2
+const DIFY_FILE_UPLOAD_TIMEOUT_MS = 40_000
 const essayOcrInFlightByUser = new Map<string, number>()
 
 const DIFY_BASE_URL = (process.env.DIFY_INTERNAL_URL
@@ -298,6 +299,7 @@ async function uploadFileToDify(file: File, userId: string, apiKey: string) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: formData,
+    signal: AbortSignal.timeout(DIFY_FILE_UPLOAD_TIMEOUT_MS),
   })
 
   const bodyText = await response.text()
