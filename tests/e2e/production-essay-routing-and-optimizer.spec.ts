@@ -70,3 +70,25 @@ test("a DOCX and PNG in one essay request produce a complete grade", async ({ pa
   await expect(report).toContainText(/种花|花苗/)
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
 })
+
+test("a pasted essay still receives a full grade when the primary model is unavailable", async ({ page }) => {
+  test.setTimeout(360_000)
+  await login(page, "/chat/standard")
+  const essay = [
+    "那本错题本一直放在书桌最下面的抽屉里。第一次月考后，老师让我们整理错题，我只是工整地抄了一遍答案，以为这样就算学会了。",
+    "第二周的测验又出现相似的题。我照着记住的公式写下去，交卷后才发现题目多了一个关键条件。那一刻我才明白，自己记住的是答案，并没有理解方法。",
+    "放学后我重新打开错题本，在草稿纸上从已知条件开始推导，并写下每一步为什么成立。第二天我带着草稿去问老师，终于能把那个条件的作用讲清楚。",
+    "从那以后，我会在每道错题旁写下错误原因，再用一道变化的题检验理解。错题本提醒我，认真面对不会的地方，比假装已经学会更需要勇气。",
+  ].join("\n")
+  await page.getByPlaceholder("输入内容开始对话...").fill(
+    `请完整批改这篇作文，给出具体评分和修改建议，并说明如何提升为中考优秀作文：\n${essay}`,
+  )
+  await expect(page.getByRole("button", { name: "发送消息" })).toBeEnabled({ timeout: 30_000 })
+  await page.getByRole("button", { name: "发送消息" }).click()
+  const report = page.locator("article").last()
+  await expect.poll(async () => (await report.innerText()).replace(/\s+/g, " "),
+    { timeout: 270_000 }).toMatch(/(?:综合评分|综合总分)\s*[:：]?\s*(?:100%\s+)?[1-9]\d*(?=\s|\/|分|$)/)
+  await expect(report).toContainText(/错题本|错题/)
+  await expect(page.getByText("作文批改服务暂时不可用")).toHaveCount(0)
+  await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
+})
