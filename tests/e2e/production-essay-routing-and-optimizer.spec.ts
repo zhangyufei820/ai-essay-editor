@@ -84,6 +84,9 @@ test("a pasted essay still receives a full grade when the primary model is unava
     `请完整批改这篇作文，给出具体评分和修改建议，并说明如何提升为中考优秀作文：\n${essay}`,
   )
   await expect(page.getByRole("button", { name: "发送消息" })).toBeEnabled({ timeout: 30_000 })
+  const chatResponse = page.waitForResponse((response) =>
+    response.url().includes("/api/dify-chat") && response.request().method() === "POST",
+  { timeout: 60_000 })
   await page.getByRole("button", { name: "发送消息" }).click()
   const report = page.locator("article").last()
   await expect.poll(async () => (await report.innerText()).replace(/\s+/g, " "),
@@ -91,4 +94,7 @@ test("a pasted essay still receives a full grade when the primary model is unava
   await expect(report).toContainText(/错题本|错题/)
   await expect(page.getByText("作文批改服务暂时不可用")).toHaveCount(0)
   await expect(page.getByText("当前回复未完整送达")).toHaveCount(0)
+  const response = await chatResponse
+  expect(response.ok()).toBe(true)
+  expect(await response.text()).not.toContain("DIFY_UPSTREAM_UNAVAILABLE")
 })
