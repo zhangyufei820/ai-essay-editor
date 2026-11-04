@@ -54,6 +54,10 @@ func Distribute() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusNotFound, "该模型已下架，请选择其他模型。", types.ErrorCodeModelNotFound)
 			return
 		}
+		if shouldSelectChannel && (strings.TrimSpace(modelRequest.Model) == service.UpscalePrecisionModel || strings.TrimSpace(modelRequest.Model) == service.UpscaleCreativeModel) {
+			abortWithOpenAiMessage(c, http.StatusBadRequest, "此模型请使用高清放大接口 /v1/images/upscale。")
+			return
+		}
 		publicModelAlias := publicImageModelAliasForRequest(c)
 		if service.IsSupplierExposedModelName(modelRequest.Model) &&
 			!service.IsInternalImageModelAllowedByPublicAlias(modelRequest.Model, publicModelAlias) {

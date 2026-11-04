@@ -31,3 +31,4 @@ mp-video-preview-modal
 xingren-grok-video-15-6s
 xingren-grok-video-15-10s
 user.register
+mp-upscale-workbench

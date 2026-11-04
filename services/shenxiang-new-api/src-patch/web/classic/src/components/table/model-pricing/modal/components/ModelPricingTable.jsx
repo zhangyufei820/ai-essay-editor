@@ -91,7 +91,9 @@ const ModelPricingTable = ({
         group: group,
         ratio: groupRatioValue,
         billingType:
-          modelData?.billing_mode === 'tiered_expr'
+          ['精准放大', '创意放大'].includes(modelData?.model_name)
+            ? t('像素计费')
+            : modelData?.billing_mode === 'tiered_expr'
             ? t('动态计费')
             : modelData?.quota_type === 0
               ? t('按量计费')

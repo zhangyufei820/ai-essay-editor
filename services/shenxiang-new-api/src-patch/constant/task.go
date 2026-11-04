@@ -6,6 +6,7 @@ const (
 	TaskPlatformSuno            TaskPlatform = "suno"
 	TaskPlatformMidjourney                   = "mj"
 	TaskPlatformPlaygroundImage              = "playground_image"
+	TaskPlatformPlaygroundUpscale            = "playground_upscale"
 )
 
 const (
@@ -20,6 +21,7 @@ const (
 	TaskActionImageRecover      = "imageRecover"
 	TaskActionImageGenerate     = "imageGenerate"
 	TaskActionImageEdit         = "imageEdit"
+	TaskActionImageUpscale      = "imageUpscale"
 )
 
 var SunoModel2Action = map[string]string{

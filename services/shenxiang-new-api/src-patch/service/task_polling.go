@@ -120,6 +120,11 @@ func sweepTimedOutTasks(ctx context.Context) {
 	timedOutCount := 0
 
 	for _, task := range tasks {
+		// Upscaling owns acceptance-aware settlement. A provider-accepted job
+		// must never be refunded by the generic task timeout sweeper.
+		if task.Platform == constant.TaskPlatformPlaygroundUpscale {
+			continue
+		}
 		isLegacy := task.SubmitTime > 0 && task.SubmitTime < legacyTaskCutoff
 
 		oldStatus := task.Status
@@ -197,7 +202,7 @@ func RunTaskPollingOnce(ctx context.Context, progress func(processed, total int)
 		if len(tasks) == 0 {
 			continue
 		}
-		if platform == constant.TaskPlatformPlaygroundImage {
+		if platform == constant.TaskPlatformPlaygroundImage || platform == constant.TaskPlatformPlaygroundUpscale {
 			summary.SkippedPlayground += len(tasks)
 			summary.Processed += len(tasks)
 			if progress != nil {
@@ -289,7 +294,8 @@ func isAsyncVideoTask(task *model.Task) bool {
 	}
 	return task.Platform != constant.TaskPlatformMidjourney &&
 		task.Platform != constant.TaskPlatformSuno &&
-		task.Platform != constant.TaskPlatformPlaygroundImage
+		task.Platform != constant.TaskPlatformPlaygroundImage &&
+		task.Platform != constant.TaskPlatformPlaygroundUpscale
 }
 
 func asyncVideoTaskExpired(task *model.Task, now time.Time) bool {

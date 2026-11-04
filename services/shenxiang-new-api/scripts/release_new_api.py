@@ -536,8 +536,9 @@ class Release:
         sql = """SET NAMES utf8mb4;
 SELECT COUNT(*)
 FROM tasks
-WHERE platform IN ('playground_image', 'playground_video')
-  AND status NOT IN ('FAILURE', 'SUCCESS');
+WHERE (platform IN ('playground_image', 'playground_video')
+  AND status NOT IN ('FAILURE', 'SUCCESS'))
+  OR (platform = 'playground_upscale' AND status IN ('SUBMITTED', 'IN_PROGRESS'));
 """
         result = run(
             [

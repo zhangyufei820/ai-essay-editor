@@ -10,7 +10,8 @@ Before touching production New API operations, read:
 4. Root project `docs/CODEX-SKILL-SOP.md`
 5. Root project `docs/SERVER-CLEANUP-SOP.md`
 6. `docs/CLASSIC-THEME-ONLY.md` for all New API UI work.
-7. `docs/SYSTEM-TEST-TOKENS.md` before running or editing any smoke, probe, monitor, or system-test path.
+7. `docs/UPSCALING.md` for upscale pricing, task settlement, staging, and publishing.
+8. `docs/SYSTEM-TEST-TOKENS.md` before running or editing any smoke, probe, monitor, or system-test path.
 
 Hard boundaries:
 

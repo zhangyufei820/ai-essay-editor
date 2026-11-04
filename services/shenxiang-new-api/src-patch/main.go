@@ -166,6 +166,7 @@ func main() {
 	if common.IsMasterNode {
 		controller.FailInterruptedPlaygroundImageTasksOnStartup()
 		controller.StartPlaygroundImageTaskWatchdog()
+		controller.StartPlaygroundUpscaleReconciler()
 	}
 
 	if common.IsMasterNode && constant.UpdateTask {

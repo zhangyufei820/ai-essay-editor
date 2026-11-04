@@ -117,6 +117,13 @@ GPT_IMAGE25_MODEL_CONFIGS = {
     },
 }
 GPT_IMAGE25_MODELS = tuple(GPT_IMAGE25_MODEL_CONFIGS)
+UPSCALE_MODEL_CONFIGS = {
+    "精准放大": {"tag": "xingren-upscale-precision", "upstream_model": "magnific-upscaler-precision-v2", "description": "忠实原图，适合照片、商品图和界面截图。照片及照片降噪仅支持2倍。"},
+    "创意放大": {"tag": "xingren-upscale-creative", "upstream_model": "magnific-upscaler-creative", "description": "通过提示词与参数增强纹理，适合插画、概念图与创意素材。"},
+}
+UPSCALE_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
+UPSCALE_MODELS = tuple(UPSCALE_MODEL_CONFIGS)
+UPSCALE_ENDPOINTS = '{"image-upscale":"/v1/images/upscale"}'
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
@@ -2566,11 +2573,61 @@ def ensure_gpt_image25_models() -> None:
     mysql_exec("\n".join(statements))
 
 
+def upscale_pricing_config(raw: str | None = None) -> dict:
+    try:
+        config = json.loads((option_value("UpscalePricingCNY") if raw is None else raw) or "{}")
+    except (ValueError, TypeError):
+        return {}
+    if not isinstance(config, dict):
+        return {}
+    mode = config.get("mode")
+    if mode not in {"per_credit", "per_credit_by_scale"}:
+        return {}
+    try:
+        units = {scale: Decimal(str(config.get("per_credit_cny") if mode == "per_credit" else config.get("per_credit_cny_by_scale", {}).get(str(scale)))) for scale in (2, 4, 8, 16)}
+    except (ValueError, TypeError, ArithmeticError):
+        return {}
+    if any(not unit.is_finite() or unit <= 0 for unit in units.values()):
+        return {}
+    return {**config, "units": units}
+
+
+def ensure_upscale_models() -> dict[str, int]:
+    config = upscale_pricing_config()
+    if not config:
+        return {"models_published": 0}
+    units = config["units"]
+    examples = "; ".join(f"{scale}倍（{500 if scale == 16 else 1000}×{500 if scale == 16 else 1000}）：¥{units[scale] * credits:.3f}" for scale, credits in ((2, 90), (4, 360), (8, 1440), (16, 1530)))
+    statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
+    for name, spec in UPSCALE_MODEL_CONFIGS.items():
+        description = spec["description"] + " 按原图像素与倍数累计积分计费，提交前显示人民币费用；" + examples + "。受理后失败可能收费不退。"
+        literal = sql_quote(name)
+        statements.extend([
+            "SET @upscale_model := " + literal + " COLLATE utf8mb4_unicode_ci;",
+            "SET @upscale_id := (SELECT MIN(id) FROM models WHERE model_name = @upscale_model);",
+            "INSERT INTO models (model_name,description,icon,tags,vendor_id,endpoints,status,sync_official,created_time,updated_time,name_rule) SELECT " + ",".join([literal, sql_quote(description), "'Image'", "'image,upscale'", "0", sql_quote(UPSCALE_ENDPOINTS), "1", "0", "@now", "@now", "0"]) + " WHERE @upscale_id IS NULL;",
+            "SET @upscale_id := IFNULL(@upscale_id,LAST_INSERT_ID());",
+            "UPDATE models SET description=" + sql_quote(description) + ",icon='Image',tags='image,upscale',vendor_id=0,endpoints=" + sql_quote(UPSCALE_ENDPOINTS) + ",status=1,sync_official=0,updated_time=@now,deleted_at=NULL WHERE id=@upscale_id;",
+            "UPDATE models SET status=0,deleted_at=COALESCE(deleted_at,DATE_ADD(FROM_UNIXTIME(@now),INTERVAL id SECOND)) WHERE model_name=@upscale_model AND id<>@upscale_id;",
+        ])
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    return {"models_published": len(UPSCALE_MODELS)}
+
+
 def sync_public_image_pricing() -> None:
     model_ratios = parse_json_option("ModelRatio")
     completion_ratios = parse_json_option("CompletionRatio")
     model_prices = parse_json_option("ModelPrice")
     exchange_rate = usd_exchange_rate()
+    upscale = upscale_pricing_config()
+    if upscale:
+        for name in UPSCALE_MODELS:
+            # Compatibility field is the smallest 2x job. Public UI labels this
+            # model as pixel-priced; actual tasks use the authoritative estimator.
+            model_prices[name] = decimal_to_float(Decimal(90) * upscale["units"][2] / exchange_rate)
+            model_ratios.pop(name, None)
+            completion_ratios.pop(name, None)
 
     model_prices[DISCOUNT_IMAGE2_PUBLIC_MODEL] = decimal_to_float(
         DISCOUNT_IMAGE2_BASE_PRICE_CNY / exchange_rate
@@ -3038,6 +3095,7 @@ def sync_abilities() -> None:
             *CLAUDE_CHANNEL_GROUPS,
             *DISCOUNT_IMAGE2_CHANNEL_TAGS,
             *STABLE_IMAGE2_CHANNEL_TAGS,
+            *(spec["tag"] for spec in UPSCALE_MODEL_CONFIGS.values()),
         )
     )
     discount_allowed_models = set(DISCOUNT_TEXT_ALLOWED_MODELS)
@@ -3262,10 +3320,17 @@ def sync_abilities() -> None:
     }
     gemini_tag_by_model = {model: tag for tag, model in gemini_model_by_tag.items()}
     gpt_image25_model_set = set(GPT_IMAGE25_MODELS)
+    upscale_model_by_tag = {spec["tag"]: name for name,spec in UPSCALE_MODEL_CONFIGS.items()}
     for channel_id, raw_models, _priority, _weight, tag, raw_groups in channel_rows:
         channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
         channel_models = [item.strip() for item in raw_models.split(",") if item.strip()]
-        if tag in discount_channel_tags:
+        if tag in upscale_model_by_tag:
+            expected = upscale_model_by_tag[tag]
+            if channel_models != [expected] or ",".join(channel_groups) not in {"internal",UPSCALE_PUBLIC_CHANNEL_GROUPS}:
+                sync_groups = []
+            else:
+                sync_groups = channel_groups
+        elif tag in discount_channel_tags:
             if (
                 channel_groups != [DISCOUNT_TEXT_GROUP]
                 or not channel_models
@@ -3460,6 +3525,10 @@ def sync_abilities() -> None:
                 and group not in ISOLATED_CLAUDE_GROUPS
             ]
         for model in channel_models:
+            if model in UPSCALE_MODELS and upscale_model_by_tag.get(tag) != model:
+                continue
+            if tag in upscale_model_by_tag and model != upscale_model_by_tag[tag]:
+                continue
             if model == INTERNAL_DISCOUNT_IMAGE2_MODEL and tag not in DISCOUNT_IMAGE2_CHANNEL_TAGS:
                 continue
             if tag in DISCOUNT_IMAGE2_CHANNEL_TAGS and model != INTERNAL_DISCOUNT_IMAGE2_MODEL:
@@ -3539,7 +3608,7 @@ def sync_abilities() -> None:
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
                     )
-                elif tag in CLAUDE_CHANNEL_GROUPS or tag in DEFAULT_CODEX_CHANNEL_TAGS or tag in {KIMI_K3_CHANNEL_TAG, GPT6_ASTRA_CHANNEL_TAG, *GPT6_MANAGED_CHANNEL_TAGS} or tag in grok46_media_channel_tags:
+                elif tag in upscale_model_by_tag or tag in CLAUDE_CHANNEL_GROUPS or tag in DEFAULT_CODEX_CHANNEL_TAGS or tag in {KIMI_K3_CHANNEL_TAG, GPT6_ASTRA_CHANNEL_TAG, *GPT6_MANAGED_CHANNEL_TAGS} or tag in grok46_media_channel_tags:
                     pass
                 elif tag not in grok_channel_tags:
                     current_channel_conditions.extend(
@@ -3817,6 +3886,13 @@ def sync_abilities() -> None:
             + "));",
         ]
     )
+    for name, spec in UPSCALE_MODEL_CONFIGS.items():
+        tag = sql_quote(spec["tag"])
+        literal = sql_quote(name)
+        statements.extend([
+            "UPDATE abilities AS a JOIN channels AS c ON c.id=a.channel_id SET a.enabled=0 WHERE c.tag=" + tag + " AND (c.status<>1 OR c.models<>" + literal + " OR a.model<>" + literal + " OR FIND_IN_SET(a.`group`,c.`group`)=0 OR c.`group` NOT IN ('internal'," + sql_quote(UPSCALE_PUBLIC_CHANNEL_GROUPS) + "));",
+            "UPDATE abilities SET enabled=0 WHERE model=" + literal + " AND channel_id NOT IN (SELECT id FROM channels WHERE status=1 AND tag=" + tag + " AND models=" + literal + ");",
+        ])
     for model, config in GEMINI_DDPAPI_MODEL_CONFIGS.items():
         channel_tag = str(config["channel_tag"])
         statements.extend(
@@ -4106,6 +4182,7 @@ def main() -> int:
     ensure_stable_image2_channel_order()
     ensure_gemini_ddpapi_image_models()
     ensure_gpt_image25_models()
+    ensure_upscale_models()
     sync_grok_image_metadata()
     ensure_public_openai_text_models()
     sync_public_video_pricing()

@@ -15,6 +15,7 @@ func SetRelayRouter(router *gin.Engine) {
 	router.Use(middleware.DecompressRequestMiddleware())
 	router.Use(middleware.BodyStorageCleanup()) // 清理请求体存储
 	router.Use(middleware.StatsMiddleware())
+	router.GET("/pg/upscale/help", controller.UpscaleHelp)
 	// https://platform.openai.com/docs/api-reference/introduction
 	modelsRouter := router.Group("/v1/models")
 	modelsRouter.Use(middleware.RouteTag("relay"))
@@ -82,12 +83,22 @@ func SetRelayRouter(router *gin.Engine) {
 		playgroundMediaAPIRouter.GET("/policy", controller.PlaygroundMediaPolicy)
 		playgroundMediaAPIRouter.GET("/list", controller.PlaygroundListMedia)
 	}
+	upscaleDownloadRouter := router.Group("/pg/upscale/tasks")
+	upscaleDownloadRouter.Use(middleware.RouteTag("web"), middleware.TokenOrUserAuth())
+	upscaleDownloadRouter.GET("/:task_id/download", controller.PlaygroundUpscaleDownload)
 
 	playgroundRouter := router.Group("/pg")
 	playgroundRouter.Use(middleware.RouteTag("relay"))
 	playgroundRouter.Use(middleware.SystemPerformanceCheck())
 	playgroundRouter.Use(middleware.UserAuth())
 	{
+		playgroundUpscale := playgroundRouter.Group("/upscale")
+		playgroundUpscale.Use(middleware.ModelRequestRateLimit())
+		playgroundUpscale.GET("/config", controller.PlaygroundUpscaleConfig)
+		playgroundUpscale.POST("/estimate", controller.PlaygroundUpscaleEstimate)
+		playgroundUpscale.POST("/tasks", controller.PlaygroundUpscaleCreate)
+		playgroundUpscale.GET("/tasks", controller.PlaygroundUpscaleList)
+		playgroundUpscale.GET("/tasks/:task_id", controller.PlaygroundUpscaleGet)
 		playgroundRelayRouter := playgroundRouter.Group("")
 		playgroundRelayRouter.Use(middleware.Distribute())
 		{
@@ -115,6 +126,11 @@ func SetRelayRouter(router *gin.Engine) {
 	relayV1Router.Use(middleware.ModelRequestRateLimit())
 	relayV1Router.GET("/images/tasks", controller.V1ListImageTasks)
 	relayV1Router.GET("/images/tasks/:task_id", controller.V1GetImageTask)
+	relayV1Router.POST("/images/upscale", controller.PlaygroundUpscaleCreate)
+	relayV1Router.POST("/images/upscale/estimate", controller.PlaygroundUpscaleEstimate)
+	relayV1Router.GET("/images/upscale/tasks", controller.PlaygroundUpscaleList)
+	relayV1Router.GET("/images/upscale/tasks/:task_id", controller.PlaygroundUpscaleGet)
+	relayV1Router.GET("/images/upscale/tasks/:task_id/download", controller.PlaygroundUpscaleDownload)
 	{
 		// WebSocket 路由（统一到 Relay）
 		wsRouter := relayV1Router.Group("")

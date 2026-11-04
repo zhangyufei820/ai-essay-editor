@@ -154,5 +154,21 @@
   {
     "package": "./controller",
     "run": "^TestRetiredTextModelsAreHiddenFromPublicCatalogs$"
+  },
+  {
+    "package": "./controller",
+    "run": "^TestUpscale.*$"
+  },
+  {
+    "package": "./model",
+    "run": "^TestUpscale.*$"
+  },
+  {
+    "package": "./service",
+    "run": "^TestUpscale.*$"
+  },
+  {
+    "package": "./middleware",
+    "run": "^TestUpscaleModelsRequireDedicatedEndpointBeforeChannelSelection$"
   }
 ]

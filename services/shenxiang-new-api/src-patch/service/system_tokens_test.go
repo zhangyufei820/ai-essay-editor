@@ -60,6 +60,8 @@ func TestSystemTokenProfilesImageModelsDoNotExposeSupplierModel(t *testing.T) {
 		"gpt-image-2.5-sunburst",
 		"ecommerce-banana-2",
 		"image 2电商商品图快速通道(1.5K)",
+		UpscalePrecisionModel,
+		UpscaleCreativeModel,
 	}, imageModels)
 	require.NotContains(t, imageModels, "geek2api-image-2")
 	require.NotContains(t, imageModels, InternalDiscountImage2ModelName)

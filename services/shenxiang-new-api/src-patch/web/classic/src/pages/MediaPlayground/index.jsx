@@ -54,6 +54,7 @@ import {
 import { closestSupportedImageAspectRatio } from './image-aspect-ratio';
 import { webBuildEntryFromHtml } from './web-build-entry';
 import { planImageUploadTargets } from './image-upload-budget';
+import UpscalePanel from './UpscalePanel';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -3286,6 +3287,7 @@ function ResultCard({
   result,
   onContinueEdit,
   onUseAsReference,
+  onUpscale,
   onInspect,
   selected = false,
   onToggleSelect,
@@ -3309,7 +3311,7 @@ function ResultCard({
   const statusText = cacheFailed
     ? '临时缓存不可用，作品已生成，请用原始链接保存。'
     : '浏览器暂时无法直接预览，请打开原始链接保存。';
-  const kindLabel = result.kind === 'image' ? '图片作品' : '视频作品';
+  const kindLabel = result.workflow === 'upscale' ? `${result.scaleFactor || 2} 倍高清放大` : result.kind === 'image' ? '图片作品' : '视频作品';
   const fileLabel = result.kind === 'image' ? 'PNG / URL' : 'MP4 / URL';
   const createdLabel = formatResultTime(result.createdAt);
   const taskLabel = result.taskId ? `任务 ${result.taskId}` : '即时结果';
@@ -3427,7 +3429,7 @@ function ResultCard({
           }
         >
           <div className='mp-result-prompt-head'>
-            <span>Prompt 摘要</span>
+            <span>提示词摘要</span>
             {promptFoldable ? (
               <button
                 type='button'
@@ -3444,6 +3446,13 @@ function ResultCard({
         <div className='mp-result-next-actions' aria-label='下一步创作'>
           {result.kind === 'image' ? (
             <>
+              <Button
+                size='small'
+                className='mp-btn-secondary'
+                onClick={() => onUpscale?.(result)}
+              >
+                高清放大
+              </Button>
               <Button
                 size='small'
                 className='mp-btn-secondary is-strong'
@@ -3477,7 +3486,7 @@ function ResultCard({
             icon={<IconDownload />}
             onClick={() =>
               downloadURL(
-                displayUrl || originalUrl,
+                result.downloadUrl || displayUrl || originalUrl,
                 result.kind === 'image'
                   ? 'xingren-image.png'
                   : 'xingren-video.mp4',
@@ -3582,6 +3591,9 @@ const MediaPlayground = () => {
   const [selectedResultIds, setSelectedResultIds] = useState([]);
   const [resultViewMode, setResultViewMode] = useState('grid');
   const [resultSort, setResultSort] = useState('newest');
+  const [resultFilter, setResultFilter] = useState('all');
+  const [upscaleSource, setUpscaleSource] = useState(null);
+  const [upscaleResetKey, setUpscaleResetKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [staleBuild, setStaleBuild] = useState(false);
   const [videoPolling, setVideoPolling] = useState(false);
@@ -3659,7 +3671,7 @@ const MediaPlayground = () => {
     ? negativePrompt.trim()
     : '';
   const visibleResults = useMemo(() => {
-    const sorted = [...results].sort((left, right) => {
+    const sorted = results.filter((item) => resultFilter === 'all' || (resultFilter === 'upscale' ? item.workflow === 'upscale' : resultFilter === 'image' ? item.kind === 'image' && item.workflow !== 'upscale' : item.kind === 'video')).sort((left, right) => {
       const leftTime = Number(left.createdAt || 0);
       const rightTime = Number(right.createdAt || 0);
       return resultSort === 'oldest'
@@ -3667,7 +3679,7 @@ const MediaPlayground = () => {
         : rightTime - leftTime;
     });
     return sorted;
-  }, [results, resultSort]);
+  }, [results, resultSort, resultFilter]);
   const inspectorResult = useMemo(
     () =>
       visibleResults.find((item) => selectedResultIds.includes(item.id)) ||
@@ -5505,6 +5517,10 @@ const MediaPlayground = () => {
       return;
     }
     setCreativeTask(task);
+    if (task === 'upscale') {
+      setMode('image');
+      return;
+    }
     if (task === 'video') {
       setMode('video');
       if (nextWorkflow) setVideoWorkflow(nextWorkflow);
@@ -5521,6 +5537,14 @@ const MediaPlayground = () => {
       return;
     }
     setImageWorkflow('generate');
+  }
+
+  function upscaleResultMedia(result) {
+    const image = result.cachedUrl || result.url || result.displayUrl;
+    if (!image || result.kind !== 'image') return;
+    setUpscaleSource({ image, name: result.modelLabel || '已选作品', selection: Date.now() });
+    selectCreativeTask('upscale');
+    scrollWorkbenchTo('mp-task-workbench');
   }
 
   function appendImageReferenceFile(file, successMessage) {
@@ -5746,7 +5770,9 @@ const MediaPlayground = () => {
     setMode('image');
   };
   const workflowLabel =
-    mode === 'image'
+    creativeTask === 'upscale'
+      ? '高清放大'
+      : mode === 'image'
       ? imageWorkflow === 'edit'
         ? '图像修改'
         : '文生图'
@@ -5831,12 +5857,20 @@ const MediaPlayground = () => {
     creativeTask === 'reverse' ||
     (creativeTask === 'video' && videoWorkflow !== 'text');
   const outputSpec =
-    mode === 'image'
+    creativeTask === 'upscale'
+      ? '原图直传 · 最高 16 倍'
+      : mode === 'image'
       ? [ratioLabel, sizeLabel, imagePixelLabel, qualityLabel]
           .filter(Boolean)
           .join(' · ')
       : `${ratioLabel} · ${qualityLabel}`;
   const creativeNavItems = [
+    {
+      key: 'upscale',
+      label: '高清放大',
+      active: creativeTask === 'upscale',
+      onClick: () => selectCreativeTask('upscale'),
+    },
     {
       key: 'video',
       label: '视频生成',
@@ -5991,7 +6025,7 @@ const MediaPlayground = () => {
             <div>
               <strong>媒体创作工作台</strong>
               <span>
-                {workflowLabel} · {activeModel.label}
+                {creativeTask === 'upscale' ? '精准放大 / 创意放大' : `${workflowLabel} · ${activeModel.label}`}
               </span>
             </div>
           </div>
@@ -5999,7 +6033,7 @@ const MediaPlayground = () => {
             <div className='mp-topbar-primary-spec'>
               <span>当前模型 / 输出规格</span>
               <strong>
-                {activeModel.label} · {outputSpec}
+                {creativeTask === 'upscale' ? '高清放大' : activeModel.label} · {outputSpec}
               </strong>
             </div>
             <div className='mp-topbar-pills'>
@@ -6045,6 +6079,8 @@ const MediaPlayground = () => {
                 setSubmitStartedAt(null);
                 setElapsedSeconds(0);
                 setSelectedResultIds([]);
+                setUpscaleSource(null);
+                setUpscaleResetKey((value) => value + 1);
               }}
             >
               新建创作
@@ -6066,7 +6102,7 @@ const MediaPlayground = () => {
               ))}
             </nav>
 
-            <div className='mp-sidebar-card mp-sidebar-model-card'>
+            {creativeTask === 'upscale' ? <div className='mp-sidebar-card'><SectionTitle>高清放大</SectionTitle><p>精准还原原图，或用创意模式增强纹理和细节。</p><a href='/pg/upscale/help' target='_blank' rel='noopener noreferrer'>查看放大使用说明 ↗</a></div> : <div className='mp-sidebar-card mp-sidebar-model-card'>
               <SectionTitle meta={activeModel.badge}>当前模型</SectionTitle>
               <ModelSelector
                 models={modelOptions}
@@ -6079,7 +6115,7 @@ const MediaPlayground = () => {
                 }}
                 mode={mode}
               />
-            </div>
+            </div>}
 
             <div className='mp-sidebar-card'>
               <SectionTitle>快捷入口</SectionTitle>
@@ -6118,7 +6154,7 @@ const MediaPlayground = () => {
           </aside>
 
           <main className='mp-canvas-panel'>
-            <section className='mp-flow-steps' aria-label='媒体创作流程'>
+            {creativeTask !== 'upscale' ? <section className='mp-flow-steps' aria-label='媒体创作流程'>
               {flowSteps.map((step) => (
                 <button
                   key={step.key}
@@ -6133,12 +6169,13 @@ const MediaPlayground = () => {
                   <em>{step.caption}</em>
                 </button>
               ))}
-            </section>
+            </section> : null}
 
             <section id='mp-task-workbench' className='mp-mode-panel'>
               <div className='mp-task-type-tabs' aria-label='创作类型'>
                 {[
                   { key: 'image-generate', label: '图片生成' },
+                  { key: 'upscale', label: '高清放大' },
                   {
                     key: 'image-edit',
                     label: '图片编辑',
@@ -6160,6 +6197,14 @@ const MediaPlayground = () => {
               </div>
             </section>
 
+            <UpscalePanel
+              active={creativeTask === 'upscale'}
+              source={upscaleSource}
+              resetKey={upscaleResetKey}
+              onResult={(result) => setResults((current) => [result, ...current.filter((item) => item.id !== result.id)])}
+              onQueueTask={(task) => task.status === 'completed' ? removeLiveQueueTask(task.id) : upsertLiveQueueTask(task)}
+            />
+            {creativeTask !== 'upscale' ? <>
             <div
               className={
                 creativeTask === 'reverse'
@@ -6634,6 +6679,7 @@ const MediaPlayground = () => {
                 description='当前用户分组暂未开放这个模型。'
               />
             ) : null}
+            </> : null}
             <section id='mp-results-workbench' className='mp-results-section'>
               {results.length === 0 ? (
                 <div className='mp-empty-canvas'>
@@ -6645,10 +6691,14 @@ const MediaPlayground = () => {
                     选择模型后点击生成。任务进度会进入右侧队列，完成后作品会自动落到这里。
                   </Paragraph>
                   <div className='mp-empty-spec'>
-                    <span>{activeModel.label}</span>
+                    <span>{creativeTask === 'upscale' ? '高清放大' : activeModel.label}</span>
                     <span>{workflowLabel}</span>
                     <span>{outputSpec}</span>
                   </div>
+                  <div className='mp-result-filter-tabs' aria-label='作品类型筛选'>
+                    {[['all', '全部'], ['image', '图片'], ['upscale', '高清放大'], ['video', '视频']].map(([value, label]) => <button type='button' key={value} className={resultFilter === value ? 'active' : ''} aria-pressed={resultFilter === value} onClick={() => setResultFilter(value)}>{label} {results.filter((item) => value === 'all' || (value === 'upscale' ? item.workflow === 'upscale' : value === 'image' ? item.kind === 'image' && item.workflow !== 'upscale' : item.kind === 'video')).length}</button>)}
+                  </div>
+                  {visibleResults.length === 0 ? <p className='mp-upload-hint'>当前分类暂无作品。</p> : null}
                 </div>
               ) : (
                 <>
@@ -6748,6 +6798,7 @@ const MediaPlayground = () => {
                             item.kind === 'video' ? 'video' : 'reference',
                           )
                         }
+                        onUpscale={upscaleResultMedia}
                         onInspect={inspectResult}
                         selected={selectedResultIds.includes(result.id)}
                         onToggleSelect={toggleResultSelection}
@@ -6776,7 +6827,7 @@ const MediaPlayground = () => {
               <>
                 <div className='mp-queue-card is-overview'>
                   <div className='mp-queue-card-head'>
-                    <SectionTitle meta='Queue'>任务队列中心</SectionTitle>
+                    <SectionTitle meta='队列'>任务队列中心</SectionTitle>
                     <Tag color={queueCounts.running ? 'blue' : 'grey'}>
                       {queueCounts.running ? '运行中' : '空闲'}
                     </Tag>
@@ -6819,7 +6870,7 @@ const MediaPlayground = () => {
 
                 <div className='mp-queue-card is-current'>
                   <div className='mp-queue-card-head'>
-                    <SectionTitle meta='Current'>当前生成任务</SectionTitle>
+                    <SectionTitle meta='当前'>当前生成任务</SectionTitle>
                   </div>
                   {activeQueueItem ? (
                     <div className='mp-current-queue-task'>

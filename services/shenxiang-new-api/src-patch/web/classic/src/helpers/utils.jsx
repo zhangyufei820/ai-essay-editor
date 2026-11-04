@@ -29,6 +29,8 @@ import { TABLE_COMPACT_MODES_KEY } from '../constants';
 import { MOBILE_BREAKPOINT } from '../hooks/common/useIsMobile';
 
 const PRICING_DISPLAY_OVERRIDES = {
+  '精准放大': { display_name: '精准放大', fixed_price_label: '按像素与倍数计算', price_unit_label: '', billing_label: '像素计费' },
+  '创意放大': { display_name: '创意放大', fixed_price_label: '按像素与倍数计算', price_unit_label: '', billing_label: '像素计费' },
   'gpt-image-2': {
     display_name: 'gpt-image-2',
     description: '高质量 OpenAI 图像模型，适合图片生成、编辑和电商商品图场景。',
@@ -887,6 +889,9 @@ export const calculateModelPrice = ({
   // GPT-6 models may route through the default, plus, or discount chain, but
   // their Model Plaza price is fixed at 1x for every chain.
   if (['gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol'].includes(String(record?.model_name || '').trim().toLowerCase())) {
+    usedGroupRatio = 1;
+  }
+  if (['精准放大', '创意放大'].includes(record?.model_name)) {
     usedGroupRatio = 1;
   }
 

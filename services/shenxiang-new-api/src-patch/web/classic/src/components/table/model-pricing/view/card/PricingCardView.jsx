@@ -164,7 +164,9 @@ const PricingCardView = ({
         -
       </Tag>
     );
-    if (record.quota_type === 1) {
+    if (['精准放大', '创意放大'].includes(record.model_name)) {
+      billingTag = <Tag key='billing' shape='circle' color='teal' size='small'>像素计费</Tag>;
+    } else if (record.quota_type === 1) {
       billingTag = (
         <Tag key='billing' shape='circle' color='teal' size='small'>
           {t('按次计费')}
