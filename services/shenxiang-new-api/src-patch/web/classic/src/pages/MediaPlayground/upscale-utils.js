@@ -21,6 +21,8 @@ export function allowedUpscaleFactors(width, height, flavor = 'sublime') {
 
 export function upscaleTaskStatus(task) {
   const value = String(task?.status || '').toUpperCase();
+  if (task?.cache_status === 'expired') return 'FAILURE';
+  if (task?.cache_status === 'pending' && value === 'SUCCESS') return 'IN_PROGRESS';
   if (['SUCCESS', 'COMPLETED', 'SUCCEEDED'].includes(value)) return 'SUCCESS';
   if (['FAILURE', 'FAILED', 'ERROR'].includes(value)) return 'FAILURE';
   if (['UNKNOWN', 'UNCERTAIN'].includes(value)) return 'UNKNOWN';
@@ -30,6 +32,8 @@ export function upscaleTaskStatus(task) {
 }
 
 export function upscaleStatusLabel(task) {
+  if (task?.cache_status === 'expired') return '结果已过期';
+  if (task?.cache_status === 'pending' && task?.status === 'SUCCESS') return '正在保存图片';
   return {
     SUCCESS: '放大完成',
     FAILURE: '处理失败',

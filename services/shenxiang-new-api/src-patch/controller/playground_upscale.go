@@ -214,8 +214,8 @@ func upscaleReadImage(c *gin.Context, raw string) ([]byte, upscaleSize, error) {
 		if e != nil {
 			return nil, upscaleSize{}, errors.New("图片不属于当前用户或已失效")
 		}
-		if f.Size > 10*1024*1024 {
-			return nil, upscaleSize{}, errors.New("上传图片不能超过十兆字节")
+		if f.Size > 75*1024*1024 {
+			return nil, upscaleSize{}, errors.New("本站素材不能超过七十五兆字节")
 		}
 		data, err = os.ReadFile(f.Path)
 	} else if strings.HasPrefix(raw, "https://") {
@@ -845,7 +845,8 @@ func upscaleRefresh(id string) {
 	upscaleApplyResult(id, v)
 }
 func upscaleApplyResult(id string, v upscaleUpstreamResponse) {
-	_ = model.UpscaleTaskTransaction(id, func(tx *gorm.DB, t *model.Task) error {
+	completed := false
+	err := model.UpscaleTaskTransaction(id, func(tx *gorm.DB, t *model.Task) error {
 		if t.Status == model.TaskStatusFailure || t.Status == model.TaskStatusSuccess {
 			return nil
 		}
@@ -881,6 +882,7 @@ func upscaleApplyResult(id string, v upscaleUpstreamResponse) {
 				break
 			}
 			t.PrivateData.ResultURL = v.Data.Generated[0]
+			completed = true
 			t.Status = model.TaskStatusSuccess
 			t.FinishTime = time.Now().Unix()
 			t.Progress = "100%"
@@ -894,6 +896,9 @@ func upscaleApplyResult(id string, v upscaleUpstreamResponse) {
 		t.SetData(p)
 		return nil
 	})
+	if err == nil && completed {
+		go upscaleCacheCompleted(id)
+	}
 }
 func upscaleOwned(c *gin.Context) (*model.Task, bool) {
 	var t model.Task
@@ -903,6 +908,13 @@ func upscaleOwned(c *gin.Context) (*model.Task, bool) {
 	}
 	return &t, true
 }
+func upscaleResultLifetime(name string) int64 {
+	if upscalePrecision(name) {
+		return 7200
+	}
+	return 1800
+}
+
 func upscalePublic(t *model.Task) gin.H {
 	var p upscalePayload
 	_ = t.GetData(&p)
@@ -910,7 +922,17 @@ func upscalePublic(t *model.Task) gin.H {
 	if t.Status == model.TaskStatusSuccess {
 		url = "/pg/upscale/tasks/" + t.TaskID + "/download"
 	}
-	return gin.H{"task_id": t.TaskID, "status": t.Status, "model": p.Model, "scale_factor": p.Scale, "input": p.Input, "output": p.Output, "amount_cny": p.Amount, "currency": "CNY", "billing_state": p.BillingState, "url": url, "download_url": url, "error": p.Error, "item": p.Item, "created_at": t.SubmitTime}
+	cacheStatus := ""
+	if t.Status == model.TaskStatusSuccess {
+		cacheStatus = "pending"
+		if p.Item != nil {
+			cacheStatus = "ready"
+		} else if t.FinishTime > 0 && time.Now().Unix()-t.FinishTime > upscaleResultLifetime(p.Model) {
+			cacheStatus = "expired"
+			p.Error = "原始结果已过期，未完成本站缓存；费用不退回"
+		}
+	}
+	return gin.H{"task_id": t.TaskID, "cache_status": cacheStatus, "status": t.Status, "model": p.Model, "scale_factor": p.Scale, "input": p.Input, "output": p.Output, "amount_cny": p.Amount, "currency": "CNY", "billing_state": p.BillingState, "url": url, "download_url": url, "error": p.Error, "item": p.Item, "created_at": t.SubmitTime}
 }
 func upscaleTaskPrefix(c *gin.Context) string {
 	if c != nil && c.Request != nil && strings.HasPrefix(c.Request.URL.Path, "/v1/") {
@@ -952,48 +974,85 @@ func PlaygroundUpscaleList(c *gin.Context) {
 }
 
 var upscaleDownloads sync.Map
+var errUpscaleCaching = errors.New("图片正在保存，请稍后重试")
+var upscaleBackgroundSlots = make(chan struct{}, 2)
+var upscaleArtifactRequest = func(req *http.Request) (*http.Response, error) {
+	client := &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return client.Do(req)
+}
+var upscaleFetchMedia = func(req *http.Request) (*http.Response, error) { return upscaleMediaClient().Do(req) }
 
 func PlaygroundUpscaleDownload(c *gin.Context) {
 	t, ok := upscaleOwned(c)
 	if !ok {
 		return
 	}
-	if _, busy := upscaleDownloads.LoadOrStore(t.TaskID, true); busy {
-		upscaleFail(c, 409, "图片正在保存，请稍后重试")
-		return
-	}
-	defer upscaleDownloads.Delete(t.TaskID)
 	if t.Status != model.TaskStatusSuccess {
 		upscaleFail(c, 409, "图片尚未完成")
 		return
+	}
+	item, err := upscaleCacheResult(c, t)
+	if err != nil {
+		status := 502
+		if errors.Is(err, errUpscaleCaching) {
+			status = 409
+		}
+		upscaleFail(c, status, err.Error())
+		return
+	}
+	c.Redirect(302, item.URL)
+}
+
+// Persist immediately on completion; clients must not have to visit a preview
+// before the short-lived provider link expires. Only GET requests are retried.
+func upscaleCacheCompleted(id string) {
+	select {
+	case upscaleBackgroundSlots <- struct{}{}:
+	default:
+		return
+	}
+	defer func() { <-upscaleBackgroundSlots }()
+	var task model.Task
+	if model.DB.Where("task_id = ? AND platform = ? AND status = ?", id, upscalePlatform, model.TaskStatusSuccess).First(&task).Error != nil {
+		return
+	}
+	req, _ := http.NewRequest(http.MethodGet, "http://localhost/", nil)
+	c := &gin.Context{Request: req}
+	c.Set("id", task.UserId)
+	_, _ = upscaleCacheResult(c, &task)
+}
+
+func upscaleCacheResult(c *gin.Context, t *model.Task) (*playgroundMediaItem, error) {
+	if _, busy := upscaleDownloads.LoadOrStore(t.TaskID, true); busy {
+		return nil, errUpscaleCaching
+	}
+	defer upscaleDownloads.Delete(t.TaskID)
+	// A concurrent request may have cached the file before this lock was acquired.
+	if err := model.DB.Where("task_id = ? AND user_id = ? AND platform = ?", t.TaskID, c.GetInt("id"), upscalePlatform).First(t).Error; err != nil {
+		return nil, errors.New("任务不存在或无权访问")
 	}
 	var p upscalePayload
 	_ = t.GetData(&p)
 	if p.Item != nil && p.Item.URL != "" {
 		if _, err := resolvePlaygroundStoredMediaURL(c, p.Item.URL, "image"); err == nil {
-			c.Redirect(302, p.Item.URL)
-			return
+			return p.Item, nil
 		}
 	}
 	var ch model.Channel
 	if model.DB.First(&ch, t.ChannelId).Error != nil || ch.BaseURL == nil {
-		upscaleFail(c, 503, "图片下载服务暂时不可用")
-		return
+		return nil, errors.New("图片下载服务暂时不可用")
 	}
 	// Refresh through authenticated artifact endpoint; never forward credentials across redirects.
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 90*time.Second)
 	defer cancel()
 	req, e := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(*ch.BaseURL, "/")+"/v1/tasks/"+url.PathEscape(t.PrivateData.UpstreamTaskID)+"/artifacts/image-0/content", nil)
 	if e != nil {
-		upscaleFail(c, 502, "暂时无法下载图片")
-		return
+		return nil, errors.New("暂时无法下载图片")
 	}
 	req.Header.Set("Authorization", "Bearer "+ch.Key)
-	client := &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, e := client.Do(req)
+	resp, e := upscaleArtifactRequest(req)
 	if e != nil {
-		upscaleFail(c, 502, "暂时无法下载图片")
-		return
+		return nil, errors.New("暂时无法下载图片")
 	}
 	defer resp.Body.Close()
 	rawURL := ""
@@ -1001,49 +1060,45 @@ func PlaygroundUpscaleDownload(c *gin.Context) {
 		rawURL = resp.Header.Get("Location")
 	}
 	if rawURL == "" {
-		upscaleFail(c, 502, "图片下载链接暂时不可用")
-		return
+		return nil, errors.New("图片下载链接暂时不可用")
 	}
 	if _, err := validatePlaygroundMediaURL(rawURL); err != nil || !strings.HasPrefix(rawURL, "https://") {
-		upscaleFail(c, 502, "图片下载链接无效")
-		return
+		return nil, errors.New("图片下载链接无效")
 	}
 	req, e = http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if e != nil {
-		upscaleFail(c, 502, "图片下载链接无效")
-		return
+		return nil, errors.New("图片下载链接无效")
 	}
-	resp2, e := upscaleMediaClient().Do(req)
+	resp2, e := upscaleFetchMedia(req)
 	if e != nil {
-		upscaleFail(c, 502, "暂时无法下载图片")
-		return
+		return nil, errors.New("暂时无法下载图片")
 	}
 	defer resp2.Body.Close()
 	if resp2.StatusCode != 200 {
-		upscaleFail(c, 502, "图片链接已失效，请稍后重试")
-		return
+		return nil, errors.New("图片链接已失效，请稍后重试")
 	}
 	reader := bufio.NewReaderSize(resp2.Body, 1024*1024)
 	ext, err := upscaleOutputHeader(reader, p.Output)
 	if err != nil {
-		upscaleFail(c, 502, "放大结果不是有效图片或尺寸不匹配，请稍后重试")
-		return
+		return nil, errors.New("放大结果不是有效图片或尺寸不匹配，请稍后重试")
 	}
 	item, e := writePlaygroundMedia(c, playgroundMediaCacheRequest{Kind: "image", Model: p.Model, Workflow: "高清放大", Metadata: map[string]interface{}{"scale_factor": p.Scale, "task_id": t.TaskID}}, reader, ext, 1024*1024*1024)
 	if e != nil {
-		upscaleFail(c, 502, "图片保存失败，请稍后重试")
-		return
+		return nil, errors.New("图片保存失败，请稍后重试")
 	}
 	item.OriginalURL = ""
 	p.Item = item
-	_ = model.UpscaleTaskTransaction(t.TaskID, func(tx *gorm.DB, t *model.Task) error {
+	e = model.UpscaleTaskTransaction(t.TaskID, func(tx *gorm.DB, t *model.Task) error {
 		var current upscalePayload
 		_ = t.GetData(&current)
 		current.Item = item
 		t.SetData(current)
 		return nil
 	})
-	c.Redirect(302, item.URL)
+	if e != nil {
+		return nil, errors.New("图片已保存但任务记录尚未更新，请稍后重试")
+	}
+	return item, nil
 }
 
 // Decode through Peek so the stream remains intact for storage.
@@ -1072,6 +1127,15 @@ func StartPlaygroundUpscaleReconciler() {
 				continue
 			}
 			recoverUpscaleReceipts()
+			var uncached []model.Task
+			_ = model.DB.Where("platform = ? AND status = ? AND finish_time > ?", upscalePlatform, model.TaskStatusSuccess, time.Now().Unix()-7200).Where("data NOT LIKE ?", "%\"item\"%").Order("finish_time DESC").Limit(20).Find(&uncached).Error
+			for _, task := range uncached {
+				var p upscalePayload
+				_ = task.GetData(&p)
+				if time.Now().Unix()-task.FinishTime <= upscaleResultLifetime(p.Model) {
+					go upscaleCacheCompleted(task.TaskID)
+				}
+			}
 			var tasks []model.Task
 			_ = model.DB.Where("platform = ?", upscalePlatform).Where("status IN ? OR (status = ? AND private_data LIKE ?)", []string{"SUBMITTED", "IN_PROGRESS"}, "UNKNOWN", "%\"upstream_task_id\"%").Order("id").Limit(100).Find(&tasks).Error
 			for _, t := range tasks {

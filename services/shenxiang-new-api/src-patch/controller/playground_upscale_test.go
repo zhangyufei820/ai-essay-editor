@@ -19,7 +19,9 @@ import (
 	"net/http/httptrace"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestUpscaleValidationBlocksInvalidOrCrossModeParameters(t *testing.T) {
@@ -210,4 +212,81 @@ func TestUpscaleDownloadRejectsHTMLAndWrongDimensions(t *testing.T) {
 	ext, err := upscaleOutputHeader(bufio.NewReaderSize(bytes.NewReader(b.Bytes()), 1024*1024), expected)
 	require.NoError(t, err)
 	require.Equal(t, ".png", ext)
+}
+
+func TestUpscaleCompletionCachesWithoutClientDownloadAndKeepsCredentialPrivate(t *testing.T) {
+	task, _ := setupUpscaleStateTest(t)
+	var body bytes.Buffer
+	require.NoError(t, png.Encode(&body, image.NewRGBA(image.Rect(0, 0, 200, 400))))
+	oldArtifact, oldFetch := upscaleArtifactRequest, upscaleFetchMedia
+	defer func() { upscaleArtifactRequest, upscaleFetchMedia = oldArtifact, oldFetch }()
+	var artifactCalls, publicCalls atomic.Int32
+	upscaleArtifactRequest = func(req *http.Request) (*http.Response, error) {
+		artifactCalls.Add(1)
+		require.Equal(t, http.MethodGet, req.Method)
+		require.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
+		return &http.Response{StatusCode: 302, Header: http.Header{"Location": []string{"https://example.com/result.png"}}, Body: io.NopCloser(strings.NewReader(""))}, nil
+	}
+	upscaleFetchMedia = func(req *http.Request) (*http.Response, error) {
+		publicCalls.Add(1)
+		require.Equal(t, "", req.Header.Get("Authorization"))
+		require.Equal(t, http.MethodGet, req.Method)
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(body.Bytes()))}, nil
+	}
+	var v upscaleUpstreamResponse
+	v.Data.TaskID = "upstream-test"
+	v.Data.Status = "COMPLETED"
+	v.Data.Generated = []string{"https://example.com/result.png"}
+	require.NoError(t, upscaleAcceptReceipt(task.TaskID, v))
+	upscaleApplyResult(task.TaskID, v)
+	require.Eventually(t, func() bool { _, p := readUpscaleState(t, task.TaskID); return p.Item != nil }, 3*time.Second, 10*time.Millisecond)
+	// Wait until the background worker has returned before restoring injected clients.
+	require.Eventually(t, func() bool { return len(upscaleBackgroundSlots) == 0 }, time.Second, 10*time.Millisecond)
+	stored, p := readUpscaleState(t, task.TaskID)
+	require.Equal(t, "ready", upscalePublic(&stored)["cache_status"])
+	require.NotEmpty(t, p.Item.URL)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("id", 1)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	item, err := upscaleCacheResult(c, &stored)
+	require.NoError(t, err)
+	require.Equal(t, p.Item.URL, item.URL)
+	require.EqualValues(t, 1, artifactCalls.Load())
+	require.EqualValues(t, 1, publicCalls.Load())
+	_, size, err := upscaleReadImage(c, item.URL)
+	require.NoError(t, err)
+	require.Equal(t, 200, size.Width)
+}
+func TestUpscaleCacheFailureDoesNotResubmitOrRefund(t *testing.T) {
+	task, _ := setupUpscaleStateTest(t)
+	task.Status = model.TaskStatusSuccess
+	task.FinishTime = time.Now().Unix()
+	task.PrivateData.UpstreamTaskID = "accepted"
+	var p upscalePayload
+	require.NoError(t, task.GetData(&p))
+	p.BillingState = "charged"
+	task.SetData(p)
+	require.NoError(t, model.DB.Save(task).Error)
+	oldArtifact, oldFetch := upscaleArtifactRequest, upscaleFetchMedia
+	defer func() { upscaleArtifactRequest, upscaleFetchMedia = oldArtifact, oldFetch }()
+	upscaleArtifactRequest = func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 302, Header: http.Header{"Location": []string{"https://example.com/expired.png"}}, Body: io.NopCloser(strings.NewReader(""))}, nil
+	}
+	upscaleFetchMedia = func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 403, Body: io.NopCloser(strings.NewReader("expired"))}, nil
+	}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("id", 1)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	_, err := upscaleCacheResult(c, task)
+	require.Error(t, err)
+	stored, p := readUpscaleState(t, task.TaskID)
+	require.Equal(t, "charged", p.BillingState)
+	require.Nil(t, p.Item)
+	require.Equal(t, "pending", upscalePublic(&stored)["cache_status"])
+	var user model.User
+	require.NoError(t, model.DB.First(&user, 1).Error)
+	require.Equal(t, 99900, user.Quota)
+	stored.FinishTime = time.Now().Unix() - 7201
+	require.Equal(t, "expired", upscalePublic(&stored)["cache_status"])
 }

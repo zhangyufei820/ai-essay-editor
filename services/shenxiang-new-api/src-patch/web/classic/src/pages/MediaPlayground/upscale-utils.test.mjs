@@ -47,3 +47,7 @@ assert.equal(result.downloadUrl, '/pg/upscale/tasks/a/download');
 assert.equal(formatUpscalePrice('0.613'), '¥0.613');
 assert.equal(formatUpscalePrice('bad'), '待计算');
 console.log('upscale dimension, status and result contracts passed');
+
+assert.equal(upscaleTaskStatus({status:"SUCCESS",cache_status:"pending"}),"IN_PROGRESS");
+assert.equal(upscaleTaskStatus({status:"SUCCESS",cache_status:"expired"}),"FAILURE");
+assert.equal(upscaleTaskToResult({task_id:"pending",status:"SUCCESS",cache_status:"pending",url:"/download"}),null);
