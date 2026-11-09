@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -72,8 +73,9 @@ type upscalePayload struct {
 	Error        string               `json:"error,omitempty"`
 }
 type upscaleUpstreamResponse struct {
-	Code string `json:"code"`
-	Data struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
 		TaskID    string   `json:"task_id"`
 		Status    string   `json:"status"`
 		Generated []string `json:"generated"`
@@ -667,6 +669,40 @@ func upscaleReject(id, message string) error {
 	}
 	return err
 }
+
+// Only a bounded category reaches operational logs. Never log a provider body,
+// message, key, input image or private URL, including when parsing fails.
+func upscaleSubmitFailureCategory(status int, err error, v upscaleUpstreamResponse) string {
+	if errors.Is(err, errUpscaleNotSent) {
+		return "not_sent"
+	}
+	if err != nil {
+		return "transport_or_invalid_response"
+	}
+	var detail struct {
+		Code    string `json:"code"`
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	}
+	_ = json.Unmarshal(v.Error, &detail)
+	text := strings.ToLower(v.Code + " " + v.Message + " " + detail.Code + " " + detail.Type + " " + detail.Message)
+	if strings.Contains(text, "insufficient") || strings.Contains(text, "quota_exceeded") || strings.Contains(text, "余额不足") || strings.Contains(text, "额度不足") {
+		return "upstream_quota_exhausted"
+	}
+	switch {
+	case status == 401 || status == 403:
+		return "upstream_auth_or_permission"
+	case status == 429:
+		return "upstream_rate_limited"
+	case status >= 400 && status < 500:
+		return "upstream_request_rejected"
+	case status >= 500:
+		return "upstream_service_error"
+	default:
+		return "incomplete_receipt"
+	}
+}
+
 func upscaleSubmit(id string, q upscaleRequest, ch model.Channel) {
 	claimed := false
 	err := model.UpscaleTaskTransaction(id, func(tx *gorm.DB, t *model.Task) error {
@@ -684,8 +720,13 @@ func upscaleSubmit(id string, q upscaleRequest, ch model.Channel) {
 		return
 	}
 	v, status, err := upscaleAPI(ch, "POST", upscalePath(q.Model), upscaleUpstreamBody(q))
+	if err != nil || status != 200 || v.Data.TaskID == "" || v.Billing == nil {
+		common.SysLog(fmt.Sprintf("upscale submit failed task=%s http_status=%d category=%s has_task=%t has_billing=%t", id, status, upscaleSubmitFailureCategory(status, err, v), v.Data.TaskID != "", v.Billing != nil))
+	}
 	if (errors.Is(err, errUpscaleNotSent) || (status >= 400 && status < 500) || (err == nil && status >= 500 && v.Code == "server_error")) && v.Data.TaskID == "" && v.Billing == nil {
-		upscaleReject(id, "服务未受理任务，预扣费用已退回，请稍后重试")
+		if upscaleReject(id, "服务未受理任务，预扣费用已退回，请稍后重试") != nil {
+			common.SysLog(fmt.Sprintf("upscale unaccepted refund transaction failed task=%s", id))
+		}
 		return
 	}
 	if err != nil || status != 200 || v.Data.TaskID == "" || v.Billing == nil {

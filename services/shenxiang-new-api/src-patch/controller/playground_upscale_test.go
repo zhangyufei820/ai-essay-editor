@@ -155,6 +155,18 @@ func TestUpscaleSubmitRejectionRefundsOnceWithoutRetry(t *testing.T) {
 	model.DB.Model(&model.Log{}).Where("type = ?", model.LogTypeRefund).Count(&count)
 	require.EqualValues(t, 1, count)
 }
+func TestUpscaleSubmitDiagnosticDoesNotExposeProviderResponse(t *testing.T) {
+	var v upscaleUpstreamResponse
+	require.NoError(t, json.Unmarshal([]byte(`{"error":{"code":"insufficient_quota","message":"余额不足 sk-private https://private.invalid"}}`), &v))
+	require.Equal(t, "upstream_quota_exhausted", upscaleSubmitFailureCategory(403, nil, v))
+	v.Error = json.RawMessage(`{"message":"sk-private https://private.invalid"}`)
+	require.Equal(t, "upstream_request_rejected", upscaleSubmitFailureCategory(400, nil, v))
+	require.Equal(t, "upstream_rate_limited", upscaleSubmitFailureCategory(429, nil, v))
+	require.Equal(t, "upstream_service_error", upscaleSubmitFailureCategory(500, nil, v))
+	require.Equal(t, "not_sent", upscaleSubmitFailureCategory(0, errUpscaleNotSent, v))
+	require.Equal(t, "transport_or_invalid_response", upscaleSubmitFailureCategory(0, errors.New("sk-private"), v))
+}
+
 func TestUpscaleAmbiguousSubmitNeverResubmitsOrRefunds(t *testing.T) {
 	task, ch := setupUpscaleStateTest(t)
 	old := upscaleDoRequest

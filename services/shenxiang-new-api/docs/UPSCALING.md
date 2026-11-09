@@ -20,6 +20,8 @@
 - 受理回执先写私有缓存目录 `.upscale-receipts`，可恢复数据库事务；仅重试GET。
 - 普通任务扫描排除本平台，专用 reconciler 负责处理。
 
+估价只校验图片和计算价格，不创建付费任务。前端估价有75秒截止时间，超时显示未提交、未扣费并允许“重新计算费用”；切换工具、清空原图或新建创作会取消旧估价并清除加载状态，迟到的响应不能覆盖新图片费用。提交拒绝的运维日志只记录任务ID、HTTP状态、固定错误分类和是否取得回执，不记录原始供应商响应、密钥或图片。
+
 ## 发布与回退
 
 先按 RELEASE-GOVERNANCE 正式发布代码。私密600文件放仓库外；`configure_upscale_channels.py --stage --apply --secrets-file ... --pricing-file ...` 校验两枚独立令牌的模型权限，快照保存在受保护 release-state，创建internal链路，仅管理员图像令牌先测。脚本需加载既有 New API 环境到进程，禁止输出环境或密钥。
@@ -30,4 +32,4 @@
 
 ## 验证
 
-Go contract包含 controller/model/service `TestUpscale*` 和 middleware专用接口测试；Python `test_configure_upscale_channels`、`test_sync_app_model_permissions`；Node `upscale-utils.test.mjs`；classic构建和桌面/手机用户路径。线上仅使用user_id=1管理员令牌测试估价、两模式最小2倍提交、轮询、下载和实际CNY流水。
+Go contract包含 controller/model/service `TestUpscale*` 和 middleware专用接口测试；Python `test_configure_upscale_channels`、`test_sync_app_model_permissions`；Node `upscale-utils.test.mjs`、`upscale-estimate.test.mjs`（取消、迟到响应、超时与失败恢复）；classic构建和桌面/手机用户路径。线上仅使用user_id=1管理员令牌测试估价、两模式最小2倍提交、轮询、下载和实际CNY流水。

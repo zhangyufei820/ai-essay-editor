@@ -12,6 +12,7 @@ import {
   upscaleTaskToResult,
 } from './upscale-utils';
 import './UpscalePanel.css';
+import { startUpscaleEstimate } from './upscale-estimate';
 
 const CREATIVE_CONTENT = [
   ['standard', '标准'],
@@ -144,6 +145,8 @@ export default function UpscalePanel({
   const [configError, setConfigError] = useState('');
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
+  const [estimateError, setEstimateError] = useState('');
+  const [estimateVersion, setEstimateVersion] = useState(0);
   const [message, setMessage] = useState('');
   const [tasks, setTasks] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -371,41 +374,39 @@ export default function UpscalePanel({
 
   useEffect(() => {
     setEstimate(null);
+    setEstimating(false);
+    setEstimateError('');
     if (!active || !input?.image || !config) return undefined;
-    const c = trackedController();
-    let cancelled = false;
     setEstimating(true);
-    const timer = window.setTimeout(async () => {
-      try {
-        const r = await API.post(
-          '/pg/upscale/estimate',
-          payload,
-          apiOptions(c.signal),
-        );
-        if (cancelled || !mounted.current) return;
+    return startUpscaleEstimate({
+      request: (signal) =>
+        API.post('/pg/upscale/estimate', payload, {
+          ...apiOptions(signal),
+          timeout: 75000,
+        }),
+      onResult: (r) => {
+        if (!mounted.current) return;
         if (!r.data?.success) {
-          setMessage(r.data?.message || '暂时无法计算费用。');
+          setEstimateError(r.data?.message || '暂时无法计算费用。');
           return;
         }
         setEstimate(r.data.data);
         setMessage('');
-      } catch (error) {
-        if (!cancelled && !isCancelled(error) && mounted.current)
-          setMessage(
-            taskError(error, '暂时无法校验图片或计算费用，请稍后重试。'),
+      },
+      onError: (error) => {
+        if (mounted.current)
+          setEstimateError(
+            error?.code === 'UPSCALE_ESTIMATE_TIMEOUT' ||
+              error?.code === 'ECONNABORTED'
+              ? '费用计算超时，请重新计算；本次未提交放大任务，也未扣费。'
+              : taskError(error, '暂时无法校验图片或计算费用，请重新计算。'),
           );
-      } finally {
-        controllers.current.delete(c);
-        if (!cancelled && mounted.current) setEstimating(false);
-      }
-    }, 350);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-      c.abort();
-      controllers.current.delete(c);
-    };
-  }, [active, input?.image, model, scale, flavor, config]);
+      },
+      onSettled: () => {
+        if (mounted.current) setEstimating(false);
+      },
+    });
+  }, [active, input?.image, model, scale, flavor, config, estimateVersion]);
 
   async function chooseFile(file) {
     if (!file || submittingRef.current) return;
@@ -742,7 +743,9 @@ export default function UpscalePanel({
                   ? '计算中…'
                   : estimate
                     ? formatUpscalePrice(estimate.amount_cny)
-                    : '上传后计算'}
+                    : input?.image
+                      ? '暂未算出'
+                      : '上传后计算'}
               </strong>
             </div>
             <p>
@@ -755,6 +758,16 @@ export default function UpscalePanel({
                 本次处理需要 {estimate.credits}{' '}
                 积分，费用按原图像素和放大倍数计算。
               </small>
+            ) : null}
+            {estimateError ? <p role='status'>{estimateError}</p> : null}
+            {input?.image && !estimate && !estimating ? (
+              <Button
+                icon={<IconRefresh />}
+                disabled={!config || Boolean(configError)}
+                onClick={() => setEstimateVersion((value) => value + 1)}
+              >
+                重新计算费用
+              </Button>
             ) : null}
           </div>
           <p className='mp-upscale-charge-note'>
