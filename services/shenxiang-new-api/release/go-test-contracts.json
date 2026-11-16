@@ -156,6 +156,14 @@
     "run": "^TestRetiredTextModelsAreHiddenFromPublicCatalogs$"
   },
   {
+    "package": "./relay/channel",
+    "run": "^TestResponsesKeepAliveFlushesBeforeUpstreamHeadersWithoutMarkingOutput$"
+  },
+  {
+    "package": "./relay/helper",
+    "run": "^TestResponsesKeepAlive.*$"
+  },
+  {
     "package": "./controller",
     "run": "^TestUpscale.*$"
   },

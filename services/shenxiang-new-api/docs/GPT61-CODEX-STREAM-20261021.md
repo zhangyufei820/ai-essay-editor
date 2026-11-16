@@ -25,3 +25,13 @@ This does not change model permissions, public model names, prices, subscription
 The new fixtures fail before the patch and pass after it. Targeted Go verification covers the Responses handler, scanner deadline, retry guards, explicit SSE errors, and output tracking. The release contracts additionally require the whitespace rejection, event-order preservation, buffer bound, and delayed-output preservation tests.
 
 Production verification must use only the admin-owned system token, through the public `/v1/responses` endpoint, and check both a completed text answer and a completed function-call/output round trip. This simulates the Codex protocol, not the affected user's desktop UI. Supplier redundancy remains limited to the suppliers that pass the existing strict health gate.
+
+## Long-context edge timeout protection (2026-11-16)
+
+GPT-6 Astra requests on the affected default route showed first effective response latency growing from about 28 seconds to 101 seconds as conversation input grew from about 38k to 101k tokens. Later requests repeatedly disconnected after roughly 117 seconds with no received data. The user confirmed the same account, model and original conversation. Small admin requests on that exact route completed in 3–5 seconds, so they do not reproduce long-context prefill.
+
+Streaming POST `/v1/responses` now sends SSE comment keepalives every 10 seconds, both while awaiting upstream response headers and while reading the upstream stream. This narrowly scoped behavior does not depend on the site's general ping setting, and still respects an adaptor's explicit `DisablePing`. Non-streaming requests and other endpoints retain their existing behavior.
+
+Comments contain no model content and must not mark effective output, stop safe fallback, or create token usage. The pre-header writer is cancelled and joined before the upstream result is handled, with bounded writes, so it cannot race output/error handling or outlive Gin's context. If an attempt fails after only comments, the existing Responses SSE error and output-aware retry paths remain in effect. Existing long-reasoning and empty-output handling remains unchanged.
+
+Regression fixtures use delayed upstream headers and a silent response body with general ping disabled. Both must deliver a comment to the client before upstream content and stop cleanly on cancellation. Production verification must use an admin token and distinguish header/comment latency from actual model output latency; never replay a normal user's private conversation for a system test.

@@ -413,6 +413,42 @@ func DoWssRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	return targetConn, nil
 }
 
+// The pre-header pinger is the only downstream writer during client.Do. Joining
+// it before returning prevents an in-flight comment racing the stream handler,
+// error response, or Gin's context pool. Each write has a bounded deadline.
+func startResponsesKeepAlive(c *gin.Context, interval time.Duration) context.CancelFunc {
+	ctx, cancel := context.WithCancel(c.Request.Context())
+	done := make(chan struct{})
+	gopool.Go(func() {
+		defer close(done)
+		defer func() {
+			if recover() != nil {
+				logger.LogError(c, "responses keepalive writer stopped after panic")
+			}
+		}()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if ctx.Err() != nil {
+					return
+				}
+				helper.ExtendWriteDeadline(c)
+				if helper.PingData(c) != nil {
+					return
+				}
+			}
+		}
+	})
+	return func() {
+		cancel()
+		<-done
+	}
+}
+
 func startPingKeepAlive(c *gin.Context, pingInterval time.Duration) context.CancelFunc {
 	pingerCtx, stopPinger := context.WithCancel(context.Background())
 
@@ -601,7 +637,13 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		helper.SetEventStreamHeaders(c)
 		// 处理流式请求的 ping 保活
 		generalSettings := operation_setting.GetGeneralSetting()
-		if generalSettings.PingIntervalEnabled && !info.DisablePing {
+		if helper.ResponsesKeepAliveEnabled(c, info) {
+			// Keep HTTP/SSE errors and fallback output-aware even when only
+			// comments have been flushed before upstream response headers.
+			c.Set("responses_stream_output_tracking", true)
+			stopPinger = startResponsesKeepAlive(c, helper.DefaultPingInterval)
+			defer stopPinger()
+		} else if generalSettings.PingIntervalEnabled && !info.DisablePing {
 			pingInterval := time.Duration(generalSettings.PingIntervalSeconds) * time.Second
 			stopPinger = startPingKeepAlive(c, pingInterval)
 			// 使用defer确保在任何情况下都能停止ping goroutine
