@@ -51,6 +51,48 @@ class ConfigureGpt6AstraChannelTests(unittest.TestCase):
             self.module.SOURCE_CHANNEL_TAGS,
         )
 
+    def test_default_promotes_working_long_context_source_without_remapping_channels(self) -> None:
+        sources = tuple(
+            self.module.SourceChannel(tag, f"test-source-key-123456-{index}", f"https://{index}.example", index)
+            for index, tag in enumerate(self.module.SOURCE_CHANNEL_TAGS, start=1)
+        )
+        ordered = self.module.sources_for_group("default", sources)
+        self.assertEqual(tuple(s.tag for s in ordered), (
+            self.module.WANGWANG_SOURCE_TAG, self.module.PDHLZY_SOURCE_TAG,
+            self.module.AIHUB_SOURCE_TAG, self.module.ASTRA_SOURCE_TAG,
+        ))
+        priorities = self.module.source_priorities_for_group("default", ordered)
+        self.assertEqual(priorities[self.module.AIHUB_SOURCE_TAG], 40)
+        self.assertEqual(priorities[self.module.PDHLZY_SOURCE_TAG], 30)
+        sql = self.module.build_apply_sql(
+            sources, {self.module.AIHUB_SOURCE_TAG, self.module.PDHLZY_SOURCE_TAG}, groups=("default",),
+        )
+        self.assertIn("priority=40, auto_ban=1, tag='xingren-gpt6-astra-default-3'", sql)
+        self.assertIn("priority=30, auto_ban=1, tag='xingren-gpt6-astra-default-2'", sql)
+        self.assertIn("'default','gpt-6-astra',@astra_default_3,1,40", sql)
+        self.assertIn("'default','gpt-6-astra',@astra_default_2,1,30", sql)
+        self.assertNotIn("@astra_discount_", sql)
+        self.assertNotIn("@astra_plus_", sql)
+        self.assertNotIn("UPDATE options", sql)
+
+    def test_non_default_group_priorities_remain_unchanged(self) -> None:
+        sources = tuple(
+            self.module.SourceChannel(tag, "test-source-key-123456", f"https://{i}.example", i)
+            for i, tag in enumerate(self.module.SOURCE_CHANNEL_TAGS)
+        )
+        for group in self.module.MANAGED_GROUPS:
+            if group == "default":
+                continue
+            ordered = self.module.sources_for_group(group, sources)
+            self.assertEqual(self.module.source_priorities_for_group(group, ordered),
+                             {s.tag: self.module.CHAIN_PRIORITIES[i] for i, s in enumerate(ordered)})
+
+    def test_sol_profiles_do_not_inherit_astra_latency_priority(self) -> None:
+        for profile in ("sol", "sol61"):
+            with mock.patch.dict("os.environ", {"GPT6_MODEL_PROFILE": profile}):
+                module = load_module()
+                self.assertEqual(module.GROUP_SOURCE_PRIORITY_OVERRIDES, {})
+
     def test_probe_source_requires_responses_and_chat_completion(self) -> None:
         source = self.module.SourceChannel("source-a", "test-astra-key-123456", "https://aihub.top", 69)
         models = {"data": [{"id": "gpt-6-astra"}]}

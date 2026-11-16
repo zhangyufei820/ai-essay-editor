@@ -35,3 +35,11 @@ Streaming POST `/v1/responses` now sends SSE comment keepalives every 10 seconds
 Comments contain no model content and must not mark effective output, stop safe fallback, or create token usage. The pre-header writer is cancelled and joined before the upstream result is handled, with bounded writes, so it cannot race output/error handling or outlive Gin's context. If an attempt fails after only comments, the existing Responses SSE error and output-aware retry paths remain in effect. Existing long-reasoning and empty-output handling remains unchanged.
 
 Regression fixtures use delayed upstream headers and a silent response body with general ping disabled. Both must deliver a comment to the client before upstream content and stop cleanly on cancellation. Production verification must use an admin token and distinguish header/comment latency from actual model output latency; never replay a normal user's private conversation for a system test.
+
+### Default Astra long-conversation latency routing
+
+The next two affected requests completed with 156,919 and 158,178 input tokens, `low` reasoning and about 99.6% cache hits. Both first waited about 118–124 seconds for the default PDHLZY attempt to fail with empty output, then completed through ZWACA in a further 89–92 seconds. The logged first-response metric includes the failed attempt and must not be attributed to the final supplier's own effective-text latency.
+
+Default Astra now prefers the verified ZWACA source (`xingren-discount-text-aihub`, a historical tag) over PDHLZY. The existing default channel identities and credentials stay with their suppliers; only channel and ability priorities change. Other routing groups, Sol profiles, model identity, reasoning settings and pricing remain unchanged. Eligibility still requires fresh provider verification; a failed supplier is not enabled merely because it has a preferred priority. The periodic manifest-pinned reconcile owns the same priority policy, preventing the old ordering from returning on the next sync.
+
+Operational application must take a private rollback snapshot, target `groups=("default",)` only, and wait for the normal channel-cache refresh before testing. Verify actual user-path latency separately from tiny admin probes; removing the failed primary's waiting time does not make a large conversation a tiny request.

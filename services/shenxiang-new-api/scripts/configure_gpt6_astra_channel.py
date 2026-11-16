@@ -61,6 +61,14 @@ GROUP_SOURCE_TAG_ORDER_OVERRIDES = {} if PROFILE_NAME != "astra" else {
     "plus": (WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG, AIHUB_SOURCE_TAG, ASTRA_SOURCE_TAG),
     "default": (WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG, AIHUB_SOURCE_TAG, ASTRA_SOURCE_TAG),
 }
+# Preserve each managed channel's supplier identity; change only its priority.
+# The previous default primary repeatedly ended long cached conversations with
+# empty output after two minutes. Prefer the supplier that completed those
+# same conversations, while retaining only independently verified fallbacks.
+GROUP_SOURCE_PRIORITY_OVERRIDES = {} if PROFILE_NAME != "astra" else {
+    "default": {AIHUB_SOURCE_TAG: 40, PDHLZY_SOURCE_TAG: 30,
+                WANGWANG_SOURCE_TAG: 20, ASTRA_SOURCE_TAG: 10},
+}
 MANAGED_GROUPS = ("default", "standard", "pro", "code", "internal", "plus", "discount", "special")
 CHAIN_PRIORITIES = (40, 30, 20, 10)
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -348,6 +356,14 @@ def independent_enabled_sources(sources: tuple[SourceChannel, ...], verified: se
     return enabled
 
 
+def source_priorities_for_group(group: str, sources: tuple[SourceChannel, ...]) -> dict[str, int]:
+    priorities = {source.tag: CHAIN_PRIORITIES[index] for index, source in enumerate(sources)}
+    overrides = GROUP_SOURCE_PRIORITY_OVERRIDES.get(group, {})
+    if set(priorities) == set(SOURCE_CHANNEL_TAGS):
+        priorities.update(overrides)
+    return priorities
+
+
 def validate_group_options() -> None:
     rows = sync.mysql("SELECT `key`, COALESCE(`value`,'') FROM options WHERE `key` IN ('GroupRatio','UserUsableGroups')")
     options = {row[0]: row[1] for row in rows if len(row) == 2}
@@ -400,10 +416,11 @@ def build_apply_sql(
     discount_priorities, discount_verified = discount_route_policy(sources, probe_results, enabled_source_tags)
     for group in groups:
         group_sources = sources_for_group(group, sources)
-        ranking = sorted(group_sources, key=lambda source: -discount_priorities[source.tag]) if group == "discount" and probe_results is not None else group_sources
+        priorities = discount_priorities if group == "discount" and probe_results is not None else source_priorities_for_group(group, group_sources)
+        ranking = sorted(group_sources, key=lambda source: -priorities[source.tag])
         group_enabled = independent_enabled_sources(ranking, discount_verified if group == "discount" and probe_results is not None else enabled_source_tags)
         for index, source in enumerate(group_sources):
-            priority = discount_priorities[source.tag] if group == "discount" and probe_results is not None else CHAIN_PRIORITIES[index]
+            priority = priorities[source.tag]
             tag = managed_tag(group, index)
             variable = f"@{SQL_VAR_PREFIX}_" + group.replace("-", "_") + "_" + str(index + 1)
             channel_status = "1" if source.tag in group_enabled else "2"
@@ -427,10 +444,11 @@ def build_apply_sql(
     )
     for group in groups:
         group_sources = sources_for_group(group, sources)
-        ranking = sorted(group_sources, key=lambda source: -discount_priorities[source.tag]) if group == "discount" and probe_results is not None else group_sources
+        priorities = discount_priorities if group == "discount" and probe_results is not None else source_priorities_for_group(group, group_sources)
+        ranking = sorted(group_sources, key=lambda source: -priorities[source.tag])
         group_enabled = independent_enabled_sources(ranking, discount_verified if group == "discount" and probe_results is not None else enabled_source_tags)
         for index, source in enumerate(group_sources):
-            priority = discount_priorities[source.tag] if group == "discount" and probe_results is not None else CHAIN_PRIORITIES[index]
+            priority = priorities[source.tag]
             tag = managed_tag(group, index)
             variable = f"@{SQL_VAR_PREFIX}_" + group.replace("-", "_") + "_" + str(index + 1)
             ability_enabled = "1" if source.tag in group_enabled else "0"
