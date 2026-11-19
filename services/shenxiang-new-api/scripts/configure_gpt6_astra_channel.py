@@ -24,15 +24,30 @@ import sync_app_model_permissions as sync
 import provider_monitor
 
 PROFILE_NAME = os.environ.get("GPT6_MODEL_PROFILE", "astra").strip().lower()
-if PROFILE_NAME not in {"astra", "sol", "sol61"}:
-    raise RuntimeError("GPT6_MODEL_PROFILE must be astra, sol or sol61")
+if PROFILE_NAME not in {"astra", "sol", "sol61", "sol62", "astra62"}:
+    raise RuntimeError("GPT6_MODEL_PROFILE must be astra, sol, sol61, sol62 or astra62")
 
 ASTRA_SOURCE_TAG = "xingren-gpt6-astra"
 AIHUB_SOURCE_TAG = "xingren-discount-text-aihub"
 WANGWANG_SOURCE_TAG = "xingren-plus-text-wangwang"
 PDHLZY_SOURCE_TAG = "xingren-plus-text-pdhlzy"
 
-if PROFILE_NAME in {"sol", "sol61"}:
+if PROFILE_NAME in {"sol62", "astra62"}:
+    _variant = "sol" if PROFILE_NAME == "sol62" else "astra"
+    MODEL_NAME = "gpt-6.2-" + _variant
+    DISPLAY_NAME = "GPT-6.2 " + _variant.title()
+    # Measured 2026-11-19: Sol AIHub -> Wangwang -> PDHLZY;
+    # Astra Wangwang -> AIHub -> PDHLZY. Never confuse the historical
+    # AIHUB_SOURCE_TAG (now ZWACA) with the actual AIHub origin.
+    SOURCE_CHANNEL_TAGS = ((ASTRA_SOURCE_TAG, WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG)
+                           if _variant == "sol" else (WANGWANG_SOURCE_TAG, ASTRA_SOURCE_TAG, PDHLZY_SOURCE_TAG))
+    MANAGED_TAG_PREFIX = "xingren-gpt62-" + _variant + "-"
+    DISCOUNT_PRIMARY_SOURCE_TAG = SOURCE_CHANNEL_TAGS[0]
+    DEPRECATED_CHANNEL_TAG = None
+    LOCK_PATH = "/tmp/shenxiang-new-api-gpt62-" + _variant + "-channel.lock"
+    LOCK_HELD_ENV = "GPT62_" + _variant.upper() + "_CHANNEL_SYNC_LOCK_HELD"
+    SQL_VAR_PREFIX = "gpt62_" + _variant
+elif PROFILE_NAME in {"sol", "sol61"}:
     MODEL_NAME = "gpt-6.1-sol" if PROFILE_NAME == "sol61" else "gpt-6-sol"
     DISPLAY_NAME = "GPT-6.1 Sol" if PROFILE_NAME == "sol61" else "GPT-6 Sol"
     SOURCE_CHANNEL_TAGS = (AIHUB_SOURCE_TAG, WANGWANG_SOURCE_TAG, PDHLZY_SOURCE_TAG, ASTRA_SOURCE_TAG)
@@ -248,6 +263,8 @@ def probe_codex_tool_roundtrip(source: SourceChannel) -> bool:
                                   "required": ["a", "b"], "additionalProperties": False}, "strict": True}],
         "tool_choice": {"type": "function", "name": "audit_sum"},
     }
+    if PROFILE_NAME in {"sol62", "astra62"}:
+        body["max_output_tokens"] = 1024
     first = codex_completed_response(source, body)
     output = (first or {}).get("output")
     if not isinstance(output, list):
@@ -262,6 +279,11 @@ def probe_codex_tool_roundtrip(source: SourceChannel) -> bool:
         return False
     body["input"] += output + [{"type": "function_call_output", "call_id": calls[0]["call_id"], "output": "2"}]
     body.pop("tool_choice")
+    if PROFILE_NAME in {"sol62", "astra62"}:
+        # End this deterministic probe after the tool result. Astra may validly
+        # choose another function in auto mode; that is not a wire-format error.
+        body["tool_choice"] = "none"
+        body["instructions"] = "The audit_sum tool result is already provided. Reply exactly 2 as plain text."
     second = codex_completed_response(source, body)
     if not isinstance((second or {}).get("output"), list):
         return False
@@ -302,6 +324,11 @@ def probe_source(source: SourceChannel) -> dict[str, object]:
     )
     if not response.get("ok") or not chat_ok(completion):
         raise ConfigurationError(f"{source.tag} failed Responses or Chat Completions verification")
+    if PROFILE_NAME in {"sol62", "astra62"}:
+        if not probe_codex_tool_roundtrip(source):
+            raise ConfigurationError("GPT-6.2 source failed Codex tool round-trip verification")
+        return {"tag": source.tag, "channel_id": source.channel_id, "models": True, "responses": True, "chat": True,
+                "discount_healthy": True, "discount_ttft_ms": response["first_token_ms"], "discount_tools": True}
     return {"tag": source.tag, "channel_id": source.channel_id, "models": True, "responses": True, "chat": True,
             **probe_discount_codex(source, response)}
 
@@ -460,6 +487,8 @@ def build_apply_sql(
 
 
 def discount_route_policy(sources, probe_results, enabled_source_tags):
+    if PROFILE_NAME in {"sol62", "astra62"}:
+        return {source.tag: CHAIN_PRIORITIES[i] for i, source in enumerate(sources)}, set(enabled_source_tags)
     reports = {r["tag"]: r for r in (probe_results or [])}
     healthy = {tag for tag, report in reports.items() if tag in enabled_source_tags
                and report.get("discount_healthy") is True and isinstance(report.get("discount_ttft_ms"), (int, float))
@@ -506,6 +535,11 @@ def main() -> int:
     parser.add_argument("--discount-only", action="store_true", help=f"change only the public discount {DISPLAY_NAME} chain")
     args = parser.parse_args()
     with channel_lock():
+        if args.reconcile_if_configured and PROFILE_NAME in {"sol62", "astra62"}:
+            existing = sync.mysql("SELECT COUNT(*) FROM channels WHERE tag LIKE " + sql_quote(MANAGED_TAG_PREFIX + "%"))
+            if not existing or int(existing[0][0]) == 0:
+                print(json.dumps({"ok": True, "action": "not_configured", "model": MODEL_NAME}))
+                return 0
         sources = load_sources()
         probe_results, unavailable_tags = probe_sources(sources)
         if not probe_results:

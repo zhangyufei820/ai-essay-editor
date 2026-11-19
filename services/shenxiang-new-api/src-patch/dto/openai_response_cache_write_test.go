@@ -32,3 +32,14 @@ func TestInputTokenDetailsCacheCreationTokensTotalClampsNegativeValues(t *testin
 
 	require.Equal(t, 0, details.CacheCreationTokensTotal())
 }
+
+func TestInputTokenDetails12hSplitDoesNotLoseAggregateWrites(t *testing.T) {
+	usage := Usage{InputTokensDetails: &InputTokenDetails{CacheWriteTokens: 100, CacheWriteTokensDetails: &CacheWriteTokenDetails{TTL30mTokens: 30, TTL12hTokens: 20}}}
+	usage.NormalizeCacheWriteTokens()
+	require.Equal(t, 100, usage.PromptTokensDetails.CacheCreationTokensTotal())
+	require.Equal(t, 20, usage.PromptTokensDetails.CacheWrite12hTokens())
+	legacy := InputTokenDetails{CachedCreationTokens: 100, CacheWriteTokens: 50}
+	require.Equal(t, 100, legacy.CacheCreationTokensTotal())
+	usage.NormalizeCacheWriteTokens()
+	require.Equal(t, 100, usage.PromptTokensDetails.CacheCreationTokensTotal())
+}

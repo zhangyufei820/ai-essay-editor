@@ -2297,6 +2297,7 @@ export function renderTieredModelPrice(opts) {
     cache_creation_tokens: cacheCreationTokens = 0,
     cache_creation_tokens_5m: cacheCreationTokens5m = 0,
     cache_creation_tokens_1h: cacheCreationTokens1h = 0,
+    cache_creation_tokens_12h: cacheCreationTokens12h = 0,
     image_input: imageInputTokens = 0,
     image_output: imageOutputTokens = 0,
     audio_input: audioInputTokens = 0,
@@ -2327,7 +2328,7 @@ export function renderTieredModelPrice(opts) {
   const gr = groupRatio || 1;
 
   const hasAnyCacheTokens = cacheTokens > 0 || cacheCreationTokens > 0
-      || cacheCreationTokens5m > 0 || cacheCreationTokens1h > 0;
+      || cacheCreationTokens5m > 0 || cacheCreationTokens1h > 0 || cacheCreationTokens12h > 0;
 
   const priceLines = BILLING_PRICING_VARS
       .filter((v) => v.group !== 'cache' || hasAnyCacheTokens)
@@ -2335,11 +2336,12 @@ export function renderTieredModelPrice(opts) {
 
   const cacheCreateTokens = isClaude && cacheCreationTokens5m > 0
       ? cacheCreationTokens5m
-      : cacheCreationTokens;
+      : Math.max(0, cacheCreationTokens - (tier.cacheCreate12hPrice > 0 ? cacheCreationTokens12h : 0));
   const inputTokensPricedSeparately =
       (tier.cacheReadPrice > 0 ? cacheTokens : 0) +
       (tier.cacheCreatePrice > 0 ? cacheCreateTokens : 0) +
       (tier.cacheCreate1hPrice > 0 ? cacheCreationTokens1h : 0) +
+      (tier.cacheCreate12hPrice > 0 ? cacheCreationTokens12h : 0) +
       (tier.imagePrice > 0 ? imageInputTokens : 0) +
       (tier.audioInputPrice > 0 ? audioInputTokens : 0);
   const outputTokensPricedSeparately =
@@ -2351,6 +2353,7 @@ export function renderTieredModelPrice(opts) {
     cr: cacheTokens,
     cc: cacheCreateTokens,
     cc1h: cacheCreationTokens1h,
+    cc12h: cacheCreationTokens12h,
     img: imageInputTokens,
     img_o: imageOutputTokens,
     ai: audioInputTokens,
@@ -2418,6 +2421,7 @@ export function renderTieredModelPriceSimple(opts) {
     cache_tokens: cacheTokens = 0,
     cache_creation_tokens_5m: cacheCreationTokens5m = 0,
     cache_creation_tokens_1h: cacheCreationTokens1h = 0,
+    cache_creation_tokens_12h: cacheCreationTokens12h = 0,
     cache_creation_tokens: cacheCreationTokens = 0,
     displayMode = 'price',
     outputMode = 'segments',
@@ -2449,7 +2453,7 @@ export function renderTieredModelPriceSimple(opts) {
       });
     } else if (isPriceDisplayMode(displayMode)) {
       const hasAnyCacheTokens = cacheTokens > 0 || cacheCreationTokens > 0
-          || cacheCreationTokens5m > 0 || cacheCreationTokens1h > 0;
+          || cacheCreationTokens5m > 0 || cacheCreationTokens1h > 0 || cacheCreationTokens12h > 0;
       const priceSegments = BILLING_PRICING_VARS
           .filter((v) => v.group !== 'cache' || hasAnyCacheTokens)
           .map((v) => [v.field, v.shortLabel]);

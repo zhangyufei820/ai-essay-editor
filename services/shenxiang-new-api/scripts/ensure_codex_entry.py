@@ -38,6 +38,8 @@ CODEX_ALLOWED_MODELS = (
     "gpt-6-astra",
     "gpt-6-sol",
     "gpt-6.1-sol",
+    "gpt-6.2-sol",
+    "gpt-6.2-astra",
     "kimi-k3",
     "gpt-5.5-openai-compact",
     CODEX_AUTO_REVIEW_MODEL,

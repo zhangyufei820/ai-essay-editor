@@ -282,25 +282,39 @@ type OpenAIVideoResponse struct {
 }
 
 type InputTokenDetails struct {
-	CachedTokens         int `json:"cached_tokens"`
-	CachedCreationTokens int `json:"cached_creation_tokens,omitempty"`
-	CacheWriteTokens     int `json:"cache_write_tokens,omitempty"`
-	TextTokens           int `json:"text_tokens"`
-	AudioTokens          int `json:"audio_tokens"`
-	ImageTokens          int `json:"image_tokens"`
+	CachedTokens            int                     `json:"cached_tokens"`
+	CachedCreationTokens    int                     `json:"cached_creation_tokens,omitempty"`
+	CacheWriteTokens        int                     `json:"cache_write_tokens,omitempty"`
+	CacheWriteTokensDetails *CacheWriteTokenDetails `json:"cache_write_tokens_details,omitempty"`
+	TextTokens              int                     `json:"text_tokens"`
+	AudioTokens             int                     `json:"audio_tokens"`
+	ImageTokens             int                     `json:"image_tokens"`
+}
+
+type CacheWriteTokenDetails struct {
+	TTL30mTokens int `json:"ttl_30m_tokens,omitempty"`
+	TTL12hTokens int `json:"ttl_12h_tokens,omitempty"`
+}
+
+func (details InputTokenDetails) CacheWrite12hTokens() int {
+	if details.CacheWriteTokensDetails != nil && details.CacheWriteTokensDetails.TTL12hTokens > 0 {
+		return details.CacheWriteTokensDetails.TTL12hTokens
+	}
+	return 0
 }
 
 func (details InputTokenDetails) GetCacheWriteTokens() int {
-	if details.CacheWriteTokens > 0 {
-		return details.CacheWriteTokens
+	total := details.CacheWriteTokens
+	if details.CachedCreationTokens > total {
+		total = details.CachedCreationTokens
 	}
-	return details.CachedCreationTokens
-}
-
-func (details InputTokenDetails) CacheCreationTokensTotal() int {
-	total := details.CachedCreationTokens
-	if details.CacheWriteTokens > total {
-		total = details.CacheWriteTokens
+	// Some suppliers provide only the TTL breakdown; it is not additional usage.
+	split := details.CacheWrite12hTokens()
+	if details.CacheWriteTokensDetails != nil && details.CacheWriteTokensDetails.TTL30mTokens > 0 {
+		split += details.CacheWriteTokensDetails.TTL30mTokens
+	}
+	if split > total {
+		total = split
 	}
 	if total < 0 {
 		return 0
@@ -308,17 +322,22 @@ func (details InputTokenDetails) CacheCreationTokensTotal() int {
 	return total
 }
 
+func (details InputTokenDetails) CacheCreationTokensTotal() int {
+	return details.GetCacheWriteTokens()
+}
+
 func (usage *Usage) NormalizeCacheWriteTokens() {
 	if usage == nil {
 		return
 	}
-	if cacheWriteTokens := usage.PromptTokensDetails.GetCacheWriteTokens(); cacheWriteTokens > 0 {
-		usage.PromptTokensDetails.CachedCreationTokens = cacheWriteTokens
-		return
+	if usage.InputTokensDetails != nil && usage.PromptTokensDetails.CacheWriteTokensDetails == nil {
+		usage.PromptTokensDetails.CacheWriteTokensDetails = usage.InputTokensDetails.CacheWriteTokensDetails
 	}
-	if usage.InputTokensDetails != nil {
-		usage.PromptTokensDetails.CachedCreationTokens = usage.InputTokensDetails.GetCacheWriteTokens()
+	cacheWriteTokens := usage.PromptTokensDetails.GetCacheWriteTokens()
+	if usage.InputTokensDetails != nil && usage.InputTokensDetails.GetCacheWriteTokens() > cacheWriteTokens {
+		cacheWriteTokens = usage.InputTokensDetails.GetCacheWriteTokens()
 	}
+	usage.PromptTokensDetails.CachedCreationTokens = cacheWriteTokens
 }
 
 type OutputTokenDetails struct {

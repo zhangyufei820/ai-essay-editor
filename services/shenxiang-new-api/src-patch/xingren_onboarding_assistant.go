@@ -53,11 +53,13 @@ var (
 		Timeout: 120 * time.Second,
 	}
 	xingrenCodexAllowedTextModels = map[string]bool{
-		"gpt-5.4":      true,
-		"gpt-5.4-mini": true,
-		"gpt-6-astra":  true,
-		"gpt-6-sol":    true,
-		"gpt-6.1-sol":  true,
+		"gpt-5.4":       true,
+		"gpt-5.4-mini":  true,
+		"gpt-6-astra":   true,
+		"gpt-6-sol":     true,
+		"gpt-6.1-sol":   true,
+		"gpt-6.2-sol":   true,
+		"gpt-6.2-astra": true,
 	}
 )
 

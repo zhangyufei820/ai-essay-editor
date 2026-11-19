@@ -182,7 +182,7 @@ func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesRespons
 			usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
 		}
 		if resp.Usage.InputTokensDetails != nil {
-			usage.PromptTokensDetails.CachedTokens = resp.Usage.InputTokensDetails.CachedTokens
+			usage.PromptTokensDetails = *resp.Usage.InputTokensDetails
 			usage.PromptTokensDetails.CachedCreationTokens = resp.Usage.InputTokensDetails.GetCacheWriteTokens()
 			usage.PromptTokensDetails.ImageTokens = resp.Usage.InputTokensDetails.ImageTokens
 			usage.PromptTokensDetails.AudioTokens = resp.Usage.InputTokensDetails.AudioTokens

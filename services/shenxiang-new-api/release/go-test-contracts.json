@@ -178,5 +178,17 @@
   {
     "package": "./middleware",
     "run": "^TestUpscaleModelsRequireDedicatedEndpointBeforeChannelSelection$"
+  },
+  {
+    "package": "./relay/helper",
+    "run": "^TestGpt62MarketplacePricingAllTiersAndMultipliers$"
+  },
+  {
+    "package": "./service",
+    "run": "^TestGpt62CacheWriteBreakdownPreservesLegacyExpressions$"
+  },
+  {
+    "package": "./dto",
+    "run": "^TestInputTokenDetails12hSplitDoesNotLoseAggregateWrites$"
   }
 ]

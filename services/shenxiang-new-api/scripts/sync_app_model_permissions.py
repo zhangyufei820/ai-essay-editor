@@ -271,15 +271,27 @@ GPT61_SOL_CHANNEL_GROUP_BY_TAG = {
     for index in range(1, 5)
     for tag in (f"{GPT61_SOL_CHANNEL_TAG_PREFIX}{group}-{index}",)
 }
+GPT62_MODELS = ("gpt-6.2-sol", "gpt-6.2-astra")
+GPT62_CHANNEL_MODEL_BY_TAG = {
+    f"xingren-gpt62-{model.rsplit('-', 1)[-1]}-{group}-{index}": model
+    for model in GPT62_MODELS
+    for group in GPT6_ASTRA_MANAGED_GROUPS
+    for index in range(1, 4)
+}
+GPT62_CHANNEL_GROUP_BY_TAG = {
+    tag: tag.rsplit("-", 2)[-2] for tag in GPT62_CHANNEL_MODEL_BY_TAG
+}
 GPT6_MANAGED_CHANNEL_GROUP_BY_TAG = {
     **GPT6_ASTRA_CHANNEL_GROUP_BY_TAG,
     **GPT6_SOL_CHANNEL_GROUP_BY_TAG,
     **GPT61_SOL_CHANNEL_GROUP_BY_TAG,
+    **GPT62_CHANNEL_GROUP_BY_TAG,
 }
 GPT6_MANAGED_CHANNEL_MODEL_BY_TAG = {
     **{tag: GPT6_ASTRA_MODEL for tag in GPT6_ASTRA_CHANNEL_TAGS},
     **{tag: GPT6_SOL_MODEL for tag in GPT6_SOL_CHANNEL_TAGS},
     **{tag: GPT61_SOL_MODEL for tag in GPT61_SOL_CHANNEL_TAGS},
+    **GPT62_CHANNEL_MODEL_BY_TAG,
 }
 GPT6_MANAGED_CHANNEL_TAGS = tuple(GPT6_MANAGED_CHANNEL_GROUP_BY_TAG)
 GROK45_CHANNEL_TAG = "xingren-grok45"
@@ -340,6 +352,7 @@ CODEX_ALLOWED_MODELS = [
     "gpt-6-astra",
     "gpt-6-sol",
     "gpt-6.1-sol",
+    *GPT62_MODELS,
     "kimi-k3",
     "gpt-5.5-openai-compact",
     CODEX_AUTO_REVIEW_MODEL,
@@ -684,6 +697,24 @@ PUBLIC_OPENAI_TEXT_MODELS = {
         "longcontext_cache_create_cny": Decimal("5"),
     },
 }
+for _gpt62_model, _gpt62_scale in (("gpt-6.2-sol", Decimal("1")), ("gpt-6.2-astra", Decimal("4"))):
+    PUBLIC_OPENAI_TEXT_MODELS[_gpt62_model] = {
+        "description": ("GPT-6.2 " + _gpt62_model.rsplit("-", 1)[-1].title()
+            + "，人民币计费，所有用户固定 1X（含月卡）。完整输入 ≤272,000 Token 使用基础档，超过后整轮使用长上下文档。"
+            + "每百万 Token 基础档输入 ¥" + str(2 * _gpt62_scale) + "、输出 ¥" + str(10 * _gpt62_scale)
+            + "、缓存读取 ¥" + str(Decimal("0.1") * _gpt62_scale) + "、缓存写入 ¥" + str(Decimal("2.5") * _gpt62_scale)
+            + "、12小时缓存写入 ¥" + str(5 * _gpt62_scale) + "；长上下文档输入 ¥" + str(4 * _gpt62_scale)
+            + "、输出 ¥" + str(15 * _gpt62_scale) + "、缓存读取 ¥" + str(Decimal("0.2") * _gpt62_scale)
+            + "、缓存写入 ¥" + str(5 * _gpt62_scale) + "、12小时缓存写入 ¥" + str(10 * _gpt62_scale) + "。"),
+        "icon": "OpenAI", "tags": "text,openai,codex,reasoning",
+        "endpoints": '{"openai":"/v1/chat/completions","openai-response":"/v1/responses"}',
+        **{key: value * _gpt62_scale for key, value in {
+            "input_cny": Decimal("2"), "output_cny": Decimal("10"),
+            "cache_read_cny": Decimal("0.1"), "cache_create_cny": Decimal("2.5"), "cache_create_12h_cny": Decimal("5"),
+            "longcontext_input_cny": Decimal("4"), "longcontext_output_cny": Decimal("15"),
+            "longcontext_cache_read_cny": Decimal("0.2"), "longcontext_cache_create_cny": Decimal("5"), "longcontext_cache_create_12h_cny": Decimal("10"),
+        }.items()},
+    }
 PUBLIC_OPENAI_TEXT_MODELS[CODEX_AUTO_REVIEW_MODEL] = {
     **PUBLIC_OPENAI_TEXT_MODELS["gpt-5.5"],  # Preserve review retail pricing when replacing its upstream model.
     "description": "Codex 自动审批审查模型，仅供已授权的 Codex 令牌调用。",
@@ -1181,6 +1212,8 @@ def openai_text_tier_expr(prices: dict[str, object], exchange_rate: Decimal, pre
         + openai_text_price_usd_literal(prices, f"{prefix}cache_read_cny", exchange_rate)
         + " + cc * "
         + openai_text_price_usd_literal(prices, f"{prefix}cache_create_cny", exchange_rate)
+        + (" + cc12h * " + openai_text_price_usd_literal(prices, f"{prefix}cache_create_12h_cny", exchange_rate)
+           if f"{prefix}cache_create_12h_cny" in prices else "")
         + ")"
     )
 
@@ -1196,9 +1229,11 @@ def openai_text_billing_expr(prices: dict[str, object], exchange_rate: Decimal) 
     )
 
 
-def ensure_public_openai_text_models() -> None:
+def ensure_public_openai_text_models(models: tuple[str, ...] | None = None) -> None:
     statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
     for model, config in PUBLIC_OPENAI_TEXT_MODELS.items():
+        if models is not None and model not in models:
+            continue
         if is_retired_codex_text_model(model):
             continue
         statements.append(
@@ -1249,7 +1284,7 @@ def ensure_public_openai_text_models() -> None:
     mysql_exec("\n".join(statements))
 
 
-def sync_public_openai_text_pricing() -> None:
+def sync_public_openai_text_pricing(models: tuple[str, ...] | None = None) -> None:
     model_ratios = parse_json_option("ModelRatio")
     completion_ratios = parse_json_option("CompletionRatio")
     cache_ratios = parse_json_option("CacheRatio")
@@ -1260,6 +1295,8 @@ def sync_public_openai_text_pricing() -> None:
     exchange_rate = usd_exchange_rate()
 
     for model, prices in PUBLIC_OPENAI_TEXT_MODELS.items():
+        if models is not None and model not in models:
+            continue
         if is_retired_codex_text_model(model):
             continue
         input_cny = prices["input_cny"]
@@ -2716,7 +2753,7 @@ def sync_tokens(
             continue
         if name in TOKEN_PROFILES["codex"]:
             candidates = (
-                list(SPECIAL_TEXT_ALLOWED_MODELS)
+                list(SPECIAL_TEXT_ALLOWED_MODELS) + list(GPT62_MODELS)
                 if raw_group == SPECIAL_TEXT_GROUP
                 else profiles["codex"]
             )
@@ -2776,7 +2813,7 @@ def sync_user_codex_tokens(
     )
     token_updates: list[tuple[str, str, str]] = []
     for token_id, token_key, raw_limits, raw_enabled, raw_group in token_rows:
-        candidates = list(SPECIAL_TEXT_ALLOWED_MODELS) if raw_group == SPECIAL_TEXT_GROUP else required_models
+        candidates = list(SPECIAL_TEXT_ALLOWED_MODELS) + list(GPT62_MODELS) if raw_group == SPECIAL_TEXT_GROUP else required_models
         if routable_by_group is not None:
             candidates = [
                 model for model in candidates if model not in CONTROLLED_CODEX_MODEL_ALIASES
@@ -2791,7 +2828,7 @@ def sync_user_codex_tokens(
         next_limits = (
             reconcile_codex_model_limits(raw_limits, scoped_models)
             if routable_by_group is not None
-            else SPECIAL_TEXT_MODEL_LIMITS
+            else ",".join((*SPECIAL_TEXT_ALLOWED_MODELS, *GPT62_MODELS))
             if raw_group == SPECIAL_TEXT_GROUP
             else ensure_codex_image_model_limits(raw_limits, required_models)
         )
@@ -2825,21 +2862,21 @@ def append_model_limit(raw_limits: str, model: str) -> str:
 
 def sync_astra_access_for_target_user_tokens(
     routable_by_group: dict[str, set[str]] | None = None,
+    *, models: tuple[str, ...] | None = None, include_admin: bool = False,
 ) -> dict[str, int]:
     """Grant managed GPT-6 models to restricted user keys in supported groups."""
     normalized_group = "REPLACE(COALESCE(`group`, ''), ' ', '')"
     group_predicate = " OR ".join(
         "FIND_IN_SET(" + sql_quote(group) + ", " + normalized_group + ") > 0"
-        for group in GPT6_ASTRA_USER_ACCESS_GROUPS
+        for group in (*GPT6_ASTRA_USER_ACCESS_GROUPS, "special")
     )
     excluded_names_sql = ", ".join(sql_quote(name) for name in GPT6_ASTRA_EXCLUDED_TOKEN_NAMES)
     token_rows = mysql(
         "SELECT id, COALESCE(`key`, ''), COALESCE(model_limits, ''), COALESCE(`group`, '') FROM tokens "
         "WHERE deleted_at IS NULL AND status = 1 AND model_limits_enabled = 1 "
-        "AND user_id <> "
-        + str(ADMIN_SYSTEM_TOKEN_USER_ID)
-        + " AND ("
-        + group_predicate
+        + ("" if include_admin else "AND user_id <> " + str(ADMIN_SYSTEM_TOKEN_USER_ID) + " ")
+        + "AND ("
+        + group_predicate + " OR " + normalized_group + " = ''"
         + ") AND COALESCE(name, '') NOT IN ("
         + excluded_names_sql
         + ");"
@@ -2847,14 +2884,17 @@ def sync_astra_access_for_target_user_tokens(
     token_updates: list[tuple[str, str, str]] = []
     for token_id, token_key, raw_limits, raw_group in token_rows:
         next_limits = raw_limits
+        access_models = (list(models) if models is not None else
+                         list(GPT62_MODELS) if set(raw_group.replace(" ", "").split(",")) == {"special"} else
+                         [GPT6_ASTRA_MODEL, GPT6_SOL_MODEL, GPT61_SOL_MODEL, *GPT62_MODELS])
         routable = set(
             routable_codex_models_for_group_chain(
                 raw_group,
-                [GPT6_ASTRA_MODEL, GPT6_SOL_MODEL, GPT61_SOL_MODEL],
+                access_models,
                 routable_by_group,
             )
         )
-        for model in (GPT6_ASTRA_MODEL, GPT6_SOL_MODEL, GPT61_SOL_MODEL):
+        for model in access_models:
             if routable_by_group is None or model in routable:
                 next_limits = append_model_limit(next_limits, model)
             else:
@@ -3135,6 +3175,12 @@ def sync_abilities() -> None:
         + ", ".join(sql_quote(group) for group in GPT6_ASTRA_MANAGED_GROUPS)
         + ") AND REPLACE(COALESCE(models, ''), ' ', '') = "
         + sql_quote(GPT61_SOL_MODEL)
+    )
+    gpt62_enabled_predicate = " OR ".join(
+        "(model = " + sql_quote(model) + " AND channel_id IN (SELECT id FROM channels WHERE status=1 AND tag IN ("
+        + ",".join(sql_quote(tag) for tag, owned_model in GPT62_CHANNEL_MODEL_BY_TAG.items() if owned_model == model)
+        + ") AND REPLACE(COALESCE(models,''),' ','')=" + sql_quote(model) + "))"
+        for model in GPT62_MODELS
     )
     statements = [
         "START TRANSACTION;",
@@ -3557,7 +3603,7 @@ def sync_abilities() -> None:
                 continue
             if tag == KIMI_K3_CHANNEL_TAG and model != KIMI_K3_MODEL:
                 continue
-            if model in {GPT6_ASTRA_MODEL, GPT6_SOL_MODEL, GPT61_SOL_MODEL} and GPT6_MANAGED_CHANNEL_MODEL_BY_TAG.get(tag) != model:
+            if model in {GPT6_ASTRA_MODEL, GPT6_SOL_MODEL, GPT61_SOL_MODEL, *GPT62_MODELS} and GPT6_MANAGED_CHANNEL_MODEL_BY_TAG.get(tag) != model:
                 continue
             if tag in GPT6_MANAGED_CHANNEL_MODEL_BY_TAG and model != GPT6_MANAGED_CHANNEL_MODEL_BY_TAG[tag]:
                 continue
@@ -3682,7 +3728,7 @@ def sync_abilities() -> None:
             + sql_quote(GPT61_SOL_MODEL)
             + " AND channel_id IN ("
             + sol61_enabled_channel_sql
-            + ")));",
+            + ")) OR " + gpt62_enabled_predicate + ");",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
             + "(SELECT id FROM channels WHERE tag IN ("
             + discount_channel_tags_sql
@@ -3724,7 +3770,7 @@ def sync_abilities() -> None:
             + sql_quote(GPT61_SOL_MODEL)
             + " AND channel_id IN ("
             + sol61_enabled_channel_sql
-            + ")));",
+            + ")) OR " + gpt62_enabled_predicate + ");",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
             + "(SELECT id FROM channels WHERE tag IN ("
             + special_channel_tags_sql
@@ -3766,7 +3812,7 @@ def sync_abilities() -> None:
             + sql_quote(GPT61_SOL_MODEL)
             + " AND channel_id IN ("
             + sol61_enabled_channel_sql
-            + ")));",
+            + ")) OR " + gpt62_enabled_predicate + ");",
             "UPDATE abilities SET enabled = 0 WHERE channel_id IN "
             + "(SELECT id FROM channels WHERE tag IN ("
             + plus_channel_tags_sql
@@ -3839,6 +3885,7 @@ def sync_abilities() -> None:
                     (GPT6_ASTRA_MODEL, GPT6_ASTRA_CHANNEL_TAGS),
                     (GPT6_SOL_MODEL, GPT6_SOL_CHANNEL_TAGS),
                     (GPT61_SOL_MODEL, GPT61_SOL_CHANNEL_TAGS),
+                    *[(model, tuple(tag for tag, owned_model in GPT62_CHANNEL_MODEL_BY_TAG.items() if owned_model == model)) for model in GPT62_MODELS],
                 )
             ],
             *[
@@ -3851,6 +3898,7 @@ def sync_abilities() -> None:
                     (GPT6_ASTRA_MODEL, GPT6_ASTRA_CHANNEL_TAGS),
                     (GPT6_SOL_MODEL, GPT6_SOL_CHANNEL_TAGS),
                     (GPT61_SOL_MODEL, GPT61_SOL_CHANNEL_TAGS),
+                    *[(model, tuple(tag for tag, owned_model in GPT62_CHANNEL_MODEL_BY_TAG.items() if owned_model == model)) for model in GPT62_MODELS],
                 )
             ],
             "UPDATE abilities AS ability JOIN channels AS channel ON channel.id = ability.channel_id "

@@ -90,6 +90,8 @@ else
 fi
 run_optional_reconcile "grok-4.5" "GROK45_MODEL_SYNC_LOCK_HELD" "$GROK45_SCRIPT"
 run_optional_reconcile "grok-4.6" "GROK46_MODEL_SYNC_LOCK_HELD" "$GROK46_SCRIPT"
+GPT6_MODEL_PROFILE=sol62 run_optional_reconcile "gpt-6.2-sol" "GPT62_SOL_CHANNEL_SYNC_LOCK_HELD" "$GPT6_ASTRA_SCRIPT"
+GPT6_MODEL_PROFILE=astra62 run_optional_reconcile "gpt-6.2-astra" "GPT62_ASTRA_CHANNEL_SYNC_LOCK_HELD" "$GPT6_ASTRA_SCRIPT"
 
 if [[ ${#optional_failures[@]} -gt 0 ]]; then
   printf 'warning: model permission sync completed with optional_failures=%s\n' "$(IFS=,; printf '%s' "${optional_failures[*]}")" >&2

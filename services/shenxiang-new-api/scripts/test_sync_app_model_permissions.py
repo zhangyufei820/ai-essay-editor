@@ -137,7 +137,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             SCRIPT_PATH.parent.parent
             / "src-patch/web/classic/src/helpers/utils.jsx"
         ).read_text(encoding="utf-8")
-        self.assertIn("['gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol'].includes", frontend)
+        self.assertIn("['gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol', 'gpt-6.2-sol', 'gpt-6.2-astra'].includes", frontend)
 
     def test_gpt6_astra_ability_sync_preserves_discount_and_plus_visibility(self) -> None:
         source = SCRIPT_PATH.read_text(encoding="utf-8")
@@ -581,7 +581,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4-mini,gpt-5.4,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4-mini,gpt-5.4,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,gpt-6.2-sol,gpt-6.2-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
@@ -589,7 +589,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
-            "gpt-5.4,gpt-5.4-mini,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
+            "gpt-5.4,gpt-5.4-mini,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,gpt-6.2-sol,gpt-6.2-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_token_cache_key_uses_crypto_secret_hmac(self) -> None:
@@ -1401,7 +1401,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("`group` = 'kiro-stable'", sql)
         self.assertIn("claude-sonnet-4-5-20250929", sql)
         special_update = next(statement for statement in sql.splitlines() if "WHERE id = '105'" in statement)
-        self.assertIn("model_limits = '" + self.module.SPECIAL_TEXT_MODEL_LIMITS + "'", special_update)
+        self.assertIn("model_limits = '" + self.module.SPECIAL_TEXT_MODEL_LIMITS + ",gpt-6.2-sol,gpt-6.2-astra'", special_update)
         self.assertNotIn("codex-auto-review", special_update)
         self.assertIn("CACHE:admin-codex-key,user-claude-key,user-image-key,user-special-codex-key", sql)
 
@@ -1488,8 +1488,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn("WHERE id = '106'", sql)
         self.assertIn("CACHE:key-101,key-102,key-103,key-104,key-105,key-106", sql)
         self.assertIn("model_limits_enabled = 1", sql)
-        self.assertIn("gpt-5.4,gpt-5.4-mini,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
-        self.assertIn("gpt-5.4-mini,gpt-5.4,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4,gpt-5.4-mini,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,gpt-6.2-sol,gpt-6.2-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("gpt-5.4-mini,gpt-5.4,gpt-5.6-terra,gpt-5.6-sol,gpt-6-astra,gpt-6-sol,gpt-6.1-sol,gpt-6.2-sol,gpt-6.2-astra,kimi-k3,gpt-5.5-openai-compact,image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("gpt-5.3-codex-spark", sql)
         self.assertNotIn("gpt-5.3-spark", sql)
         self.assertNotIn("gpt-5.4-openai-compact", sql)
@@ -1530,7 +1530,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         sql = "\n".join(captured)
         self.assertEqual(result, {"tokens_rewritten": 1, "token_caches_deleted": 1})
-        self.assertIn("model_limits = '" + self.module.SPECIAL_TEXT_MODEL_LIMITS + "'", sql)
+        self.assertIn("model_limits = '" + self.module.SPECIAL_TEXT_MODEL_LIMITS + ",gpt-6.2-sol,gpt-6.2-astra'", sql)
         self.assertNotIn("codex-auto-review", sql)
         self.assertNotIn("image 2电商商品图快速通道(1.5K)", sql)
         self.assertIn("CACHE:key-108", sql)

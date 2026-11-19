@@ -30,7 +30,7 @@ func TestOaiResponsesHandlerCopiesCacheWriteTokens(t *testing.T) {
 				"input_tokens":100,
 				"output_tokens":20,
 				"total_tokens":120,
-				"input_tokens_details":{"cached_tokens":70,"cache_write_tokens":15}
+				"input_tokens_details":{"cached_tokens":70,"cache_write_tokens":15,"cache_write_tokens_details":{"ttl_30m_tokens":10,"ttl_12h_tokens":5}}
 			}
 		}`)),
 	}
@@ -39,6 +39,7 @@ func TestOaiResponsesHandlerCopiesCacheWriteTokens(t *testing.T) {
 	require.Nil(t, apiErr)
 	require.Equal(t, 70, usage.PromptTokensDetails.CachedTokens)
 	require.Equal(t, 15, usage.PromptTokensDetails.CachedCreationTokens)
+	require.Equal(t, 5, usage.PromptTokensDetails.CacheWrite12hTokens())
 }
 
 func TestOaiResponsesStreamHandlerCopiesCacheWriteTokens(t *testing.T) {
@@ -54,7 +55,7 @@ func TestOaiResponsesStreamHandlerCopiesCacheWriteTokens(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
 		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
-			`data: {"type":"response.completed","response":{"object":"response","status":"completed","usage":{"input_tokens":100,"output_tokens":20,"total_tokens":120,"input_tokens_details":{"cached_tokens":70,"cache_write_tokens":15}}}}`,
+			`data: {"type":"response.completed","response":{"object":"response","status":"completed","usage":{"input_tokens":100,"output_tokens":20,"total_tokens":120,"input_tokens_details":{"cached_tokens":70,"cache_write_tokens":15,"cache_write_tokens_details":{"ttl_30m_tokens":10,"ttl_12h_tokens":5}}}}}`,
 			`data: [DONE]`,
 			``,
 		}, "\n"))),
@@ -65,5 +66,6 @@ func TestOaiResponsesStreamHandlerCopiesCacheWriteTokens(t *testing.T) {
 	require.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
 	require.Equal(t, 70, usage.PromptTokensDetails.CachedTokens)
 	require.Equal(t, 15, usage.PromptTokensDetails.CachedCreationTokens)
+	require.Equal(t, 5, usage.PromptTokensDetails.CacheWrite12hTokens())
 	require.NotContains(t, recorder.Body.String(), "response.completed")
 }
