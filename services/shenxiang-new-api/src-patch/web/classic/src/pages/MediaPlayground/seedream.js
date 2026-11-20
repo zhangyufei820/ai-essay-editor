@@ -1,12 +1,9 @@
-const MODEL = 'doubao-seedream-5-5-261028';
+export const SEEDREAM_MODEL = 'doubao-seedream-5-5-261028';
 const MODES = ['text', 'edit', 'split'];
 const LOW_PIXEL_LIMIT = 2610000;
 
-// RMB per image, stored in thousandths of a yuan so pricing stays exact.
-const RATES = {
-  discount: { input: 35, low: 91, high: 161 },
-  original: { input: 50, low: 130, high: 230 },
-};
+// Ten-thousandths of a yuan, including the shop's 20% markup.
+const RATES = { input: 420, low: 1092, high: 1932 };
 
 export function defaultSeedreamForm(mode = 'text') {
   return {
@@ -98,7 +95,7 @@ export function buildSeedreamRequest(form, images = []) {
   const error = validateSeedream(form, images.length);
   if (error) throw new Error(error);
   const request = {
-    model: MODEL,
+    model: SEEDREAM_MODEL,
     size: form.size === 'custom' ? Number(form.width) + 'x' + Number(form.height) : form.size,
     output_format: form.format,
     response_format: 'url',
@@ -119,10 +116,8 @@ export function buildSeedreamRequest(form, images = []) {
 
 // A quote without actualOutputs uses the requested cap. All layers share the
 // request's price tier. A request with zero successful outputs costs zero.
-export function seedreamQuote(form, inputCount, priceGroup = 'discount', actualOutputs) {
+export function seedreamQuote(form, inputCount, actualOutputs) {
   if (!form || !MODES.includes(form.mode) || countError(form.mode, inputCount) || sizeError(form)) return null;
-  const group = priceGroup === 'default' ? 'discount' : priceGroup;
-  if (group !== 'discount' && group !== 'original') return null;
   if (form.mode === 'split' && !validMaxImages(form.maxImages)) return null;
   const outputCap = form.mode === 'split' ? Number(form.maxImages) : 1;
   const outputCount = actualOutputs === undefined ? outputCap : actualOutputs;
@@ -131,11 +126,33 @@ export function seedreamQuote(form, inputCount, priceGroup = 'discount', actualO
     ? Number(form.width) * Number(form.height) <= LOW_PIXEL_LIMIT
     : form.size === '1K' || form.size === '1.5K';
   const tier = lowTier ? 'low' : 'high';
-  const rate = RATES[group];
-  const inputMilli = outputCount === 0 ? 0 : inputCount * rate.input;
-  const outputMilli = outputCount * rate[tier];
+  const rate = RATES;
+  const inputUnits = outputCount === 0 ? 0 : inputCount * rate.input;
+  const outputUnits = outputCount * rate[tier];
   return {
-    inputMilli, outputMilli, totalMilli: inputMilli + outputMilli,
-    unitInputMilli: rate.input, unitOutputMilli: rate[tier], outputCount, tier,
+    inputUnits, outputUnits, totalUnits: inputUnits + outputUnits,
+    unitInputUnits: rate.input, unitOutputUnits: rate[tier], outputCount, tier,
   };
+}
+
+export function seedreamLayers(task) {
+  if (task?.model !== SEEDREAM_MODEL) return [];
+  const items = task.items || task.data?.items || [];
+  if (!Array.isArray(items)) return [];
+  return items.map((item, index) => {
+    const layer = item.metadata?.layer || {};
+    return {
+      ...layer, url: item.cachedUrl || item.url, index,
+      filename: item.filename,
+      label: layer.z_index === 0 ? '底图' : layer.name || `图层 ${layer.z_index ?? index}`,
+    };
+  });
+}
+
+export function seedreamLayerText(recognition) {
+  if (typeof recognition?.text === 'string') return recognition.text;
+  if (!Array.isArray(recognition?.lines)) return '';
+  return recognition.lines.map((line) =>
+    line.text || (Array.isArray(line.runs) ? line.runs.map((run) => run.text || '').join('') : ''),
+  ).filter(Boolean).join('\n');
 }

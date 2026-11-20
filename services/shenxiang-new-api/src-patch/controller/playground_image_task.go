@@ -203,6 +203,15 @@ func recoverInterruptedPlaygroundImageTaskOnStartup(task *model.Task) bool {
 	}
 	var payload playgroundImageTaskPayload
 	_ = task.GetData(&payload)
+	if payload.Model == dto.Seedream55Model && task.Status == model.TaskStatusInProgress {
+		var response dto.ImageResponse
+		body, err := os.ReadFile(payload.RequestFile + ".outputs")
+		if err != nil || json.Unmarshal(body, &response) != nil || len(response.Data) == 0 {
+			return false
+		}
+		gopool.Go(func() { finishSeedreamImageTask(task, &response, http.StatusOK, payload.ActualQuota) })
+		return true
+	}
 	now := time.Now()
 	ensurePlaygroundImageTaskDeadline(&payload, task.SubmitTime, now)
 	if payload.DeadlineAt > 0 && now.Unix() >= payload.DeadlineAt {
@@ -296,6 +305,7 @@ type playgroundImageTaskPayload struct {
 	Metadata          map[string]interface{} `json:"metadata,omitempty"`
 	CachedURL         string                 `json:"cached_url,omitempty"`
 	Item              *playgroundMediaItem   `json:"item,omitempty"`
+	Items             []*playgroundMediaItem `json:"items,omitempty"`
 	OriginalStatus    int                    `json:"original_status,omitempty"`
 	Error             string                 `json:"error,omitempty"`
 	ActualQuota       int                    `json:"actual_quota,omitempty"`
@@ -371,7 +381,16 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "model is required"})
 		return
 	}
-	if strings.TrimSpace(imageReq.Prompt) == "" {
+	if imageReq.Model == dto.Seedream55Model {
+		if path != "/pg/images/generations" {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "豆包绘图请使用图片生成端点"})
+			return
+		}
+		if _, err := dto.Seedream55QuoteForRequest(&imageReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+			return
+		}
+	} else if strings.TrimSpace(imageReq.Prompt) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "prompt is required"})
 		return
 	}
@@ -446,6 +465,12 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 	if path == "/pg/images/edits" {
 		action = constant.TaskActionImageEdit
 		workflow = "图像修改"
+	} else if imageReq.Model == dto.Seedream55Model && len(imageReq.Image) > 0 {
+		action = constant.TaskActionImageEdit
+		workflow = "参考图改图"
+		if imageReq.LayerDecomposition {
+			workflow = "图层拆分"
+		}
 	}
 
 	now := time.Now().Unix()
@@ -1253,6 +1278,10 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	if recorder.Code >= http.StatusBadRequest {
 		reason := resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, recorder.Body.Bytes(), recorder.Code)
 		recordPlaygroundImageTaskAttempt(task, &payload, relayCtx, capture, recorder.Code, reason)
+		if recorder.Header().Get("X-AIPHUI-Retryable") == "false" {
+			markPlaygroundImageTaskFailure(task, reason)
+			return
+		}
 		retryOrFailPlaygroundImageTask(task, reason, recorder.Code, userID, username, role, userGroup, usingGroup, tokenName)
 		return
 	}
@@ -1276,6 +1305,15 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		return
 	}
 	capture.Response = &response
+
+	if payload.Model == dto.Seedream55Model {
+		// A restart during media transfer may resume this exact response, never another generation.
+		if err := saveSeedreamImageTaskResponse(payload.RequestFile, responseBody); err != nil {
+			logger.LogError(relayCtx, "failed to checkpoint generated images for task "+taskID)
+		}
+		finishSeedreamImageTask(task, &response, recorder.Code, capture.Quota)
+		return
+	}
 
 	item, err := cacheFirstPlaygroundImageTaskResult(relayCtx, task, &payload, capture.Response)
 	if err != nil {
@@ -1824,7 +1862,10 @@ func cacheFirstPlaygroundImageTaskResult(c *gin.Context, task *model.Task, paylo
 	if response == nil || len(response.Data) == 0 {
 		return nil, errors.New("image task returned no image")
 	}
-	first := response.Data[0]
+	return cachePlaygroundImageTaskData(c, task, payload, response.Data[0])
+}
+
+func cachePlaygroundImageTaskData(c *gin.Context, task *model.Task, payload *playgroundImageTaskPayload, first dto.ImageData) (*playgroundMediaItem, error) {
 	rawURL := strings.TrimSpace(first.Url)
 	if rawURL == "" && strings.TrimSpace(first.B64Json) != "" {
 		rawURL = "data:image/png;base64," + strings.TrimSpace(first.B64Json)
@@ -2321,6 +2362,9 @@ func taskToPlaygroundImageTask(task *model.Task) gin.H {
 		"data":           payload,
 		"item":           payload.Item,
 	}
+	if len(payload.Items) > 0 {
+		response["items"] = payload.Items
+	}
 	for key, value := range playgroundImageTaskRetryMetadata(task, &payload, time.Now()) {
 		response[key] = value
 	}
@@ -2379,6 +2423,21 @@ func taskToOpenAIImageTask(task *model.Task) map[string]interface{} {
 		}
 		if payload.Item != nil && strings.TrimSpace(payload.Item.RevisedPrompt) != "" {
 			imageData[0]["revised_prompt"] = payload.Item.RevisedPrompt
+		}
+		if len(payload.Items) > 0 {
+			imageData = make([]map[string]interface{}, 0, len(payload.Items))
+			for _, item := range payload.Items {
+				data := map[string]interface{}{"url": item.URL}
+				if layer, ok := item.Metadata["layer"].(map[string]interface{}); ok {
+					for k, v := range layer {
+						data[k] = v
+					}
+				}
+				if item.RevisedPrompt != "" {
+					data["revised_prompt"] = item.RevisedPrompt
+				}
+				imageData = append(imageData, data)
+			}
 		}
 		response["data"].(map[string]interface{})["data"] = imageData
 		response["data"].(map[string]interface{})["url"] = resultURL
@@ -2491,6 +2550,7 @@ func cleanupPlaygroundImageTaskRequest(path string) {
 		return
 	}
 	_ = os.Remove(cleanPath)
+	_ = os.Remove(cleanPath + ".outputs")
 }
 
 func extractPlaygroundImageTaskError(body []byte, status int) string {

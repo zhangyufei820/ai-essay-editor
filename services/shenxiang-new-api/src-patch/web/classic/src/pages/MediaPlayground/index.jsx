@@ -56,6 +56,7 @@ import { webBuildEntryFromHtml } from './web-build-entry';
 import { planImageUploadTargets } from './image-upload-budget';
 import UpscalePanel from './UpscalePanel';
 import SeedreamPanel from './SeedreamPanel';
+import { buildSeedreamRequest, SEEDREAM_MODEL, seedreamLayers, seedreamLayerText } from './seedream.js';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -1740,7 +1741,7 @@ function restoreStoredResults() {
     return parsed.filter((item) => {
       const url = item?.cachedUrl || item?.url;
       return (
-        item?.id &&
+        item?.id && item.model !== SEEDREAM_MODEL &&
         ['image', 'video'].includes(item.kind) &&
         typeof item.createdAt === 'number' &&
         now - item.createdAt < MEDIA_RESULT_TTL_MS &&
@@ -1756,7 +1757,7 @@ function persistResults(results) {
   try {
     const now = Date.now();
     const storable = results
-      .filter((item) => now - (item.createdAt || now) < MEDIA_RESULT_TTL_MS)
+      .filter((item) => item.model !== SEEDREAM_MODEL && now - (item.createdAt || now) < MEDIA_RESULT_TTL_MS)
       .map((item) => {
         const durableUrl = item.cachedUrl || item.url;
         if (!isPersistentMediaURL(durableUrl)) return null;
@@ -2623,6 +2624,8 @@ function imageTaskToResult(
     revisedPrompt,
     displayPrompt: firstPromptText(revisedPrompt, originalPrompt),
     taskId: task.task_id,
+    layers: seedreamLayers(task),
+    workflow: task.data?.workflow,
     actualSize,
     requestedSize,
     sizeMismatch: Boolean(
@@ -2630,7 +2633,7 @@ function imageTaskToResult(
     ),
     status: 'ready',
     cacheStatus: 'ready',
-    createdAt: Date.now(),
+    createdAt: task.finish_time ? Number(task.finish_time) * 1000 : Date.now(),
   };
 }
 
@@ -3443,6 +3446,26 @@ function ResultCard({
           <p>{displayPrompt}</p>
         </div>
       ) : null}
+      {!!result.layers?.length && (result.workflow === '图层拆分' || result.layers.length > 1) && (
+        <details className='mp-seedream-layers'>
+          <summary>查看和下载全部 {result.layers.length} 张（含底图）</summary>
+          <p>底图位于最下方。将各图层按层序从小到大叠放，可以还原设计稿。</p>
+          <ol>{result.layers.map((layer) => (
+            <li key={layer.index}>
+              <img loading='lazy' src={layer.url} alt={layer.label} />
+              <div>
+                <strong>{layer.label}</strong>
+                {layer.description && <p>{layer.description}</p>}
+                {Number.isInteger(layer.z_index) && <p>层序 {layer.z_index}</p>}
+                {Array.isArray(layer.bounding_box?.absolute) && <p>在底图上的位置（左、上、右、下，像素） {layer.bounding_box.absolute.join('，')}</p>}
+                {seedreamLayerText(layer.text_recognition) && <p>识别文字：{seedreamLayerText(layer.text_recognition)}</p>}
+                {layer.text_recognition && <details><summary>文字位置与样式数据</summary><pre>{JSON.stringify(layer.text_recognition, null, 2)}</pre></details>}
+                <button type='button' className='mp-btn-tool' onClick={() => downloadURL(layer.url, layer.filename || 'layer.png')}>下载{layer.label}</button>
+              </div>
+            </li>
+          ))}</ol>
+        </details>
+      )}
       <div className='mp-result-action-stack'>
         <div className='mp-result-next-actions' aria-label='下一步创作'>
           {result.kind === 'image' ? (
@@ -3545,6 +3568,7 @@ const MediaPlayground = () => {
   const [group, setGroup] = useState('');
   const [groups, setGroups] = useState([]);
   const [models, setModels] = useState(EMPTY_MODELS);
+  const seedreamAllowed = models.includes(SEEDREAM_MODEL);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const promptTextareaRef = useRef(null);
   const pollingCancelledRef = useRef(false);
@@ -3996,8 +4020,8 @@ const MediaPlayground = () => {
 
   useEffect(() => {
     let cancelled = false;
-    const model = mode === 'image' ? imageModel : videoModel;
-    const workflow =
+    const model = isSeedream ? SEEDREAM_MODEL : mode === 'image' ? imageModel : videoModel;
+    const workflow = isSeedream ? 'image_edit' :
       mode === 'image'
         ? imageWorkflow === 'edit'
           ? 'image_edit'
@@ -4009,7 +4033,7 @@ const MediaPlayground = () => {
     return () => {
       cancelled = true;
     };
-  }, [imageModel, imageWorkflow, mode, videoModel, videoWorkflow]);
+  }, [imageModel, imageWorkflow, isSeedream, mode, videoModel, videoWorkflow]);
 
   useEffect(() => {
     setSize(activeModel.defaultSize || activeModel.sizes?.[0] || '1024x1024');
@@ -4115,6 +4139,26 @@ const MediaPlayground = () => {
     setResults(restoreStoredResults());
     setResultsLoaded(true);
   }, []);
+
+  useEffect(() => {
+    if (!seedreamAllowed) return undefined;
+    let cancelled = false;
+    API.get('/pg/images/tasks', { skipErrorHandler: true })
+      .then((response) => {
+        const items = response.data?.data?.items;
+        if (cancelled || !Array.isArray(items)) return;
+        const previous = items
+          .filter((task) => task.model === SEEDREAM_MODEL && getImageTaskStatus(task) === 'completed')
+          .map((task) => imageTaskToResult(task, '', SEEDREAM_MODEL, '豆包绘图 5.5'))
+          .filter(Boolean);
+        if (previous.length) setResults((current) => {
+          const ids = new Set(current.map((item) => item.id));
+          return [...current, ...previous.filter((item) => !ids.has(item.id))];
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [seedreamAllowed]);
 
   useEffect(() => {
     pollingCancelledRef.current = false;
@@ -4913,6 +4957,41 @@ const MediaPlayground = () => {
         },
       );
     }
+    await finishImageSubmission(response, submittedPrompt, submittedModel, submittedModelLabel);
+  }
+
+  async function submitSeedream(form, files) {
+    if (!seedreamAllowed) throw new Error('当前账号暂未开通此模型。');
+    if (staleBuild) throw new Error('工坊已更新，请刷新页面后再提交。');
+    setSubmitting(true);
+    setSubmitStartedAt(Date.now());
+    setTaskMessage(files.length ? '正在上传参考图片…' : '正在提交任务…');
+    try {
+      const urls = [];
+      for (const [index, file] of files.entries()) {
+        const upload = await uploadMediaFile(file, {
+          kind: 'image', model: SEEDREAM_MODEL, workflow: 'image_edit', role: 'edit_source',
+          metadata: { reference_index: index + 1 },
+        });
+        const publicURL = upload.upstream_url || upload.public_url;
+        if (!publicURL) throw new Error('这张参考图暂时无法供模型读取，请稍后重试。');
+        urls.push(toAbsoluteMediaURL(publicURL));
+      }
+      const body = buildSeedreamRequest(form, urls);
+      const response = await API.post('/pg/images/tasks/generations', body, {
+        skipErrorHandler: true, timeout: IMAGE_REQUEST_TIMEOUT_MS,
+      });
+      await finishImageSubmission(response, body.prompt || '', SEEDREAM_MODEL, '豆包绘图 5.5');
+    } catch (error) {
+      throw new Error(userFacingGenerationError(generationErrorMessage(error)));
+    } finally {
+      setSubmitting(false);
+      setSubmitStartedAt(null);
+      setTaskMessage('');
+    }
+  }
+
+  async function finishImageSubmission(response, submittedPrompt, submittedModel, submittedModelLabel) {
     const payload = response.data;
     if (payload?.error?.message) throw new Error(payload.error.message);
     if (!payload?.success)
@@ -5870,7 +5949,7 @@ const MediaPlayground = () => {
       : `${ratioLabel} · ${qualityLabel}`;
   const seedreamTab = { key: 'seedream', label: '豆包绘图 5.5' };
   const creativeNavItems = [
-    { ...seedreamTab, active: isSeedream, onClick: () => selectCreativeTask('seedream') },
+    ...(seedreamAllowed ? [{ ...seedreamTab, active: isSeedream, onClick: () => selectCreativeTask('seedream') }] : []),
     {
       key: 'upscale',
       label: '高清放大',
@@ -6030,7 +6109,7 @@ const MediaPlayground = () => {
             <div>
               <strong>媒体创作工作台</strong>
               <span>
-                {isSeedream ? '豆包绘图 5.5 · 表单预览' : creativeTask === 'upscale' ? '精准放大 / 创意放大' : `${workflowLabel} · ${activeModel.label}`}
+                {isSeedream ? '豆包绘图 5.5 · 图片创作' : creativeTask === 'upscale' ? '精准放大 / 创意放大' : `${workflowLabel} · ${activeModel.label}`}
               </span>
             </div>
           </div>
@@ -6038,7 +6117,7 @@ const MediaPlayground = () => {
             <div className='mp-topbar-primary-spec'>
               <span>当前模型 / 输出规格</span>
               <strong>
-                {isSeedream ? '豆包绘图 5.5 · 参数与费用试算' : `${creativeTask === 'upscale' ? '高清放大' : activeModel.label} · ${outputSpec}`}
+                {isSeedream ? '豆包绘图 5.5 · 按张计费' : `${creativeTask === 'upscale' ? '高清放大' : activeModel.label} · ${outputSpec}`}
               </strong>
             </div>
             <div className='mp-topbar-pills'>
@@ -6144,7 +6223,7 @@ const MediaPlayground = () => {
               <SectionTitle>账户与资源</SectionTitle>
               <div className='mp-resource-row'>
                 <span>本次方案</span>
-                <strong>{isSeedream ? '表单预览' : formatLabel}</strong>
+                <strong>{isSeedream ? '按张计费' : formatLabel}</strong>
               </div>
               <div className='mp-resource-row'>
                 <span>结果数量</span>
@@ -6181,7 +6260,7 @@ const MediaPlayground = () => {
               <div className='mp-task-type-tabs' aria-label='创作类型'>
                 {[
                   { key: 'image-generate', label: '图片生成' },
-                  seedreamTab,
+                  ...(seedreamAllowed ? [seedreamTab] : []),
                   { key: 'upscale', label: '高清放大' },
                   {
                     key: 'image-edit',
@@ -6213,7 +6292,7 @@ const MediaPlayground = () => {
               onQueueTask={(task) => task.status === 'completed' ? removeLiveQueueTask(task.id) : upsertLiveQueueTask(task)}
             />
             <div hidden={!isSeedream}>
-              <SeedreamPanel key={seedreamDraftKey} uploadPolicy={DEFAULT_MEDIA_UPLOAD_POLICY} />
+              {seedreamAllowed && <SeedreamPanel key={seedreamDraftKey} uploadPolicy={mediaUploadPolicy} onSubmit={submitSeedream} submitting={submitting} taskMessage={taskMessage} />}
             </div>
             {usesStandardForm ? <>
             <div
@@ -6699,7 +6778,7 @@ const MediaPlayground = () => {
                   </div>
                   <Title heading={4}>等待第一个作品</Title>
                   <Paragraph>
-                    {isSeedream ? '这里保存已生成的作品。当前表单可预览参数和费用。' : '选择模型后点击生成。任务进度会进入右侧队列，完成后作品会自动落到这里。'}
+                    {isSeedream ? '生成的图片和图层会保存在这里，请在 72 小时内下载。' : '选择模型后点击生成。任务进度会进入右侧队列，完成后作品会自动落到这里。'}
                   </Paragraph>
                   {!isSeedream && <div className='mp-empty-spec'>
                     <span>{creativeTask === 'upscale' ? '高清放大' : activeModel.label}</span>

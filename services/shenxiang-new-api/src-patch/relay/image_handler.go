@@ -214,6 +214,9 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
+	if info.OriginModelName == dto.Seedream55Model {
+		return relaySeedream55Image(c, info, request)
+	}
 	useGeminiAdaptorForNativeImageModel(info)
 	hydrateNativeGeminiImageRequestFromMultipart(c, info, request)
 

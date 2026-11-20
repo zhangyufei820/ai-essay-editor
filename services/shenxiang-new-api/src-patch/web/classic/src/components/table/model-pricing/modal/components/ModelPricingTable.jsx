@@ -22,6 +22,7 @@ import { Avatar, Typography, Table, Tag } from '@douyinfe/semi-ui';
 import { IconCoinMoneyStroked } from '@douyinfe/semi-icons';
 import {
   calculateModelPrice,
+  getSpecializedPricingLabel,
   getModelPriceItems,
 } from '../../../../../helpers';
 
@@ -91,15 +92,14 @@ const ModelPricingTable = ({
         group: group,
         ratio: groupRatioValue,
         billingType:
-          ['精准放大', '创意放大'].includes(modelData?.model_name)
-            ? t('像素计费')
-            : modelData?.billing_mode === 'tiered_expr'
+          getSpecializedPricingLabel(modelData) ||
+          (modelData?.billing_mode === 'tiered_expr'
             ? t('动态计费')
             : modelData?.quota_type === 0
               ? t('按量计费')
               : modelData?.quota_type === 1
                 ? t('按次计费')
-                : '-',
+                : '-'),
         priceItems: getModelPriceItems(priceData, t, siteDisplayType),
       };
     });

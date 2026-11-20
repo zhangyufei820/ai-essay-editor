@@ -29,6 +29,16 @@ import { TABLE_COMPACT_MODES_KEY } from '../constants';
 import { MOBILE_BREAKPOINT } from '../hooks/common/useIsMobile';
 
 const PRICING_DISPLAY_OVERRIDES = {
+  'doubao-seedream-5-5-261028': {
+    price_components: [
+      { key: 'reference', label: '参考图', value: '¥0.042' },
+      { key: 'low', label: '低档出图', value: '¥0.1092' },
+      { key: 'high', label: '高档出图', value: '¥0.1932' },
+    ],
+    price_unit_label: '',
+    billing_label: '按图片张数与尺寸计费',
+    visible_vendor_name: '字节跳动',
+  },
   '精准放大': { display_name: '精准放大', fixed_price_label: '按像素与倍数计算', price_unit_label: '', billing_label: '像素计费' },
   '创意放大': { display_name: '创意放大', fixed_price_label: '按像素与倍数计算', price_unit_label: '', billing_label: '像素计费' },
   'gpt-image-2': {
@@ -223,6 +233,11 @@ export function getPricingModelVisibleTags(model) {
     ),
   );
   return tags.filter((tag) => !hiddenTags.has(tag.toLowerCase()));
+}
+
+export function getSpecializedPricingLabel(model) {
+  const override = getPricingDisplayOverride(model);
+  return override?.price_unit_label === '' ? override.billing_label : '';
 }
 
 export function getPricingBillingLabel(model, t = (key) => key) {
@@ -891,8 +906,16 @@ export const calculateModelPrice = ({
   if (['gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol', 'gpt-6.2-sol', 'gpt-6.2-astra'].includes(String(record?.model_name || '').trim().toLowerCase())) {
     usedGroupRatio = 1;
   }
-  if (['精准放大', '创意放大'].includes(record?.model_name)) {
+  if (['精准放大', '创意放大', 'doubao-seedream-5-5-261028'].includes(record?.model_name)) {
     usedGroupRatio = 1;
+  }
+
+  if (displayOverride?.price_components) {
+    return {
+      priceComponents: displayOverride.price_components,
+      usedGroup,
+      usedGroupRatio,
+    };
   }
 
   if (displayOverride?.fixed_price_label) {
@@ -1038,6 +1061,11 @@ export const getModelPriceItems = (
   t,
   quotaDisplayType = 'USD',
 ) => {
+  if (priceData.priceComponents) {
+    return priceData.priceComponents.map(({ key, label, value }) => ({
+      key, label: t(label), value, suffix: ' / ' + t('张'),
+    }));
+  }
   if (priceData.isDynamicPricing) {
     return [
       {

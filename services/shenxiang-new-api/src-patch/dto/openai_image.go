@@ -44,9 +44,11 @@ type ImageRequest struct {
 	InputFidelity     json.RawMessage `json:"input_fidelity,omitempty"`
 	Watermark         *bool           `json:"watermark,omitempty"`
 	// zhipu 4v
-	WatermarkEnabled json.RawMessage `json:"watermark_enabled,omitempty"`
-	UserId           json.RawMessage `json:"user_id,omitempty"`
-	Image            json.RawMessage `json:"image,omitempty"`
+	WatermarkEnabled          json.RawMessage         `json:"watermark_enabled,omitempty"`
+	UserId                    json.RawMessage         `json:"user_id,omitempty"`
+	Image                     json.RawMessage         `json:"image,omitempty"`
+	LayerDecomposition        bool                    `json:"layer_decomposition,omitempty"`
+	LayerDecompositionOptions *Seedream55LayerOptions `json:"layer_decomposition_options,omitempty"`
 	// 用匿名参数接收额外参数
 	Extra map[string]json.RawMessage `json:"-"`
 }
@@ -84,6 +86,10 @@ func (r ImageRequest) MarshalJSON() ([]byte, error) {
 	// 将已定义字段转为 map
 	type Alias ImageRequest
 	alias := Alias(r)
+	if r.Model != Seedream55Model {
+		alias.LayerDecomposition = false
+		alias.LayerDecompositionOptions = nil
+	}
 	base, err := common.Marshal(alias)
 	if err != nil {
 		return nil, err
@@ -478,7 +484,13 @@ type ImageResponse struct {
 	Metadata json.RawMessage `json:"metadata,omitempty"`
 }
 type ImageData struct {
-	Url           string `json:"url"`
-	B64Json       string `json:"b64_json"`
-	RevisedPrompt string `json:"revised_prompt"`
+	Url             string          `json:"url"`
+	B64Json         string          `json:"b64_json"`
+	RevisedPrompt   string          `json:"revised_prompt"`
+	ZIndex          *int            `json:"z_index,omitempty"`
+	BoundingBox     json.RawMessage `json:"bounding_box,omitempty"`
+	Name            string          `json:"name,omitempty"`
+	Description     string          `json:"description,omitempty"`
+	Background      json.RawMessage `json:"background,omitempty"`
+	TextRecognition json.RawMessage `json:"text_recognition,omitempty"`
 }

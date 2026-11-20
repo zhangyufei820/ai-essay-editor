@@ -5,10 +5,12 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -49,6 +51,9 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 		logger.LogDebug(ctx, "final group: %s", autoGroup)
 		relayInfo.UsingGroup = autoGroup.(string)
 	}
+	if relayInfo.OriginModelName == dto.Seedream55Model {
+		return groupRatioInfo
+	}
 	// GPT-6 models keep the selected group for channel routing, but their Model
 	// Plaza prices are never changed by routing-group multipliers.
 	if service.IsGpt6FixedMarketplaceModel(relayInfo.OriginModelName) {
@@ -88,6 +93,27 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 }
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
+	if info.OriginModelName == dto.Seedream55Model {
+		r, ok := info.Request.(*dto.ImageRequest)
+		if !ok || info.RelayMode != relayconstant.RelayModeImagesGenerations {
+			return types.PriceData{}, fmt.Errorf("豆包绘图 5.5 请使用 /v1/images/generations")
+		}
+		quote, err := dto.Seedream55QuoteForRequest(r)
+		if err != nil {
+			return types.PriceData{}, err
+		}
+		exchange := usdExchangeRateForBilling()
+		bill := service.StartSeedream55Billing(c, quote, exchange)
+		group := HandleGroupRatio(c, info)
+		info.ForcePreConsume = true
+		info.PriceData = types.PriceData{
+			UsePrice:          true,
+			GroupRatioInfo:    group,
+			ModelPrice:        float64(quote.OutputRate) / 10000 / exchange,
+			QuotaToPreConsume: bill.Quota(quote.OutputCap),
+		}
+		return info.PriceData, nil
+	}
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
 	if service.IsGrok45PricingGroup(info) {
 		modelPrice = 0

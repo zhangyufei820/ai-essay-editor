@@ -1041,3 +1041,59 @@ func TestMarkPlaygroundImageTaskLogFailureFallsBackToSubmittedChannelLog(t *test
 	require.Equal(t, float64(24), other["channel_id"])
 	require.Equal(t, "Application not found", other["fail_reason"])
 }
+
+func TestSeedreamImageTaskRetainsAllOutputsAndLayerMetadata(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	root := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", root)
+	var imageBytes bytes.Buffer
+	require.NoError(t, png.Encode(&imageBytes, image.NewRGBA(image.Rect(0, 0, 3, 2))))
+	encoded := base64.StdEncoding.EncodeToString(imageBytes.Bytes())
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/pg/images/tasks/test", nil)
+	ctx.Set("id", 7)
+	base, title := 0, 1
+	response := &dto.ImageResponse{Data: []dto.ImageData{
+		{B64Json: encoded, ZIndex: &base},
+		{B64Json: encoded, ZIndex: &title, Name: "标题", BoundingBox: json.RawMessage(`{"absolute":[0,0,3,2]}`), TextRecognition: json.RawMessage(`{"lines":[{"runs":[{"text":"测试"}]}]}`)},
+	}}
+	task := &model.Task{TaskID: "layers", Status: model.TaskStatusSuccess}
+	payload := &playgroundImageTaskPayload{Model: dto.Seedream55Model, Workflow: "图层拆分"}
+	items, err := cacheSeedreamImageTaskItems(ctx, task, payload, response)
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+	require.NotEqual(t, items[0].URL, items[1].URL)
+	for _, item := range items {
+		require.FileExists(t, filepath.Join(root, "u-7", item.Filename))
+	}
+	task.PrivateData.ResultURL = items[0].URL
+	payload.Item, payload.Items = items[0], items
+	task.SetData(payload)
+	history := taskToPlaygroundImageTask(task)
+	require.Len(t, history["items"], 2)
+	output := taskToOpenAIImageTask(task)["data"].(map[string]interface{})["data"].([]map[string]interface{})
+	require.Len(t, output, 2)
+	require.EqualValues(t, 0, output[0]["z_index"])
+	require.Equal(t, items[1].URL, output[1]["url"])
+	require.Equal(t, "标题", output[1]["name"])
+	require.Contains(t, output[1], "bounding_box")
+	require.Contains(t, output[1], "text_recognition")
+	require.NotContains(t, output[1], "b64_json")
+}
+
+func TestSeedreamImageTaskPartialCacheFailureCleansThisAttempt(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", root)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/pg/images/tasks/test", nil)
+	ctx.Set("id", 9)
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 3, 2))))
+	r := &dto.ImageResponse{Data: []dto.ImageData{{B64Json: base64.StdEncoding.EncodeToString(buf.Bytes())}, {B64Json: "illegal"}}}
+	items, err := cacheSeedreamImageTaskItems(ctx, &model.Task{}, &playgroundImageTaskPayload{}, r)
+	require.Error(t, err)
+	require.Empty(t, items)
+	entries, err := os.ReadDir(filepath.Join(root, "u-9"))
+	require.NoError(t, err)
+	require.Empty(t, entries)
+}

@@ -102,6 +102,11 @@ GEMINI_DDPAPI_MODELS = tuple(GEMINI_DDPAPI_MODEL_CONFIGS)
 GEMINI_DDPAPI_CHANNEL_TAGS = tuple(
     str(config["channel_tag"]) for config in GEMINI_DDPAPI_MODEL_CONFIGS.values()
 )
+SEEDREAM55_MODEL = "doubao-seedream-5-5-261028"
+SEEDREAM55_CHANNEL_TAG = "xingren-seedream55"
+SEEDREAM55_BASE_URL = "https://api.tu-zi.com"
+SEEDREAM55_PUBLIC_GROUPS = ("default", "standard", "pro", "code", "internal")
+SEEDREAM55_MINIMUM_CNY = Decimal("0.1092")
 GPT_IMAGE25_PUBLIC_CHANNEL_GROUPS = "default,standard,pro,code,internal"
 GPT_IMAGE25_ENDPOINTS = '{"image-generation":"/v1/images/generations","image-edit":"/v1/images/edits"}'
 GPT_IMAGE25_BASE_URL = "https://api.smile-ai-studio.com"
@@ -3133,6 +3138,7 @@ def sync_abilities() -> None:
             GPT6_ASTRA_CHANNEL_TAG,
             *GPT6_MANAGED_CHANNEL_TAGS,
             *CLAUDE_CHANNEL_GROUPS,
+            SEEDREAM55_CHANNEL_TAG,
             *DISCOUNT_IMAGE2_CHANNEL_TAGS,
             *STABLE_IMAGE2_CHANNEL_TAGS,
             *(spec["tag"] for spec in UPSCALE_MODEL_CONFIGS.values()),
@@ -3331,6 +3337,15 @@ def sync_abilities() -> None:
         + sql_quote(",".join(GPT_IMAGE25_MODELS))
         + ");"
     )
+    # A staged channel advertises no models. Remove stale or foreign routes for this model.
+    statements.append(
+        "UPDATE abilities AS a JOIN channels AS c ON c.id = a.channel_id SET a.enabled = 0 "
+        "WHERE (a.model = " + sql_quote(SEEDREAM55_MODEL) + " OR c.tag = " + sql_quote(SEEDREAM55_CHANNEL_TAG) + ") "
+        "AND NOT (c.status = 1 AND COALESCE(c.tag, '') = " + sql_quote(SEEDREAM55_CHANNEL_TAG) +
+        " AND COALESCE(c.models, '') = " + sql_quote(SEEDREAM55_MODEL) + " AND a.model = " + sql_quote(SEEDREAM55_MODEL) +
+        " AND COALESCE(c.`group`, '') = " + sql_quote(",".join(SEEDREAM55_PUBLIC_GROUPS)) +
+        " AND FIND_IN_SET(a.`group`, c.`group`) > 0);"
+    )
     for claude_group, allowed_tags in CLAUDE_CHANNEL_TAGS_BY_GROUP.items():
         allowed_tags_sql = ", ".join(sql_quote(tag) for tag in allowed_tags)
         statements.extend(
@@ -3370,7 +3385,12 @@ def sync_abilities() -> None:
     for channel_id, raw_models, _priority, _weight, tag, raw_groups in channel_rows:
         channel_groups = [item.strip() for item in raw_groups.split(",") if item.strip()]
         channel_models = [item.strip() for item in raw_models.split(",") if item.strip()]
-        if tag in upscale_model_by_tag:
+        if tag == SEEDREAM55_CHANNEL_TAG:
+            sync_groups = list(SEEDREAM55_PUBLIC_GROUPS) if (
+                channel_models == [SEEDREAM55_MODEL] and
+                channel_groups == list(SEEDREAM55_PUBLIC_GROUPS)
+            ) else []
+        elif tag in upscale_model_by_tag:
             expected = upscale_model_by_tag[tag]
             if channel_models != [expected] or ",".join(channel_groups) not in {"internal",UPSCALE_PUBLIC_CHANNEL_GROUPS}:
                 sync_groups = []
@@ -3571,6 +3591,8 @@ def sync_abilities() -> None:
                 and group not in ISOLATED_CLAUDE_GROUPS
             ]
         for model in channel_models:
+            if (model == SEEDREAM55_MODEL) != (tag == SEEDREAM55_CHANNEL_TAG):
+                continue
             if model in UPSCALE_MODELS and upscale_model_by_tag.get(tag) != model:
                 continue
             if tag in upscale_model_by_tag and model != upscale_model_by_tag[tag]:
@@ -3654,6 +3676,8 @@ def sync_abilities() -> None:
                         "REPLACE(COALESCE(current_channel.models, ''), ' ', '') = "
                         + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
                     )
+                elif tag == SEEDREAM55_CHANNEL_TAG:
+                    current_channel_conditions.append("current_channel.models = " + sql_quote(SEEDREAM55_MODEL))
                 elif tag in upscale_model_by_tag or tag in CLAUDE_CHANNEL_GROUPS or tag in DEFAULT_CODEX_CHANNEL_TAGS or tag in {KIMI_K3_CHANNEL_TAG, GPT6_ASTRA_CHANNEL_TAG, *GPT6_MANAGED_CHANNEL_TAGS} or tag in grok46_media_channel_tags:
                     pass
                 elif tag not in grok_channel_tags:

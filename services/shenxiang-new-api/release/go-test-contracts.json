@@ -190,5 +190,25 @@
   {
     "package": "./dto",
     "run": "^TestInputTokenDetails12hSplitDoesNotLoseAggregateWrites$"
+  },
+  {
+    "package": "./dto",
+    "run": "^TestSeedream55.*$"
+  },
+  {
+    "package": "./relay",
+    "run": "^TestSeedream55.*$"
+  },
+  {
+    "package": "./relay/helper",
+    "run": "^TestSeedream55.*$"
+  },
+  {
+    "package": "./controller",
+    "run": "^TestSeedreamImageTask.*$"
+  },
+  {
+    "package": "./service",
+    "run": "^TestSeedream55.*$"
   }
 ]

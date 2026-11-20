@@ -417,7 +417,12 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		}
 	}
 	var upstreamCostBilling *UpstreamCostBillingResult
-	summary.Quota, upstreamCostBilling = ApplyUpstreamCostBilling(relayInfo, usage, summary.Quota)
+	seedreamBill := GetSeedream55Billing(ctx)
+	if seedreamBill != nil {
+		summary.Quota = seedreamBill.Quota(seedreamBill.ActualOutputs)
+	} else {
+		summary.Quota, upstreamCostBilling = ApplyUpstreamCostBilling(relayInfo, usage, summary.Quota)
+	}
 	if upstreamCostLog := FormatUpstreamCostBillingLog(upstreamCostBilling); upstreamCostLog != "" {
 		extraContent = append(extraContent, upstreamCostLog)
 	}
@@ -430,9 +435,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			MonthlyCardTextValueMultiplierForRelayInfo(relayInfo),
 		))
 	}
-	missingUsageAfterOutput := summary.TotalTokens == 0 &&
-		(upstreamCostBilling == nil || !upstreamCostBilling.Applied) &&
-		responseStreamOutputSent
+	missingBillableUsage := seedreamBill == nil && summary.TotalTokens == 0 && (upstreamCostBilling == nil || !upstreamCostBilling.Applied)
+	missingUsageAfterOutput := missingBillableUsage && responseStreamOutputSent
 	settledBillingQuota := billingQuota
 
 	if summary.WebSearchCallCount > 0 {
@@ -451,7 +455,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		extraContent = append(extraContent, fmt.Sprintf("Image Generation Call 花费 %s", decimal.NewFromFloat(summary.ImageGenerationCallPrice).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).String()))
 	}
 
-	if summary.TotalTokens == 0 && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
+	if missingBillableUsage {
 		if missingUsageAfterOutput {
 			extraContent = append(extraContent, "已向用户成功输出内容但未取得上游最终计费信息，保留预扣并记录待对账")
 		} else {
@@ -504,6 +508,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	} else {
 		other = GenerateTextOtherInfo(ctx, relayInfo, summary.ModelRatio, summary.GroupRatio, summary.CompletionRatio, summary.CacheTokens, summary.CacheRatio, summary.ModelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
 	}
+	if seedreamBill != nil {
+		seedreamBill.Audit(other)
+	}
 	if adminRejectReason != "" {
 		other["reject_reason"] = adminRejectReason
 	}
@@ -519,7 +526,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if ctx.GetBool("response_stream_usage_drain_timed_out") {
 		other["upstream_usage_drain_timed_out"] = true
 	}
-	if summary.TotalTokens == 0 && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
+	if missingBillableUsage {
 		other["zero_usage"] = true
 		other["pre_consumed_quota"] = relayInfo.FinalPreConsumedQuota
 		if missingUsageAfterOutput {

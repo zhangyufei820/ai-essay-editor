@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   buildSeedreamRequest, defaultSeedreamForm, seedreamQuote,
-  validateSeedream, validateSeedreamImage,
+  validateSeedream, validateSeedreamImage, SEEDREAM_MODEL, seedreamLayers, seedreamLayerText,
 } from './seedream.js';
 
 const text = { ...defaultSeedreamForm(), prompt: '蓝色的鱼' };
@@ -50,24 +50,23 @@ test('transparent PNG, mode-specific auto and custom resolution', () => {
   }
 });
 
-test('price in integer thousandths: ordinary, discounted/original, cutoff inclusive', () => {
-  assert.equal(seedreamQuote(defaultSeedreamForm(), 0).totalMilli, 91);
-  assert.equal(seedreamQuote(edit, 2, 'default').totalMilli, 161);
-  assert.equal(seedreamQuote({ ...edit, size: '2K' }, 2, 'original').totalMilli, 330);
-  for (const [width, height, total] of [[1800, 1450, 91], [1800, 1451, 161]]) {
-    assert.equal(seedreamQuote({ ...text, size: 'custom', width, height }, 0).totalMilli, total);
+test('price in integer ten-thousandths: retail rates, cutoff inclusive', () => {
+  assert.equal(seedreamQuote(defaultSeedreamForm(), 0).totalUnits, 1092);
+  assert.equal(seedreamQuote(edit, 2).totalUnits, 1932);
+  assert.equal(seedreamQuote({ ...edit, size: '2K' }, 2).totalUnits, 2772);
+  for (const [width, height, total] of [[1800, 1450, 1092], [1800, 1451, 1932]]) {
+    assert.equal(seedreamQuote({ ...text, size: 'custom', width, height }, 0).totalUnits, total);
   }
 });
 
 test('split reserves the cap, settles actual outputs at the request tier and refunds all on failure', () => {
   const form = { ...split, size: 'auto', maxImages: 5 };
-  assert.equal(seedreamQuote(form, 1).totalMilli, 840);
-  assert.equal(seedreamQuote(form, 1, 'discount', 2).totalMilli, 357);
-  assert.equal(seedreamQuote(form, 1, 'original', 2).totalMilli, 510);
-  const failed = seedreamQuote(form, 1, 'discount', 0);
-  assert.deepEqual([failed.inputMilli, failed.outputMilli, failed.totalMilli], [0, 0, 0]);
-  assert.equal(seedreamQuote(form, 1, 'discount', 6), null);
-  assert.equal(seedreamQuote(form, 1, 'discount', -1), null);
+  assert.equal(seedreamQuote(form, 1).totalUnits, 10080);
+  assert.equal(seedreamQuote(form, 1, 2).totalUnits, 4284);
+  const failed = seedreamQuote(form, 1, 0);
+  assert.deepEqual([failed.inputUnits, failed.outputUnits, failed.totalUnits], [0, 0, 0]);
+  assert.equal(seedreamQuote(form, 1, 6), null);
+  assert.equal(seedreamQuote(form, 1, -1), null);
   assert.equal(seedreamQuote(form, 0), null);
   assert.equal(seedreamQuote(form, 1, 'missing'), null);
 });
@@ -83,4 +82,20 @@ test('validates decoded reference metadata, distinct pixel minimums and file cei
   assert.ok(validateSeedreamImage('edit', { ...image, type: 'image/webp' }));
   assert.ok(validateSeedreamImage('split', { ...image, size: 30 * 1024 * 1024 + 1 }));
   assert.ok(!validateSeedreamImage('split', { ...image, size: 30 * 1024 * 1024 }));
+});
+
+test('layer history keeps the base, duplicate URLs, OCR runs and geometry', () => {
+  const common = { url: '/pg/media/files/example.png' };
+  const recognition = { lines: [{ runs: [{ text: '第一行' }] }, { text: '第二行' }] };
+  const items = [
+    { ...common, metadata: { layer: { z_index: 0 } } },
+    { ...common, metadata: { layer: { z_index: 1, name: '标题', text_recognition: recognition, bounding_box: { absolute: [1, 2, 3, 4] } } } },
+  ];
+  const layers = seedreamLayers({ model: SEEDREAM_MODEL, data: { items } });
+  assert.deepEqual(layers.map((layer) => layer.label), ['底图', '标题']);
+  assert.equal(layers[1].url, layers[0].url);
+  assert.notEqual(layers[1].index, layers[0].index);
+  assert.deepEqual(layers[1].bounding_box.absolute, [1, 2, 3, 4]);
+  assert.equal(seedreamLayerText(layers[1].text_recognition), '第一行\n第二行');
+  assert.deepEqual(seedreamLayers({ model: 'another-model', items }), []);
 });

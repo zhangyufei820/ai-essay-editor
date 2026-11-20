@@ -24,6 +24,7 @@ import {
   renderModelTag,
   stringToColor,
   calculateModelPrice,
+  getSpecializedPricingLabel,
   getPricingModelDescription,
   getPricingModelDisplayName,
   getPricingModelVisibleTags,
@@ -150,7 +151,7 @@ export const getPricingTableColumns = ({
     title: t('计费类型'),
     dataIndex: 'quota_type',
     render: (text, record, index) => {
-      return ['精准放大', '创意放大'].includes(record?.model_name) ? '像素计费' : renderQuotaType(parseInt(text), t);
+      return getSpecializedPricingLabel(record) || renderQuotaType(parseInt(text), t);
     },
     sorter: (a, b) => a.quota_type - b.quota_type,
   };

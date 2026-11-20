@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  buildSeedreamRequest,
   defaultSeedreamForm,
   seedreamQuote,
   validateSeedream,
@@ -48,10 +47,10 @@ function mb(bytes) {
   return Number((bytes / MB).toFixed(2));
 }
 
-function money(milli) {
-  return '¥' + (milli / 1000).toLocaleString('zh-CN', {
+function money(units) {
+  return '¥' + (units / 10000).toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 3,
+    maximumFractionDigits: 4,
     useGrouping: false,
   });
 }
@@ -68,13 +67,13 @@ async function inspectFile(file, mode) {
     const info = { name: file.name, type: file.type, size: file.size, width: image.naturalWidth, height: image.naturalHeight };
     const error = validateSeedreamImage(mode, info);
     if (error) throw new Error(error);
-    return info;
+    return { ...info, file };
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
-export default function SeedreamPanel({ uploadPolicy } = {}) {
+export default function SeedreamPanel({ uploadPolicy, onSubmit, submitting, taskMessage }) {
   const [mode, setMode] = useState('text');
   const [drafts, setDrafts] = useState(() =>
     Object.fromEntries(Object.keys(MODES).map((key) => [key, defaultSeedreamForm(key)])),
@@ -82,8 +81,8 @@ export default function SeedreamPanel({ uploadPolicy } = {}) {
   const [sources, setSources] = useState({ edit: [], split: [] });
   const [reading, setReading] = useState(false);
   const [fileError, setFileError] = useState('');
-  const [priceGroup, setPriceGroup] = useState('discount');
-  const [copyStatus, setCopyStatus] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const pending = useRef(false);
   const operation = useRef(0);
   useEffect(() => () => { operation.current += 1; }, []);
 
@@ -95,24 +94,20 @@ export default function SeedreamPanel({ uploadPolicy } = {}) {
   const fileCount = files.length;
   // A split always takes one original, so its ceiling is knowable before file selection.
   const quoteInputCount = isSplit ? 1 : fileCount;
-  const quote = seedreamQuote(form, quoteInputCount, priceGroup);
+  const quote = seedreamQuote(form, quoteInputCount);
   const sampleCount = quote && isSplit ? Math.min(3, quote.outputCount) : 0;
-  const sample = sampleCount ? seedreamQuote(form, 1, priceGroup, sampleCount) : null;
+  const sample = sampleCount ? seedreamQuote(form, 1, sampleCount) : null;
   const invalid = validateSeedream(form, fileCount);
-  const request = invalid ? '' : JSON.stringify(buildSeedreamRequest(form,
-    files.map((file, index) => 'https://example.invalid/image-' + (index + 1) + (file.type === 'image/png' ? '.png' : '.jpg')),
-  ), null, 2);
-
   function update(values) {
     setDrafts((previous) => ({ ...previous, [mode]: { ...previous[mode], ...values } }));
-    setCopyStatus('');
+    setSubmitError('');
   }
 
   function changeMode(next) {
     operation.current += 1;
     setReading(false);
     setFileError('');
-    setCopyStatus('');
+    setSubmitError('');
     setMode(next);
   }
 
@@ -122,7 +117,7 @@ export default function SeedreamPanel({ uploadPolicy } = {}) {
     if (!picked.length) return;
     const ticket = ++operation.current;
     setReading(true);
-    setCopyStatus('');
+    setSubmitError('');
     setFileError('');
     try {
       const base = isSplit ? [] : files;
@@ -150,15 +145,19 @@ export default function SeedreamPanel({ uploadPolicy } = {}) {
   function removeFile(index) {
     setSources((previous) => ({ ...previous, [mode]: previous[mode].filter((_, i) => i !== index) }));
     setFileError('');
-    setCopyStatus('');
+    setSubmitError('');
   }
 
-  async function copyRequest() {
+  async function generate() {
+    if (pending.current || submitting || invalid || reading) return;
+    pending.current = true;
+    setSubmitError('');
     try {
-      await navigator.clipboard.writeText(request);
-      setCopyStatus('请求模板已复制。');
-    } catch {
-      setCopyStatus('请选中下方模板文字，使用系统复制功能。');
+      await onSubmit(form, files.map((source) => source.file));
+    } catch (error) {
+      setSubmitError(error.message);
+    } finally {
+      pending.current = false;
     }
   }
 
@@ -166,7 +165,7 @@ export default function SeedreamPanel({ uploadPolicy } = {}) {
     <section className='mp-seedream' aria-label='豆包 Seedream 5.5 创作设置'>
       <header className='sd-header'>
         <h2>豆包 Seedream 5.5</h2>
-        <p>先准备图片和要求，查看费用估算。当前为配置预览，文件仅在本机读取，预览免费。</p>
+        <p>选一种创作方式，填好要求后确认费用，再点生成。作品会出现在下方的历史任务中。</p>
       </header>
       <div className='sd-layout'>
         <div className='sd-main'>
@@ -236,38 +235,33 @@ export default function SeedreamPanel({ uploadPolicy } = {}) {
             </div>}
             {isSplit && <div className='sd-check'>
               <label><input type='checkbox' checked={form.ocr} onChange={(e) => update({ ocr: e.target.checked })} />提取图层里的文字（OCR）</label>
-              <small>可返回印刷文字、位置和近似样式。没有可识别文字的图层可能只有图片。当前参考价目中，文字识别没有单独收费。</small>
+              <small>可返回印刷文字、位置和近似样式。没有可识别文字的图层可能只有图片。勾选文字识别无需另付费用。</small>
             </div>}
           </section>
         </div>
-        <aside className='sd-side' aria-label='费用与请求预览'>
+        <aside className='sd-side' aria-label='费用与生成'>
           <section className='sd-card sd-cost'>
             <h3>费用估算</h3>
-            <label className='sd-field'>参考价目
-              <select value={priceGroup} onChange={(e) => setPriceGroup(e.target.value)}>
-                <option value='discount'>优惠参考价</option><option value='original'>原价参考价</option>
-              </select><small>用于比较方案成本，正式售价以工坊开通后的账单为准。</small>
-            </label>
             <div aria-live='polite'>
               {quote ? <>
-                <p className='sd-total'>{isSplit ? '按拆图上限估算' : '单次参考费用'}<strong>{money(quote.totalMilli)}</strong></p>
+                <p className='sd-total'>{isSplit ? '本次最高费用' : '本次预计费用'}<strong>{money(quote.totalUnits)}</strong></p>
                 <dl className='sd-breakdown'>
-                  <div><dt>输入 {quoteInputCount} 张 × {money(quote.unitInputMilli)}</dt><dd>{money(quote.inputMilli)}</dd></div>
-                  <div><dt>{isSplit ? '最多输出' : '输出'} {quote.outputCount} 张 × {money(quote.unitOutputMilli)}</dt><dd>{money(quote.outputMilli)}</dd></div>
+                  <div><dt>输入 {quoteInputCount} 张 × {money(quote.unitInputUnits)}</dt><dd>{money(quote.inputUnits)}</dd></div>
+                  <div><dt>{isSplit ? '最多输出' : '输出'} {quote.outputCount} 张 × {money(quote.unitOutputUnits)}</dt><dd>{money(quote.outputUnits)}</dd></div>
                 </dl></> : <p>{mode !== 'text' && !fileCount ? '选择图片后即可查看费用。' : '填好尺寸和张数后即可查看费用。'}</p>}
             </div>
-            {sample && <p>举例：如果成功返回 {sampleCount} 张（含底图），按当前参考价共 {money(sample.totalMilli)}。整单失败则为 ¥0。</p>}
+            {sample && <p>举例：如果成功返回 {sampleCount} 张（含底图），按当前单价共 {money(sample.totalUnits)}。整单失败则为 ¥0。</p>}
             <p>每张输入图从首张计费。{isSplit ? '底图也算一张，所有图层按本次选择的尺寸档位计价。如有预扣，先按上限预留，完成后按实际返回张数结算并退回差额。' : '普通生图只输出一张。'} 整次没有成功输出时，费用为 ¥0。</p>
           </section>
-          <details className='sd-card sd-request'>
-            <summary>查看请求模板</summary>
-            <p>供接入时使用。模板里的图片地址是占位符，使用前替换为可访问的图片 URL。此处不会发起调用。</p>
-            {invalid || reading ? <p role='status'>{reading ? '图片检查完成后可查看模板。' : invalid}</p> : <>
-              <pre tabIndex='0'>{request}</pre>
-              <button type='button' className='sd-copy' onClick={copyRequest}>复制请求模板</button>
-              <small role='status'>{copyStatus}</small>
-            </>}
-          </details>
+          <section className='sd-card'>
+            <h3>开始创作</h3>
+            <p>{invalid || '确认上方金额后点击提交。你可以在右侧查看进度，完成后到历史任务下载。'}</p>
+            <button type='button' className='sd-copy' disabled={!!invalid || reading || submitting} onClick={generate}>
+              {submitting ? '处理中…' : isSplit ? '开始拆图' : '生成图片'}
+            </button>
+            {submitting && <p role='status'>{taskMessage || '正在准备任务…'}</p>}
+            {submitError && <p className='sd-error' role='alert'>{submitError}</p>}
+          </section>
         </aside>
       </div>
     </section>
