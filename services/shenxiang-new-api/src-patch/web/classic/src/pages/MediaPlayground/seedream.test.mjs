@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  buildSeedreamRequest, defaultSeedreamForm, seedreamQuote,
+  buildSeedreamRequest, defaultSeedreamForm, seedreamDimensions, seedreamQuote, SEEDREAM_RATIOS,
   validateSeedream, validateSeedreamImage, SEEDREAM_MODEL, seedreamLayers, seedreamLayerText,
 } from './seedream.js';
 
@@ -57,6 +57,46 @@ test('price in integer ten-thousandths: retail rates, cutoff inclusive', () => {
   for (const [width, height, total] of [[1800, 1450, 1092], [1800, 1451, 1932]]) {
     assert.equal(seedreamQuote({ ...text, size: 'custom', width, height }, 0).totalUnits, total);
   }
+});
+
+test('preset ratios submit the displayed dimensions and preserve the selected billing tier', () => {
+  const ratios = SEEDREAM_RATIOS.filter((ratio) => ratio !== 'auto');
+  for (const size of ['1K', '1.5K', '2K']) {
+    for (const ratio of ratios) {
+      const [w, h] = ratio.split(':').map(Number);
+      for (const [draft, urls] of [[text, []], [edit, ['reference']]]) {
+        const form = { ...draft, size, aspectRatio: ratio };
+        const { width, height } = seedreamDimensions(form);
+        const pixels = width * height;
+        const request = buildSeedreamRequest(form, urls);
+        assert.equal(width * h, height * w);
+        assert.ok(pixels >= 921600 && pixels <= 4624220);
+        assert.equal(request.size, width + 'x' + height);
+        assert.equal(request.aspect_ratio, undefined);
+        assert.equal(pixels > 2610000, size === '2K');
+        assert.equal(seedreamQuote(form, urls.length).unitOutputUnits, pixels > 2610000 ? 1932 : 1092);
+      }
+    }
+  }
+});
+
+test('automatic sizing, manual dimensions and original split geometry take precedence', () => {
+  for (const aspectRatio of ['auto', undefined]) {
+    const form = { ...text, aspectRatio };
+    assert.equal(seedreamDimensions(form), null);
+    assert.equal(buildSeedreamRequest(form).size, '1.5K');
+  }
+  const custom = { ...text, size: 'custom', aspectRatio: '9:16', width: '1500', height: '1000' };
+  assert.deepEqual(seedreamDimensions(custom), { width: 1500, height: 1000 });
+  assert.equal(buildSeedreamRequest(custom).size, '1500x1000');
+  assert.equal(seedreamDimensions({ ...custom, width: 50 }), null);
+  const splitForm = { ...split, size: 'auto', aspectRatio: '4:3' };
+  assert.equal(seedreamDimensions(splitForm), null);
+  assert.equal(buildSeedreamRequest(splitForm, ['original']).size, 'auto');
+  const invalid = { ...text, aspectRatio: '0:0' };
+  assert.ok(validateSeedream(invalid, 0));
+  assert.equal(seedreamQuote(invalid, 0), null);
+  assert.throws(() => buildSeedreamRequest(invalid));
 });
 
 test('split reserves the cap, settles actual outputs at the request tier and refunds all on failure', () => {

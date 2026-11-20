@@ -94,3 +94,33 @@
   .mp-seedream .sd-card { padding: 13px; }
   .mp-seedream .sd-modes, .mp-seedream .sd-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.mp-seedream .sd-files li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; }
+.mp-seedream .sd-thumb {
+  width: 56px; height: 56px; padding: 2px; overflow: hidden; cursor: pointer;
+  border: 1px solid var(--mp-border-strong); border-radius: 7px; background: var(--mp-bg-input);
+}
+.mp-seedream .sd-thumb[aria-pressed='true'] { border-color: var(--mp-accent-primary); }
+.mp-seedream .sd-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.mp-seedream .sd-ratios { min-width: 0; margin: 0; padding: 0; border: 0; }
+.mp-seedream .sd-ratios legend { margin: 0 0 6px; padding: 0; font-size: 14px; }
+.mp-seedream .sd-ratio-options { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 5px; }
+.mp-seedream .sd-ratio-options label { position: relative; cursor: pointer; }
+.mp-seedream .sd-ratio-options input { position: absolute; opacity: 0; }
+.mp-seedream .sd-ratio-options span {
+  display: grid; place-items: center; min-height: 36px; padding: 4px 10px; font-variant-numeric: tabular-nums;
+  border: 1px solid var(--mp-border-strong); border-radius: 6px; background: var(--mp-bg-input);
+}
+.mp-seedream .sd-ratio-options input:checked + span {
+  color: var(--mp-accent-primary); border-color: var(--mp-accent-primary); background: var(--mp-accent-soft);
+}
+.mp-seedream .sd-ratio-options input:focus-visible + span { outline: 2px solid var(--mp-accent-primary); outline-offset: 2px; }
+.mp-seedream .sd-framing { display: grid; gap: 7px; margin: 0; min-width: 0; }
+.mp-seedream .sd-framing figcaption { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.mp-seedream .sd-framing figcaption span { color: var(--mp-text-secondary); overflow-wrap: anywhere; font-size: 12px; }
+.mp-seedream .sd-stage {
+  display: grid; place-items: center; min-height: 140px; padding: 10px;
+  border-radius: 8px; border: 1px solid var(--mp-border-subtle); background: var(--mp-bg-input);
+}
+.mp-seedream .sd-frame { overflow: hidden; border-radius: 3px; background: var(--mp-bg-panel); box-shadow: 0 1px 4px #0002; }
+.mp-seedream .sd-frame img { display: block; width: 100%; height: 100%; object-fit: cover; }

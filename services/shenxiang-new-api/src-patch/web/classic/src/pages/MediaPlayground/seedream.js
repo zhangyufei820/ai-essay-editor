@@ -1,13 +1,15 @@
 export const SEEDREAM_MODEL = 'doubao-seedream-5-5-261028';
+export const SEEDREAM_RATIOS = ['auto', '1:1', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16', '4:5', '5:4'];
 const MODES = ['text', 'edit', 'split'];
 const LOW_PIXEL_LIMIT = 2610000;
+const SQUARE_SIDE = { '1K': 1024, '1.5K': 1536, '2K': 2048 };
 
 // Ten-thousandths of a yuan, including the shop's 20% markup.
 const RATES = { input: 420, low: 1092, high: 1932 };
 
 export function defaultSeedreamForm(mode = 'text') {
   return {
-    mode, prompt: '', size: '1.5K', width: '', height: '',
+    mode, prompt: '', size: '1.5K', aspectRatio: 'auto', width: '', height: '',
     background: 'auto', format: 'png', maxImages: 5, ocr: false,
   };
 }
@@ -35,9 +37,25 @@ function sizeError(form) {
     }
     return validRatio(width, height) ? '' : '请把宽高比调整到 1∶16 至 16∶1 之间。';
   }
-  if (['1K', '1.5K', '2K'].includes(form.size)) return '';
+  if (Object.hasOwn(SQUARE_SIDE, form.size)) {
+    if (form.mode !== 'split' && !SEEDREAM_RATIOS.includes(form.aspectRatio ?? 'auto')) {
+      return '请选择支持的画幅比例。';
+    }
+    return '';
+  }
   if (form.mode === 'split' && form.size === 'auto') return '';
   return '请为当前任务选择可用的输出尺寸。';
+}
+
+export function seedreamDimensions(form) {
+  if (!form || !['text', 'edit'].includes(form.mode) || sizeError(form)) return null;
+  if (form.size === 'custom') return { width: Number(form.width), height: Number(form.height) };
+  const ratio = form.aspectRatio ?? 'auto';
+  if (ratio === 'auto') return null;
+  const [w, h] = ratio.split(':').map(Number);
+  // Keep the requested proportions exact and choose a multiple of 8 near the preset's pixel area.
+  const scale = 8 * Math.round(SQUARE_SIDE[form.size] / Math.sqrt(w * h) / 8);
+  return { width: w * scale, height: h * scale };
 }
 
 function countError(mode, inputCount) {
@@ -94,9 +112,10 @@ export function buildSeedreamRequest(form, images = []) {
   }
   const error = validateSeedream(form, images.length);
   if (error) throw new Error(error);
+  const dimensions = seedreamDimensions(form);
   const request = {
     model: SEEDREAM_MODEL,
-    size: form.size === 'custom' ? Number(form.width) + 'x' + Number(form.height) : form.size,
+    size: dimensions ? dimensions.width + 'x' + dimensions.height : form.size,
     output_format: form.format,
     response_format: 'url',
   };
@@ -122,8 +141,9 @@ export function seedreamQuote(form, inputCount, actualOutputs) {
   const outputCap = form.mode === 'split' ? Number(form.maxImages) : 1;
   const outputCount = actualOutputs === undefined ? outputCap : actualOutputs;
   if (!Number.isInteger(outputCount) || outputCount < 0 || outputCount > outputCap) return null;
-  const lowTier = form.size === 'custom'
-    ? Number(form.width) * Number(form.height) <= LOW_PIXEL_LIMIT
+  const dimensions = seedreamDimensions(form);
+  const lowTier = dimensions
+    ? dimensions.width * dimensions.height <= LOW_PIXEL_LIMIT
     : form.size === '1K' || form.size === '1.5K';
   const tier = lowTier ? 'low' : 'high';
   const rate = RATES;

@@ -34,3 +34,5 @@ user.register
 mp-upscale-workbench
 doubao-seedream-5-5-261028
 mp-seedream
+sd-framing
+seedream-aspect-ratio

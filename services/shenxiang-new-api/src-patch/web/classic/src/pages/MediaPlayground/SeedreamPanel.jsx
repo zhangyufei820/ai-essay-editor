@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   defaultSeedreamForm,
+  SEEDREAM_RATIOS,
+  seedreamDimensions,
   seedreamQuote,
   validateSeedream,
   validateSeedreamImage,
 } from './seedream.js';
+import framingExample from './seedream-framing.webp';
 import './SeedreamPanel.css';
 
 const MODES = {
@@ -73,12 +76,59 @@ async function inspectFile(file, mode) {
   }
 }
 
+// The file stays in the browser until the user submits the generation request.
+function useLocalImage(file) {
+  const [image, setImage] = useState(null);
+  useEffect(() => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setImage({ file, url });
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  return file && image?.file === file ? image.url : undefined;
+}
+
+function ReferenceThumbnail({ source, index, selected, onSelect }) {
+  const url = useLocalImage(source.file);
+  return (
+    <button type='button' className='sd-thumb' aria-label={`预览第 ${index + 1} 张：${source.name}`} aria-pressed={selected} onClick={onSelect}>
+      {url && <img src={url} alt='' />}
+    </button>
+  );
+}
+
+function FramingPreview({ form, source, sourceIndex }) {
+  const url = useLocalImage(source?.file);
+  const pixels = seedreamDimensions(form);
+  const ratio = pixels ? pixels.width / pixels.height : source ? source.width / source.height : 1;
+  const isSplit = form.mode === 'split';
+  const caption = pixels
+    ? `请求尺寸 ${pixels.width} × ${pixels.height} 像素`
+    : isSplit ? '拆图沿用原图的画幅' : '自动画幅，由模型决定最终比例';
+  return (
+    <figure className='sd-framing' aria-label='画幅预览'>
+      <figcaption><strong>画幅预览</strong><span>{source ? `第 ${sourceIndex + 1} 张 · ${source.name}` : '示例图'}</span></figcaption>
+      {form.size === 'custom' && !pixels
+        ? <p className='sd-stage'>填写有效的宽度和高度后即可预览。</p>
+        : <div className='sd-stage'>
+            <div className='sd-frame' style={{ aspectRatio: String(ratio), width: `min(100%, ${ratio * 200}px)` }}>
+              {(url || !source) && <img src={source ? url : framingExample} alt={source ? source.name : '画幅示例'} />}
+            </div>
+          </div>}
+      {(pixels || form.size !== 'custom') && <small aria-live='polite'>{caption}。{isSplit && source
+        ? `原图 ${source.width} × ${source.height} 像素。`
+        : source ? '此处展示参考图在画框中的取景。' : '这张示例图用于比较横竖构图。'}</small>}
+    </figure>
+  );
+}
+
 export default function SeedreamPanel({ uploadPolicy, onSubmit, submitting, taskMessage }) {
   const [mode, setMode] = useState('text');
   const [drafts, setDrafts] = useState(() =>
     Object.fromEntries(Object.keys(MODES).map((key) => [key, defaultSeedreamForm(key)])),
   );
   const [sources, setSources] = useState({ edit: [], split: [] });
+  const [selectedReference, setSelectedReference] = useState(null);
   const [reading, setReading] = useState(false);
   const [fileError, setFileError] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -92,6 +142,7 @@ export default function SeedreamPanel({ uploadPolicy, onSubmit, submitting, task
   const files = sources[mode] || [];
   const limits = limitsFor(mode, uploadPolicy);
   const fileCount = files.length;
+  const sourceIndex = isSplit ? 0 : Math.max(0, files.findIndex((item) => item.file === selectedReference));
   // A split always takes one original, so its ceiling is knowable before file selection.
   const quoteInputCount = isSplit ? 1 : fileCount;
   const quote = seedreamQuote(form, quoteInputCount);
@@ -143,6 +194,7 @@ export default function SeedreamPanel({ uploadPolicy, onSubmit, submitting, task
   }
 
   function removeFile(index) {
+    if (files[index]?.file === selectedReference) setSelectedReference(null);
     setSources((previous) => ({ ...previous, [mode]: previous[mode].filter((_, i) => i !== index) }));
     setFileError('');
     setSubmitError('');
@@ -190,7 +242,11 @@ export default function SeedreamPanel({ uploadPolicy, onSubmit, submitting, task
               {reading && <p role='status'>正在本机检查图片尺寸…</p>}
               {fileError && <p className='sd-error' role='alert'>{fileError}</p>}
               {!!fileCount && <ol className='sd-files'>{files.map((file, i) => (
-                <li key={i}><span>{i + 1}. {file.name}<small>{file.width} × {file.height} 像素 · {mb(file.size)} MB</small></span><button type='button' className='sd-link' disabled={reading} aria-label={'移除第 ' + (i + 1) + ' 张图片'} onClick={() => removeFile(i)}>移除</button></li>
+                <li key={i}>
+                  <ReferenceThumbnail source={file} index={i} selected={i === sourceIndex} onSelect={() => setSelectedReference(file.file)} />
+                  <span>{i + 1}. {file.name}<small>{file.width} × {file.height} 像素 · {mb(file.size)} MB</small></span>
+                  <button type='button' className='sd-link' disabled={reading} aria-label={'移除第 ' + (i + 1) + ' 张图片'} onClick={() => removeFile(i)}>移除</button>
+                </li>
               ))}</ol>}
             </section>
           )}
@@ -233,6 +289,17 @@ export default function SeedreamPanel({ uploadPolicy, onSubmit, submitting, task
               </div>
               <p id='sd-custom-hint'>宽 × 高须在 921,600 至 4,624,220 像素之间。宽高比可从 1:16 到 16:1。总像素超过 261 万时采用高档价格。</p>
             </div>}
+            {!isSplit && form.size !== 'custom' && <fieldset className='sd-ratios'>
+              <legend>画幅比例</legend>
+              <div className='sd-ratio-options'>{SEEDREAM_RATIOS.map((value) => (
+                <label key={value}>
+                  <input type='radio' name='seedream-aspect-ratio' value={value} checked={form.aspectRatio === value} onChange={() => update({ aspectRatio: value })} />
+                  <span>{value === 'auto' ? '自动' : value}</span>
+                </label>
+              ))}</div>
+              <small>1:1 适合方图，16:9 适合横屏，9:16 适合手机竖屏。</small>
+            </fieldset>}
+            <FramingPreview form={form} source={files[sourceIndex]} sourceIndex={sourceIndex} />
             {isSplit && <div className='sd-check'>
               <label><input type='checkbox' checked={form.ocr} onChange={(e) => update({ ocr: e.target.checked })} />提取图层里的文字（OCR）</label>
               <small>可返回印刷文字、位置和近似样式。没有可识别文字的图层可能只有图片。勾选文字识别无需另付费用。</small>
