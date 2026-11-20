@@ -37,7 +37,6 @@ const PRICING_DISPLAY_OVERRIDES = {
     ],
     price_unit_label: '',
     billing_label: '按图片张数与尺寸计费',
-    visible_vendor_name: '字节跳动',
   },
   '精准放大': { display_name: '精准放大', fixed_price_label: '按像素与倍数计算', price_unit_label: '', billing_label: '像素计费' },
   '创意放大': { display_name: '创意放大', fixed_price_label: '按像素与倍数计算', price_unit_label: '', billing_label: '像素计费' },
