@@ -145,8 +145,10 @@ def publish_sql(channel_id: int) -> str:
         "ON DUPLICATE KEY UPDATE enabled=1, priority=0, weight=100, tag=VALUES(tag);",
         "INSERT INTO models (model_name,description,icon,tags,vendor_id,endpoints,status,sync_official,"
         "created_time,updated_time,name_rule) "
-        f"SELECT {q(MODEL)},{q(DESCRIPTION)},'Doubao','image,seedream',0,{q(ENDPOINTS)},1,0,"
+        f"SELECT {q(MODEL)},{q(DESCRIPTION)},'Doubao.Color','image,doubao,seedream',4,{q(ENDPOINTS)},1,0,"
         f"UNIX_TIMESTAMP(),UNIX_TIMESTAMP(),0 WHERE NOT EXISTS (SELECT 1 FROM models WHERE model_name={q(MODEL)} AND deleted_at IS NULL);",
+        f"UPDATE models SET vendor_id=4, icon='Doubao.Color', tags='image,doubao,seedream' "
+        f"WHERE model_name={q(MODEL)} AND deleted_at IS NULL;",
         f"UPDATE tokens SET model_limits=CONCAT_WS(',',NULLIF(model_limits,''),{q(MODEL)}) "
         f"WHERE name={q(TOKEN_NAME)} AND deleted_at IS NULL AND model_limits_enabled=1 "
         f"AND FIND_IN_SET({q(MODEL)},COALESCE(model_limits,''))=0;",

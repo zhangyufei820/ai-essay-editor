@@ -63,6 +63,8 @@ class Seedream55CatalogTests(unittest.TestCase):
         self.assertTrue(sql.startswith("START TRANSACTION;"))
         self.assertTrue(sql.endswith("COMMIT;"))
         self.assertIn(f"WHERE name={cfg.q(cfg.TOKEN_NAME)} AND deleted_at IS NULL AND model_limits_enabled=1", sql)
+        self.assertIn("UPDATE models SET vendor_id=4", sql)
+        self.assertIn("'Doubao.Color','image,doubao,seedream',4,", sql)
         self.assertNotIn("UPDATE users", sql)
         self.assertNotIn("subscription", sql)
         for group in ("discount", "plus", "special", "astra"):
