@@ -55,6 +55,7 @@ import { closestSupportedImageAspectRatio } from './image-aspect-ratio';
 import { webBuildEntryFromHtml } from './web-build-entry';
 import { planImageUploadTargets } from './image-upload-budget';
 import UpscalePanel from './UpscalePanel';
+import SeedreamPanel from './SeedreamPanel';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -3534,6 +3535,9 @@ const MediaPlayground = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState('image');
   const [creativeTask, setCreativeTask] = useState('image-generate');
+  const isSeedream = creativeTask === 'seedream';
+  const usesStandardForm = !isSeedream && creativeTask !== 'upscale';
+  const [seedreamDraftKey, setSeedreamDraftKey] = useState(0);
   const [imageWorkflow, setImageWorkflow] = useState('generate');
   const [videoWorkflow, setVideoWorkflow] = useState('text');
   const [imageModel, setImageModel] = useState(IMAGE_MODELS[0].value);
@@ -5517,7 +5521,7 @@ const MediaPlayground = () => {
       return;
     }
     setCreativeTask(task);
-    if (task === 'upscale') {
+    if (task === 'upscale' || task === 'seedream') {
       setMode('image');
       return;
     }
@@ -5864,7 +5868,9 @@ const MediaPlayground = () => {
           .filter(Boolean)
           .join(' · ')
       : `${ratioLabel} · ${qualityLabel}`;
+  const seedreamTab = { key: 'seedream', label: '豆包绘图 5.5' };
   const creativeNavItems = [
+    { ...seedreamTab, active: isSeedream, onClick: () => selectCreativeTask('seedream') },
     {
       key: 'upscale',
       label: '高清放大',
@@ -5912,11 +5918,10 @@ const MediaPlayground = () => {
       key: 'library',
       label: '素材库',
       active: false,
-      onClick: () =>
-        document.getElementById('mp-assets-workbench')?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        }),
+      onClick: () => {
+        if (isSeedream) selectCreativeTask('image-edit');
+        scrollWorkbenchTo('mp-assets-workbench');
+      },
     },
   ];
   const quickEntryItems = [
@@ -6025,7 +6030,7 @@ const MediaPlayground = () => {
             <div>
               <strong>媒体创作工作台</strong>
               <span>
-                {creativeTask === 'upscale' ? '精准放大 / 创意放大' : `${workflowLabel} · ${activeModel.label}`}
+                {isSeedream ? '豆包绘图 5.5 · 表单预览' : creativeTask === 'upscale' ? '精准放大 / 创意放大' : `${workflowLabel} · ${activeModel.label}`}
               </span>
             </div>
           </div>
@@ -6033,14 +6038,12 @@ const MediaPlayground = () => {
             <div className='mp-topbar-primary-spec'>
               <span>当前模型 / 输出规格</span>
               <strong>
-                {creativeTask === 'upscale' ? '高清放大' : activeModel.label} · {outputSpec}
+                {isSeedream ? '豆包绘图 5.5 · 参数与费用试算' : `${creativeTask === 'upscale' ? '高清放大' : activeModel.label} · ${outputSpec}`}
               </strong>
             </div>
             <div className='mp-topbar-pills'>
               <span>作品 {results.length} 个</span>
-              <span>
-                素材 {referenceFiles.length} / {referenceFileLimit}
-              </span>
+              {!isSeedream && <span>素材 {referenceFiles.length} / {referenceFileLimit}</span>}
               <span>保留 72 小时</span>
             </div>
           </div>
@@ -6079,6 +6082,7 @@ const MediaPlayground = () => {
                 setSubmitStartedAt(null);
                 setElapsedSeconds(0);
                 setSelectedResultIds([]);
+                setSeedreamDraftKey((value) => value + 1);
                 setUpscaleSource(null);
                 setUpscaleResetKey((value) => value + 1);
               }}
@@ -6102,7 +6106,9 @@ const MediaPlayground = () => {
               ))}
             </nav>
 
-            {creativeTask === 'upscale' ? <div className='mp-sidebar-card'><SectionTitle>高清放大</SectionTitle><p>精准还原原图，或用创意模式增强纹理和细节。</p><a href='/pg/upscale/help' target='_blank' rel='noopener noreferrer'>查看放大使用说明 ↗</a></div> : <div className='mp-sidebar-card mp-sidebar-model-card'>
+            {isSeedream ? (
+              <div className='mp-sidebar-card'><SectionTitle>豆包绘图 5.5</SectionTitle><p>可以从一句话画图，上传参考图改图，或把海报拆成可单独使用的图层。</p></div>
+            ) : creativeTask === 'upscale' ? <div className='mp-sidebar-card'><SectionTitle>高清放大</SectionTitle><p>精准还原原图，或用创意模式增强纹理和细节。</p><a href='/pg/upscale/help' target='_blank' rel='noopener noreferrer'>查看放大使用说明 ↗</a></div> : <div className='mp-sidebar-card mp-sidebar-model-card'>
               <SectionTitle meta={activeModel.badge}>当前模型</SectionTitle>
               <ModelSelector
                 models={modelOptions}
@@ -6138,7 +6144,7 @@ const MediaPlayground = () => {
               <SectionTitle>账户与资源</SectionTitle>
               <div className='mp-resource-row'>
                 <span>本次方案</span>
-                <strong>{formatLabel}</strong>
+                <strong>{isSeedream ? '表单预览' : formatLabel}</strong>
               </div>
               <div className='mp-resource-row'>
                 <span>结果数量</span>
@@ -6154,7 +6160,7 @@ const MediaPlayground = () => {
           </aside>
 
           <main className='mp-canvas-panel'>
-            {creativeTask !== 'upscale' ? <section className='mp-flow-steps' aria-label='媒体创作流程'>
+            {usesStandardForm ? <section className='mp-flow-steps' aria-label='媒体创作流程'>
               {flowSteps.map((step) => (
                 <button
                   key={step.key}
@@ -6175,6 +6181,7 @@ const MediaPlayground = () => {
               <div className='mp-task-type-tabs' aria-label='创作类型'>
                 {[
                   { key: 'image-generate', label: '图片生成' },
+                  seedreamTab,
                   { key: 'upscale', label: '高清放大' },
                   {
                     key: 'image-edit',
@@ -6188,6 +6195,7 @@ const MediaPlayground = () => {
                     key={item.key}
                     type='button'
                     disabled={item.disabled}
+                    aria-pressed={creativeTask === item.key}
                     className={creativeTask === item.key ? 'active' : ''}
                     onClick={() => selectCreativeTask(item.key)}
                   >
@@ -6204,7 +6212,10 @@ const MediaPlayground = () => {
               onResult={(result) => setResults((current) => [result, ...current.filter((item) => item.id !== result.id)])}
               onQueueTask={(task) => task.status === 'completed' ? removeLiveQueueTask(task.id) : upsertLiveQueueTask(task)}
             />
-            {creativeTask !== 'upscale' ? <>
+            <div hidden={!isSeedream}>
+              <SeedreamPanel key={seedreamDraftKey} uploadPolicy={DEFAULT_MEDIA_UPLOAD_POLICY} />
+            </div>
+            {usesStandardForm ? <>
             <div
               className={
                 creativeTask === 'reverse'
@@ -6688,13 +6699,13 @@ const MediaPlayground = () => {
                   </div>
                   <Title heading={4}>等待第一个作品</Title>
                   <Paragraph>
-                    选择模型后点击生成。任务进度会进入右侧队列，完成后作品会自动落到这里。
+                    {isSeedream ? '这里保存已生成的作品。当前表单可预览参数和费用。' : '选择模型后点击生成。任务进度会进入右侧队列，完成后作品会自动落到这里。'}
                   </Paragraph>
-                  <div className='mp-empty-spec'>
+                  {!isSeedream && <div className='mp-empty-spec'>
                     <span>{creativeTask === 'upscale' ? '高清放大' : activeModel.label}</span>
                     <span>{workflowLabel}</span>
                     <span>{outputSpec}</span>
-                  </div>
+                  </div>}
                   <div className='mp-result-filter-tabs' aria-label='作品类型筛选'>
                     {[['all', '全部'], ['image', '图片'], ['upscale', '高清放大'], ['video', '视频']].map(([value, label]) => <button type='button' key={value} className={resultFilter === value ? 'active' : ''} aria-pressed={resultFilter === value} onClick={() => setResultFilter(value)}>{label} {results.filter((item) => value === 'all' || (value === 'upscale' ? item.workflow === 'upscale' : value === 'image' ? item.kind === 'image' && item.workflow !== 'upscale' : item.kind === 'video')).length}</button>)}
                   </div>
