@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/types"
@@ -16,20 +17,29 @@ import (
 const seedream55BillingKey = "seedream55_billing"
 const Seedream55AcceptanceUncertainKey = "seedream55_acceptance_uncertain"
 const Seedream55ReservationCheckpointedKey = "seedream55_reservation_checkpointed"
+const seedream55ReservedChannelKey = "seedream55_reserved_channel"
 
 func Seedream55TaskID(c *gin.Context) string {
 	return c.GetString("playground_image_task_id")
 }
 
 func CheckpointSeedream55Reservation(c *gin.Context) error {
-	if Seedream55TaskID(c) != "" && !c.GetBool(Seedream55ReservationCheckpointedKey) {
-		return errors.New("image task reservation was not saved")
+	if Seedream55TaskID(c) == "" {
+		return nil
+	}
+	channelID := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
+	if !c.GetBool(Seedream55ReservationCheckpointedKey) || channelID <= 0 || channelID != c.GetInt(seedream55ReservedChannelKey) {
+		return errors.New("image task reservation was not saved for the selected channel")
 	}
 	return nil
 }
 
 func (s *BillingSession) reserveSeedream55Task(c *gin.Context, quota int) *types.NewAPIError {
 	info := s.relayInfo
+	channelID := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
+	if channelID <= 0 {
+		return types.NewError(errors.New("image task channel is unavailable"), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
+	}
 	tokenID := 0
 	if s.shouldChargeTokenQuota() {
 		tokenID = info.TokenId
@@ -40,7 +50,7 @@ func (s *BillingSession) reserveSeedream55Task(c *gin.Context, quota int) *types
 		quotaType, planID = sub.quotaType, sub.targetPlanId
 		holdSubscription = sub.holdReservation
 	}
-	err := model.ReserveImageTaskBilling(Seedream55TaskID(c), info.RequestId, info.UserId, info.ChannelId,
+	err := model.ReserveImageTaskBilling(Seedream55TaskID(c), info.RequestId, info.UserId, channelID,
 		quota, tokenID, s.funding.Source(), quotaType, planID, holdSubscription)
 	if err != nil {
 		s.funding.Close()
@@ -56,6 +66,7 @@ func (s *BillingSession) reserveSeedream55Task(c *gin.Context, quota int) *types
 	}
 	s.preConsumedQuota = quota
 	s.syncRelayInfo()
+	c.Set(seedream55ReservedChannelKey, channelID)
 	c.Set(Seedream55ReservationCheckpointedKey, true)
 	return nil
 }

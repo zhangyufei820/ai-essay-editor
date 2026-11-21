@@ -425,9 +425,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	// common.SetContextKey(c, constant.ContextKeyTokenCountMeta, meta)
 
+	reserveAfterChannelSelection := relayInfo.OriginModelName == dto.Seedream55Model && service.Seedream55TaskID(c) != ""
 	if priceData.FreeModel {
 		logger.LogInfo(c, fmt.Sprintf("模型 %s 免费，跳过预扣费", relayInfo.OriginModelName))
-	} else {
+	} else if !reserveAfterChannelSelection {
 		newAPIError = service.PreConsumeBilling(c, priceData.QuotaToPreConsume, relayInfo)
 		if newAPIError != nil {
 			return
@@ -487,6 +488,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			relayInfo.LastError = fallbackBillingErr
 			break
 		}
+		if reserveAfterChannelSelection && relayInfo.Billing == nil && !relayInfo.PriceData.FreeModel {
+			newAPIError = service.PreConsumeBilling(c, relayInfo.PriceData.QuotaToPreConsume, relayInfo)
+			if newAPIError != nil {
+				break
+			}
+		}
 
 		addUsedChannel(c, channel.Id)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
@@ -524,6 +531,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.LastError = newAPIError
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+		if c.GetBool(service.Seedream55ReservationCheckpointedKey) {
+			break
+		}
 		if shouldFallbackPlaygroundDiscount(c, relayInfo, meta, newAPIError) {
 			service.RecordRelayRetryAttempt(c, channel.Id, channel.Name, retryParam.GetRetry(), newAPIError)
 			fallbackErr := preparePlaygroundDiscountFallback(c, relayInfo, retryParam, meta)

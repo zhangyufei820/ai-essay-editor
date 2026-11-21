@@ -56,7 +56,7 @@ func TestSeedream55WalletSettlementAndRefund(t *testing.T) {
 
 func TestSeedream55TaskReservationCommitsWalletAndTokenWithReceipt(t *testing.T) {
 	truncate(t)
-	const userID, tokenID, reserve = 781, 782, 500
+	const userID, tokenID, channelID, reserve = 781, 782, 783, 500
 	seedUser(t, userID, 2000)
 	seedToken(t, tokenID, userID, "seedream-test-token", 20)
 	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", tokenID).Update("expired_time", -1).Error)
@@ -65,16 +65,21 @@ func TestSeedream55TaskReservationCommitsWalletAndTokenWithReceipt(t *testing.T)
 	require.NoError(t, model.DB.Create(task).Error)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Set("playground_image_task_id", task.TaskID)
-	info := &relaycommon.RelayInfo{UserId: userID, TokenId: tokenID, OriginModelName: dto.Seedream55Model,
-		ChannelMeta: &relaycommon.ChannelMeta{}}
+	info := &relaycommon.RelayInfo{UserId: userID, TokenId: tokenID, OriginModelName: dto.Seedream55Model}
+	require.NotNil(t, PreConsumeBilling(ctx, reserve, info))
+	require.Equal(t, 2000, getUserQuota(t, userID))
+	common.SetContextKey(ctx, constant.ContextKeyChannelId, channelID)
 	require.NotNil(t, PreConsumeBilling(ctx, reserve, info))
 	require.Equal(t, 2000, getUserQuota(t, userID))
 	require.Equal(t, 20, getTokenRemainQuota(t, tokenID))
 	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", tokenID).Update("remain_quota", 1000).Error)
 	require.Nil(t, PreConsumeBilling(ctx, reserve, info))
 	require.NoError(t, CheckpointSeedream55Reservation(ctx))
+	common.SetContextKey(ctx, constant.ContextKeyChannelId, channelID+1)
+	require.Error(t, CheckpointSeedream55Reservation(ctx))
 	require.NoError(t, model.DB.First(task, task.ID).Error)
 	require.Equal(t, reserve, task.Quota)
+	require.Equal(t, channelID, task.ChannelId)
 	require.Equal(t, tokenID, task.PrivateData.TokenId)
 	require.Equal(t, 1500, getUserQuota(t, userID))
 	require.Equal(t, 500, getTokenRemainQuota(t, tokenID))
