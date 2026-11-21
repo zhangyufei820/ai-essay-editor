@@ -12,6 +12,8 @@ import sync_app_model_permissions as permissions
 from configure_gpt_image25_channel import fetch_upstream_models, normalize_base_url, validate_api_key
 
 
+BASE_URL = "https://moonapix.com"
+API_KEY_ENV = "MOON25_B720_API_KEY"
 MODEL = permissions.PUBLIC_MOON25_B720_VIDEO_MODEL
 UPSTREAM = permissions.UPSTREAM_MOON25_B720_VIDEO_MODEL
 TAG = permissions.PUBLIC_MOON25_B720_VIDEO_CHANNEL_TAG
@@ -38,7 +40,9 @@ def stage(key: str) -> dict[str, str]:
     )
     if conflicts and int(conflicts[0][0]):
         raise ValueError("model is already configured on another channel")
-    if UPSTREAM not in fetch_upstream_models("https://moonapix.com", key):
+    if UPSTREAM not in fetch_upstream_models(
+        BASE_URL, key, expected_origin=BASE_URL, provider_name="Moon Video", env_name=API_KEY_ENV,
+    ):
         raise ValueError("the required upstream model is absent")
 
     tokens = permissions.mysql_raw(
@@ -72,7 +76,7 @@ def stage(key: str) -> dict[str, str]:
         1,
         "星人 Moon Video 2.5 720P",
         100,
-        "https://moonapix.com",
+        BASE_URL,
         MODEL,
         "internal",
         mapping,
@@ -98,8 +102,7 @@ def stage(key: str) -> dict[str, str]:
         + " AND user_id=1;",
         "COMMIT;",
     ]
-    permissions.mysql_exec("\n".join(sql))
-    permissions.delete_token_caches([token_key])
+    permissions.commit_token_updates(sql, [token_key])
     return {"action": "staged", "model": MODEL, "snapshot": str(log_path)}
 
 
@@ -109,7 +112,7 @@ def publish() -> dict[str, object]:
         raise ValueError("the staged channel is incomplete")
     if json.loads(rows[0][4]) != {MODEL: UPSTREAM}:
         raise ValueError("model mapping differs from the verified contract")
-    normalize_base_url(rows[0][5])
+    normalize_base_url(rows[0][5], expected_origin=BASE_URL, provider_name="Moon Video")
     successes = permissions.mysql(
         "SELECT COUNT(*) FROM tasks WHERE user_id=1 AND channel_id="
         + str(int(rows[0][0]))
@@ -139,7 +142,9 @@ def main() -> None:
     with open("/tmp/shenxiang-new-api-model-sync.lock", "a+") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args.action == "stage":
-            key = validate_api_key(os.environ.get("MOON25_B720_API_KEY") or getpass.getpass("Upstream key: "))
+            key = validate_api_key(
+                os.environ.get(API_KEY_ENV) or getpass.getpass("Upstream key: "), env_name=API_KEY_ENV,
+            )
             result = stage(key)
         else:
             result = publish()

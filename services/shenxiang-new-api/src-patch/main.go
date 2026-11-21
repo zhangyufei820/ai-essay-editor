@@ -164,6 +164,7 @@ func main() {
 	service.StartSystemTaskRunner()
 
 	if common.IsMasterNode {
+		service.StartTaskBillingReconciler()
 		controller.FailInterruptedPlaygroundImageTasksOnStartup()
 		controller.StartPlaygroundImageTaskWatchdog()
 		controller.StartPlaygroundUpscaleReconciler()
@@ -227,6 +228,9 @@ func main() {
 		SameSite: http.SameSiteStrictMode,
 	})
 	server.Use(sessions.Sessions("session", store))
+	if info, err := os.Stat("/data"); err == nil && info.IsDir() {
+		server.Use(middleware.MediaReleaseAdmission("/data/release-media-admission.lock"))
+	}
 
 	InjectUmamiAnalytics()
 	InjectGoogleAnalytics()

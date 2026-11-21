@@ -205,10 +205,34 @@
   },
   {
     "package": "./controller",
-    "run": "^TestSeedreamImageTask.*$"
+    "run": "^TestSeedream(ImageTask.*|PendingMarker.*|ConfirmedUndeliverable.*)$"
   },
   {
     "package": "./service",
     "run": "^TestSeedream55.*$"
+  },
+  {
+    "package": "./middleware",
+    "run": "^Test(SignedSessionUsesCurrentAccountState|DistributeSkipsIneligibleUpstreamTextRoutes|MediaReleaseAdmissionBlocksOnlyMediaSubmissions)$"
+  },
+  {
+    "package": "./router",
+    "run": "^TestSetApiRouterEnforcesChannelPermissions$"
+  },
+  {
+    "package": "./relay/channel/claude",
+    "run": "^TestClaudeStreamRequiresMessageStop$"
+  },
+  {
+    "package": "./controller",
+    "run": "^TestClaudeStreamErrorUsesSSEAndPreventsReplay$"
+  },
+  {
+    "package": "./service",
+    "run": "^Test(TaskBillingReconcile.*|VideoPollingKeepsIdenticalUpstreamIDsInTheirOwnChannels)$"
+  },
+  {
+    "package": "./relay/helper",
+    "run": "^Test(GetAndValidOpenAIImageRequestNBounds|TieredRealtimeBillingUsesFrozenExpression)$"
   }
 ]

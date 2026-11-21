@@ -44,9 +44,11 @@ def sql_quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
 
 
-def normalize_base_url(value: str) -> str:
+def normalize_base_url(
+    value: str, *, expected_origin: str = EXPECTED_BASE_URL, provider_name: str = "GPT Image 2.5",
+) -> str:
     parsed = urllib.parse.urlsplit(value.strip().rstrip("/"))
-    expected = urllib.parse.urlsplit(EXPECTED_BASE_URL)
+    expected = urllib.parse.urlsplit(expected_origin)
     if (
         parsed.scheme != "https"
         or parsed.hostname != expected.hostname
@@ -57,24 +59,29 @@ def normalize_base_url(value: str) -> str:
         or parsed.query
         or parsed.fragment
     ):
-        raise ConfigurationError("the configured GPT Image 2.5 endpoint is not permitted")
-    return EXPECTED_BASE_URL
+        raise ConfigurationError(f"the configured {provider_name} endpoint is not permitted")
+    return expected_origin
 
 
-def validate_api_key(value: str) -> str:
+def validate_api_key(value: str, *, env_name: str = API_KEY_ENV) -> str:
     key = value.strip()
     if len(key) < 20 or any(character.isspace() for character in key):
-        raise ConfigurationError(f"{API_KEY_ENV} is missing or invalid")
+        raise ConfigurationError(f"{env_name} is missing or invalid")
     return key
 
 
-def fetch_upstream_models(base_url: str, api_key: str) -> set[str]:
+def fetch_upstream_models(
+    base_url: str, api_key: str, *,
+    expected_origin: str = EXPECTED_BASE_URL,
+    provider_name: str = "GPT Image 2.5",
+    env_name: str = API_KEY_ENV,
+) -> set[str]:
     request = urllib.request.Request(
-        normalize_base_url(base_url) + "/v1/models",
+        normalize_base_url(base_url, expected_origin=expected_origin, provider_name=provider_name) + "/v1/models",
         headers={
-            "Authorization": "Bearer " + validate_api_key(api_key),
+            "Authorization": "Bearer " + validate_api_key(api_key, env_name=env_name),
             "Accept": "application/json",
-            "User-Agent": "shenxiang-new-api-gpt-image25-model-probe/1.0",
+            "User-Agent": "shenxiang-new-api-model-catalog/1.0",
         },
     )
     try:

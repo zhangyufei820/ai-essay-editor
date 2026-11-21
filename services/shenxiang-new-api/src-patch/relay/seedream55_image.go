@@ -74,8 +74,11 @@ func seedream55OutputCount(body []byte, cap int) (int, error) {
 		}
 		if item.Base64 != "" {
 			decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(item.Base64))
-			if n, err := io.Copy(io.Discard, decoder); err == nil && n > 0 {
-				continue
+			imageData, err := io.ReadAll(io.LimitReader(decoder, dto.Seedream55MaxImageBytes+1))
+			if err == nil && len(imageData) <= dto.Seedream55MaxImageBytes {
+				if _, err := dto.Seedream55ImageFormat(bytes.NewReader(imageData)); err == nil {
+					continue
+				}
 			}
 		}
 		return 0, errors.New("返回的图片结果缺少有效文件")
@@ -92,6 +95,9 @@ func relaySeedream55Image(c *gin.Context, info *relaycommon.RelayInfo, r *dto.Im
 	if err != nil {
 		return types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
+	if err := service.CheckpointSeedream55Reservation(c); err != nil {
+		return types.NewErrorWithStatusCode(err, types.ErrorCodeUpdateDataError, http.StatusServiceUnavailable, types.ErrOptionWithSkipRetry())
+	}
 	adaptor := GetAdaptor(info.ApiType)
 	adaptor.Init(info)
 	info.UpstreamRequestBodySize = int64(len(body))
@@ -105,14 +111,21 @@ func relaySeedream55Image(c *gin.Context, info *relaycommon.RelayInfo, r *dto.Im
 	}
 	resp, ok := rawResp.(*http.Response)
 	if err != nil || !ok || resp == nil || resp.Body == nil {
+		c.Set(service.Seedream55AcceptanceUncertainKey, true)
 		return fail("图片服务的结果尚未确认，请查看原任务记录", http.StatusBadGateway)
 	}
 	defer service.CloseResponseBodyGracefully(resp)
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusBadGateway ||
+			resp.StatusCode == http.StatusGatewayTimeout || resp.StatusCode == 524 {
+			c.Set(service.Seedream55AcceptanceUncertainKey, true)
+			return fail("图片服务的结果尚未确认，请查看原任务记录", http.StatusBadGateway)
+		}
 		return fail(fmt.Sprintf("图片服务未完成本次请求（HTTP %d）", resp.StatusCode), http.StatusBadGateway)
 	}
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
+		c.Set(service.Seedream55AcceptanceUncertainKey, true)
 		return fail("未能完整接收图片结果，请查看原任务记录", http.StatusBadGateway)
 	}
 	count, err := seedream55OutputCount(data, bill.Quote.OutputCap)
@@ -122,12 +135,16 @@ func relaySeedream55Image(c *gin.Context, info *relaycommon.RelayInfo, r *dto.Im
 	bill.ActualOutputs = count
 	// Images are billed by validated outputs. Token counts do not participate.
 	usage := &dto.Usage{}
+	if err := service.PostTextConsumeQuota(c, info, usage, []string{
+		fmt.Sprintf("输入 %d 张，输出 %d 张（含底图），请求尺寸 %s", bill.Quote.InputCount, count, r.Size),
+	}); err != nil {
+		return fail("图片结算暂时失败，请稍后查看消费记录。", http.StatusServiceUnavailable)
+	}
 	service.IOCopyBytesGracefully(c, resp, data)
 	if callback, ok := c.Get(PlaygroundImageResponseCaptureKey); ok {
 		if capture, ok := callback.(func(*dto.ImageRequest, *dto.Usage)); ok {
 			capture(r, usage)
 		}
 	}
-	service.PostTextConsumeQuota(c, info, usage, []string{fmt.Sprintf("输入 %d 张，输出 %d 张（含底图），请求尺寸 %s", bill.Quote.InputCount, count, r.Size)})
 	return nil
 }

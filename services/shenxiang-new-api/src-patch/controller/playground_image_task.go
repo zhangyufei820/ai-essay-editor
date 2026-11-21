@@ -71,7 +71,7 @@ func FailInterruptedPlaygroundImageTasksOnStartup() {
 	err := model.DB.
 		Where("platform = ?", constant.TaskPlatformPlaygroundImage).
 		Where("action IN ?", []string{constant.TaskActionImageGenerate, constant.TaskActionImageEdit}).
-		Where("status NOT IN ?", []string{string(model.TaskStatusFailure), string(model.TaskStatusSuccess)}).
+		Where("status NOT IN ?", []model.TaskStatus{model.TaskStatusFailure, model.TaskStatusSuccess, model.TaskStatusUnknown}).
 		Order("id").
 		Limit(200).
 		Find(&tasks).Error
@@ -104,6 +104,7 @@ func StartPlaygroundImageTaskWatchdog() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for now := range ticker.C {
+			retrySeedreamResultDelivery(now)
 			stats := reconcilePlaygroundImageTasksOnceAt(now, func(task *model.Task) {
 				userID := task.UserId
 				taskID := task.TaskID
@@ -124,6 +125,40 @@ func StartPlaygroundImageTaskWatchdog() {
 			}
 		}
 	})
+}
+
+func retrySeedreamResultDelivery(now time.Time) {
+	var tasks []model.Task
+	modelName := "JSON_UNQUOTE(JSON_EXTRACT(properties, '$.origin_model_name'))"
+	switch common.MainDatabaseType() {
+	case common.DatabaseTypeSQLite:
+		modelName = "JSON_EXTRACT(properties, '$.origin_model_name')"
+	case common.DatabaseTypePostgreSQL:
+		modelName = "properties->>'origin_model_name'"
+	}
+	err := model.DB.Where("platform = ? AND status = ? AND quota > 0 AND updated_at < ?",
+		constant.TaskPlatformPlaygroundImage, model.TaskStatusInProgress, now.Add(-time.Minute).Unix()).
+		Where(modelName+" = ?", dto.Seedream55Model).
+		Order("updated_at, id").Limit(10).Find(&tasks).Error
+	if err != nil {
+		common.SysError("failed to find interrupted image deliveries: " + err.Error())
+		return
+	}
+	for i := range tasks {
+		task := &tasks[i]
+		var payload playgroundImageTaskPayload
+		if task.GetData(&payload) != nil || payload.Model != dto.Seedream55Model ||
+			payload.RequestFile == "" {
+			continue
+		}
+		raw, err := os.ReadFile(payload.RequestFile + ".outputs")
+		var response dto.ImageResponse
+		if payload.ActualQuota > 0 && err == nil && json.Unmarshal(raw, &response) == nil && len(response.Data) > 0 {
+			gopool.Go(func() { finishSeedreamImageTask(task, &response, http.StatusOK, payload.ActualQuota) })
+		} else if payload.DeadlineAt > 0 && now.Unix() > payload.DeadlineAt+int64(15*time.Minute/time.Second) {
+			markSeedreamImageTaskPending(task)
+		}
+	}
 }
 
 func reconcilePlaygroundImageTasksOnceAt(now time.Time, schedule func(task *model.Task)) playgroundImageTaskReconcileStats {
@@ -207,6 +242,9 @@ func recoverInterruptedPlaygroundImageTaskOnStartup(task *model.Task) bool {
 		var response dto.ImageResponse
 		body, err := os.ReadFile(payload.RequestFile + ".outputs")
 		if err != nil || json.Unmarshal(body, &response) != nil || len(response.Data) == 0 {
+			if task.Quota > 0 {
+				return markSeedreamImageTaskPending(task)
+			}
 			return false
 		}
 		gopool.Go(func() { finishSeedreamImageTask(task, &response, http.StatusOK, payload.ActualQuota) })
@@ -1277,6 +1315,10 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	engine.ServeHTTP(recorder, request)
 	if recorder.Code >= http.StatusBadRequest {
 		reason := resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, recorder.Body.Bytes(), recorder.Code)
+		if relayCtx != nil && relayCtx.GetBool(service.Seedream55AcceptanceUncertainKey) {
+			markSeedreamImageTaskPending(task)
+			return
+		}
 		recordPlaygroundImageTaskAttempt(task, &payload, relayCtx, capture, recorder.Code, reason)
 		if recorder.Header().Get("X-AIPHUI-Retryable") == "false" {
 			markPlaygroundImageTaskFailure(task, reason)
@@ -1286,11 +1328,6 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		return
 	}
 
-	task, exists, err = model.GetByTaskId(userID, taskID)
-	if err != nil || !exists || task == nil {
-		cleanupPlaygroundImageTaskRequest(payload.RequestFile)
-		return
-	}
 	var response dto.ImageResponse
 	responseBody := recorder.Body.Bytes()
 	if err := common.Unmarshal(responseBody, &response); err != nil || len(response.Data) == 0 {
@@ -1311,7 +1348,17 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		if err := saveSeedreamImageTaskResponse(payload.RequestFile, responseBody); err != nil {
 			logger.LogError(relayCtx, "failed to checkpoint generated images for task "+taskID)
 		}
+		latest, found, err := model.GetByTaskId(userID, taskID)
+		if err != nil || !found || latest == nil || latest.Status != model.TaskStatusInProgress {
+			return
+		}
+		task = latest
 		finishSeedreamImageTask(task, &response, recorder.Code, capture.Quota)
+		return
+	}
+
+	task, exists, err = model.GetByTaskId(userID, taskID)
+	if err != nil || !exists || task == nil {
 		return
 	}
 
@@ -1752,11 +1799,15 @@ func recordPlaygroundImageTaskAttempt(task *model.Task, payload *playgroundImage
 	payload.LastStatusCode = status
 	payload.LastFailureKind = classifyPlaygroundImageTaskFailure(reason, status)
 	task.SetData(*payload)
-	if err := task.Update(); err != nil {
-		logger.LogError(nil, fmt.Sprintf("failed to persist playground image task %s attempt metadata: %s", task.TaskID, err.Error()))
+	update := model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, task.Status).
+		Updates(map[string]any{"data": task.Data})
+	if update.Error != nil {
+		common.SysError(fmt.Sprintf("failed to persist playground image task %s attempt metadata: %s", task.TaskID, update.Error.Error()))
 		return
 	}
-	markPlaygroundImageTaskLogRetrying(task, payload)
+	if update.RowsAffected == 1 {
+		markPlaygroundImageTaskLogRetrying(task, payload)
+	}
 }
 
 func classifyPlaygroundImageTaskFailure(reason string, status int) string {
@@ -1832,13 +1883,17 @@ func capturePlaygroundImageTaskBilling(taskID string, actualQuota int, info *rel
 	if err != nil || !exists || task == nil {
 		return
 	}
-	task.Quota = actualQuota
+	if info == nil || info.OriginModelName != dto.Seedream55Model {
+		task.Quota = actualQuota
+	}
 	if info != nil {
 		task.ChannelId = info.ChannelId
 		task.Group = truncatePlaygroundText(info.UsingGroup, 50)
 		task.PrivateData.BillingSource = info.BillingSource
 		task.PrivateData.SubscriptionId = info.SubscriptionId
-		task.PrivateData.TokenId = info.TokenId
+		if info.OriginModelName != dto.Seedream55Model {
+			task.PrivateData.TokenId = info.TokenId
+		}
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
 			ModelPrice:      info.PriceData.ModelPrice,
 			GroupRatio:      info.PriceData.GroupRatioInfo.GroupRatio,
@@ -1855,7 +1910,7 @@ func capturePlaygroundImageTaskBilling(taskID string, actualQuota int, info *rel
 	_ = task.GetData(&payload)
 	payload.ActualQuota = actualQuota
 	task.SetData(payload)
-	_ = task.Update()
+	_, _ = task.UpdateWithStatus(model.TaskStatusInProgress)
 }
 
 func cacheFirstPlaygroundImageTaskResult(c *gin.Context, task *model.Task, payload *playgroundImageTaskPayload, response *dto.ImageResponse) (*playgroundMediaItem, error) {
@@ -1881,7 +1936,7 @@ func cachePlaygroundImageTaskData(c *gin.Context, task *model.Task, payload *pla
 	}
 	metadata["task_id"] = task.TaskID
 	metadata["request_id"] = payload.RequestID
-	item, err := cachePlaygroundMedia(c, playgroundMediaCacheRequest{
+	item, err := cachePlaygroundMediaResult(c, playgroundMediaCacheRequest{
 		URL:           rawURL,
 		Kind:          "image",
 		Prompt:        payload.Prompt,
@@ -1889,7 +1944,7 @@ func cachePlaygroundImageTaskData(c *gin.Context, task *model.Task, payload *pla
 		Workflow:      payload.Workflow,
 		RevisedPrompt: first.RevisedPrompt,
 		Metadata:      metadata,
-	})
+	}, payload.Model == dto.Seedream55Model)
 	if err != nil {
 		return nil, err
 	}
@@ -1915,16 +1970,37 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	payload.RequestFile = ""
 	if actualQuota > 0 {
 		payload.ActualQuota = actualQuota
-		task.Quota = actualQuota
+		if payload.Model == dto.Seedream55Model {
+			service.PrepareDeliveredImageBilling(task, actualQuota)
+		} else {
+			task.Quota = actualQuota
+		}
 	}
 	task.SetData(payload)
 	won, err := task.UpdateWithStatus(fromStatus)
 	if err != nil {
 		logger.LogError(nil, fmt.Sprintf("failed to complete playground image task %s: %s", task.TaskID, err.Error()))
 	}
+	if !won {
+		return
+	}
+	if task.PrivateData.BillingAdjustment != nil {
+		if err := service.ReconcileTaskBillingAdjustment(task.ID); err != nil {
+			common.SysError("image task billing adjustment pending: " + err.Error())
+		} else {
+			task.Quota = actualQuota
+		}
+	}
 	extra := map[string]interface{}{}
 	if actualQuota > 0 {
 		extra["actual_quota"] = actualQuota
+	}
+	if payload.Model == dto.Seedream55Model && task.Quota != actualQuota {
+		delete(extra, "actual_quota")
+		extra["billing_settlement"] = "image_delivery_pending"
+	} else if payload.Model == dto.Seedream55Model {
+		extra["billing_settlement"] = "image_delivery_settled"
+		extra["charged_quota"] = task.Quota
 	}
 	if task.ChannelId > 0 {
 		extra["channel_id"] = task.ChannelId
@@ -1994,9 +2070,15 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 		}
 		task = latest
 	}
-	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure || task.Status == model.TaskStatusUnknown {
 		return
 	}
+	if _, err := failPlaygroundImageTask(task, reason); err != nil {
+		common.SysError(fmt.Sprintf("failed to fail playground image task %s: %s", task.TaskID, err.Error()))
+	}
+}
+
+func failPlaygroundImageTask(task *model.Task, reason string) (bool, error) {
 	reason = truncatePlaygroundText(strings.TrimSpace(sanitizePlaygroundImageTaskFailure(reason)), 1000)
 	if reason == "" {
 		reason = "image task failed"
@@ -2016,17 +2098,19 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	requestFile := payload.RequestFile
 	payload.RequestFile = ""
 	task.SetData(payload)
+	service.PrepareTaskBillingAdjustment(task, 0, reason)
 	won, err := task.UpdateWithStatus(fromStatus)
-	if err != nil {
-		logger.LogError(nil, fmt.Sprintf("failed to fail playground image task %s: %s", task.TaskID, err.Error()))
-		return
-	}
-	if !won {
-		return
+	if err != nil || !won {
+		return false, err
 	}
 	markPlaygroundImageTaskLogFailure(task, &payload, reason)
 	cleanupPlaygroundImageTaskRequest(requestFile)
-	service.RefundTaskQuota(nil, task, reason)
+	if task.PrivateData.BillingAdjustment != nil {
+		if err := service.ReconcileTaskBillingAdjustment(task.ID); err != nil {
+			common.SysError("image task refund pending: " + err.Error())
+		}
+	}
+	return true, nil
 }
 
 func sanitizePlaygroundImageTaskFailure(reason string) string {
@@ -2343,6 +2427,8 @@ func taskToPlaygroundImageTask(task *model.Task) gin.H {
 	publicFailureReason := ""
 	if task.Status == model.TaskStatusFailure {
 		publicFailureReason = publicPlaygroundTaskFailureReason(task.FailReason)
+	} else if task.Status == model.TaskStatusUnknown {
+		publicFailureReason = seedreamPendingMessage
 	}
 	response := gin.H{
 		"task_id":        task.TaskID,
@@ -2384,6 +2470,8 @@ func taskToOpenAIImageTask(task *model.Task) map[string]interface{} {
 	publicFailureReason := ""
 	if task.Status == model.TaskStatusFailure {
 		publicFailureReason = publicPlaygroundTaskFailureReason(task.FailReason)
+	} else if task.Status == model.TaskStatusUnknown {
+		publicFailureReason = seedreamPendingMessage
 	}
 	response := map[string]interface{}{
 		"task_id":        taskID,

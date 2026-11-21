@@ -21,6 +21,9 @@ def load_module():
 class StableImage2EnterpriseFallbackTest(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_module()
+        permissions = self.module.permissions
+        self.addCleanup(setattr, permissions, "ensure_stable_image2_channel_order", permissions.ensure_stable_image2_channel_order)
+        self.addCleanup(setattr, permissions, "sync_abilities", permissions.sync_abilities)
 
     def test_apply_sql_uses_hidden_model_and_lowest_priority(self) -> None:
         sql = self.module.build_apply_sql(

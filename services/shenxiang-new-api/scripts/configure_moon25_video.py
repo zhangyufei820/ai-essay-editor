@@ -12,6 +12,8 @@ import sync_app_model_permissions as permissions
 from configure_gpt_image25_channel import fetch_upstream_models, normalize_base_url, validate_api_key
 
 
+BASE_URL = "https://moonapix.com"
+API_KEY_ENV = "MOON25_API_KEY"
 MODEL = permissions.PUBLIC_MOON25_VIDEO_MODEL
 UPSTREAM = permissions.UPSTREAM_MOON25_VIDEO_MODEL
 TAG = permissions.PUBLIC_MOON25_VIDEO_CHANNEL_TAG
@@ -33,7 +35,9 @@ def stage(key):
     conflicts = permissions.mysql('SELECT COUNT(*) FROM channels WHERE FIND_IN_SET(' + quote(MODEL) + ", REPLACE(COALESCE(models, ''), ' ', '')) > 0")
     if conflicts and int(conflicts[0][0]):
         raise ValueError('model is already configured on another channel')
-    if UPSTREAM not in fetch_upstream_models('https://moonapix.com', key):
+    if UPSTREAM not in fetch_upstream_models(
+        BASE_URL, key, expected_origin=BASE_URL, provider_name="Moon Video", env_name=API_KEY_ENV,
+    ):
         raise ValueError('the required upstream model is absent')
     tokens = permissions.mysql_raw("SELECT id, `key`, model_limits FROM tokens WHERE user_id=1 AND name='星人视频生成令牌' AND deleted_at IS NULL AND status=1")
     if len(tokens) != 1:
@@ -47,7 +51,7 @@ def stage(key):
     prices[MODEL] = permissions.decimal_to_float(permissions.Decimal('0.50') / permissions.usd_exchange_rate())
     model_limits = ','.join(dict.fromkeys([*filter(None, limits.split(',')), MODEL]))
     mapping = json.dumps({MODEL: UPSTREAM}, separators=(',', ':'))
-    values = [55, key, 1, '星人 Moon Video 2.5 480P', 100, 'https://moonapix.com', MODEL, 'internal', mapping, 0, 1, TAG, '人民币 ¥0.50/秒；480P；4-30秒；30图；音频接口拒绝，暂不开放']
+    values = [55, key, 1, '星人 Moon Video 2.5 480P', 100, BASE_URL, MODEL, 'internal', mapping, 0, 1, TAG, '人民币 ¥0.50/秒；480P；4-30秒；30图；音频接口拒绝，暂不开放']
     sql = [
         'START TRANSACTION;',
         'INSERT INTO channels (type, `key`, status, name, weight, base_url, models, `group`, model_mapping, priority, auto_ban, tag, remark, created_time, test_time, response_time) VALUES (' + ','.join(str(value) if isinstance(value, int) else quote(value) for value in values) + ', UNIX_TIMESTAMP(),0,0);',
@@ -57,8 +61,7 @@ def stage(key):
         'UPDATE tokens SET model_limits_enabled=1, model_limits=' + quote(model_limits) + ' WHERE id=' + str(int(token_id)) + ' AND user_id=1;',
         'COMMIT;',
     ]
-    permissions.mysql_exec('\n'.join(sql))
-    permissions.delete_token_caches([token_key])
+    permissions.commit_token_updates(sql, [token_key])
     return {'action': 'staged', 'model': MODEL, 'snapshot': str(log_path)}
 
 
@@ -68,7 +71,7 @@ def publish():
         raise ValueError('the staged channel is incomplete')
     if json.loads(rows[0][4]) != {MODEL: UPSTREAM}:
         raise ValueError('model mapping differs from the verified contract')
-    normalize_base_url(rows[0][5])
+    normalize_base_url(rows[0][5], expected_origin=BASE_URL, provider_name="Moon Video")
     successes = permissions.mysql("SELECT COUNT(*) FROM tasks WHERE user_id=1 AND channel_id=" + str(int(rows[0][0])) + " AND status='SUCCESS' AND properties LIKE '%" + MODEL + "%'")
     if not successes or int(successes[0][0]) < 1:
         raise ValueError('a successful admin task through the staged channel is required before publishing')
@@ -89,7 +92,9 @@ def main():
     with open('/tmp/shenxiang-new-api-model-sync.lock', 'a+') as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args.action == 'stage':
-            key = validate_api_key(os.environ.get('MOON25_API_KEY') or getpass.getpass('Upstream key: '))
+            key = validate_api_key(
+                os.environ.get(API_KEY_ENV) or getpass.getpass("Upstream key: "), env_name=API_KEY_ENV,
+            )
             result = stage(key)
         else:
             result = publish()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import hashlib
 import hmac
+import re
 import os
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from pathlib import Path
 
 
 ROOT = Path("/opt/shenxiang-new-api")
+TOKEN_CACHE_PENDING_PATH = ROOT / "data" / "model-permission-token-cache-pending.json"
 CODEX_ROOT = Path("/opt/shenxiang-codex-workspace")
 ADMIN_SYSTEM_TOKEN_USER_ID = 1
 
@@ -812,25 +814,16 @@ def token_cache_key(token_key: str) -> str:
     return f"token:{digest}"
 
 
-def delete_token_caches(token_keys: list[str]) -> int:
-    unique_keys = []
-    seen: set[str] = set()
-    for token_key in token_keys:
-        token_key = token_key.strip()
-        if not token_key or token_key in seen:
-            continue
-        seen.add(token_key)
-        unique_keys.append(token_key)
-    if not unique_keys:
+def delete_token_cache_entries(cache_keys: list[str]) -> int:
+    if not cache_keys:
         return 0
-
     password = os.environ.get("REDIS_PASSWORD", "")
     if not password:
         raise RuntimeError("REDIS_PASSWORD is required to invalidate token cache")
     redis_container = os.environ.get("REDIS_CONTAINER", "shenxiang-new-api-redis")
     env = os.environ.copy()
     env["REDISCLI_AUTH"] = password
-    payload = "".join(f"DEL {token_cache_key(token_key)}\n" for token_key in unique_keys)
+    payload = "".join(f"DEL {cache_key}\n" for cache_key in cache_keys)
     subprocess.run(
         ["docker", "exec", "-i", "-e", "REDISCLI_AUTH", redis_container, "redis-cli", "--pipe"],
         input=payload.encode("utf-8"),
@@ -839,7 +832,74 @@ def delete_token_caches(token_keys: list[str]) -> int:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    return len(unique_keys)
+    return len(cache_keys)
+
+
+def token_cache_entries(token_keys: list[str]) -> list[str]:
+    return list(dict.fromkeys(token_cache_key(key.strip()) for key in token_keys if key.strip()))
+
+
+def delete_token_caches(token_keys: list[str]) -> int:
+    return delete_token_cache_entries(token_cache_entries(token_keys))
+
+
+def load_pending_token_cache_entries() -> set[str]:
+    try:
+        pending = json.loads(TOKEN_CACHE_PENDING_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return set()
+    if not isinstance(pending, list) or any(
+        not isinstance(entry, str) or re.fullmatch(r"token:[0-9a-f]{64}", entry) is None
+        for entry in pending
+    ):
+        raise RuntimeError("invalid token cache pending journal")
+    return set(pending)
+
+
+def save_pending_token_cache_entries(entries: set[str]) -> None:
+    if not entries:
+        TOKEN_CACHE_PENDING_PATH.unlink(missing_ok=True)
+        return
+    TOKEN_CACHE_PENDING_PATH.parent.mkdir(parents=True, exist_ok=True)
+    pending_temp = TOKEN_CACHE_PENDING_PATH.with_suffix(f".{os.getpid()}.tmp")
+    fd = os.open(pending_temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(sorted(entries), stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        pending_temp.replace(TOKEN_CACHE_PENDING_PATH)
+        fd = os.open(TOKEN_CACHE_PENDING_PATH.parent, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    finally:
+        pending_temp.unlink(missing_ok=True)
+
+
+def retry_pending_token_cache_deletes() -> int:
+    pending = load_pending_token_cache_entries()
+    if not pending:
+        return 0
+    deleted = delete_token_cache_entries(sorted(pending))
+    save_pending_token_cache_entries(set())
+    return deleted
+
+
+def commit_token_updates(statements: list[str], token_keys: list[str]) -> int:
+    entries = set(token_cache_entries(token_keys))
+    if not entries:
+        mysql_exec("\n".join(statements))
+        return 0
+    pending = load_pending_token_cache_entries() | entries
+    # Journal only hashed cache keys before committing MySQL. Replaying a DEL
+    # after a crash or rolled-back SQL transaction is harmless.
+    save_pending_token_cache_entries(pending)
+    mysql_exec("\n".join(statements))
+    deleted = delete_token_caches(token_keys)
+    save_pending_token_cache_entries(pending - entries)
+    return deleted
 
 
 def sql_quote(value: str) -> str:
@@ -1549,8 +1609,7 @@ def retire_codex_text_models() -> dict[str, int]:
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches([token_key for _token_id, _next_limits, token_key in token_updates])
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, _next_limits, token_key in token_updates])
     return {
         "active_models_retired": int(active_model_rows[0][0]) if active_model_rows else 0,
         "abilities_disabled": int(ability_rows[0][0]) if ability_rows else 0,
@@ -1666,8 +1725,7 @@ def retire_claude_models() -> dict[str, int]:
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches([token_key for _token_id, _next_limits, token_key in token_updates])
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, _next_limits, token_key in token_updates])
     return {
         "active_models_retired": int(active_model_rows[0][0]) if active_model_rows else 0,
         "abilities_disabled": int(ability_rows[0][0]) if ability_rows else 0,
@@ -2074,7 +2132,7 @@ def ensure_grok46_media_channels() -> None:
                     [
                         str(channel_type),
                         "source.`key`",
-                        "1",
+                        "COALESCE(source.status, 2)",
                         sql_quote(name),
                         "100",
                         "@now",
@@ -2098,7 +2156,7 @@ def ensure_grok46_media_channels() -> None:
                 + str(source_channel_id)
                 + " SET media.type = "
                 + str(channel_type)
-                + ", media.`key` = source.`key`, media.status = 1, media.name = "
+                + ", media.`key` = source.`key`, media.name = "
                 + sql_quote(name)
                 + ", media.weight = 100, media.base_url = source.base_url, media.models = "
                 + sql_quote(public_model)
@@ -2321,10 +2379,7 @@ def retire_legacy_discount_image2() -> dict[str, int]:
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches(
-        [token_key for _token_id, _next_limits, token_key in token_updates]
-    )
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, _next_limits, token_key in token_updates])
     return {
         "channels_disabled": len(
             mysql("SELECT id FROM channels WHERE status = 2 AND (" + channel_predicate + ");")
@@ -2402,7 +2457,7 @@ def ensure_discount_image2_primary_and_fallback_channels() -> None:
     mapping = json.dumps({INTERNAL_DISCOUNT_IMAGE2_MODEL: RAW_GPT_IMAGE2_MODEL}, separators=(",", ":"))
     statements = [
         "START TRANSACTION;",
-        "UPDATE channels SET status = 1, priority = "
+        "UPDATE channels SET priority = "
         + str(DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG])
         + ", weight = 100, models = "
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
@@ -2413,7 +2468,7 @@ def ensure_discount_image2_primary_and_fallback_channels() -> None:
         + " WHERE tag = "
         + sql_quote(DISCOUNT_IMAGE2_PRIMARY_CHANNEL_TAG)
         + ";",
-        "UPDATE channels SET status = 1, priority = "
+        "UPDATE channels SET priority = "
         + str(DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG])
         + ", weight = 100, models = "
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
@@ -2426,7 +2481,7 @@ def ensure_discount_image2_primary_and_fallback_channels() -> None:
         + " WHERE tag = "
         + sql_quote(DISCOUNT_IMAGE2_DDPAPI_CHANNEL_TAG)
         + ";",
-        "UPDATE channels SET status = 1, priority = "
+        "UPDATE channels SET priority = "
         + str(DISCOUNT_IMAGE2_CHANNEL_PRIORITIES[DISCOUNT_IMAGE2_GEEK2API_CHANNEL_TAG])
         + ", weight = 100, models = "
         + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
@@ -2499,7 +2554,7 @@ def ensure_stable_image2_channel_order() -> None:
     mapping = json.dumps({INTERNAL_STABLE_IMAGE2_MODEL: RAW_GPT_IMAGE2_MODEL}, separators=(",", ":"))
     statements = [
         "START TRANSACTION;",
-        "UPDATE channels SET status = 1, priority = "
+        "UPDATE channels SET priority = "
         + str(STABLE_IMAGE2_CHANNEL_PRIORITIES[STABLE_IMAGE2_PRIMARY_CHANNEL_TAG])
         + ", weight = 100, models = "
         + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
@@ -2515,7 +2570,7 @@ def ensure_stable_image2_channel_order() -> None:
         # A fallback that was explicitly offlined after a failed probe must
         # remain offlined across periodic permission syncs. Operators re-enable
         # it deliberately through the channel configuration flow.
-        "UPDATE channels SET status = IF(status = 2, 2, 1), priority = "
+        "UPDATE channels SET priority = "
         + str(STABLE_IMAGE2_CHANNEL_PRIORITIES[STABLE_IMAGE2_ENTERPRISE_FALLBACK_CHANNEL_TAG])
         + ", weight = 100, models = "
         + sql_quote(INTERNAL_STABLE_IMAGE2_MODEL)
@@ -2788,10 +2843,7 @@ def sync_tokens(
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches(
-        [token_key for _token_id, token_key, _expected_models, _expected_group in token_updates]
-    )
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, token_key, _expected_models, _expected_group in token_updates])
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
@@ -2850,10 +2902,7 @@ def sync_user_codex_tokens(
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches(
-        [token_key for _token_id, _next_limits, token_key in token_updates]
-    )
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, _next_limits, token_key in token_updates])
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
@@ -2921,10 +2970,7 @@ def sync_astra_access_for_target_user_tokens(
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches(
-        [token_key for _token_id, _next_limits, token_key in token_updates]
-    )
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, _next_limits, token_key in token_updates])
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
@@ -2977,10 +3023,7 @@ def sync_controlled_codex_alias_tokens(
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches(
-        [token_key for _token_id, _raw_limits, _next_limits, token_key in token_updates]
-    )
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, _raw_limits, _next_limits, token_key in token_updates])
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
@@ -3024,10 +3067,7 @@ def sync_user_claude_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches(
-        [token_key for _token_id, token_key, _models, _group in token_updates]
-    )
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, token_key, _models, _group in token_updates])
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
@@ -3055,8 +3095,7 @@ def sync_user_video_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches([token_key for _token_id, token_key in token_updates])
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, token_key in token_updates])
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
@@ -3086,8 +3125,7 @@ def sync_user_image_tokens(profiles: dict[str, list[str]]) -> dict[str, int]:
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
-    caches_deleted = delete_token_caches([token_key for _token_id, token_key in token_updates])
+    caches_deleted = commit_token_updates(statements, [token_key for _token_id, token_key in token_updates])
     return {"tokens_rewritten": len(token_updates), "token_caches_deleted": caches_deleted}
 
 
@@ -4117,17 +4155,17 @@ def enforce_gpt_image2_db_guard() -> dict[str, int]:
     disabled_ability_counts["supplier_exposed_abilities"] = int(supplier_ability_rows[0][0]) if supplier_ability_rows else 0
     disabled_ability_counts["supplier_exposed_models"] = int(supplier_model_rows[0][0]) if supplier_model_rows else 0
     token_rows = mysql(
-        "SELECT id, COALESCE(model_limits, '') FROM tokens "
+        "SELECT id, COALESCE(model_limits, ''), COALESCE(`key`, '') FROM tokens "
         "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
         "AND ("
         + supplier_exposed_model_limit_predicate()
         + ");"
     )
-    token_updates: list[tuple[str, str]] = []
-    for token_id, raw_limits in token_rows:
+    token_updates: list[tuple[str, str, str]] = []
+    for token_id, raw_limits, token_key in token_rows:
         next_limits = sanitize_model_limits(raw_limits)
         if next_limits != raw_limits:
-            token_updates.append((token_id, next_limits))
+            token_updates.append((token_id, next_limits, token_key))
 
     statements = ["START TRANSACTION;"]
     for channel_id, model in DISABLED_ABILITY_PAIRS:
@@ -4148,7 +4186,7 @@ def enforce_gpt_image2_db_guard() -> dict[str, int]:
         + supplier_exposed_model_name_predicate("model_name", exclude_public_alias_backing=True)
         + ";"
     )
-    for token_id, next_limits in token_updates:
+    for token_id, next_limits, _token_key in token_updates:
         statements.append(
             "UPDATE tokens SET model_limits = "
             + sql_quote(next_limits)
@@ -4157,7 +4195,7 @@ def enforce_gpt_image2_db_guard() -> dict[str, int]:
             + ";"
         )
     statements.append("COMMIT;")
-    mysql_exec("\n".join(statements))
+    commit_token_updates(statements, [token_key for _token_id, _next_limits, token_key in token_updates])
     disabled_ability_counts["tokens_rewritten"] = len(token_updates)
     return disabled_ability_counts
 
@@ -4244,8 +4282,9 @@ def run_optional_reconcile(
 
 
 def main() -> int:
+    retry_pending_token_cache_deletes()
     optional_failures: list[str] = []
-    ensure_grok46_media_channels()
+    run_optional_reconcile("grok46_media_channels", ensure_grok46_media_channels, optional_failures)
     ensure_public_video_models()
     ensure_grok46_image_model()
     ensure_discount_image2_backing_model()

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -51,4 +52,32 @@ func TestSeedream55WalletSettlementAndRefund(t *testing.T) {
 	info.Billing.Refund(ctx)
 	info.Billing.Refund(ctx)
 	require.Eventually(t, func() bool { return balance() == startingBalance-25315 }, time.Second, 10*time.Millisecond)
+}
+
+func TestSeedream55TaskReservationCommitsWalletAndTokenWithReceipt(t *testing.T) {
+	truncate(t)
+	const userID, tokenID, reserve = 781, 782, 500
+	seedUser(t, userID, 2000)
+	seedToken(t, tokenID, userID, "seedream-test-token", 20)
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", tokenID).Update("expired_time", -1).Error)
+	task := &model.Task{TaskID: "task_seedream_reservation", UserId: userID,
+		Platform: constant.TaskPlatformPlaygroundImage, Status: model.TaskStatusInProgress}
+	require.NoError(t, model.DB.Create(task).Error)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Set("playground_image_task_id", task.TaskID)
+	info := &relaycommon.RelayInfo{UserId: userID, TokenId: tokenID, OriginModelName: dto.Seedream55Model,
+		ChannelMeta: &relaycommon.ChannelMeta{}}
+	require.NotNil(t, PreConsumeBilling(ctx, reserve, info))
+	require.Equal(t, 2000, getUserQuota(t, userID))
+	require.Equal(t, 20, getTokenRemainQuota(t, tokenID))
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", tokenID).Update("remain_quota", 1000).Error)
+	require.Nil(t, PreConsumeBilling(ctx, reserve, info))
+	require.NoError(t, CheckpointSeedream55Reservation(ctx))
+	require.NoError(t, model.DB.First(task, task.ID).Error)
+	require.Equal(t, reserve, task.Quota)
+	require.Equal(t, tokenID, task.PrivateData.TokenId)
+	require.Equal(t, 1500, getUserQuota(t, userID))
+	require.Equal(t, 500, getTokenRemainQuota(t, tokenID))
+	require.NotNil(t, PreConsumeBilling(ctx, reserve, info))
+	require.Equal(t, 1500, getUserQuota(t, userID))
 }

@@ -48,6 +48,8 @@ func TestMain(m *testing.M) {
 		&model.Token{},
 		&model.Log{},
 		&model.Channel{},
+		&model.SystemTask{},
+		&model.SystemTaskLock{},
 		&model.TopUp{},
 		&model.SubscriptionPlan{},
 		&model.UserSubscription{},
@@ -71,6 +73,8 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM tokens")
 		model.DB.Exec("DELETE FROM logs")
 		model.DB.Exec("DELETE FROM channels")
+		model.DB.Exec("DELETE FROM system_tasks")
+		model.DB.Exec("DELETE FROM system_task_locks")
 		model.DB.Exec("DELETE FROM top_ups")
 		model.DB.Exec("DELETE FROM subscription_pre_consume_records")
 		model.DB.Exec("DELETE FROM user_subscriptions")
@@ -449,11 +453,12 @@ func TestImageBenefitPlaygroundBillingSessionRefundsTokenQuota(t *testing.T) {
 		funding:   &ImageBenefitFunding{},
 	}
 
-	apiErr := session.preConsume(nil, quota)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	apiErr := session.preConsume(ctx, quota)
 	require.Nil(t, apiErr)
 	assert.Equal(t, 1000-quota, getTokenRemainQuota(t, tokenID))
 
-	session.Refund(nil)
+	session.Refund(ctx)
 	require.Eventually(t, func() bool {
 		return getTokenRemainQuota(t, tokenID) == 1000
 	}, time.Second, 10*time.Millisecond)
@@ -1045,7 +1050,7 @@ func TestNonTerminalUpdate_NoBilling(t *testing.T) {
 }
 
 // ===========================================================================
-// Mock adaptor for settleTaskBillingOnComplete tests
+// Mock adaptor for prepareCompletedTaskBilling tests
 // ===========================================================================
 
 type mockAdaptor struct {
@@ -1062,7 +1067,7 @@ func (m *mockAdaptor) AdjustBillingOnComplete(_ *model.Task, _ *relaycommon.Task
 }
 
 // ===========================================================================
-// PerCallBilling tests — settleTaskBillingOnComplete
+// Per-call billing leaves the reservation unchanged.
 // ===========================================================================
 
 func TestSettle_PerCallBilling_SkipsAdaptorAdjust(t *testing.T) {
@@ -1083,7 +1088,8 @@ func TestSettle_PerCallBilling_SkipsAdaptorAdjust(t *testing.T) {
 	adaptor := &mockAdaptor{adjustReturn: 2000}
 	taskResult := &relaycommon.TaskInfo{Status: model.TaskStatusSuccess}
 
-	settleTaskBillingOnComplete(ctx, adaptor, task, taskResult)
+	prepareCompletedTaskBilling(ctx, adaptor, task, taskResult)
+	assert.Nil(t, task.PrivateData.BillingAdjustment)
 
 	// Per-call: no adjustment despite adaptor returning 2000
 	assert.Equal(t, initQuota, getUserQuota(t, userID))
@@ -1110,7 +1116,8 @@ func TestSettle_PerCallBilling_SkipsTotalTokens(t *testing.T) {
 	adaptor := &mockAdaptor{adjustReturn: 0}
 	taskResult := &relaycommon.TaskInfo{Status: model.TaskStatusSuccess, TotalTokens: 9999}
 
-	settleTaskBillingOnComplete(ctx, adaptor, task, taskResult)
+	prepareCompletedTaskBilling(ctx, adaptor, task, taskResult)
+	assert.Nil(t, task.PrivateData.BillingAdjustment)
 
 	// Per-call: no recalculation by tokens
 	assert.Equal(t, initQuota, getUserQuota(t, userID))
@@ -1138,7 +1145,11 @@ func TestSettle_NonPerCall_AdaptorAdjustWorks(t *testing.T) {
 	adaptor := &mockAdaptor{adjustReturn: adaptorQuota}
 	taskResult := &relaycommon.TaskInfo{Status: model.TaskStatusSuccess}
 
-	settleTaskBillingOnComplete(ctx, adaptor, task, taskResult)
+	task.Status = model.TaskStatusSuccess
+	prepareCompletedTaskBilling(ctx, adaptor, task, taskResult)
+	require.NoError(t, model.DB.Create(task).Error)
+	require.NoError(t, ReconcileTaskBillingAdjustment(task.ID))
+	require.NoError(t, model.DB.First(task, task.ID).Error)
 
 	// Non-per-call: adaptor adjustment applies (refund 2000)
 	assert.Equal(t, initQuota+(preConsumed-adaptorQuota), getUserQuota(t, userID))

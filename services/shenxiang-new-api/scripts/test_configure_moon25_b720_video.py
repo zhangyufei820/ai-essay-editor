@@ -43,15 +43,17 @@ class ConfigureMoon25B720VideoTest(unittest.TestCase):
                 return [["1"]]
             return []
 
-        self.module.permissions.mysql = fake_mysql
-        self.module.permissions.mysql_exec = lambda sql: calls.append(sql)
-        self.module.permissions.ensure_public_video_models = lambda: calls.append("models")
-        self.module.permissions.sync_public_video_pricing = lambda: calls.append("pricing")
-        self.module.permissions.sync_abilities = lambda: calls.append("abilities")
-        self.module.permissions.model_lists = lambda: {"video": [self.module.MODEL]}
-        self.module.permissions.sync_user_video_tokens = lambda profiles: {"tokens_rewritten": 3}
-
-        result = self.module.publish()
+        with mock.patch.multiple(
+            self.module.permissions,
+            mysql=fake_mysql,
+            mysql_exec=calls.append,
+            ensure_public_video_models=lambda: calls.append("models"),
+            sync_public_video_pricing=lambda: calls.append("pricing"),
+            sync_abilities=lambda: calls.append("abilities"),
+            model_lists=lambda: {"video": [self.module.MODEL]},
+            sync_user_video_tokens=lambda profiles: {"tokens_rewritten": 3},
+        ):
+            result = self.module.publish()
 
         self.assertEqual(result, {"action": "published", "model": self.module.MODEL, "tokens_rewritten": 3})
         self.assertIn("default,standard,pro,code,internal", calls[0])

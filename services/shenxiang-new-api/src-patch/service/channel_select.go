@@ -2,7 +2,7 @@ package service
 
 import (
 	"errors"
-	"fmt"
+	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -12,51 +12,48 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var getRandomSatisfiedChannelForTokenGroupChain = model.GetRandomSatisfiedChannel
-var isChannelAbilityEnabledForCircuit = model.IsChannelAbilityEnabled
-
-type randomSatisfiedChannelSelector func(string, string, int, string) (*model.Channel, error)
-
-func usesModelAbilityCircuit(group string, requestPath string) bool {
-	if requestPath != "/v1/responses" && requestPath != "/v1/chat/completions" {
+func usesLiveChannelSelection(group string, requestPath string) bool {
+	switch requestPath {
+	case "/v1/messages":
+		return IsPublicClaudeTokenGroup(group)
+	case "/v1/responses", "/v1/responses/compact", "/v1/completions", "/v1/chat/completions", "/pg/chat/completions":
+		return group == "default" || group == DiscountPricingGroupName || group == PlusPricingGroupName || group == SpecialPricingGroupName || IsPublicClaudeTokenGroup(group)
+	default:
 		return false
 	}
-	return group == "default" || group == DiscountPricingGroupName || group == PlusPricingGroupName || group == SpecialPricingGroupName
 }
 
-func getRandomSatisfiedChannelWithCircuit(
-	ctx *gin.Context,
-	selector randomSatisfiedChannelSelector,
-	group string,
-	modelName string,
-	retry int,
-	requestPath string,
-) (*model.Channel, error) {
-	channel, err := selector(group, modelName, retry, requestPath)
-	if err != nil || channel == nil || !usesModelAbilityCircuit(group, requestPath) {
-		return channel, err
+func channelAllowedOnPath(group, requestPath string) bool {
+	return group != ClaudeTerminalPricingGroupName || requestPath == "/v1/messages"
+}
+
+func PreferredChannelEligible(c *gin.Context, group, modelName string, preferred *model.Channel) bool {
+	requestPath := c.Request.URL.Path
+	if !channelAllowedOnPath(group, requestPath) || !model.ChannelSupportsRelayPath(preferred, requestPath, modelName) {
+		return false
 	}
-	seen := make(map[int]struct{})
-	for attempts := 0; attempts < 16 && channel != nil; attempts++ {
-		if _, duplicate := seen[channel.Id]; duplicate {
-			return nil, nil
-		}
-		seen[channel.Id] = struct{}{}
-		enabled, abilityErr := isChannelAbilityEnabledForCircuit(group, modelName, channel.Id)
-		if abilityErr != nil {
-			logger.LogError(ctx, fmt.Sprintf("model ability circuit lookup failed: %s", abilityErr.Error()))
-			return channel, nil
-		}
-		if enabled {
-			return channel, nil
-		}
-		retry++
-		channel, err = selector(group, modelName, retry, requestPath)
-		if err != nil {
-			return nil, err
+	if usesLiveChannelSelection(group, requestPath) || HasExplicitTokenGroupChain(c) {
+		channel, err := model.SelectLiveChannelForGroupModel(group, modelName, requestPath, nil, preferred.Id)
+		return err == nil && channel != nil && channel.Id == preferred.Id
+	}
+	return model.IsChannelCurrentPriorityForGroupModel(group, modelName, preferred.Id)
+}
+
+func (p *RetryParam) selectChannel(group string, retry int, live bool) (*model.Channel, error) {
+	if live && !channelAllowedOnPath(group, p.RequestPath) {
+		return nil, nil
+	}
+	if !live && !usesLiveChannelSelection(group, p.RequestPath) {
+		return model.GetRandomSatisfiedChannel(group, p.ModelName, retry, p.RequestPath)
+	}
+	used := p.Ctx.GetStringSlice("use_channel")
+	tried := make([]int, 0, len(used))
+	for _, raw := range used {
+		if id, err := strconv.Atoi(raw); err == nil && id > 0 {
+			tried = append(tried, id)
 		}
 	}
-	return nil, nil
+	return model.SelectLiveChannelForGroupModel(group, p.ModelName, p.RequestPath, tried, 0)
 }
 
 func GetTokenGroupChain(c *gin.Context) []string {
@@ -182,74 +179,22 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 
 	groupChain := GetTokenGroupChain(param.Ctx)
 	if len(groupChain) > 1 && param.TokenGroup != "auto" {
-		startGroupIndex := common.GetContextKeyInt(param.Ctx, constant.ContextKeyTokenGroupChainIndex)
-		if startGroupIndex < 0 {
-			startGroupIndex = 0
+		start := common.GetContextKeyInt(param.Ctx, constant.ContextKeyTokenGroupChainIndex)
+		if start > 0 && param.GetRetry() > 0 {
+			// The cursor points after the selected group. On retries, first
+			// try its remaining channels before moving to the next group.
+			start--
 		}
-		groupStartRetry := common.GetContextKeyInt(param.Ctx, constant.ContextKeyTokenGroupChainRetryIndex)
-		if groupStartRetry < 0 || groupStartRetry > param.GetRetry() {
-			groupStartRetry = 0
-		}
-		usingGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUsingGroup)
-		selectedGroupIndex := -1
-		for index, group := range groupChain {
-			if group == usingGroup {
-				selectedGroupIndex = index
-				break
-			}
-		}
-
-		// The chain index points at the next fallback group. On a retry, exhaust
-		// the already-selected group at its next priority before advancing.
-		if param.GetRetry() > groupStartRetry && selectedGroupIndex >= 0 && selectedGroupIndex < startGroupIndex {
-			priorityRetry := param.GetRetry() - groupStartRetry
-			channel, err = getRandomSatisfiedChannelWithCircuit(
-				param.Ctx,
-				getRandomSatisfiedChannelForTokenGroupChain,
-				usingGroup,
-				param.ModelName,
-				priorityRetry,
-				param.RequestPath,
-			)
-			if err != nil {
-				return nil, usingGroup, err
-			}
-			if channel != nil {
-				return channel, usingGroup, nil
-			}
-			groupStartRetry = param.GetRetry()
-			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainRetryIndex, groupStartRetry)
-		}
-		for index := startGroupIndex; index < len(groupChain); index++ {
+		for index := start; index < len(groupChain); index++ {
 			group := groupChain[index]
-			priorityRetry := param.GetRetry() - groupStartRetry
-			if index > startGroupIndex {
-				priorityRetry = 0
-			}
-			channel, err = getRandomSatisfiedChannelWithCircuit(
-				param.Ctx,
-				getRandomSatisfiedChannelForTokenGroupChain,
-				group,
-				param.ModelName,
-				priorityRetry,
-				param.RequestPath,
-			)
+			channel, err = param.selectChannel(group, 0, true)
 			if err != nil {
 				return nil, group, err
 			}
-			if channel == nil {
-				common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainIndex, index+1)
-				common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainRetryIndex, param.GetRetry())
-				logger.LogDebug(param.Ctx, "No available channel in explicit token group chain for model %s, trying next group", param.ModelName)
-				continue
+			if channel != nil {
+				MarkTokenGroupChainSelected(param.Ctx, group)
+				return channel, group, nil
 			}
-			selectGroup = group
-			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainIndex, index+1)
-			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupChainRetryIndex, groupStartRetry)
-			common.SetContextKey(param.Ctx, constant.ContextKeyUsingGroup, group)
-			common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroup, group)
-			logger.LogDebug(param.Ctx, "Selected explicit token group chain entry for model %s", param.ModelName)
-			return channel, selectGroup, nil
 		}
 		return nil, selectGroup, nil
 	}
@@ -283,14 +228,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", autoGroup, priorityRetry)
 
-			channel, _ = getRandomSatisfiedChannelWithCircuit(
-				param.Ctx,
-				model.GetRandomSatisfiedChannel,
-				autoGroup,
-				param.ModelName,
-				priorityRetry,
-				param.RequestPath,
-			)
+			channel, _ = param.selectChannel(autoGroup, priorityRetry, false)
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
 				// 当前分组没有该模型的可用渠道，尝试下一个分组
@@ -328,14 +266,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			break
 		}
 	} else {
-		channel, err = getRandomSatisfiedChannelWithCircuit(
-			param.Ctx,
-			model.GetRandomSatisfiedChannel,
-			param.TokenGroup,
-			param.ModelName,
-			param.GetRetry(),
-			param.RequestPath,
-		)
+		channel, err = param.selectChannel(param.TokenGroup, param.GetRetry(), false)
 		if err != nil {
 			return nil, param.TokenGroup, err
 		}

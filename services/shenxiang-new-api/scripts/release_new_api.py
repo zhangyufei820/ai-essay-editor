@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
@@ -13,6 +14,8 @@ import stat
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -20,6 +23,8 @@ from typing import Any, Sequence
 DEFAULT_APP_DIR = Path("/opt/shenxiang-new-api")
 DEFAULT_REPO_URL = "https://github.com/zhangyufei820/ai-essay-editor.git"
 DEFAULT_BRANCH = "production/new-api"
+MEDIA_ADMISSION_LOCK = "release-media-admission.lock"
+MEDIA_ADMISSION_HEADER = "x-new-api-media-release-admission:"
 DEFAULT_TEST_IMAGE = (
     "golang:1.26.1-alpine@sha256:2389ebfa5b7f43eeafbd6be0c3700cc46690ef842ad962f6c5bd6be49ed82039"
 )
@@ -218,9 +223,10 @@ class Release:
         self.run_tests()
         self.build_image()
         self.verify_candidate_image()
-        self.check_active_media_tasks()
-        self.validate_current_state(manifest)
         if self.args.preflight_only:
+            self.check_active_media_tasks()
+            self.validate_current_state(manifest)
+            self.validate_remote_head()
             print(f"candidate preflight passed: {self.candidate} {self.image}")
             return
         self.switch(manifest)
@@ -257,6 +263,16 @@ class Release:
         if self.args.candidate and validate_sha(self.args.candidate, "requested candidate") != candidate:
             raise ReleaseError(f"requested candidate is not origin/{self.args.branch}: {candidate}")
         return candidate
+
+    def validate_remote_head(self) -> None:
+        branch_ref = f"refs/heads/{self.args.branch}"
+        remote_ref = self.git(["ls-remote", "--exit-code", "origin", branch_ref])
+        fields = remote_ref.split()
+        if len(fields) != 2 or fields[1] != branch_ref:
+            raise ReleaseError("cannot verify the current production remote head")
+        head = validate_sha(fields[0], "current production remote head")
+        if head != self.candidate:
+            raise ReleaseError(f"production branch advanced to {head}; rebuild the current remote head")
 
     def ensure_checkout(self, commit: str) -> Path:
         checkout = self.checkouts_dir / commit
@@ -450,43 +466,29 @@ class Release:
             else:
                 run([*docker_go, "-count=1", package])
 
-        provider_monitor_test = (
-            self.checkout / "services/shenxiang-new-api/scripts/test_provider_monitor.py"
+        scripts_dir = self.checkout / "services/shenxiang-new-api/scripts"
+        required_tests = (
+            "test_provider_monitor.py",
+            "test_sync_app_model_permissions.py",
+            "test_codex_entry_guard_runner.py",
+            "test_codex_permission_writer_consistency.py",
+            "test_release_new_api.py",
+            "test_configure_gpt6_astra_channel.py",
+            "test_configure_gpt6_sol_channel.py",
         )
-        if not provider_monitor_test.is_file():
-            raise ReleaseError("candidate is missing provider monitor tests")
-        run(["python3", str(provider_monitor_test)])
-        permission_sync_test = self.checkout / "services/shenxiang-new-api/scripts/test_sync_app_model_permissions.py"
-        if not permission_sync_test.is_file():
-            raise ReleaseError("candidate is missing model permission sync tests")
-        run(["python3", str(permission_sync_test)])
-        codex_guard_runner_test = (
-            self.checkout / "services/shenxiang-new-api/scripts/test_codex_entry_guard_runner.py"
-        )
-        if not codex_guard_runner_test.is_file():
-            raise ReleaseError("candidate is missing Codex guard runner tests")
-        run(["python3", str(codex_guard_runner_test)])
-        codex_writer_consistency_test = (
-            self.checkout
-            / "services/shenxiang-new-api/scripts/test_codex_permission_writer_consistency.py"
-        )
-        if not codex_writer_consistency_test.is_file():
-            raise ReleaseError("candidate is missing Codex permission writer consistency tests")
-        run(["python3", str(codex_writer_consistency_test)])
-        release_governance_test = (
-            self.checkout / "services/shenxiang-new-api/scripts/test_release_new_api.py"
-        )
-        if not release_governance_test.is_file():
-            raise ReleaseError("candidate is missing release governance tests")
-        run(["python3", str(release_governance_test)])
-        astra_test = self.checkout / "services/shenxiang-new-api/scripts/test_configure_gpt6_astra_channel.py"
-        if not astra_test.is_file():
-            raise ReleaseError("candidate is missing Astra routing policy tests")
-        run(["python3", str(astra_test)])
-        sol_test = self.checkout / "services/shenxiang-new-api/scripts/test_configure_gpt6_sol_channel.py"
-        if not sol_test.is_file():
-            raise ReleaseError("candidate is missing Sol routing policy tests")
-        run(["python3", str(sol_test)])
+        for name in required_tests:
+            if not (scripts_dir / name).is_file():
+                raise ReleaseError(f"candidate is missing required operations tests: {name}")
+        # Several legacy test modules replace module globals. Run each in its
+        # own process so one maintainer script cannot change another test's fixtures.
+        for script in sorted(scripts_dir.glob("test_*.py")):
+            run(["python3", "-B", "-m", "unittest", script.stem], cwd=scripts_dir)
+
+        classic_root = self.source_dir / "web/classic"
+        classic_tests = sorted((classic_root / "src").rglob("*.test.mjs"))
+        if not classic_tests:
+            raise ReleaseError("candidate is missing Classic node tests")
+        run(["node", "--test", *map(str, classic_tests)], cwd=classic_root)
 
     def build_image(self) -> None:
         labels = self.image_labels(self.image)
@@ -532,13 +534,52 @@ class Release:
             ]
         )
 
+    def media_admission_supported(self) -> bool:
+        headers = output([
+            "curl", "-fsS", "--noproxy", "*", "--connect-timeout", "10", "--max-time", "30",
+            "--dump-header", "-", "--output", "/dev/null", "http://127.0.0.1:3120/api/status",
+        ])
+        return any(line.lower().strip() == MEDIA_ADMISSION_HEADER + " 1" for line in headers.splitlines())
+
+    @contextmanager
+    def pause_media_admission(self) -> Iterator[None]:
+        if not self.media_admission_supported():
+            raise ReleaseError("active New API does not support the release media admission lock")
+        data_dir = self.app_dir / "data"
+        mounts = json.loads(output(["docker", "inspect", self.container, "--format", "{{json .Mounts}}"]))
+        if not any(
+            mount.get("Type") == "bind"
+            and mount.get("Destination") == "/data"
+            and Path(mount["Source"]).resolve() == data_dir.resolve()
+            for mount in mounts
+        ):
+            raise ReleaseError("active New API /data mount does not match the release media admission lock")
+        lock_path = data_dir / MEDIA_ADMISSION_LOCK
+        fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o644)
+        with os.fdopen(fd, "a") as lock:
+            # Let already-admitted requests finish inserting their rows. If
+            # they do not release the shared lock promptly, leave the service up.
+            deadline = time.monotonic() + 20
+            while True:
+                try:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError as error:
+                    if time.monotonic() >= deadline:
+                        raise ReleaseError("media admissions did not drain; release refused") from error
+                    time.sleep(0.2)
+            yield
+
     def check_active_media_tasks(self) -> None:
         sql = """SET NAMES utf8mb4;
 SELECT COUNT(*)
 FROM tasks
-WHERE (platform IN ('playground_image', 'playground_video')
-  AND status NOT IN ('FAILURE', 'SUCCESS'))
-  OR (platform = 'playground_upscale' AND status IN ('SUBMITTED', 'IN_PROGRESS'));
+WHERE (platform = 'playground_image' AND status NOT IN ('FAILURE', 'SUCCESS', 'UNKNOWN'))
+  OR (platform = 'playground_video' AND status NOT IN ('FAILURE', 'SUCCESS'))
+  OR (platform = 'playground_upscale' AND (
+    status IN ('SUBMITTED', 'IN_PROGRESS')
+    OR (status = 'UNKNOWN' AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(private_data, '$.upstream_task_id')), '') <> '')
+  ));
 """
         result = run(
             [
@@ -553,8 +594,10 @@ WHERE (platform IN ('playground_image', 'playground_video')
             input_text=sql,
             capture=True,
         )
-        count_text = re.sub(r"\D", "", result.stdout)
-        count = int(count_text or "0")
+        count_text = result.stdout.strip()
+        if not re.fullmatch(r"[0-9]+", count_text):
+            raise ReleaseError("active media-task count was not returned")
+        count = int(count_text)
         if count:
             raise ReleaseError(f"{count} media-workshop tasks are still active; release refused")
 
@@ -630,6 +673,10 @@ WHERE (platform IN ('playground_image', 'playground_video')
         run([str(self.app_dir / "scripts/check-new-api-release-state.sh")])
 
     def switch(self, previous_manifest: dict[str, Any]) -> None:
+        with self.pause_media_admission():
+            self.switch_with_media_paused(previous_manifest)
+
+    def switch_with_media_paused(self, previous_manifest: dict[str, Any]) -> None:
         timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         self.rollback_dir.mkdir(parents=True, exist_ok=True)
         compose_backup = self.rollback_dir / f"docker-compose.{timestamp}.yml"
@@ -654,6 +701,9 @@ WHERE (platform IN ('playground_image', 'playground_video')
         switch_attempted = False
         governance_changed = False
         try:
+            self.validate_current_state(previous_manifest)
+            self.check_active_media_tasks()
+            self.validate_remote_head()
             candidate_compose = replace_compose_image(self.compose_path.read_text(encoding="utf-8"), self.image)
             atomic_write(self.compose_path, candidate_compose.encode(), stat.S_IMODE(self.compose_path.stat().st_mode))
             compose_changed = True
@@ -661,6 +711,8 @@ WHERE (platform IN ('playground_image', 'playground_video')
             switch_attempted = True
             self.compose("up", "-d", "--no-deps", "--force-recreate", "shenxiang-new-api")
             self.wait_for_health(self.image)
+            if not self.media_admission_supported():
+                raise ReleaseError("candidate removed the release media admission lock")
             self.verify_live()
             self.image_id = output(["docker", "image", "inspect", self.image, "--format", "{{.Id}}"])
             current_image, current_image_id = self.active_image()

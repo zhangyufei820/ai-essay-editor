@@ -419,6 +419,10 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 
 	usage, newAPIError := adaptor.DoResponse(c, httpResp, info)
 	if newAPIError != nil {
+		// A streaming adaptor can report billable output delivered before a failure.
+		if partialUsage, ok := usage.(*dto.Usage); ok && partialUsage != nil {
+			service.PostTextConsumeQuota(c, info, partialUsage, []string{"上游流式响应中断，按已生成内容结算"})
+		}
 		// reset status code 重置状态码
 		service.ResetStatusCode(newAPIError, statusCodeMappingStr)
 		return newAPIError

@@ -588,6 +588,7 @@ type ClaudeResponseInfo struct {
 	ResponseText strings.Builder
 	Usage        *dto.Usage
 	Done         bool
+	Stopped      bool
 }
 
 func cacheCreationTokensForOpenAIUsage(usage *dto.Usage) int {
@@ -743,6 +744,9 @@ func FormatClaudeResponseInfo(claudeResponse *dto.ClaudeResponse, oaiResponse *d
 			if claudeResponse.Delta.Thinking != nil {
 				claudeInfo.ResponseText.WriteString(*claudeResponse.Delta.Thinking)
 			}
+			if claudeResponse.Delta.PartialJson != nil {
+				claudeInfo.ResponseText.WriteString(*claudeResponse.Delta.PartialJson)
+			}
 		}
 	} else if claudeResponse.Type == "message_delta" {
 		// 最终的usage获取
@@ -773,6 +777,9 @@ func FormatClaudeResponseInfo(claudeResponse *dto.ClaudeResponse, oaiResponse *d
 
 		// 判断是否完整
 		claudeInfo.Done = true
+	} else if claudeResponse.Type == "message_stop" {
+		claudeInfo.Stopped = true
+		return false
 	} else if claudeResponse.Type == "content_block_start" {
 	} else {
 		return false
@@ -832,12 +839,12 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 	return nil
 }
 
-func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo) {
+func completeClaudeStreamUsage(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo) {
 	if claudeInfo.Usage.PromptTokens == 0 {
 		// 上游可能出错：未返回 prompt token 用量。记录以便排查，下方会用估算值兜底计费。
 		logger.LogError(c, fmt.Sprintf("claude upstream returned zero prompt tokens for model %s, falling back to estimated usage", info.UpstreamModelName))
 	}
-	if claudeInfo.Usage.CompletionTokens == 0 || !claudeInfo.Done {
+	if claudeInfo.Usage.PromptTokens == 0 || claudeInfo.Usage.CompletionTokens == 0 || !claudeInfo.Done {
 		if common.DebugEnabled {
 			common.SysLog("claude response usage is not complete, maybe upstream error")
 		}
@@ -856,9 +863,11 @@ func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, clau
 		claudeInfo.Usage.UsageSemantic = "anthropic"
 	}
 
-	if info.RelayFormat == types.RelayFormatClaude {
-		//
-	} else if info.RelayFormat == types.RelayFormatOpenAI {
+}
+
+func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo) {
+	completeClaudeStreamUsage(c, info, claudeInfo)
+	if info.RelayFormat == types.RelayFormatOpenAI {
 		if info.ShouldIncludeUsage {
 			openAIUsage := buildOpenAIStyleUsageFromClaudeUsage(claudeInfo.Usage)
 			response := helper.GenerateFinalUsageResponse(claudeInfo.ResponseId, claudeInfo.Created, info.UpstreamModelName, openAIUsage)
@@ -884,14 +893,32 @@ func ClaudeStreamHandler(c *gin.Context, resp *http.Response, info *relaycommon.
 		err = HandleStreamResponseData(c, info, claudeInfo, data)
 		if err != nil {
 			sr.Stop(err)
+		} else if claudeInfo.Stopped {
+			sr.Done()
 		}
 	})
-	if err != nil {
+	if err == nil && claudeInfo.Stopped {
+		HandleStreamFinalResponse(c, info, claudeInfo)
+		return claudeInfo.Usage, nil
+	}
+	if err == nil {
+		// A protocol truncation before any output is a channel failure: unlike
+		// generic response parsing errors, the relay may try another channel.
+		c.Set("claude_stream_truncated", true)
+		status := http.StatusBadGateway
+		if info.StreamStatus != nil && info.StreamStatus.EndReason == relaycommon.StreamEndReasonTimeout {
+			status = http.StatusGatewayTimeout
+		}
+		err = types.NewOpenAIError(fmt.Errorf("Claude stream ended before message_stop"), types.ErrorCodeBadResponseBody, status)
+	}
+	if !c.Writer.Written() {
 		return nil, err
 	}
-
-	HandleStreamFinalResponse(c, info, claudeInfo)
-	return claudeInfo.Usage, nil
+	if claudeInfo.ResponseText.Len() == 0 && claudeInfo.Usage.CompletionTokens == 0 {
+		return nil, err
+	}
+	completeClaudeStreamUsage(c, info, claudeInfo)
+	return claudeInfo.Usage, err
 }
 
 func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo, httpResp *http.Response, data []byte) *types.NewAPIError {

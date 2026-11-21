@@ -186,7 +186,7 @@ func Distribute() func(c *gin.Context) {
 								userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 								autoGroups := service.GetUserAutoGroup(userGroup)
 								for _, g := range autoGroups {
-									if model.IsChannelCurrentPriorityForGroupModel(g, modelRequest.Model, preferred.Id) {
+									if service.PreferredChannelEligible(c, g, modelRequest.Model, preferred) {
 										selectGroup = g
 										common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
 										channel = preferred
@@ -196,7 +196,7 @@ func Distribute() func(c *gin.Context) {
 										break
 									}
 								}
-							} else if model.IsChannelCurrentPriorityForGroupModel(usingGroup, modelRequest.Model, preferred.Id) {
+							} else if service.PreferredChannelEligible(c, usingGroup, modelRequest.Model, preferred) {
 								channel = preferred
 								selectGroup = usingGroup
 								affinityUsable = true
@@ -212,10 +212,11 @@ func Distribute() func(c *gin.Context) {
 
 				if channel == nil {
 					channel, selectGroup, err = service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
-						Ctx:        c,
-						ModelName:  modelRequest.Model,
-						TokenGroup: usingGroup,
-						Retry:      common.GetPointer(0),
+						Ctx:         c,
+						ModelName:   modelRequest.Model,
+						TokenGroup:  usingGroup,
+						RequestPath: c.Request.URL.Path,
+						Retry:       common.GetPointer(0),
 					})
 					if err != nil {
 						showGroup := usingGroup

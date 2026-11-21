@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {
   allowedUpscaleFactors,
+  forgetFinishedUpscaleAttempts,
+  shouldPollUpscaleTask,
   upscaleTaskStatus,
   upscaleTaskToResult,
   formatUpscalePrice,
@@ -51,3 +53,17 @@ console.log('upscale dimension, status and result contracts passed');
 assert.equal(upscaleTaskStatus({status:"SUCCESS",cache_status:"pending"}),"IN_PROGRESS");
 assert.equal(upscaleTaskStatus({status:"SUCCESS",cache_status:"expired"}),"FAILURE");
 assert.equal(upscaleTaskToResult({task_id:"pending",status:"SUCCESS",cache_status:"pending",url:"/download"}),null);
+
+assert.equal(shouldPollUpscaleTask({ status: 'UNKNOWN', pollable: false }), false);
+assert.equal(shouldPollUpscaleTask({ status: 'UNKNOWN', pollable: true }), true);
+assert.equal(shouldPollUpscaleTask({ status: 'SUCCESS', cache_status: 'pending' }), true);
+const attempts = new Map([
+  ['uncertain-image', { key: 'one', taskId: 'unknown' }],
+  ['other-image', { key: 'two', taskId: 'completed' }],
+]);
+forgetFinishedUpscaleAttempts(attempts, [
+  { task_id: 'unknown', status: 'UNKNOWN' },
+  { task_id: 'completed', status: 'SUCCESS' },
+]);
+assert.equal(attempts.get('uncertain-image').key, 'one');
+assert.equal(attempts.has('other-image'), false);

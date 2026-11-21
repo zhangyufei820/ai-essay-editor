@@ -1,13 +1,64 @@
 package service
 
 import (
+	"errors"
+	"net/http"
+	"strings"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 )
 
 const seedream55BillingKey = "seedream55_billing"
+const Seedream55AcceptanceUncertainKey = "seedream55_acceptance_uncertain"
+const Seedream55ReservationCheckpointedKey = "seedream55_reservation_checkpointed"
+
+func Seedream55TaskID(c *gin.Context) string {
+	return c.GetString("playground_image_task_id")
+}
+
+func CheckpointSeedream55Reservation(c *gin.Context) error {
+	if Seedream55TaskID(c) != "" && !c.GetBool(Seedream55ReservationCheckpointedKey) {
+		return errors.New("image task reservation was not saved")
+	}
+	return nil
+}
+
+func (s *BillingSession) reserveSeedream55Task(c *gin.Context, quota int) *types.NewAPIError {
+	info := s.relayInfo
+	tokenID := 0
+	if s.shouldChargeTokenQuota() {
+		tokenID = info.TokenId
+	}
+	quotaType, planID := 0, 0
+	var holdSubscription func(*model.SubscriptionPreConsumeResult, model.SubscriptionPlanInfo) error
+	if sub, ok := s.funding.(*SubscriptionFunding); ok {
+		quotaType, planID = sub.quotaType, sub.targetPlanId
+		holdSubscription = sub.holdReservation
+	}
+	err := model.ReserveImageTaskBilling(Seedream55TaskID(c), info.RequestId, info.UserId, info.ChannelId,
+		quota, tokenID, s.funding.Source(), quotaType, planID, holdSubscription)
+	if err != nil {
+		s.funding.Close()
+		if model.IsSubscriptionHardLimitError(err) {
+			return subscriptionLimitAPIError(err)
+		}
+		if errors.Is(err, model.ErrUserQuotaInsufficient) || strings.Contains(err.Error(), "subscription quota insufficient") ||
+			strings.Contains(err.Error(), "no active subscription") {
+			return types.NewErrorWithStatusCode(err, types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		}
+		return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+	}
+	s.preConsumedQuota = quota
+	s.syncRelayInfo()
+	c.Set(Seedream55ReservationCheckpointedKey, true)
+	return nil
+}
 
 type Seedream55Billing struct {
 	Quote         dto.Seedream55Quote

@@ -22,6 +22,17 @@ def load_module():
 class ConfigureDiscountImage2ChannelTest(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_module()
+        permissions = self.module.permissions
+        self.addCleanup(setattr, permissions, "sanitize_token_models", permissions.sanitize_token_models)
+        self.addCleanup(setattr, permissions, "usd_exchange_rate", permissions.usd_exchange_rate)
+        self.addCleanup(setattr, permissions, "mysql_exec", permissions.mysql_exec)
+        self.addCleanup(setattr, permissions, "discount_image2_release_state", permissions.discount_image2_release_state)
+        self.addCleanup(setattr, permissions, "ensure_discount_image2_primary_and_fallback_channels", permissions.ensure_discount_image2_primary_and_fallback_channels)
+        self.addCleanup(setattr, permissions, "ensure_discount_image2_backing_model", permissions.ensure_discount_image2_backing_model)
+        self.addCleanup(setattr, permissions, "sync_public_image_pricing", permissions.sync_public_image_pricing)
+        self.addCleanup(setattr, permissions, "model_lists", permissions.model_lists)
+        self.addCleanup(setattr, permissions, "sync_abilities", permissions.sync_abilities)
+        self.addCleanup(setattr, permissions, "sync_user_image_tokens", permissions.sync_user_image_tokens)
 
     def test_normalize_base_url_only_accepts_allowlisted_origin(self) -> None:
         self.assertEqual(
@@ -133,6 +144,7 @@ class ConfigureDiscountImage2ChannelTest(unittest.TestCase):
         self.module.require_staged_channel_ready = lambda: None
         self.module.permissions.mysql_exec = sql_calls.append
         self.module.permissions.discount_image2_release_state = lambda: "published"
+        self.module.permissions.ensure_discount_image2_primary_and_fallback_channels = lambda: None
         self.module.permissions.ensure_discount_image2_backing_model = lambda: None
         self.module.permissions.sync_public_image_pricing = lambda: None
         self.module.permissions.model_lists = lambda: {"image": ["特价 image-2"]}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -14,6 +15,12 @@ class Gpt61SolTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('gpt61_sync_test', Path(__file__).with_name('sync_app_model_permissions.py'))
         self.sync = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.sync)
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.sync.TOKEN_CACHE_PENDING_PATH = Path(temporary.name) / "token-cache.json"
+        crypto_secret = mock.patch.dict(os.environ, {"CRYPTO_SECRET": "mock-secret"})
+        crypto_secret.start()
+        self.addCleanup(crypto_secret.stop)
 
     def test_catalog_prices_and_expression_are_cny_and_include_whole_request_tiers(self):
         sync = self.sync

@@ -78,6 +78,7 @@ class TextFamily:
     expected_tags: dict[int, str] | None = None
     ability_group: str | None = None
     manage_model_abilities: bool = False
+    manage_channel_status: bool = True
     managed_tag_priorities: tuple[tuple[str, int], ...] = ()
     managed_tag_fallback: tuple[tuple[str, int, int], ...] = ()
     probe_models_by_tag: dict[str, tuple[str, ...]] | None = None
@@ -203,6 +204,7 @@ TEXT_FAMILIES = (
     TextFamily(
         name="claude_opus5_kiro_stable_text",
         models=("claude-opus-5",),
+        manage_channel_status=False,
         channel_ids=(47,),
         baseline_priorities={47: 30},
         standalone=True,
@@ -259,13 +261,6 @@ IMAGE2_PRIMARY = {
 IMAGE_LONG_TAIL = {
     "name": "image2_long_tail_real_p95",
     "model": "gpt-image-2-4K",
-}
-
-
-LEGACY_PROVIDER_TO_CHANNEL_ID = {
-    "yunwu": 14,
-    "moonapi": 2,
-    "moonapix": 2,
 }
 
 
@@ -558,7 +553,7 @@ def sanitize_for_event(value: Any) -> Any:
         safe: dict[str, Any] = {}
         for key, item in value.items():
             key_text = str(key)
-            if key_text in {"key", "base_url", "preview", "url"}:
+            if key_text in {"key", "base_url", "preview", "url", "other_info"}:
                 safe[key_text] = REDACTED
             elif key_text == "provider":
                 safe[key_text] = REDACTED
@@ -585,14 +580,15 @@ def write_event(event: dict[str, Any]) -> None:
         fp.write(json.dumps(sanitize_for_event(event), ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
-def load_state() -> dict[str, Any]:
+def load_state(*, repair: bool = True) -> dict[str, Any]:
     if not STATE_PATH.exists():
         return {"version": 2, "routes": {}, "channels": {}, "providers": {}}
     try:
         state = json.loads(STATE_PATH.read_text())
     except Exception:
-        backup = STATE_PATH.with_suffix(f".corrupt.{now_ts()}.json")
-        STATE_PATH.rename(backup)
+        if repair:
+            backup = STATE_PATH.with_suffix(f".corrupt.{now_ts()}.json")
+            STATE_PATH.rename(backup)
         return {"version": 2, "routes": {}, "channels": {}, "providers": {}}
     state.setdefault("version", 2)
     state.setdefault("routes", {})
@@ -623,6 +619,7 @@ SELECT JSON_OBJECT(
   'priority', priority,
   'weight', weight,
   'tag', tag,
+  'other_info', other_info,
   'key', `key`
 )
 FROM channels
@@ -972,30 +969,46 @@ def request_messages(base_url: str, api_key: str, model: str) -> dict[str, Any]:
         method="POST",
     )
     start = time.monotonic()
-    preview = ""
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
             status = resp.getcode()
             first_ms: int | None = None
+            completed = False
             deadline = time.monotonic() + HTTP_TIMEOUT
             while time.monotonic() < deadline:
-                line = resp.readline(4096)
-                if not line:
+                line = resp.readline(SSE_LINE_MAX_BYTES + 1)
+                if not line or len(line) > SSE_LINE_MAX_BYTES:
                     break
-                text = line.decode("utf-8", "replace")
-                if text.strip():
-                    preview = (preview + text)[:180]
-                if text.strip().startswith("data:"):
-                    first_ms = int((time.monotonic() - start) * 1000)
+                text = line.decode("utf-8", "replace").strip()
+                if not text.startswith("data:"):
+                    continue
+                try:
+                    event = json.loads(text[5:].strip())
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                event_type = event.get("type")
+                if event_type == "error":
                     break
-            if first_ms is None:
-                first_ms = int((time.monotonic() - start) * 1000)
-            ok = 200 <= status < 300 and ("data:" in preview or "OK" in preview)
+                if event_type == "message_stop":
+                    completed = True
+                    break
+                delta = event.get("delta")
+                block = event.get("content_block")
+                if event_type == "content_block_delta" and isinstance(delta, dict):
+                    visible = delta.get("text") if delta.get("type") == "text_delta" else None
+                    if isinstance(visible, str) and visible.strip() and first_ms is None:
+                        first_ms = int((time.monotonic() - start) * 1000)
+                elif event_type == "content_block_start" and isinstance(block, dict):
+                    if block.get("type") == "tool_use" and block.get("name") and first_ms is None:
+                        first_ms = int((time.monotonic() - start) * 1000)
+            ok = 200 <= status < 300 and completed and first_ms is not None
             return {
-                "ok": bool(ok),
+                "ok": ok,
                 "status": status,
-                "first_token_ms": first_ms,
-                "reason": "ok" if ok else "bad_stream",
+                "first_token_ms": first_ms if first_ms is not None else int((time.monotonic() - start) * 1000),
+                "reason": "ok" if ok else "messages_not_completed",
             }
     except urllib.error.HTTPError as exc:
         _ = exc.read(512)
@@ -1229,18 +1242,11 @@ def channel_state(state: dict[str, Any], channel_id: int, baseline_priority: int
     ch_state = channels.setdefault(
         key,
         {
-            "auto_disabled": False,
-            "disabled_at": 0,
             "recovering_runs_left": 0,
             "baseline_priority": baseline_priority,
         },
     )
     ch_state.setdefault("baseline_priority", baseline_priority)
-    if not ch_state.get("auto_disabled"):
-        for legacy_name, legacy in (state.get("providers") or {}).items():
-            if LEGACY_PROVIDER_TO_CHANNEL_ID.get(legacy_name) == channel_id and legacy.get("auto_disabled"):
-                ch_state["auto_disabled"] = True
-                ch_state["disabled_at"] = int(legacy.get("disabled_at") or 0)
     return ch_state
 
 
@@ -1365,17 +1371,99 @@ WHERE id = {int(channel_id)}
     return updated
 
 
-def set_channel_status(env: dict[str, str], channel_id: int, status: int, reason: str, dry_run: bool) -> None:
+def owned_circuit(channel: dict[str, Any], owner: str) -> dict[str, Any]:
+    if int(channel.get("status") or 0) != 3:
+        return {}
+    try:
+        info = json.loads(str(channel.get("other_info") or "{}"))
+    except json.JSONDecodeError:
+        return {}
+    circuit = info.get("monitor_circuit") if isinstance(info, dict) else None
+    if not isinstance(circuit, dict) or circuit.get("owner") != owner:
+        return {}
+    if (
+        not isinstance(circuit.get("disabled_at"), int)
+        or not isinstance(circuit.get("abilities"), list)
+        or info.get("status_reason") != f"provider_monitor:{owner}"
+        or info.get("status_time") != circuit["disabled_at"]
+    ):
+        return {}
+    if any(
+        not isinstance(ability, dict)
+        or any(not isinstance(ability.get(field), str) for field in ("group", "model", "tag"))
+        for ability in circuit["abilities"]
+    ):
+        return {}
+    return circuit
+
+
+def set_channel_status(
+    env: dict[str, str],
+    channel_id: int,
+    channel: dict[str, Any],
+    status: int,
+    owner: str,
+    reason: str,
+    dry_run: bool,
+) -> bool:
+    previous_status = int(channel["status"])
+    if (previous_status, status) not in {(1, 3), (3, 1)}:
+        raise ValueError("unsupported monitor channel transition")
+
+    def literal(value: str) -> str:
+        return "X'" + value.encode("utf-8").hex() + "'"
+
+    snapshot_fields = ("tag", "group", "models", "base_url", "model_mapping", "key", "other_info")
+    identity = " AND ".join(
+        f"SHA2(COALESCE(`{field}`, ''), 256) = '{hashlib.sha256(str(channel.get(field) or '').encode()).hexdigest()}'"
+        for field in snapshot_fields
+    )
+    info_json = """CASE WHEN JSON_VALID(other_info) THEN
+        IF(JSON_TYPE(other_info) = 'OBJECT', other_info, '{}') ELSE '{}' END"""
+    if status == 3:
+        ability_sql = """
+SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('group', `group`, 'model', model, 'tag', COALESCE(tag, ''))), JSON_ARRAY())
+INTO @monitor_ability_snapshot FROM abilities WHERE channel_id = @monitor_channel_id AND enabled = 1;
+UPDATE abilities SET enabled = 0 WHERE channel_id = @monitor_channel_id;
+"""
+        next_info = f"""JSON_SET({info_json}, '$.monitor_circuit',
+            JSON_OBJECT('owner', {shell_quote(owner)}, 'disabled_at', @monitor_status_time,
+                        'abilities', JSON_EXTRACT(@monitor_ability_snapshot, '$')),
+            '$.status_reason', {shell_quote(f"provider_monitor:{owner}")},
+            '$.status_time', @monitor_status_time)"""
+    else:
+        restore_abilities = owned_circuit(channel, owner).get("abilities", [])
+        if not restore_abilities:
+            return False
+        restore = " OR ".join(
+            "(BINARY a.`group` = " + literal(ability["group"])
+            + " AND BINARY a.model = " + literal(ability["model"])
+            + " AND BINARY COALESCE(a.tag, '') = " + literal(ability["tag"]) + ")"
+            for ability in restore_abilities
+        )
+        ability_sql = f"""
+UPDATE abilities AS a JOIN channels AS c ON c.id = a.channel_id
+SET a.enabled = 1
+WHERE a.channel_id = @monitor_channel_id
+  AND FIND_IN_SET(a.model, COALESCE(c.models, '')) > 0
+  AND FIND_IN_SET(a.`group`, REPLACE(COALESCE(c.`group`, ''), ' ', '')) > 0
+  AND ({restore});
+"""
+        next_info = f"JSON_REMOVE({info_json}, '$.monitor_circuit', '$.status_reason', '$.status_time')"
     remark = f"latency_canary {now_iso()} {reason}"
     sql = f"""
-UPDATE channels
-SET status = {int(status)}, remark = {shell_quote(remark)}
-WHERE id = {int(channel_id)};
-UPDATE abilities
-SET enabled = {1 if status == 1 else 0}
-WHERE channel_id = {int(channel_id)};
+START TRANSACTION;
+SET @monitor_channel_id = NULL;
+SET @monitor_status_time = UNIX_TIMESTAMP();
+SELECT id INTO @monitor_channel_id FROM channels
+WHERE id = {channel_id} AND status = {previous_status} AND {identity} FOR UPDATE;
+{ability_sql}
+UPDATE channels SET status = {status}, remark = {shell_quote(remark)}, other_info = {next_info}
+WHERE id = @monitor_channel_id;
+SELECT ROW_COUNT();
+COMMIT;
 """
-    execute_sql(env, sql, dry_run)
+    updated = execute_guarded_update(env, sql, dry_run)
     write_event(
         {
             "ts": now_iso(),
@@ -1384,8 +1472,10 @@ WHERE channel_id = {int(channel_id)};
             "status": status,
             "reason": reason,
             "dry_run": dry_run,
+            "updated": updated,
         }
     )
+    return updated
 
 
 def set_channel_priority(env: dict[str, str], channel_id: int, priority: int, reason: str, dry_run: bool) -> None:
@@ -1833,10 +1923,13 @@ def evaluate_text_family(
             base_url = str(channel.get("base_url") or "").strip()
             if not api_key or not base_url:
                 continue
+            model_mapping = parse_model_mapping(channel)
             for model in probe_models_for_channel(family, channel_id):
                 if model not in channel_models:
                     continue
-                futures[pool.submit(requester, base_url, api_key, model)] = (channel_id, model)
+                upstream_model = model_mapping.get(model, model).strip()
+                if upstream_model:
+                    futures[pool.submit(requester, base_url, api_key, upstream_model)] = (channel_id, model)
         for future in concurrent.futures.as_completed(futures):
             channel_id, model = futures[future]
             result = future.result()
@@ -1872,7 +1965,6 @@ def evaluate_text_family(
         score = score_channel(model_summaries, index)
         hard_unhealthy = bool(model_summaries) and all(summary.get("state") == "open" for summary in model_summaries)
         degraded = bool(model_summaries) and any(summary.get("state") in {"open", "degraded"} for summary in model_summaries)
-        success_streak = min((summary.get("consecutive_successes") or 0) for summary in model_summaries) if model_summaries else 0
         current_status = int(channel.get("status") or 0)
         channel_summaries[channel_id] = {
             "channel_id": channel_id,
@@ -1883,10 +1975,22 @@ def evaluate_text_family(
             "hard_unhealthy": hard_unhealthy,
             "degraded": degraded,
             "model_summaries": model_summaries,
-            "auto_disabled": bool(ch_state.get("auto_disabled")),
+            "auto_disabled": bool(owned_circuit(channel, family.name)),
             "recovering_runs_left": int(ch_state.get("recovering_runs_left") or 0),
             "action": "none",
         }
+
+    if not family.manage_channel_status:
+        event = {
+            "ts": now_iso(),
+            "event": "text_latency_family",
+            "family": family.name,
+            "dry_run": dry_run,
+            "routes": route_results,
+            "channels": channel_summaries,
+        }
+        write_event(event)
+        return event
 
     enabled_count = sum(1 for channel in channel_summaries.values() if channel.get("current_status") == 1)
     for channel_id, summary in channel_summaries.items():
@@ -1900,23 +2004,40 @@ def evaluate_text_family(
             and summary["hard_unhealthy"]
             and enabled_count > 1
         ):
-            set_channel_status(env, channel_id, 3, f"{family.name}_circuit_open", dry_run)
-            ch_state["auto_disabled"] = True
-            ch_state["disabled_at"] = now_ts()
+            if not set_channel_status(
+                env, channel_id, channels[channel_id], 3, family.name, f"{family.name}_circuit_open", dry_run,
+            ):
+                summary["action"] = "guard_mismatch"
+                continue
             ch_state["recovering_runs_left"] = 0
-            summary["action"] = "circuit_open"
+            summary["action"] = "would_circuit_open" if dry_run else "circuit_open"
+            summary["auto_disabled"] = True
+            summary["current_status"] = 3
             enabled_count -= 1
-        elif current_status == 3 and ch_state.get("auto_disabled"):
-            cooldown_ok = now_ts() - int(ch_state.get("disabled_at") or 0) >= RECOVER_COOLDOWN_SECONDS
-            recent_success = all(
+        elif current_status == 3:
+            circuit = owned_circuit(channels[channel_id], family.name)
+            if not circuit:
+                summary["action"] = "manual_review_no_ability_snapshot"
+                continue
+            cooldown_ok = now_ts() - circuit["disabled_at"] >= RECOVER_COOLDOWN_SECONDS
+            model_summaries = summary["model_summaries"]
+            recent_success = bool(model_summaries) and all(
                 model_summary.get("consecutive_successes", 0) >= RECOVER_SUCCESS_STREAK
-                for model_summary in summary.get("model_summaries") or []
+                for model_summary in model_summaries
             )
-            if cooldown_ok and recent_success:
-                set_channel_status(env, channel_id, 1, f"{family.name}_half_open_recover", dry_run)
-                ch_state["auto_disabled"] = False
+            if not cooldown_ok:
+                summary["action"] = "cooldown_wait"
+            elif not recent_success:
+                summary["action"] = "recovery_streak_wait"
+            else:
+                if not set_channel_status(
+                    env, channel_id, channels[channel_id], 1, family.name, f"{family.name}_half_open_recover", dry_run,
+                ):
+                    summary["action"] = "guard_mismatch"
+                    continue
                 ch_state["recovering_runs_left"] = RECOVERING_RUNS
-                summary["action"] = "half_open_recover"
+                summary["action"] = "would_half_open_recover" if dry_run else "half_open_recover"
+                summary["auto_disabled"] = False
                 summary["current_status"] = 1
                 enabled_count += 1
 
@@ -2113,25 +2234,34 @@ def evaluate_image2_primary(channels_by_id: dict[int, dict[str, Any]], state: di
             provider_state["recoveries"] = 0
             if provider_state["failures"] >= spec["disable_threshold"]:
                 if fallback_ready:
-                    set_channel_status(env, spec["channel_id"], 3, "image2_primary_524_failover", dry_run)
-                    provider_state["auto_disabled"] = True
-                    provider_state["disabled_at"] = now_ts()
-                    action = "auto_disable_primary"
+                    if set_channel_status(
+                        env, spec["channel_id"], primary, 3, spec["name"], "image2_primary_524_failover", dry_run,
+                    ):
+                        provider_state["auto_disabled"] = True
+                        provider_state["disabled_at"] = now_ts()
+                        action = "auto_disable_primary"
+                    else:
+                        action = "guard_mismatch"
                 else:
                     action = "hold_primary_fallback_unavailable"
         else:
             provider_state["failures"] = 0
             provider_state["recoveries"] = int(provider_state.get("recoveries", 0)) + 1
-    elif current_status == 3 and provider_state.get("auto_disabled"):
-        disabled_at = int(provider_state.get("disabled_at") or 0)
-        if disabled_at and now_ts() - disabled_at >= spec["recover_cooldown_seconds"]:
-            set_channel_status(env, spec["channel_id"], 1, "image2_primary_cooldown_recover", dry_run)
+    elif current_status == 3:
+        circuit = owned_circuit(primary, spec["name"])
+        if not circuit:
+            action = "manual_review_no_ability_snapshot"
+        elif now_ts() - circuit["disabled_at"] < spec["recover_cooldown_seconds"]:
+            action = "cooldown_wait"
+        elif not set_channel_status(
+            env, spec["channel_id"], primary, 1, spec["name"], "image2_primary_cooldown_recover", dry_run,
+        ):
+            action = "guard_mismatch"
+        else:
             provider_state["auto_disabled"] = False
             provider_state["failures"] = 0
             provider_state["recoveries"] = int(provider_state.get("recoveries", 0)) + 1
             action = "recover_enable_primary"
-        else:
-            action = "cooldown_wait"
     else:
         action = "manual_status_noop"
 
@@ -2354,7 +2484,7 @@ def main() -> int:
                 env,
                 all_configured_channel_ids(selected_families, include_images=not family_only),
             )
-            state = load_state()
+            state = load_state(repair=not (args.dry_run or args.no_probe))
             if args.no_probe:
                 print(
                     json.dumps(
@@ -2406,7 +2536,8 @@ def main() -> int:
                 state,
                 args.dry_run,
             )
-            save_state(state)
+            if not args.dry_run:
+                save_state(state)
             ok = monitor_results_ok(results)
             print(
                 json.dumps(

@@ -172,7 +172,49 @@ class ReleaseNewApiTest(unittest.TestCase):
 
         release_core = MODULE_PATH.read_text(encoding="utf-8")
         self.assertIn("test_provider_monitor.py", release_core)
-        self.assertIn("candidate is missing provider monitor tests", release_core)
+        self.assertIn("candidate is missing required operations tests", release_core)
+
+    def test_remote_head_is_rechecked_before_switch(self) -> None:
+        release = object.__new__(MODULE.Release)
+        release.candidate = "a" * 40
+        release.args = mock.Mock(branch="production/new-api")
+        release.git = mock.Mock(return_value="b" * 40 + "\trefs/heads/production/new-api")
+        with self.assertRaisesRegex(MODULE.ReleaseError, "advanced"):
+            release.validate_remote_head()
+
+    def test_media_task_count_fails_closed_and_checks_recoverable_upscale(self) -> None:
+        release = object.__new__(MODULE.Release)
+        with mock.patch.object(MODULE, "run", return_value=mock.Mock(stdout="")) as run:
+            with self.assertRaisesRegex(MODULE.ReleaseError, "count was not returned"):
+                release.check_active_media_tasks()
+        query = run.call_args.kwargs["input_text"]
+        self.assertIn("platform = 'playground_image' AND status NOT IN ('FAILURE', 'SUCCESS', 'UNKNOWN')", query)
+        self.assertIn("status = 'UNKNOWN'", query)
+        self.assertIn("$.upstream_task_id", query)
+
+    def test_media_admission_requires_capability_and_excludes_other_lock_holders(self) -> None:
+        import fcntl
+
+        release = object.__new__(MODULE.Release)
+        with tempfile.TemporaryDirectory() as directory:
+            release.app_dir = Path(directory)
+            release.container = "synthetic-container"
+            data_dir = release.app_dir / "data"
+            data_dir.mkdir()
+            mounts = [{"Type": "bind", "Destination": "/data", "Source": str(data_dir)}]
+            release.media_admission_supported = mock.Mock(return_value=False)
+            with self.assertRaisesRegex(MODULE.ReleaseError, "does not support"):
+                with release.pause_media_admission():
+                    self.fail("release ran without a media admission barrier")
+            release.media_admission_supported.return_value = True
+            lock_path = release.app_dir / "data" / MODULE.MEDIA_ADMISSION_LOCK
+            with lock_path.open("a") as peer, mock.patch.object(
+                MODULE, "output", return_value=MODULE.json.dumps(mounts),
+            ):
+                with release.pause_media_admission():
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(peer, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                fcntl.flock(peer, fcntl.LOCK_SH | fcntl.LOCK_NB)
 
     def test_active_release_reconciles_governance_before_returning(self) -> None:
         release = object.__new__(MODULE.Release)

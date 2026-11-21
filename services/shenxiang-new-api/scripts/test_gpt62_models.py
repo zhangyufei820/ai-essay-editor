@@ -2,6 +2,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -15,7 +16,14 @@ def load(name,filename,profile=None):
  return mod
 
 class Gpt62Tests(unittest.TestCase):
- def setUp(self):self.sync=load('gpt62_sync_test','sync_app_model_permissions.py')
+ def setUp(self):
+  self.sync=load('gpt62_sync_test','sync_app_model_permissions.py')
+  temporary = tempfile.TemporaryDirectory()
+  self.addCleanup(temporary.cleanup)
+  self.sync.TOKEN_CACHE_PENDING_PATH = Path(temporary.name) / "token-cache.json"
+  crypto_secret = mock.patch.dict(os.environ, {"CRYPTO_SECRET": "mock-secret"})
+  crypto_secret.start()
+  self.addCleanup(crypto_secret.stop)
  def test_exact_rmb_prices_whole_request_tiers_and_12h(self):
   s=self.sync
   for model,scale in [('gpt-6.2-sol',1),('gpt-6.2-astra',4)]:

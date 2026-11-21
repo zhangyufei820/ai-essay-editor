@@ -116,12 +116,6 @@ func (s *SubscriptionFunding) PreConsume(_ int) error {
 	if err != nil {
 		return err
 	}
-	s.subscriptionId = res.UserSubscriptionId
-	s.preConsumed = res.PreConsumed
-	s.AmountTotal = res.AmountTotal
-	s.AmountUsedAfter = res.AmountUsedAfter
-	s.MonthlyAmountTotal = res.MonthlyAmountTotal
-	s.MonthlyAmountUsedAfter = res.MonthlyAmountUsedAfter
 	// 获取订阅计划信息。月卡文本折扣结算依赖 PlanId/PlanTitle；读取失败时必须退回预扣，
 	// 不能静默继续，否则后结算可能按原价补扣。
 	planInfo, err := model.GetSubscriptionPlanInfoByUserSubscriptionId(res.UserSubscriptionId)
@@ -133,17 +127,28 @@ func (s *SubscriptionFunding) PreConsume(_ int) error {
 		_ = model.RefundSubscriptionPreConsume(s.requestId)
 		return errors.New("subscription plan info is missing")
 	}
-	s.PlanId = planInfo.PlanId
-	s.PlanTitle = planInfo.PlanTitle
-	s.ConcurrencyLimit = planInfo.ConcurrencyLimit
-	if s.ConcurrencyLimit > 0 {
-		release, err := acquireSubscriptionConcurrency(s.subscriptionId, s.ConcurrencyLimit)
+	if err := s.holdReservation(res, *planInfo); err != nil {
+		_ = model.RefundSubscriptionPreConsume(s.requestId)
+		return err
+	}
+	return nil
+}
+
+func (s *SubscriptionFunding) holdReservation(res *model.SubscriptionPreConsumeResult, plan model.SubscriptionPlanInfo) error {
+	if plan.ConcurrencyLimit > 0 {
+		release, err := acquireSubscriptionConcurrency(res.UserSubscriptionId, plan.ConcurrencyLimit)
 		if err != nil {
-			_ = model.RefundSubscriptionPreConsume(s.requestId)
 			return &model.SubscriptionLimitError{Reason: "concurrency"}
 		}
 		s.releaseConcurrency = release
 	}
+	s.subscriptionId = res.UserSubscriptionId
+	s.preConsumed = res.PreConsumed
+	s.AmountTotal = res.AmountTotal
+	s.AmountUsedAfter = res.AmountUsedAfter
+	s.MonthlyAmountTotal = res.MonthlyAmountTotal
+	s.MonthlyAmountUsedAfter = res.MonthlyAmountUsedAfter
+	s.PlanId, s.PlanTitle, s.ConcurrencyLimit = plan.PlanId, plan.PlanTitle, plan.ConcurrencyLimit
 	return nil
 }
 

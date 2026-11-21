@@ -1,272 +1,130 @@
 package service
 
 import (
+	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
-func withTokenGroupChainChannelSelector(t *testing.T, selector func(string, string, int, string) (*model.Channel, error)) {
+func withLiveChannelSelectionDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	original := getRandomSatisfiedChannelForTokenGroupChain
-	getRandomSatisfiedChannelForTokenGroupChain = selector
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	previousDB := model.DB
+	model.DB = db
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
 	t.Cleanup(func() {
-		getRandomSatisfiedChannelForTokenGroupChain = original
+		model.DB = previousDB
+		_ = sqlDB.Close()
 	})
+	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}))
+	return db
 }
 
-func withCircuitAbilityChecker(t *testing.T, checker func(string, string, int) (bool, error)) {
+func addSelectionChannel(t *testing.T, db *gorm.DB, id int, group, modelName string, priority int64, enabled bool) {
 	t.Helper()
-	original := isChannelAbilityEnabledForCircuit
-	isChannelAbilityEnabledForCircuit = checker
-	t.Cleanup(func() {
-		isChannelAbilityEnabledForCircuit = original
-	})
+	require.NoError(t, db.Create(&model.Channel{
+		Id:       id,
+		Name:     "test provider",
+		Status:   common.ChannelStatusEnabled,
+		Group:    group,
+		Models:   modelName,
+		Priority: &priority,
+	}).Error)
+	require.NoError(t, db.Create(&model.Ability{
+		Group: group, Model: modelName, ChannelId: id, Priority: &priority, Enabled: enabled,
+	}).Error)
 }
 
 func TestModelAbilityCircuitSkipsDisabledPrimary(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(nil)
-	seenRetries := make([]int, 0, 2)
-	selector := func(_ string, _ string, retry int, _ string) (*model.Channel, error) {
-		seenRetries = append(seenRetries, retry)
-		if retry == 0 {
-			return &model.Channel{Id: 43}, nil
-		}
-		return &model.Channel{Id: 44}, nil
+	for _, group := range []string{"default", PlusPricingGroupName, ClaudeKiroPricingGroupName} {
+		t.Run(group, func(t *testing.T) {
+			assertLiveAbilityCircuitSkipsDisabledPrimary(t, group)
+		})
 	}
-	withCircuitAbilityChecker(t, func(_ string, _ string, channelID int) (bool, error) {
-		return channelID == 44, nil
-	})
-
-	channel, err := getRandomSatisfiedChannelWithCircuit(
-		ctx,
-		selector,
-		PlusPricingGroupName,
-		"gpt-5.6-sol",
-		0,
-		"/v1/responses",
-	)
-
-	require.NoError(t, err)
-	require.NotNil(t, channel)
-	require.Equal(t, 44, channel.Id)
-	require.Equal(t, []int{0, 1}, seenRetries)
 }
 
 func TestSpecialModelAbilityCircuitSkipsDisabledPrimary(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(nil)
-	seenRetries := make([]int, 0, 2)
-	selector := func(group, modelName string, retry int, requestPath string) (*model.Channel, error) {
-		require.Equal(t, SpecialPricingGroupName, group)
-		require.Equal(t, "gpt-5.6-sol", modelName)
-		require.Equal(t, "/v1/responses", requestPath)
-		seenRetries = append(seenRetries, retry)
-		if retry == 0 {
-			return &model.Channel{Id: 40}, nil
-		}
-		return &model.Channel{Id: 30}, nil
-	}
-	withCircuitAbilityChecker(t, func(group, modelName string, channelID int) (bool, error) {
-		require.Equal(t, SpecialPricingGroupName, group)
-		require.Equal(t, "gpt-5.6-sol", modelName)
-		return channelID == 30, nil
-	})
-
-	channel, err := getRandomSatisfiedChannelWithCircuit(
-		ctx,
-		selector,
-		SpecialPricingGroupName,
-		"gpt-5.6-sol",
-		0,
-		"/v1/responses",
-	)
-
-	require.NoError(t, err)
-	require.NotNil(t, channel)
-	require.Equal(t, 30, channel.Id)
-	require.Equal(t, []int{0, 1}, seenRetries)
+	assertLiveAbilityCircuitSkipsDisabledPrimary(t, SpecialPricingGroupName)
 }
 
-func TestModelAbilityCircuitReturnsNoChannelWhenEveryRouteIsDisabled(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(nil)
-	selector := func(_ string, _ string, retry int, _ string) (*model.Channel, error) {
-		if retry == 0 {
-			return &model.Channel{Id: 43}, nil
-		}
-		return &model.Channel{Id: 44}, nil
-	}
-	withCircuitAbilityChecker(t, func(_ string, _ string, _ int) (bool, error) {
-		return false, nil
-	})
-
-	channel, err := getRandomSatisfiedChannelWithCircuit(
-		ctx,
-		selector,
-		PlusPricingGroupName,
-		"gpt-5.4",
-		0,
-		"/v1/responses",
-	)
-
+func assertLiveAbilityCircuitSkipsDisabledPrimary(t *testing.T, group string) {
+	t.Helper()
+	db := withLiveChannelSelectionDB(t)
+	const modelName = "test-text-model"
+	const primaryID = 101
+	const secondaryID = 102
+	addSelectionChannel(t, db, primaryID, group, modelName, 30, false)
+	addSelectionChannel(t, db, secondaryID, group, modelName, 30, true)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+	param := &RetryParam{Ctx: c, TokenGroup: group, ModelName: modelName, RequestPath: c.Request.URL.Path}
+	selected, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
-	require.Nil(t, channel)
-}
+	require.NotNil(t, selected)
+	require.Equal(t, secondaryID, selected.Id)
+	require.False(t, PreferredChannelEligible(c, group, modelName, &model.Channel{Id: primaryID}))
 
-func TestModelAbilityCircuitSkipsDisabledDefaultPrimary(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(nil)
-	seenRetries := make([]int, 0, 2)
-	withCircuitAbilityChecker(t, func(group, modelName string, channelID int) (bool, error) {
-		require.Equal(t, "default", group)
-		require.Equal(t, "gpt-5.5", modelName)
-		return channelID == 3, nil
-	})
-
-	channel, err := getRandomSatisfiedChannelWithCircuit(
-		ctx,
-		func(_ string, _ string, retry int, _ string) (*model.Channel, error) {
-			seenRetries = append(seenRetries, retry)
-			if retry == 0 {
-				return &model.Channel{Id: 2}, nil
-			}
-			return &model.Channel{Id: 3}, nil
-		},
-		"default",
-		"gpt-5.5",
-		0,
-		"/v1/responses",
-	)
-
+	require.NoError(t, db.Model(&model.Ability{}).Where("channel_id = ?", secondaryID).Update("enabled", false).Error)
+	selected, _, err = CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
-	require.NotNil(t, channel)
-	require.Equal(t, 3, channel.Id)
-	require.Equal(t, []int{0, 1}, seenRetries)
-}
-
-func TestModelAbilityCircuitDoesNotAffectDefaultMedia(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(nil)
-	withCircuitAbilityChecker(t, func(_ string, _ string, _ int) (bool, error) {
-		require.Fail(t, "media routing must not query the text model circuit")
-		return false, nil
-	})
-
-	channel, err := getRandomSatisfiedChannelWithCircuit(
-		ctx,
-		func(_ string, _ string, _ int, _ string) (*model.Channel, error) {
-			return &model.Channel{Id: 22}, nil
-		},
-		"default",
-		"gpt-image-2-4K",
-		0,
-		"/v1/images/generations",
-	)
-
-	require.NoError(t, err)
-	require.NotNil(t, channel)
-	require.Equal(t, 22, channel.Id)
-}
-
-func TestCacheGetRandomSatisfiedChannelFallsThroughMissingPrimaryGroup(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(nil)
-	SetTokenGroupChain(ctx, []string{"default", DiscountPricingGroupName, PlusPricingGroupName})
-	selectedGroups := make([]string, 0, 2)
-	withTokenGroupChainChannelSelector(t, func(group, _ string, retry int, _ string) (*model.Channel, error) {
-		selectedGroups = append(selectedGroups, group)
-		require.Zero(t, retry)
-		if group == DiscountPricingGroupName {
-			return &model.Channel{Id: 22}, nil
-		}
-		return nil, nil
-	})
-
-	channel, selectedGroup, err := CacheGetRandomSatisfiedChannel(&RetryParam{
-		Ctx:        ctx,
-		TokenGroup: "default",
-		ModelName:  "gpt-5.6-sol",
-		Retry:      common.GetPointer(0),
-	})
-
-	require.NoError(t, err)
-	require.Equal(t, 22, channel.Id)
-	require.Equal(t, DiscountPricingGroupName, selectedGroup)
-	require.Equal(t, []string{"default", DiscountPricingGroupName}, selectedGroups)
-	require.Equal(t, DiscountPricingGroupName, common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup))
-	require.Equal(t, 2, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
-}
-
-func TestCacheGetRandomSatisfiedChannelExhaustsGroupPrioritiesBeforeFallback(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(nil)
-	SetTokenGroupChain(ctx, []string{"default", DiscountPricingGroupName})
-	selected := make([]string, 0, 3)
-	withTokenGroupChainChannelSelector(t, func(group, _ string, retry int, _ string) (*model.Channel, error) {
-		selected = append(selected, group+string(rune('0'+retry)))
-		if group == "default" && retry == 0 {
-			return &model.Channel{Id: 22}, nil
-		}
-		if group == "default" && retry == 1 {
-			return &model.Channel{Id: 23}, nil
-		}
-		return nil, nil
-	})
-
-	first, firstGroup, err := CacheGetRandomSatisfiedChannel(&RetryParam{
-		Ctx:        ctx,
-		TokenGroup: "default",
-		ModelName:  "gpt-5.6-sol",
-		Retry:      common.GetPointer(0),
-	})
-	require.NoError(t, err)
-	require.Equal(t, 22, first.Id)
-	require.Equal(t, "default", firstGroup)
-
-	channel, selectedGroup, err := CacheGetRandomSatisfiedChannel(&RetryParam{
-		Ctx:        ctx,
-		TokenGroup: "default",
-		ModelName:  "gpt-5.6-sol",
-		Retry:      common.GetPointer(1),
-	})
-
-	require.NoError(t, err)
-	require.Equal(t, 23, channel.Id)
-	require.Equal(t, "default", selectedGroup)
-	require.Equal(t, []string{"default0", "default1"}, selected)
-	require.Equal(t, 1, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
+	require.Nil(t, selected)
 }
 
 func TestCacheGetRandomSatisfiedChannelMovesToNextGroupOnlyAfterPrioritiesAreExhausted(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(nil)
-	SetTokenGroupChain(ctx, []string{"default", DiscountPricingGroupName})
-	MarkTokenGroupChainSelected(ctx, "default")
-	selected := make([]string, 0, 2)
-	withTokenGroupChainChannelSelector(t, func(group, _ string, retry int, _ string) (*model.Channel, error) {
-		selected = append(selected, group+string(rune('0'+retry)))
-		if group == DiscountPricingGroupName && retry == 0 {
-			return &model.Channel{Id: 23}, nil
-		}
-		return nil, nil
-	})
+	db := withLiveChannelSelectionDB(t)
+	const modelName = "test-claude-model"
+	addSelectionChannel(t, db, 21, "default", modelName, 40, true)
+	addSelectionChannel(t, db, 22, "default", modelName, 20, true)
+	addSelectionChannel(t, db, 23, DiscountPricingGroupName, modelName, 30, true)
+	addSelectionChannel(t, db, 24, DiscountPricingGroupName, modelName, 10, true)
+	addSelectionChannel(t, db, 25, PlusPricingGroupName, modelName, 10, true)
 
-	channel, selectedGroup, err := CacheGetRandomSatisfiedChannel(&RetryParam{
-		Ctx:        ctx,
-		TokenGroup: "default",
-		ModelName:  "gpt-5.6-sol",
-		Retry:      common.GetPointer(1),
-	})
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/messages", nil)
+	SetTokenGroupChain(c, []string{"default", DiscountPricingGroupName, PlusPricingGroupName})
+	param := &RetryParam{Ctx: c, TokenGroup: "default", ModelName: modelName, RequestPath: c.Request.URL.Path}
+	var tried []string
+	for index, want := range []struct {
+		id    int
+		group string
+	}{{21, "default"}, {22, "default"}, {23, DiscountPricingGroupName}, {24, DiscountPricingGroupName}, {25, PlusPricingGroupName}} {
+		param.SetRetry(index)
+		selected, group, err := CacheGetRandomSatisfiedChannel(param)
+		require.NoError(t, err)
+		require.NotNil(t, selected)
+		require.Equal(t, want.id, selected.Id)
+		require.Equal(t, want.group, group)
+		tried = append(tried, strconv.Itoa(selected.Id))
+		c.Set("use_channel", tried)
+	}
 
+	param.SetRetry(5)
+	selected, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
-	require.Equal(t, 23, channel.Id)
-	require.Equal(t, DiscountPricingGroupName, selectedGroup)
-	require.Equal(t, []string{"default1", "discount0"}, selected)
-	require.Equal(t, 2, common.GetContextKeyInt(ctx, constant.ContextKeyTokenGroupChainIndex))
+	require.Nil(t, selected)
+}
+
+func TestCacheGetRandomSatisfiedChannelFallsThroughMissingPrimaryGroup(t *testing.T) {
+	db := withLiveChannelSelectionDB(t)
+	const modelName = "test-fallback-model"
+	addSelectionChannel(t, db, 23, DiscountPricingGroupName, modelName, 10, true)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+	SetTokenGroupChain(c, []string{"default", DiscountPricingGroupName})
+	param := &RetryParam{Ctx: c, TokenGroup: "default", ModelName: modelName, RequestPath: c.Request.URL.Path}
+
+	selected, group, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	require.Equal(t, 23, selected.Id)
+	require.Equal(t, DiscountPricingGroupName, group)
 }

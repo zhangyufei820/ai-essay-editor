@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -20,6 +22,12 @@ def load(name: str):
 class RetiredTextModelsTest(unittest.TestCase):
     def setUp(self):
         self.sync = load("sync_app_model_permissions")
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.sync.TOKEN_CACHE_PENDING_PATH = Path(temporary.name) / "token-cache.json"
+        crypto_secret = mock.patch.dict(os.environ, {"CRYPTO_SECRET": "mock-secret"})
+        crypto_secret.start()
+        self.addCleanup(crypto_secret.stop)
 
     def test_periodic_writers_do_not_regrant_retired_products(self):
         guard = load("ensure_codex_entry")

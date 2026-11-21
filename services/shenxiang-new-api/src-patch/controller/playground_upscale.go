@@ -973,7 +973,7 @@ func upscalePublic(t *model.Task) gin.H {
 			p.Error = "原始结果已过期，未完成本站缓存；费用不退回"
 		}
 	}
-	return gin.H{"task_id": t.TaskID, "cache_status": cacheStatus, "status": t.Status, "model": p.Model, "scale_factor": p.Scale, "input": p.Input, "output": p.Output, "amount_cny": p.Amount, "currency": "CNY", "billing_state": p.BillingState, "url": url, "download_url": url, "error": p.Error, "item": p.Item, "created_at": t.SubmitTime}
+	return gin.H{"task_id": t.TaskID, "cache_status": cacheStatus, "status": t.Status, "model": p.Model, "scale_factor": p.Scale, "input": p.Input, "output": p.Output, "amount_cny": p.Amount, "currency": "CNY", "billing_state": p.BillingState, "url": url, "download_url": url, "error": p.Error, "item": p.Item, "created_at": t.SubmitTime, "pollable": t.Status != model.TaskStatusUnknown || t.PrivateData.UpstreamTaskID != ""}
 }
 func upscaleTaskPrefix(c *gin.Context) string {
 	if c != nil && c.Request != nil && strings.HasPrefix(c.Request.URL.Path, "/v1/") {

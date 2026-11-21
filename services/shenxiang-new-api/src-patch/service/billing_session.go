@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -85,6 +86,21 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	if delta == 0 {
 		s.expireSubscriptionIfExhausted()
 		s.settled = true
+		return nil
+	}
+	if s.relayInfo.OriginModelName == dto.Seedream55Model {
+		tokenID := 0
+		if s.shouldChargeTokenQuota() {
+			tokenID = s.relayInfo.TokenId
+		}
+		if err := model.SettleImageQuota(s.relayInfo.UserId, tokenID, s.relayInfo.SubscriptionId, s.funding.Source(), delta); err != nil {
+			return err
+		}
+		s.fundingSettled, s.settled = true, true
+		if s.funding.Source() == BillingSourceSubscription {
+			s.relayInfo.SubscriptionPostDelta += int64(delta)
+			s.expireSubscriptionIfExhausted()
+		}
 		return nil
 	}
 	// 1) 调整资金来源（仅在尚未提交时执行，防止重复调用）
@@ -241,6 +257,9 @@ func (s *BillingSession) Reserve(targetQuota int) error {
 // preConsume 执行预扣费：信任检查 -> 令牌预扣 -> 资金来源预扣。
 // 任一步骤失败时原子回滚已完成的步骤。
 func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIError {
+	if c != nil && s.relayInfo.OriginModelName == dto.Seedream55Model && Seedream55TaskID(c) != "" {
+		return s.reserveSeedream55Task(c, quota)
+	}
 	effectiveQuota := quota
 
 	// ---- 信任额度旁路 ----

@@ -26,6 +26,16 @@ def load_module():
 class ConfigureGeminiDDPAPIImageChannelsTest(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_module()
+        permissions = self.module.permissions
+        self.addCleanup(setattr, permissions, "sanitize_token_models", permissions.sanitize_token_models)
+        self.addCleanup(setattr, permissions, "usd_exchange_rate", permissions.usd_exchange_rate)
+        self.addCleanup(setattr, permissions, "mysql_exec", permissions.mysql_exec)
+        self.addCleanup(setattr, permissions, "gemini_ddpapi_release_state", permissions.gemini_ddpapi_release_state)
+        self.addCleanup(setattr, permissions, "ensure_gemini_ddpapi_image_models", permissions.ensure_gemini_ddpapi_image_models)
+        self.addCleanup(setattr, permissions, "sync_public_image_pricing", permissions.sync_public_image_pricing)
+        self.addCleanup(setattr, permissions, "model_lists", permissions.model_lists)
+        self.addCleanup(setattr, permissions, "sync_abilities", permissions.sync_abilities)
+        self.addCleanup(setattr, permissions, "sync_user_image_tokens", permissions.sync_user_image_tokens)
 
     def test_normalize_base_url_only_accepts_allowlisted_origin(self) -> None:
         self.assertEqual(

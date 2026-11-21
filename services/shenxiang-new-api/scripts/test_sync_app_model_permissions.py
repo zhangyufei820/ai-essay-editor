@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import os
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -47,8 +48,31 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.module = load_sync_module()
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.module.TOKEN_CACHE_PENDING_PATH = Path(temporary.name) / "token-cache.json"
+        crypto_secret = mock.patch.dict(os.environ, {"CRYPTO_SECRET": "mock-secret"})
+        crypto_secret.start()
+        self.addCleanup(crypto_secret.stop)
         self.monitor_state_reader = self.module.monitor_disabled_ability_pairs
         self.module.monitor_disabled_ability_pairs = lambda: set()
+
+    def test_retry_token_cache_invalidation_after_committed_write(self) -> None:
+        calls = []
+        secret_key = "synthetic-test-token-key"
+        self.module.mysql_exec = lambda query: calls.append("mysql")
+        self.module.delete_token_caches = mock.Mock(side_effect=RuntimeError("Redis unavailable"))
+        with self.assertRaisesRegex(RuntimeError, "Redis unavailable"):
+            self.module.commit_token_updates(["START TRANSACTION;", "COMMIT;"], [secret_key])
+        pending_path = self.module.TOKEN_CACHE_PENDING_PATH
+        self.assertNotIn(secret_key, pending_path.read_text())
+        self.assertEqual(calls, ["mysql"])
+
+        # Simulate a new process after MySQL is already at the desired state.
+        self.module.delete_token_cache_entries = lambda cache_keys: calls.extend(cache_keys) or len(cache_keys)
+        self.assertEqual(self.module.retry_pending_token_cache_deletes(), 1)
+        self.assertEqual(calls[-1], self.module.token_cache_key(secret_key))
+        self.assertFalse(pending_path.exists())
 
     def test_sanitize_model_limits_replaces_raw_gpt_image2(self) -> None:
         raw = "gpt-5.5,gpt-image-2,gpt-image-2-4K,gpt-image-2,geek2api-image-2,internal-image2-stable-v1,gpt-5.3-codex-spark,gpt-5.3-spark"
@@ -350,6 +374,8 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertIn('"grok4.6视频":"grok-imagine-video"', sql)
         self.assertIn("media.type = 1", sql)
         self.assertIn("media.type = 55", sql)
+        self.assertNotIn("media.status =", sql)
+        self.assertIn("COALESCE(source.status, 2)", sql)
         self.assertNotIn("sk-", sql)
 
     def test_model_lists_publish_grok46_media_only_with_valid_managed_channels(self) -> None:
@@ -1240,7 +1266,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             2,
         )
         self.assertIn("Image 2 稳定备用线路；人民币 ¥0.17/张", sql)
-        self.assertIn("UPDATE channels SET status = IF(status = 2, 2, 1)", sql)
+        self.assertNotIn("UPDATE channels SET status", sql)
 
     def test_ensure_gemini_ddpapi_models_uses_public_metadata(self) -> None:
         captured: list[str] = []
@@ -1511,7 +1537,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
 
         self.assertEqual(result, {"tokens_rewritten": 0, "token_caches_deleted": 0})
-        self.assertIn("CACHE:", captured)
+        self.assertFalse(any(call.startswith("CACHE:") for call in captured))
         self.assertNotIn("key-107", captured[-1])
 
     def test_sync_user_codex_tokens_scopes_special_group_exactly(self) -> None:
@@ -2258,7 +2284,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         )
         self.assertNotIn("gpt-5.6-luna", "\n".join(captured))
 
-    def test_main_continues_core_permission_sync_when_optional_claude_reconcile_fails(self) -> None:
+    def test_main_continues_core_permission_sync_when_optional_reconciles_fail(self) -> None:
         profiles = {
             "codex": ["gpt-5.6"],
             "claude": ["claude-opus-4-8"],
@@ -2279,7 +2305,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         with mock.patch.multiple(
             self.module,
-            ensure_grok46_media_channels=no_result,
+            ensure_grok46_media_channels=mock.Mock(side_effect=RuntimeError("Grok source missing")),
             ensure_public_video_models=no_result,
             ensure_grok46_image_model=no_result,
             ensure_discount_image2_backing_model=no_result,
@@ -2320,7 +2346,11 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         sync_user_codex_tokens.assert_called_once_with(profiles, routable_models)
         sync_astra_access_for_target_user_tokens.assert_called_once_with(routable_models)
         self.assertIn("optional model reconcile failed step=claude_opus5_stable_model", errors.getvalue())
-        self.assertIn("optional_failures=['claude_opus5_stable_model:RuntimeError']", output.getvalue())
+        self.assertIn("optional model reconcile failed step=grok46_media_channels", errors.getvalue())
+        self.assertIn(
+            "optional_failures=['grok46_media_channels:RuntimeError', 'claude_opus5_stable_model:RuntimeError']",
+            output.getvalue(),
+        )
 
     def test_main_keeps_core_ability_sync_failure_fatal(self) -> None:
         profiles = {

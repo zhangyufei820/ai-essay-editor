@@ -419,6 +419,12 @@ func updatePendingPlaygroundImageConsumeLog(tx *gorm.DB, c *gin.Context, userId 
 	targetOther["channel_id"] = params.ChannelId
 	targetOther["use_time"] = params.UseTimeSeconds
 	targetOther["finish_time"] = common.GetTimestamp()
+	if targetOther["billing_settlement"] == "image_delivery_pending" {
+		targetOther["request_phase"] = "upstream_received"
+		targetOther["task_status"] = string(TaskStatusInProgress)
+		delete(targetOther, "actual_quota")
+		delete(targetOther, "finish_time")
+	}
 
 	updates := map[string]interface{}{
 		"content":             log.Content,

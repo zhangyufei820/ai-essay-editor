@@ -18,16 +18,16 @@ import (
 
 func setupSystemTokenControllerTestDB(t *testing.T) {
 	t.Helper()
-	originalDB := model.DB
+	originalDB, originalLogDB := model.DB, model.LOG_DB
 	originalRedisEnabled := common.RedisEnabled
 	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}))
-	model.DB = db
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Log{}))
+	model.DB, model.LOG_DB = db, db
 	common.RedisEnabled = false
 	t.Cleanup(func() {
-		model.DB = originalDB
+		model.DB, model.LOG_DB = originalDB, originalLogDB
 		common.RedisEnabled = originalRedisEnabled
 	})
 }

@@ -4,7 +4,9 @@ import { IconImage, IconRefresh, IconUpload } from '@douyinfe/semi-icons';
 import { API } from '../../helpers';
 import {
   allowedUpscaleFactors,
+  forgetFinishedUpscaleAttempts,
   formatUpscalePrice,
+  shouldPollUpscaleTask,
   UPSCALE_MAX_FILE_BYTES,
   UPSCALE_SCALES,
   upscaleStatusLabel,
@@ -50,7 +52,6 @@ const DEFAULT_PARAMS = {
   ultra_detail: 30,
   filter_nsfw: false,
 };
-const ACTIVE_STATUSES = ['SUBMITTED', 'IN_PROGRESS', 'UNKNOWN'];
 const apiOptions = (signal) => ({
   signal,
   skipErrorHandler: true,
@@ -157,7 +158,7 @@ export default function UpscalePanel({
   const callbacks = useRef({ onResult, onQueueTask });
   const controllers = useRef(new Set());
   const submittingRef = useRef(false);
-  const submissionKey = useRef('');
+  const submissionAttempts = useRef(new Map());
   const fileVersion = useRef(0);
   const lastResetKey = useRef(resetKey);
   const creative = model === '创意放大';
@@ -167,7 +168,7 @@ export default function UpscalePanel({
     : UPSCALE_SCALES.filter((x) => flavor === 'sublime' || x === 2);
   const allowed = estimate?.allowed_scale_factors || locallyAllowed;
   const activeIds = tasks
-    .filter((t) => ACTIVE_STATUSES.includes(upscaleTaskStatus(t)))
+    .filter(shouldPollUpscaleTask)
     .map((t) => t.task_id)
     .filter(Boolean)
     .join('|');
@@ -203,7 +204,7 @@ export default function UpscalePanel({
     }),
     [model, input?.image, scale, creative, params],
   );
-  const uncertain = tasks.some((t) => upscaleTaskStatus(t) === 'UNKNOWN');
+  const hasUnconfirmedTask = tasks.some((t) => upscaleTaskStatus(t) === 'UNKNOWN');
 
   useEffect(() => {
     callbacks.current = { onResult, onQueueTask };
@@ -227,7 +228,6 @@ export default function UpscalePanel({
     setMessage('');
     setParams(DEFAULT_PARAMS);
     setScale(2);
-    submissionKey.current = '';
   }, [resetKey]);
   useEffect(() => {
     if (!source?.image) return;
@@ -236,16 +236,11 @@ export default function UpscalePanel({
     setImageLink('');
     setMessage('');
     setEstimate(null);
-    submissionKey.current = '';
   }, [source]);
   useEffect(() => {
     if (!locallyAllowed.includes(scale) && locallyAllowed.length)
       setScale(locallyAllowed[0]);
   }, [flavor, input?.width, input?.height, scale]);
-  useEffect(() => {
-    submissionKey.current = '';
-  }, [payload]);
-
   function trackedController() {
     const c = new AbortController();
     controllers.current.add(c);
@@ -265,14 +260,14 @@ export default function UpscalePanel({
           ? 'completed'
           : state === 'FAILURE'
             ? 'failed'
-            : state === 'SUBMITTED'
+            : state === 'SUBMITTED' || (state === 'UNKNOWN' && !shouldPollUpscaleTask(task))
               ? 'queued'
               : 'polling',
       statusText: upscaleStatusLabel(task),
       message:
         task.error ||
         (state === 'UNKNOWN'
-          ? '提交结果待核对，请勿重复提交；任务会继续查询。'
+          ? '该任务的提交结果待核对，请勿重复提交。'
           : `${Number(task.scale_factor || 2)} 倍高清放大`),
       createdAt: task.created_at
         ? Number(task.created_at) *
@@ -285,6 +280,7 @@ export default function UpscalePanel({
 
   function mergeTasks(incoming) {
     if (!mounted.current) return;
+    forgetFinishedUpscaleAttempts(submissionAttempts.current, incoming);
     incoming.forEach(publishTask);
     setTasks((current) => {
       const map = new Map(current.map((t) => [t.task_id, t]));
@@ -451,22 +447,33 @@ export default function UpscalePanel({
       submittingRef.current ||
       !estimate ||
       estimating ||
-      uncertain ||
       !input?.image
     )
       return;
     submittingRef.current = true;
     setSubmitting(true);
     setMessage('正在提交，请勿重复点击。');
-    submissionKey.current ||=
-      window.crypto?.randomUUID?.() ||
-      `upscale-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const c = trackedController();
     try {
+      const serialized = JSON.stringify(payload);
+      const digest = await window.crypto?.subtle?.digest(
+        'SHA-256', new TextEncoder().encode(serialized),
+      );
+      const fingerprint = digest
+        ? Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+        : serialized;
+      let attempt = submissionAttempts.current.get(fingerprint);
+      if (!attempt) {
+        attempt = {
+          key: window.crypto?.randomUUID?.() ||
+            `upscale-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        };
+        submissionAttempts.current.set(fingerprint, attempt);
+      }
       const r = await API.post('/pg/upscale/tasks', payload, {
         ...apiOptions(c.signal),
         headers: {
-          'Idempotency-Key': submissionKey.current,
+          'Idempotency-Key': attempt.key,
           'X-Upscale-Expected-Amount': String(estimate.amount_cny),
         },
       });
@@ -481,14 +488,15 @@ export default function UpscalePanel({
         scale_factor: scale,
         created_at: r.data.data?.created_at || Math.floor(Date.now() / 1000),
       };
+      const knownAttempt = Boolean(attempt.taskId);
+      attempt.taskId = task.task_id;
       mergeTasks([task]);
       setMessage(
         upscaleTaskStatus(task) === 'UNKNOWN'
-          ? '提交结果待核对，请勿重复提交。我们会继续查询处理结果。'
+          ? '该任务的提交结果待核对，原任务仍保留在列表中。'
           : '任务已提交，页面切换后仍可在放大任务中查看进度。',
       );
-      if (upscaleTaskStatus(task) !== 'UNKNOWN') submissionKey.current = '';
-      if (upscaleTaskStatus(task) !== 'FAILURE')
+      if (!knownAttempt && upscaleTaskStatus(task) !== 'FAILURE')
         Toast.success('放大任务已提交');
     } catch (error) {
       if (!isCancelled(error) && mounted.current) {
@@ -778,9 +786,9 @@ export default function UpscalePanel({
               {configError || message}
             </div>
           ) : null}
-          {uncertain ? (
+          {hasUnconfirmedTask ? (
             <p className='mp-upscale-charge-note'>
-              有任务的提交结果待核对，请先查询原任务，暂不重复提交。
+              有任务的提交结果待核对，可在任务列表查看。其他图片或参数可以继续提交。
             </p>
           ) : null}
           <Button
@@ -795,8 +803,7 @@ export default function UpscalePanel({
               submitting ||
               readingFile ||
               !config ||
-              Boolean(configError) ||
-              uncertain
+              Boolean(configError)
             }
             onClick={submit}
           >

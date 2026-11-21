@@ -1223,3 +1223,20 @@ func TestTemporaryChannelCircuitFailureReentersCooldown(t *testing.T) {
 		t.Fatalf("after failure shouldSkipOrProbe() = skip %v probe %v, want cooldown skip", skip, probe)
 	}
 }
+
+func TestClaudeStreamErrorUsesSSEAndPreventsReplay(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	apiErr := types.NewOpenAIError(errors.New("upstream disconnected"), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+	c.Set("claude_stream_truncated", true)
+	require.True(t, shouldRetry(c, apiErr, 2))
+
+	_, err := c.Writer.WriteString("event: content_block_delta\ndata: {}\n\n")
+	require.NoError(t, err)
+	require.False(t, shouldRetry(c, apiErr, 2))
+	require.NoError(t, writeClaudeStreamError(c, apiErr, "claude-stream-test"))
+	require.Contains(t, recorder.Body.String(), "event: error\ndata: {")
+	require.Contains(t, recorder.Body.String(), `"type":"error"`)
+}

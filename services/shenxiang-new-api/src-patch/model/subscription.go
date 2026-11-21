@@ -1418,16 +1418,27 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 		return nil, errors.New("amount must be > 0")
 	}
 	now := GetDBTimestamp()
-
-	returnValue := &SubscriptionPreConsumeResult{}
-
+	var returnValue *SubscriptionPreConsumeResult
 	err := DB.Transaction(func(tx *gorm.DB) error {
+		var err error
+		returnValue, err = preConsumeUserSubscriptionWithTx(tx, requestId, userId, quotaType, targetPlanId, amount, now)
+		return err
+	})
+	return returnValue, err
+}
+
+func preConsumeUserSubscriptionWithTx(tx *gorm.DB, requestId string, userId, quotaType, targetPlanId int, amount, now int64) (*SubscriptionPreConsumeResult, error) {
+	returnValue := &SubscriptionPreConsumeResult{}
+	err := func() error {
 		var existing SubscriptionPreConsumeRecord
 		query := tx.Where("request_id = ?", requestId).Limit(1).Find(&existing)
 		if query.Error != nil {
 			return query.Error
 		}
 		if query.RowsAffected > 0 {
+			if existing.UserId != userId {
+				return errors.New("subscription reservation does not belong to user")
+			}
 			if existing.Status == "refunded" {
 				return errors.New("subscription pre-consume already refunded")
 			}
@@ -1495,6 +1506,9 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			if err := tx.Create(record).Error; err != nil {
 				var dup SubscriptionPreConsumeRecord
 				if err2 := tx.Where("request_id = ?", requestId).First(&dup).Error; err2 == nil {
+					if dup.UserId != userId || dup.UserSubscriptionId != sub.Id {
+						return errors.New("subscription reservation does not match task owner")
+					}
 					if dup.Status == "refunded" {
 						return errors.New("subscription pre-consume already refunded")
 					}
@@ -1528,7 +1542,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			return nil
 		}
 		return fmt.Errorf("subscription quota insufficient, need=%d", amount)
-	})
+	}()
 	if err != nil {
 		return nil, err
 	}

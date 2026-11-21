@@ -69,6 +69,20 @@ func writeResponsesStreamError(c *gin.Context, apiErr *types.NewAPIError, reques
 	return nil
 }
 
+func writeClaudeStreamError(c *gin.Context, apiErr *types.NewAPIError, requestID string) error {
+	payload, err := common.Marshal(gin.H{
+		"type":  "error",
+		"error": apiErr.ToPublicClaudeError(requestID),
+	})
+	if err != nil {
+		return err
+	}
+	if _, err = c.Writer.WriteString("event: error\ndata: " + string(payload) + "\n\n"); err != nil {
+		return err
+	}
+	return helper.FlushWriter(c)
+}
+
 func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	var err *types.NewAPIError
 	switch info.RelayMode {
@@ -309,6 +323,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			case types.RelayFormatOpenAIRealtime:
 				helper.WssError(c, ws, newAPIError.ToPublicOpenAIError(requestId))
 			case types.RelayFormatClaude:
+				if c.Writer.Written() && strings.HasPrefix(c.Writer.Header().Get("Content-Type"), "text/event-stream") {
+					if c.Request.Context().Err() == nil {
+						if err := writeClaudeStreamError(c, newAPIError, requestId); err != nil {
+							logger.LogError(c, "write Claude stream error failed: "+err.Error())
+						}
+					}
+					return
+				}
 				c.JSON(newAPIError.StatusCode, gin.H{
 					"type":  "error",
 					"error": newAPIError.ToPublicClaudeError(requestId),
@@ -324,6 +346,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 					"error": newAPIError.ToPublicOpenAIError(requestId),
 				})
 			default:
+				if c.Writer.Written() && strings.HasPrefix(c.Writer.Header().Get("Content-Type"), "text/event-stream") {
+					if c.Request.Context().Err() == nil {
+						if err := helper.ObjectData(c, gin.H{"error": newAPIError.ToPublicOpenAIError(requestId)}); err != nil {
+							logger.LogError(c, "write relay stream error failed: "+err.Error())
+						}
+					}
+					return
+				}
 				c.JSON(newAPIError.StatusCode, gin.H{
 					"error": newAPIError.ToPublicOpenAIError(requestId),
 				})
@@ -412,17 +442,23 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if newAPIError != nil {
 			newAPIError = service.NormalizeViolationFeeError(newAPIError)
 			if relayInfo.Billing != nil {
-				relayInfo.Billing.Refund(c)
+				if c.GetBool(service.Seedream55ReservationCheckpointedKey) {
+					// The image task owns reconciliation once the reservation is durable.
+					_, _ = service.SettleBillingAtPreConsumedQuota(c, relayInfo)
+				} else {
+					relayInfo.Billing.Refund(c)
+				}
 			}
 			service.ChargeViolationFeeIfNeeded(c, relayInfo, newAPIError)
 		}
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:        c,
-		TokenGroup: relayInfo.TokenGroup,
-		ModelName:  relayInfo.OriginModelName,
-		Retry:      common.GetPointer(0),
+		Ctx:         c,
+		TokenGroup:  relayInfo.TokenGroup,
+		ModelName:   relayInfo.OriginModelName,
+		RequestPath: c.Request.URL.Path,
+		Retry:       common.GetPointer(0),
 	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
@@ -466,6 +502,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		c.Set("claude_stream_truncated", false)
 		switch relayFormat {
 		case types.RelayFormatOpenAIRealtime:
 			newAPIError = relay.WssHelper(c, relayInfo)
@@ -1212,10 +1249,11 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	if c.GetInt("playground_forced_channel_id") > 0 && retryParam.GetRetry() > 0 {
 		adjustedRetry := retryParam.GetRetry() - 1
 		selectRetryParam = &service.RetryParam{
-			Ctx:        retryParam.Ctx,
-			TokenGroup: retryParam.TokenGroup,
-			ModelName:  retryParam.ModelName,
-			Retry:      &adjustedRetry,
+			Ctx:         retryParam.Ctx,
+			TokenGroup:  retryParam.TokenGroup,
+			ModelName:   retryParam.ModelName,
+			RequestPath: retryParam.RequestPath,
+			Retry:       &adjustedRetry,
 		}
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(selectRetryParam)
@@ -1311,8 +1349,14 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if openaiErr.StatusCode == http.StatusRequestEntityTooLarge {
 		return false
 	}
-	if service.HasExplicitTokenGroupChain(c) && service.HasTextOutputSent(c) {
+	if service.HasTextOutputSent(c) && (service.HasExplicitTokenGroupChain(c) ||
+		strings.HasPrefix(c.Writer.Header().Get("Content-Type"), "text/event-stream")) {
 		return false
+	}
+	if retryTimes > 0 && c.GetBool("claude_stream_truncated") && !service.HasTextOutputSent(c) {
+		if _, fixedChannel := c.Get("specific_channel_id"); !fixedChannel {
+			return true
+		}
 	}
 	if shouldRetryManagedTextUpstreamFailure(c, openaiErr, retryTimes) {
 		return true
@@ -1678,10 +1722,11 @@ func RelayTask(c *gin.Context) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:        c,
-		TokenGroup: relayInfo.TokenGroup,
-		ModelName:  relayInfo.OriginModelName,
-		Retry:      common.GetPointer(0),
+		Ctx:         c,
+		TokenGroup:  relayInfo.TokenGroup,
+		ModelName:   relayInfo.OriginModelName,
+		RequestPath: c.Request.URL.Path,
+		Retry:       common.GetPointer(0),
 	}
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {

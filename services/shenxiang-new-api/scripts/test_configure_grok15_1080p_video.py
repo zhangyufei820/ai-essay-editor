@@ -20,6 +20,15 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ConfigureGrok15Video1080Tests(unittest.TestCase):
+    def setUp(self) -> None:
+        permissions = MODULE.permissions
+        self.addCleanup(setattr, permissions, "mysql_exec", permissions.mysql_exec)
+        self.addCleanup(setattr, permissions, "ensure_public_video_models", permissions.ensure_public_video_models)
+        self.addCleanup(setattr, permissions, "sync_public_video_pricing", permissions.sync_public_video_pricing)
+        self.addCleanup(setattr, permissions, "model_lists", permissions.model_lists)
+        self.addCleanup(setattr, permissions, "sync_abilities", permissions.sync_abilities)
+        self.addCleanup(setattr, permissions, "sync_user_video_tokens", permissions.sync_user_video_tokens)
+
     def test_normalize_base_url_accepts_only_https_origin(self) -> None:
         self.assertEqual(MODULE.normalize_base_url("https://provider.example/"), "https://provider.example")
         for value in (

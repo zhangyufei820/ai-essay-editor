@@ -33,144 +33,99 @@ func validUserInfo(username string, role int) bool {
 	return true
 }
 
+func currentSessionUser(c *gin.Context, id int) (*model.User, error) {
+	var user model.User
+	err := model.DB.WithContext(c.Request.Context()).
+		Select("id", "username", "role", "status", "group").
+		First(&user, id).Error
+	return &user, err
+}
+
+func abortUserAuth(c *gin.Context, status int, messageID string) {
+	c.AbortWithStatusJSON(status, gin.H{
+		"success": false,
+		"message": common.TranslateMessage(c, messageID),
+	})
+}
+
 func authHelper(c *gin.Context, minRole int) {
-	session := sessions.Default(c)
-	username := session.Get("username")
-	role := session.Get("role")
-	id := session.Get("id")
-	status := session.Get("status")
-	useAccessToken := false
-	if username == nil {
-		// Check access token
+	sessionID, hasSession := sessions.Default(c).Get("id").(int)
+	hasSession = hasSession && sessionID > 0
+	var user *model.User
+	if !hasSession {
 		accessToken := c.Request.Header.Get("Authorization")
 		if accessToken == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
-			})
-			c.Abort()
+			abortUserAuth(c, http.StatusUnauthorized, i18n.MsgAuthNotLoggedIn)
 			return
 		}
-		user, authErr := model.ValidateAccessToken(accessToken)
-		if authErr != nil {
-			if errors.Is(authErr, model.ErrDatabase) {
-				common.SysLog("ValidateAccessToken database error: " + authErr.Error())
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"success": false,
-					"message": common.TranslateMessage(c, i18n.MsgDatabaseError),
-				})
-			} else {
-				c.JSON(http.StatusOK, gin.H{
-					"success": false,
-					"message": common.TranslateMessage(c, i18n.MsgAuthAccessTokenInvalid),
-				})
-			}
-			c.Abort()
+		var err error
+		user, err = model.ValidateAccessToken(accessToken)
+		if errors.Is(err, model.ErrDatabase) {
+			common.SysLog("ValidateAccessToken database error: " + err.Error())
+			abortUserAuth(c, http.StatusInternalServerError, i18n.MsgDatabaseError)
 			return
 		}
-		if user != nil && user.Username != "" {
-			if !validUserInfo(user.Username, user.Role) {
-				c.JSON(http.StatusOK, gin.H{
-					"success": false,
-					"message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid),
-				})
-				c.Abort()
-				return
-			}
-			// Token is valid
-			username = user.Username
-			role = user.Role
-			id = user.Id
-			status = user.Status
-			useAccessToken = true
-		} else {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": common.TranslateMessage(c, i18n.MsgAuthAccessTokenInvalid),
-			})
-			c.Abort()
+		if err != nil || user == nil || user.Username == "" {
+			abortUserAuth(c, http.StatusOK, i18n.MsgAuthAccessTokenInvalid)
 			return
 		}
+		sessionID = user.Id
 	}
-	// get header New-Api-User
+
 	apiUserIdStr := c.Request.Header.Get("New-Api-User")
 	if apiUserIdStr == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdNotProvided),
-		})
-		c.Abort()
+		abortUserAuth(c, http.StatusUnauthorized, i18n.MsgAuthUserIdNotProvided)
 		return
 	}
-	apiUserId, err := strconv.Atoi(apiUserIdStr)
+	apiUserID, err := strconv.Atoi(apiUserIdStr)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdFormatError),
-		})
-		c.Abort()
-		return
-
-	}
-	if id != apiUserId {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdMismatch),
-		})
-		c.Abort()
+		abortUserAuth(c, http.StatusUnauthorized, i18n.MsgAuthUserIdFormatError)
 		return
 	}
-	statusVal, ok := status.(int)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
-		})
-		c.Abort()
+	if sessionID != apiUserID {
+		abortUserAuth(c, http.StatusUnauthorized, i18n.MsgAuthUserIdMismatch)
 		return
 	}
-	if statusVal == common.UserStatusDisabled {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserBanned),
-		})
-		c.Abort()
+	if hasSession {
+		user, err = currentSessionUser(c, sessionID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			abortUserAuth(c, http.StatusUnauthorized, i18n.MsgAuthNotLoggedIn)
+			return
+		}
+		if err != nil {
+			common.SysLog("session user lookup failed: " + err.Error())
+			abortUserAuth(c, http.StatusInternalServerError, i18n.MsgDatabaseError)
+			return
+		}
+	}
+	if user.Status != common.UserStatusEnabled {
+		abortUserAuth(c, http.StatusOK, i18n.MsgAuthUserBanned)
 		return
 	}
-	if role.(int) < minRole {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege),
-		})
-		c.Abort()
+	if user.Role < minRole {
+		abortUserAuth(c, http.StatusOK, i18n.MsgAuthInsufficientPrivilege)
 		return
 	}
-	if !validUserInfo(username.(string), role.(int)) {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid),
-		})
-		c.Abort()
+	if !validUserInfo(user.Username, user.Role) {
+		abortUserAuth(c, http.StatusOK, i18n.MsgAuthUserInfoInvalid)
 		return
 	}
-	// 防止不同newapi版本冲突，导致数据不通用
 	c.Header("Auth-Version", "864b7076dbcd0a3c01b5520316720ebf")
-	c.Set("username", username)
-	c.Set("role", role)
-	c.Set("id", id)
-	c.Set("group", session.Get("group"))
-	c.Set("user_group", session.Get("group"))
-	c.Set("use_access_token", useAccessToken)
-
+	c.Set("username", user.Username)
+	c.Set("role", user.Role)
+	c.Set("id", user.Id)
+	c.Set("group", user.Group)
+	c.Set("user_group", user.Group)
+	c.Set("use_access_token", !hasSession)
 	c.Next()
 }
 
 func TryUserAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		session := sessions.Default(c)
-		id := session.Get("id")
-		if id != nil {
-			c.Set("id", id)
+		if id, ok := sessions.Default(c).Get("id").(int); ok && id > 0 {
+			if user, err := currentSessionUser(c, id); err == nil && user.Status == common.UserStatusEnabled {
+				c.Set("id", user.Id)
+			}
 		}
 		c.Next()
 	}
@@ -202,11 +157,9 @@ func WssAuth(c *gin.Context) {
 // Used for endpoints that need to be accessible from both the dashboard and API clients.
 func TokenOrUserAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		// Try session auth first (dashboard users)
-		session := sessions.Default(c)
-		if id := session.Get("id"); id != nil {
-			if status, ok := session.Get("status").(int); ok && status == common.UserStatusEnabled {
-				c.Set("id", id)
+		if id, ok := sessions.Default(c).Get("id").(int); ok && id > 0 {
+			if user, err := currentSessionUser(c, id); err == nil && user.Status == common.UserStatusEnabled {
+				c.Set("id", user.Id)
 				c.Next()
 				return
 			}

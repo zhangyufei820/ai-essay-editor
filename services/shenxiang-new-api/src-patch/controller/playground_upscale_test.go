@@ -55,6 +55,14 @@ func TestUpscalePublicResponseDoesNotExposePrivateRouteOrSupplier(t *testing.T) 
 	}
 	require.Contains(t, string(b), "/v1/images/upscale/tasks/task_public/download")
 }
+
+func TestUpscaleUnknownTaskIndicatesWhetherPollingCanRecover(t *testing.T) {
+	task := &model.Task{Status: model.TaskStatusUnknown}
+	require.Equal(t, false, upscalePublic(task)["pollable"])
+	task.PrivateData.UpstreamTaskID = "private-provider-task"
+	require.Equal(t, true, upscalePublic(task)["pollable"])
+	require.NotContains(t, upscalePublic(task), "upstream_task_id")
+}
 func TestUpscaleJSONStrictTypes(t *testing.T) {
 	for _, b := range []string{`{"model":"精准放大","image":"x","scale_factor":"2"}`, `{"model":"精准放大","image":"x","scale_factor":2,"filter_nsfw":"true"}`, `{"model":"精准放大","image":"x","scale_factor":2,"webhook_url":"https://example.com"}`} {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())

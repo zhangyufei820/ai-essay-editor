@@ -3,12 +3,37 @@ package dto
 import (
 	"encoding/json"
 	"errors"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
 )
 
-const Seedream55Model = "doubao-seedream-5-5-261028"
+const (
+	Seedream55Model         = "doubao-seedream-5-5-261028"
+	Seedream55MaxImageBytes = 32 * 1024 * 1024
+)
+
+// Seedream55ImageFormat returns the decoded output format, never the provider's
+// claimed MIME type. Bound decoded size before allocating pixel buffers.
+func Seedream55ImageFormat(reader io.ReadSeeker) (string, error) {
+	invalid := errors.New("豆包绘图返回了无效图片")
+	cfg, format, err := image.DecodeConfig(reader)
+	if err != nil || (format != "png" && format != "jpeg") ||
+		cfg.Width < 1 || cfg.Height < 1 || cfg.Width > 36000000/cfg.Height {
+		return "", invalid
+	}
+	if _, err := reader.Seek(0, io.SeekStart); err != nil {
+		return "", invalid
+	}
+	if _, decodedFormat, err := image.Decode(reader); err != nil || decodedFormat != format {
+		return "", invalid
+	}
+	return format, nil
+}
 
 type Seedream55LayerOptions struct {
 	MaxImages       *int  `json:"max_images,omitempty"`

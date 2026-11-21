@@ -40,6 +40,8 @@ class FakeResponse:
 class Gemini3ProImagePrimaryTest(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_module()
+        permissions = self.module.permissions
+        self.addCleanup(setattr, permissions, "sync_abilities", permissions.sync_abilities)
 
     def test_apply_sql_copies_original_credential_only_to_fallback(self) -> None:
         sql = self.module.build_apply_sql("test-key-1234567890")

@@ -40,6 +40,7 @@ type QuotaInfo struct {
 }
 
 const realtimeBillingTargetQuotaKey = "realtime_billing_target_quota"
+const realtimeTieredBillingTokensKey = "realtime_tiered_billing_tokens"
 
 func hasCustomModelRatio(modelName string, currentRatio float64) bool {
 	defaultRatio, exists := ratio_setting.GetDefaultModelRatioMap()[modelName]
@@ -136,12 +137,32 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	}
 
 	quota := calculateAudioQuota(quotaInfo)
+	tiered := relayInfo.TieredBillingSnapshot != nil
+	var accumulated billingexpr.TokenParams
+	if tiered {
+		value, _ := ctx.Get(realtimeTieredBillingTokensKey)
+		accumulated, _ = value.(billingexpr.TokenParams)
+		accumulated.P += float64(usage.InputTokens)
+		accumulated.C += float64(usage.OutputTokens)
+		accumulated.Len = accumulated.P
+		if applies, target, _ := TryTieredSettle(relayInfo, accumulated); applies {
+			quota = target - ctx.GetInt(realtimeBillingTargetQuotaKey)
+			if quota < 0 {
+				quota = 0
+			}
+		} else {
+			tiered = false
+		}
+	}
 	if relayInfo.Billing != nil {
 		targetQuota := ctx.GetInt(realtimeBillingTargetQuotaKey) + quota
 		if err := relayInfo.Billing.Reserve(targetQuota); err != nil {
 			return err
 		}
 		ctx.Set(realtimeBillingTargetQuotaKey, targetQuota)
+		if tiered {
+			ctx.Set(realtimeTieredBillingTokensKey, accumulated)
+		}
 		logger.LogInfo(ctx, "realtime streaming reserve quota success, target quota: "+fmt.Sprintf("%d", targetQuota))
 		return nil
 	}
@@ -166,6 +187,10 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	err = PostConsumeQuota(relayInfo, quota, 0, false)
 	if err != nil {
 		return err
+	}
+	if tiered {
+		ctx.Set(realtimeBillingTargetQuotaKey, ctx.GetInt(realtimeBillingTargetQuotaKey)+quota)
+		ctx.Set(realtimeTieredBillingTokensKey, accumulated)
 	}
 	logger.LogInfo(ctx, "realtime streaming consume quota success, quota: "+fmt.Sprintf("%d", quota))
 	return nil

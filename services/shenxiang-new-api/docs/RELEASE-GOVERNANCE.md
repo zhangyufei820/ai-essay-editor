@@ -49,7 +49,7 @@ The release script fails closed unless all of these conditions hold:
 7. Targeted Go tests and routing contract tests pass.
 8. The candidate binary contains every required classic media bundle marker.
 9. The image labels match the repository commit, upstream commit, patch hash, and policy hash.
-10. No media-workshop image or video task is in progress.
+10. The running app supports the shared media admission lock, the release holds its exclusive lock, and no media-workshop image, video, or upscale task is in progress.
 11. At least 12 GiB of host disk space remains before the build begins.
 12. The periodic model-permission runner is installed from the release and resolves its Python scripts only from the checkout pinned by the live manifest.
 13. The Codex entry guard runner is installed from the release, resolves its Python script only from the manifest-pinned checkout, and passes the runtime drift guard.
@@ -89,13 +89,15 @@ Every new thread must read it before editing. The manifest is the authoritative 
 
 The candidate is built and checked before Compose is changed. The script then:
 
-1. Saves the previous Compose file and manifest.
-2. Replaces only the application image line.
+1. Takes the exclusive lock on the shared media-admission file, which blocks new media submissions while the app remains available for polling.
+2. Saves the previous Compose file and manifest, rechecks the remote branch head and active task count, and replaces only the application image line.
 3. Recreates only `shenxiang-new-api` with `--no-deps`.
 4. Waits for container health.
 5. Checks local New API status, public New API status, the media runtime contract, and main-site health.
 6. Syncs the manifest-pinned model-permission and provider-monitor runners, writes the new manifest, and installs the versioned provider-monitor Cron.
 7. Verifies the manifest, runner, and Cron identities; any failure restores their previous files with the application rollback.
+
+Keep the admission lock held through verification and rollback. The prior release tool installs the first application image and release tool with this handshake together. Subsequent releases require the active image and the candidate to advertise the lock on the local status endpoint.
 
 Any failure after the switch restores the previous Compose file and application image automatically. MySQL, Redis, volumes, networks, 1Panel, and OpenResty remain untouched.
 

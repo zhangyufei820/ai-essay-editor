@@ -151,14 +151,17 @@ func TestModelPriceHelperChargesSixPercentOfMarketplaceFixedPrice(t *testing.T) 
 	require.Equal(t, 60_000, priceData.QuotaToPreConsume)
 }
 
-func TestTieredRealtimeBillingUsesFrozenModelRatio(t *testing.T) {
+func TestTieredRealtimeBillingUsesFrozenExpression(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	originalQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500_000
 	originalModelRatio := ratio_setting.ModelRatio2JSONString()
 	originalBillingModes, err := json.Marshal(billing_setting.GetBillingModeCopy())
 	require.NoError(t, err)
 	originalBillingExprs, err := json.Marshal(billing_setting.GetBillingExprCopy())
 	require.NoError(t, err)
 	t.Cleanup(func() {
+		common.QuotaPerUnit = originalQuotaPerUnit
 		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(originalModelRatio))
 		require.NoError(t, settingconfig.GlobalConfig.LoadFromDB(map[string]string{
 			"billing_setting.billing_mode": string(originalBillingModes),
@@ -182,6 +185,11 @@ func TestTieredRealtimeBillingUsesFrozenModelRatio(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2.0, priceData.ModelRatio)
 	require.Equal(t, service.DiscountPricingGroupRatio, priceData.GroupRatioInfo.GroupRatio)
+	require.Equal(t, 13, priceData.QuotaToPreConsume)
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"gpt-5.5":6}`))
+	require.NoError(t, settingconfig.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_expr": `{"gpt-5.5":"tier(\"base\", p * 4 + c * 6)"}`,
+	}))
 
 	usage := &dto.RealtimeUsage{
 		TotalTokens: 100,
@@ -192,5 +200,5 @@ func TestTieredRealtimeBillingUsesFrozenModelRatio(t *testing.T) {
 	}
 	require.NoError(t, service.PreWssConsumeQuota(ctx, relayInfo, usage))
 	require.NoError(t, service.PreWssConsumeQuota(ctx, relayInfo, usage))
-	require.Equal(t, []int{10, 20}, billing.reserveTargets)
+	require.Equal(t, []int{13, 25}, billing.reserveTargets)
 }

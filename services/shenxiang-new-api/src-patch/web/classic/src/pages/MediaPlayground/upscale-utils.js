@@ -31,6 +31,23 @@ export function upscaleTaskStatus(task) {
   return 'SUBMITTED';
 }
 
+export function shouldPollUpscaleTask(task) {
+  const status = upscaleTaskStatus(task);
+  return status === 'SUBMITTED' ||
+    status === 'IN_PROGRESS' ||
+    (status === 'UNKNOWN' && task.pollable !== false);
+}
+
+export function forgetFinishedUpscaleAttempts(attempts, tasks) {
+  const finished = new Set(tasks.filter((task) => {
+    const status = upscaleTaskStatus(task);
+    return status === 'SUCCESS' || status === 'FAILURE';
+  }).map((task) => task.task_id));
+  for (const [fingerprint, attempt] of attempts) {
+    if (attempt.taskId && finished.has(attempt.taskId)) attempts.delete(fingerprint);
+  }
+}
+
 export function upscaleStatusLabel(task) {
   if (task?.cache_status === 'expired') return '结果已过期';
   if (task?.cache_status === 'pending' && task?.status === 'SUCCESS') return '正在保存图片';

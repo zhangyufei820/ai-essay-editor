@@ -5,8 +5,119 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"gorm.io/gorm/clause"
 )
+
+// SelectLiveChannelForGroupModel chooses among enabled, untried channels in the
+// highest remaining priority. It reads abilities directly because the upstream
+// channel cache is built from channel configuration, not ability.enabled.
+func SelectLiveChannelForGroupModel(group, modelName, requestPath string, tried []int, preferredID int) (*Channel, error) {
+	models := []string{modelName}
+	if normalized := ratio_setting.FormatMatchingModelName(modelName); normalized != "" && normalized != modelName {
+		models = append(models, normalized)
+	}
+	var quotedGroupColumn strings.Builder
+	DB.Dialector.QuoteTo(&quotedGroupColumn, "channels.group")
+	for _, name := range models {
+		var routes []struct {
+			AbilityWithChannel
+			ChannelGroup string
+			ChannelTag   string
+		}
+		query := DB.Model(&Ability{}).
+			Select("abilities.*, channels.type as channel_type, "+quotedGroupColumn.String()+" as channel_group, COALESCE(channels.tag, '') as channel_tag").
+			Joins("JOIN channels ON channels.id = abilities.channel_id").
+			Where(clause.Eq{Column: clause.Column{Table: "abilities", Name: "group"}, Value: group}).
+			Where("abilities.model = ? AND abilities.enabled = ? AND channels.status = ?", name, true, common.ChannelStatusEnabled)
+		if len(tried) > 0 {
+			query = query.Where("abilities.channel_id NOT IN ?", tried)
+		}
+		if err := query.Order("COALESCE(abilities.priority, 0) DESC").Find(&routes).Error; err != nil {
+			return nil, err
+		}
+		var candidates []Ability
+		var maxPriority int64
+		weight := 0
+		for _, route := range routes {
+			if !containsChannelGroup(route.ChannelGroup, group) {
+				continue
+			}
+			tag := ""
+			if route.Tag != nil {
+				tag = *route.Tag
+			}
+			if tag != route.ChannelTag {
+				continue
+			}
+			var priority int64
+			if route.Priority != nil {
+				priority = *route.Priority
+			}
+			if len(candidates) > 0 && priority < maxPriority {
+				break
+			}
+			if requestPath != "" && route.ChannelType == constant.ChannelTypeAdvancedCustom {
+				channel, err := getLiveCandidateChannel(route.ChannelId)
+				if err != nil {
+					return nil, err
+				}
+				if !ChannelSupportsRelayPath(channel, requestPath, modelName) {
+					continue
+				}
+			}
+			if route.ChannelId == preferredID {
+				return getLiveCandidateChannel(preferredID)
+			}
+			maxPriority = priority
+			candidates = append(candidates, route.Ability)
+			weight += int(route.Weight)
+		}
+		if len(candidates) == 0 {
+			continue
+		}
+		if weight == 0 {
+			return getLiveCandidateChannel(candidates[common.GetRandomInt(len(candidates))].ChannelId)
+		}
+		picked := common.GetRandomInt(weight)
+		for _, route := range candidates {
+			picked -= int(route.Weight)
+			if picked < 0 {
+				return getLiveCandidateChannel(route.ChannelId)
+			}
+		}
+	}
+	return nil, nil
+}
+
+func ChannelSupportsRelayPath(channel *Channel, requestPath, modelName string) bool {
+	if channel == nil {
+		return false
+	}
+	if requestPath == "" || channel.Type != constant.ChannelTypeAdvancedCustom {
+		return true
+	}
+	config := channel.GetOtherSettings().AdvancedCustom
+	return config != nil && config.SupportsPathForModel(requestPath, modelName)
+}
+
+func containsChannelGroup(channelGroups, group string) bool {
+	for _, candidate := range strings.Split(channelGroups, ",") {
+		if strings.TrimSpace(candidate) == group {
+			return true
+		}
+	}
+	return false
+}
+
+func getLiveCandidateChannel(id int) (*Channel, error) {
+	channel, err := CacheGetChannel(id)
+	if err == nil && channel != nil && channel.Status == common.ChannelStatusEnabled {
+		return channel, nil
+	}
+	return GetChannelById(id, true)
+}
 
 func GetEnabledTaggedChannelForGroupModel(group string, modelName string, tag string) (*Channel, error) {
 	group = strings.TrimSpace(group)

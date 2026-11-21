@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/gin-gonic/gin"
 	_ "golang.org/x/image/webp"
 )
@@ -65,11 +66,22 @@ type playgroundMediaItem struct {
 }
 
 func cachePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest) (*playgroundMediaItem, error) {
+	return cachePlaygroundMediaResult(c, req, false)
+}
+
+func cachePlaygroundMediaResult(c *gin.Context, req playgroundMediaCacheRequest, validateSeedream bool) (*playgroundMediaItem, error) {
 	rawURL := strings.TrimSpace(req.URL)
 	if rawURL == "" {
 		return nil, errors.New("media url is required")
 	}
 	if strings.HasPrefix(strings.ToLower(rawURL), "data:") {
+		if validateSeedream {
+			_, data, err := decodePlaygroundDataURL(rawURL)
+			if err != nil {
+				return nil, err
+			}
+			return writeValidatedSeedreamMedia(c, req, bytes.NewReader(data))
+		}
 		return cachePlaygroundDataMedia(c, req, rawURL)
 	}
 
@@ -111,6 +123,9 @@ func cachePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest) (*pla
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("media download failed with status %d", resp.StatusCode)
 	}
+	if validateSeedream {
+		return writeValidatedSeedreamMedia(c, req, resp.Body)
+	}
 
 	contentType := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0]))
 	ext := playgroundMediaExtensions[contentType]
@@ -127,6 +142,31 @@ func cachePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest) (*pla
 	}
 
 	return writePlaygroundMedia(c, req, resp.Body, ext, maxBytes)
+}
+
+func writeValidatedSeedreamMedia(c *gin.Context, req playgroundMediaCacheRequest, reader io.Reader) (*playgroundMediaItem, error) {
+	maxBytes := min(int64(dto.Seedream55MaxImageBytes), int64(common.GetEnvOrDefault("PLAYGROUND_MEDIA_MAX_MB", 256))*1024*1024)
+	file, err := os.CreateTemp("", "seedream-result-*")
+	if err != nil {
+		return nil, errors.New("failed to create generated image staging file")
+	}
+	defer os.Remove(file.Name())
+	defer file.Close()
+	n, err := io.Copy(file, io.LimitReader(reader, maxBytes+1))
+	if err != nil || n > maxBytes {
+		return nil, errors.New("failed to read generated image")
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	format, err := dto.Seedream55ImageFormat(file)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return writePlaygroundMedia(c, req, file, playgroundMediaExtensions["image/"+format], maxBytes)
 }
 
 func cachePlaygroundDataMedia(c *gin.Context, req playgroundMediaCacheRequest, rawURL string) (*playgroundMediaItem, error) {

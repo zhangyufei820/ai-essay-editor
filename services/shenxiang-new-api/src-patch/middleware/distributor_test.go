@@ -542,3 +542,58 @@ func TestDistributeRejectsInternalDiscountImage2WithoutEchoingName(t *testing.T)
 	require.Contains(t, recorder.Body.String(), string(types.ErrorCodeAccessDenied))
 	require.NotContains(t, recorder.Body.String(), "geek2api")
 }
+
+func TestDistributeSkipsIneligibleUpstreamTextRoutes(t *testing.T) {
+	require.NoError(t, model.DB.AutoMigrate(&model.Channel{}, &model.Ability{}))
+	originalMemoryCache := common.MemoryCacheEnabled
+	common.MemoryCacheEnabled = true
+	t.Cleanup(func() { common.MemoryCacheEnabled = originalMemoryCache })
+
+	const testModel = "audit-test-text-route"
+	type routeFixture struct {
+		channelType int
+		priority    int64
+		enabled     bool
+		settings    string
+	}
+	for _, f := range []routeFixture{
+		{channelType: constant.ChannelTypeOpenAI, priority: 30},
+		{channelType: constant.ChannelTypeAdvancedCustom, priority: 20, enabled: true,
+			settings: `{"advanced_custom":{"advanced_routes":[{"incoming_path":"/v1/chat/completions","upstream_path":"/v1/chat/completions"}]}}`},
+		{channelType: constant.ChannelTypeOpenAI, priority: 10, enabled: true},
+	} {
+		channel := model.Channel{
+			Type: f.channelType, Key: "local-test-key", Status: common.ChannelStatusEnabled,
+			Name: testModel, Models: testModel, Group: "default", Priority: &f.priority, OtherSettings: f.settings,
+		}
+		require.NoError(t, model.DB.Create(&channel).Error)
+		require.NoError(t, model.DB.Create(&model.Ability{
+			Group: "default", Model: testModel, ChannelId: channel.Id, Priority: &f.priority, Enabled: f.enabled,
+		}).Error)
+		t.Cleanup(func() {
+			model.DB.Where("channel_id = ?", channel.Id).Delete(&model.Ability{})
+			model.DB.Delete(&channel)
+		})
+	}
+	model.InitChannelCache()
+
+	router := gin.New()
+	router.POST("/v1/responses", func(c *gin.Context) {
+		service.SetTokenGroupChain(c, []string{"default"})
+		c.Next()
+	}, Distribute(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"channelType": c.GetInt("channel_type"), "channelID": c.GetInt("channel_id")})
+	})
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"audit-test-text-route"}`))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	var selected struct {
+		ChannelID int `json:"channelID"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &selected))
+	var channel model.Channel
+	require.NoError(t, model.DB.First(&channel, selected.ChannelID).Error)
+	require.Equal(t, int64(10), channel.GetPriority())
+}

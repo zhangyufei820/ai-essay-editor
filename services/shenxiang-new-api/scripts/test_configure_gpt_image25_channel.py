@@ -26,6 +26,15 @@ def load_module():
 class ConfigureGPTImage25ChannelTest(unittest.TestCase):
     def setUp(self) -> None:
         self.module = load_module()
+        permissions = self.module.permissions
+        self.addCleanup(setattr, permissions, "sanitize_token_models", permissions.sanitize_token_models)
+        self.addCleanup(setattr, permissions, "mysql_exec", permissions.mysql_exec)
+        self.addCleanup(setattr, permissions, "gpt_image25_release_state", permissions.gpt_image25_release_state)
+        self.addCleanup(setattr, permissions, "ensure_gpt_image25_models", permissions.ensure_gpt_image25_models)
+        self.addCleanup(setattr, permissions, "sync_public_image_pricing", permissions.sync_public_image_pricing)
+        self.addCleanup(setattr, permissions, "model_lists", permissions.model_lists)
+        self.addCleanup(setattr, permissions, "sync_abilities", permissions.sync_abilities)
+        self.addCleanup(setattr, permissions, "sync_user_image_tokens", permissions.sync_user_image_tokens)
 
     def test_normalize_base_url_only_accepts_allowlisted_origin(self) -> None:
         self.assertEqual(self.module.normalize_base_url("https://api.smile-ai-studio.com/"), self.module.EXPECTED_BASE_URL)

@@ -290,13 +290,19 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 // 当任务成功且返回了 totalTokens 时，根据模型倍率和分组倍率重新计算实际扣费额度，
 // 与预扣费的差额进行补扣或退还。支持钱包和订阅计费来源。
 func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTokens int) {
+	if quota, reason := taskQuotaByTokens(ctx, task, totalTokens); quota > 0 {
+		RecalculateTaskQuota(ctx, task, quota, reason)
+	}
+}
+
+func taskQuotaByTokens(ctx context.Context, task *model.Task, totalTokens int) (int, string) {
 	if totalTokens <= 0 {
-		return
+		return 0, ""
 	}
 	if totalTokens > maxTaskTotalTokens {
 		logger.LogError(ctx, fmt.Sprintf("任务 %s 上游返回异常 token 数 %d，超过上限 %d，跳过重新计费",
 			task.TaskID, totalTokens, maxTaskTotalTokens))
-		return
+		return 0, ""
 	}
 
 	modelName := taskModelName(task)
@@ -305,7 +311,7 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	modelRatio, hasRatioSetting, _ := ratio_setting.GetModelRatio(modelName)
 	// 只有配置了倍率(非固定价格)时才按 token 重新计费
 	if !hasRatioSetting || modelRatio <= 0 {
-		return
+		return 0, ""
 	}
 
 	// 获取用户和组的倍率信息
@@ -317,7 +323,7 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 		}
 	}
 	if group == "" {
-		return
+		return 0, ""
 	}
 
 	groupRatio := ratio_setting.GetGroupRatio(group)
@@ -353,5 +359,5 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	}
 
 	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
-	RecalculateTaskQuota(ctx, task, actualQuota, reason)
+	return actualQuota, reason
 }

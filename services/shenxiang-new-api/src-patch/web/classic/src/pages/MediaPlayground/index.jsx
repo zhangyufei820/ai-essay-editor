@@ -5094,6 +5094,20 @@ const MediaPlayground = () => {
           progress,
           message: nextMessage,
         });
+        if (status === 'unknown') {
+          const message = res.data.data.public_message || '受理结果待确认，请保留任务 ID。';
+          upsertLiveQueueTask({
+            id: taskId,
+            title: '图像任务待确认',
+            kind: 'image',
+            status: 'processing',
+            statusText: '待确认',
+            progress,
+            message,
+          });
+          Toast.info(message);
+          return null;
+        }
         if (status === 'completed') {
           const result = imageTaskToResult(
             res.data.data,
@@ -5998,7 +6012,9 @@ const MediaPlayground = () => {
       label: '素材库',
       active: false,
       onClick: () => {
-        if (isSeedream) selectCreativeTask('image-edit');
+        if (!showMaterialUploads) {
+          selectCreativeTask(activeImageModel.edit ? 'image-edit' : 'reverse');
+        }
         scrollWorkbenchTo('mp-assets-workbench');
       },
     },

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"image"
+	"image/jpeg"
 	"image/png"
 	"mime/multipart"
 	"net/http"
@@ -1089,11 +1090,29 @@ func TestSeedreamImageTaskPartialCacheFailureCleansThisAttempt(t *testing.T) {
 	ctx.Set("id", 9)
 	var buf bytes.Buffer
 	require.NoError(t, png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 3, 2))))
-	r := &dto.ImageResponse{Data: []dto.ImageData{{B64Json: base64.StdEncoding.EncodeToString(buf.Bytes())}, {B64Json: "illegal"}}}
-	items, err := cacheSeedreamImageTaskItems(ctx, &model.Task{}, &playgroundImageTaskPayload{}, r)
+	r := &dto.ImageResponse{Data: []dto.ImageData{{B64Json: base64.StdEncoding.EncodeToString(buf.Bytes())}, {B64Json: "AQID"}}}
+	items, err := cacheSeedreamImageTaskItems(ctx, &model.Task{}, &playgroundImageTaskPayload{Model: dto.Seedream55Model}, r)
 	require.Error(t, err)
 	require.Empty(t, items)
 	entries, err := os.ReadDir(filepath.Join(root, "u-9"))
 	require.NoError(t, err)
 	require.Empty(t, entries)
+}
+
+func TestSeedreamImageTaskUsesActualJPEGFormat(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", root)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/pg/images/tasks/test", nil)
+	ctx.Set("id", 7)
+	var buf bytes.Buffer
+	require.NoError(t, jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 3, 2)), nil))
+
+	response := &dto.ImageResponse{Data: []dto.ImageData{{B64Json: base64.StdEncoding.EncodeToString(buf.Bytes())}}}
+	items, err := cacheSeedreamImageTaskItems(ctx, &model.Task{}, &playgroundImageTaskPayload{Model: dto.Seedream55Model}, response)
+
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, ".jpg", filepath.Ext(items[0].Filename))
+	require.FileExists(t, filepath.Join(root, "u-7", items[0].Filename))
 }

@@ -14,6 +14,8 @@
 
 监控器只自动恢复自己关闭并记录在 `/opt/shenxiang-new-api/data/provider-monitor-state.json` 的 ability。管理员手工关闭的 ability 不会被自动打开。首次接管一个已经手工停用的受管 channel 必须由运维显式传入 `--adopt-managed-disabled`；日常 Cron 不使用该参数。
 
+整条渠道的旧版熔断只保存状态标记，缺少关闭前的 ability 快照。已处于自动禁用状态的旧渠道需要核对后通过后台恢复。新版整条渠道熔断会在同一个数据库事务内记录归属和此前启用的 ability，达到恢复阈值后只恢复该快照中仍然发布的路由。模拟运行仍会记录探测日志，正式运行的监控状态由实际执行更新。
+
 ## 请求与路由
 
 探测 payload 最小化且不记录输入输出、密钥、供应商 URL 或完整上游错误。`discount_text` 的 `xingren-discount-text-pdhlzy` 兼容身份使用 `/v1/chat/completions` 探测，其余受管通道使用原生 `/v1/responses`；两种探针都必须收到真实输出并完整结束才算成功。运行时对 `default/discount/plus/special` 选择出的 channel 做一次实时 ability 检查；被熔断的高优先级模型会在发出上游请求前直接跳到下一优先级。ability 查询异常时保持原有路由，避免 MySQL 短暂异常把整组误判为无可用通道。

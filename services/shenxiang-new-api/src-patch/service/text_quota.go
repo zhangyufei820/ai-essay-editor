@@ -340,6 +340,9 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 			}
 		}
 
+		if baseTokens.IsNegative() {
+			baseTokens = decimal.Zero
+		}
 		promptQuota := baseTokens.Add(cachedTokensWithRatio).Add(imageTokensWithRatio).Add(cachedCreationTokensWithRatio)
 		completionQuota := dCompletionTokens.Mul(dCompletionRatio)
 		quotaCalculateDecimal := promptQuota.Add(completionQuota).Mul(ratio)
@@ -387,7 +390,7 @@ func usageSemanticFromUsage(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) 
 	return "openai"
 }
 
-func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, extraContent []string) {
+func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, extraContent []string) error {
 	originUsage := usage
 	if usage == nil {
 		extraContent = append(extraContent, "上游无计费信息")
@@ -462,25 +465,38 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			extraContent = append(extraContent, "未向用户输出有效内容，上游没有返回计费信息，本次按 0 扣费并返还预扣")
 		}
 		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, displayModelName, relayInfo.FinalPreConsumedQuota))
-	} else {
+	} else if seedreamBill == nil {
 		model.UpdateUsageStats(relayInfo.UserId, relayInfo.ChannelId, billingQuota)
 	}
 
 	var settleErr error
-	if missingUsageAfterOutput {
+	if seedreamBill != nil && ctx.GetBool(Seedream55ReservationCheckpointedKey) {
+		settledBillingQuota, settleErr = SettleBillingAtPreConsumedQuota(ctx, relayInfo)
+		extraContent = append(extraContent, "预扣已记录，图片交付后按实际张数结算")
+	} else if missingUsageAfterOutput {
 		settledBillingQuota, settleErr = SettleBillingAtPreConsumedQuota(ctx, relayInfo)
 	} else {
 		settleErr = SettleBilling(ctx, relayInfo, retailQuota)
 	}
 	if settleErr != nil {
 		logger.LogError(ctx, "error settling billing: "+settleErr.Error())
+		if seedreamBill != nil {
+			return settleErr
+		}
+	}
+	if seedreamBill != nil && !ctx.GetBool(Seedream55ReservationCheckpointedKey) {
+		model.UpdateUsageStats(relayInfo.UserId, relayInfo.ChannelId, billingQuota)
 	}
 	if missingUsageAfterOutput && settledBillingQuota != 0 {
 		model.UpdateUsageStats(relayInfo.UserId, relayInfo.ChannelId, settledBillingQuota)
 	}
 	if callback, ok := ctx.Get("playground_image_billing_capture"); ok {
 		if capture, ok := callback.(func(int, *relaycommon.RelayInfo)); ok {
-			capture(settledBillingQuota, relayInfo)
+			captureQuota := settledBillingQuota
+			if seedreamBill != nil && ctx.GetBool(Seedream55ReservationCheckpointedKey) {
+				captureQuota = billingQuota
+			}
+			capture(captureQuota, relayInfo)
 		}
 	}
 
@@ -510,6 +526,10 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 	if seedreamBill != nil {
 		seedreamBill.Audit(other)
+		if ctx.GetBool(Seedream55ReservationCheckpointedKey) {
+			other["billing_settlement"] = "image_delivery_pending"
+			other["charged_quota"] = settledBillingQuota
+		}
 	}
 	if adminRejectReason != "" {
 		other["reject_reason"] = adminRejectReason
@@ -627,4 +647,5 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	gopool.Go(func() {
 		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens))
 	})
+	return settleErr
 }
