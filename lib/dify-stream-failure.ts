@@ -99,6 +99,7 @@ function classifyFailure(rawMessage: string, publicMessage?: string): DifyTermin
 export type DifyTerminalFailureOptions = {
   /** Public copy for technical failures in non-essay routes. */
   publicMessage?: string
+  requireSuccessfulWorkflow?: boolean
 }
 
 export function getDifyTerminalFailure(
@@ -114,6 +115,7 @@ export function getDifyTerminalFailure(
     .toLowerCase()
     .replace(/_/g, "-")
   const statusFailure = FAILURE_STATUS_VALUES.has(status)
+    || (options.requireSuccessfulWorkflow && status === "partial-succeeded")
   if (event.event === "workflow_finished" || event.event === "message_end") {
     const structuredFailure = findStructuredFailure(data) || findStructuredFailure(event)
     if (!statusFailure && !structuredFailure) return null

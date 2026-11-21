@@ -90,6 +90,7 @@ describe("essay image fallback", () => {
         image_base64: "aGVsbG8=",
       },
       8_000,
+      undefined,
     )
     expect(internalDifyFetchMock).not.toHaveBeenCalled()
   })
@@ -164,6 +165,39 @@ describe("essay image fallback", () => {
     const body = JSON.parse(init.body)
     expect(body.model).toBe("sx-image-vision")
     expect(body.messages[1].content[1].image_url.url).toBe("data:image/png;base64,aGVsbG8=")
+  })
+
+  it("does not start gateway OCR after cancellation during suite OCR", async () => {
+    const controller = new AbortController()
+    callEssayAiSuiteMock.mockImplementation(async (_path, _body, _timeout, signal) => {
+      expect(signal).toBe(controller.signal)
+      controller.abort()
+      return { ok: false }
+    })
+
+    await expect(extractEssayTextFromImage({
+      fileId: "file-cancelled",
+      imageBase64: "aGVsbG8=",
+      signal: controller.signal,
+    })).rejects.toBe(controller.signal.reason)
+    expect(internalDifyFetchMock).not.toHaveBeenCalled()
+  })
+
+  it("cancels gateway OCR if the requester disconnects after the fallback starts", async () => {
+    const controller = new AbortController()
+    const reason = new DOMException("Disconnected", "AbortError")
+    callEssayAiSuiteMock.mockResolvedValue({ ok: false })
+    internalDifyFetchMock.mockImplementation(async (_url, { signal }) => {
+      controller.abort(reason)
+      signal.throwIfAborted()
+    })
+
+    await expect(extractEssayTextFromImage({
+      fileId: "file-cancelled",
+      imageBase64: "aGVsbG8=",
+      signal: controller.signal,
+    })).rejects.toBe(reason)
+    expect(internalDifyFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it("rejects gateway output when the model reports token truncation", async () => {

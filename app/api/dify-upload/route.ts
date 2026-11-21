@@ -242,7 +242,7 @@ function tryAcquireEssayOcrSlot(userId: string) {
   }
 }
 
-async function extractStandardEssayImageText(file: File, fileId: string, userId: string) {
+async function extractStandardEssayImageText(file: File, fileId: string, userId: string, signal: AbortSignal) {
   if (file.size > ESSAY_OCR_MAX_SOURCE_BYTES) return null
 
   const releaseSlot = tryAcquireEssayOcrSlot(userId)
@@ -260,6 +260,7 @@ async function extractStandardEssayImageText(file: File, fileId: string, userId:
       return null
     }
 
+    signal.throwIfAborted()
     const sourcePixels = (metadata.width || 0) * (metadata.height || 0)
     if (!sourcePixels || sourcePixels > ESSAY_OCR_MAX_SOURCE_PIXELS) return null
 
@@ -277,18 +278,20 @@ async function extractStandardEssayImageText(file: File, fileId: string, userId:
       .jpeg({ quality: ESSAY_OCR_JPEG_QUALITY, mozjpeg: true })
       .toBuffer()
 
+    signal.throwIfAborted()
     return await extractEssayTextFromImage({
       fileId,
       imageBase64: ocrBuffer.toString("base64"),
       fileName: file.name.replace(/\.[^.]+$/, ".jpg"),
       mimeType: "image/jpeg",
+      signal,
     })
   } finally {
     releaseSlot()
   }
 }
 
-async function uploadFileToDify(file: File, userId: string, apiKey: string) {
+async function uploadFileToDify(file: File, userId: string, apiKey: string, signal: AbortSignal) {
   const formData = new FormData()
   formData.append("file", file)
   formData.append("user", userId)
@@ -299,7 +302,7 @@ async function uploadFileToDify(file: File, userId: string, apiKey: string) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: formData,
-    signal: AbortSignal.timeout(DIFY_FILE_UPLOAD_TIMEOUT_MS),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(DIFY_FILE_UPLOAD_TIMEOUT_MS)]),
   })
 
   const bodyText = await response.text()
@@ -318,6 +321,11 @@ async function uploadFileToDify(file: File, userId: string, apiKey: string) {
   return typeof id === "string" ? id : ""
 }
 
+function cancelledUploadResponse(requestId: string) {
+  console.info("[Upload] Client disconnected", { requestId: sanitizeForTrace(requestId, 160) })
+  return new Response(null, { status: 499, headers: { "X-Request-Id": requestId } })
+}
+
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("X-Request-Id") || createRequestId("upload")
   // IP 限流：10次/分钟
@@ -328,6 +336,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    request.signal.throwIfAborted()
     // ============================================
     // 0. 大文件预检：Vercel/Node API 限制 4.5MB，超出引导使用直连
     // ============================================
@@ -349,10 +358,12 @@ export async function POST(request: NextRequest) {
 
     const auth = await requireUser(request)
     if (auth.response) return auth.response
+    request.signal.throwIfAborted()
     // 🔥 从 header 获取当前选择的模型
     const model = request.headers.get("X-Model") || null
 
     const formData = await request.formData()
+    request.signal.throwIfAborted()
     const file = formData.get("file") as File
     const userId = auth.user!.id
     // 也支持从 formData 获取模型（兼容旧版本）
@@ -477,31 +488,35 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    request.signal.throwIfAborted()
     const safeFile = new File([uploadFile], safeFileName, { type: uploadFile.type })
-    const shouldExtractEssayImageText = targetModel === "standard"
-      && getDifyFileTypeForMime(uploadFile.type) === "image"
-    const essayOcrPromise = shouldExtractEssayImageText
-      ? extractStandardEssayImageText(safeFile, `upload:${requestId}:${safeFileName}`, userId)
-          .catch((error) => {
-            console.warn("[Essay OCR] pre-extraction failed; continuing with Dify upload", {
-              requestId,
-              errorType: error instanceof Error ? error.name : "UnknownError",
-            })
-            return null
-          })
-      : Promise.resolve(null)
 
     // 非 GPT Image 工作台必须走 Dify 原生 upload_file_id。
     // OpenClaw、作文批改、教学模型等 Dify 应用不可靠支持 remote_url。
     if (!useImageGateway) {
+      const ocrController = new AbortController()
+      const ocrSignal = AbortSignal.any([request.signal, ocrController.signal])
+      const shouldExtractEssayImageText = targetModel === "standard"
+        && getDifyFileTypeForMime(uploadFile.type) === "image"
+      const essayOcrPromise = shouldExtractEssayImageText
+        ? extractStandardEssayImageText(safeFile, `upload:${requestId}:${safeFileName}`, userId, ocrSignal)
+          .catch((error) => {
+            if (!ocrSignal.aborted) {
+              console.warn("[Essay OCR] pre-extraction failed; continuing with Dify upload", {
+                requestId,
+                errorType: error instanceof Error ? error.name : "UnknownError",
+              })
+            }
+            return null
+          })
+        : Promise.resolve(null)
       try {
-        const [difyFileId, essayOcrResult] = await Promise.all([
-          uploadFileToDify(safeFile, userId, targetApiKey),
-          essayOcrPromise,
-        ])
+        const difyFileId = await uploadFileToDify(safeFile, userId, targetApiKey, request.signal)
         if (!difyFileId) {
           throw new Error("Dify upload succeeded but did not return an upload_file_id")
         }
+        const essayOcrResult = await essayOcrPromise
+        request.signal.throwIfAborted()
         if (essayOcrResult?.text) {
           extractedText = essayOcrResult.text
         }
@@ -543,6 +558,8 @@ export async function POST(request: NextRequest) {
           headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
         })
       } catch (error) {
+        ocrController.abort()
+        if (request.signal.aborted) return cancelledUploadResponse(requestId)
         console.error("[Backend] Dify upload failed:", {
           fileName: safeFileName,
           userId,
@@ -582,10 +599,13 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${gatewayToken}`,
       },
       body: gatewayFormData,
+      signal: request.signal,
     })
+    request.signal.throwIfAborted()
 
     if (!gatewayResponse.ok) {
       const errorText = await gatewayResponse.text()
+      request.signal.throwIfAborted()
       console.error("[Backend] Gateway upload failed:", {
         status: gatewayResponse.status,
         url: uploadUrl,
@@ -606,6 +626,7 @@ export async function POST(request: NextRequest) {
     }
 
     const gatewayData = await gatewayResponse.json()
+    request.signal.throwIfAborted()
     if (gatewayData?.success === false) {
       console.error("[Backend] Gateway upload returned failure:", {
         fileName: safeFileName,
@@ -681,6 +702,7 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
     })
   } catch (error) {
+    if (request.signal.aborted) return cancelledUploadResponse(requestId)
     console.error("[Backend] Upload error:", error)
     return new Response(
       JSON.stringify({

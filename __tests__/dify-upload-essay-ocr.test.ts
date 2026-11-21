@@ -35,7 +35,7 @@ jest.mock("@/lib/ai-task-trace", () => ({
   sanitizeForTrace: jest.fn((value: unknown) => String(value)),
 }))
 
-function createUploadRequest(file: File, model: string) {
+function createUploadRequest(file: File, model: string, signal?: AbortSignal) {
   const formData = new FormData()
   formData.set("file", file)
 
@@ -43,6 +43,7 @@ function createUploadRequest(file: File, model: string) {
     method: "POST",
     headers: { "X-Model": model },
     body: formData,
+    signal,
   })
 }
 
@@ -137,20 +138,17 @@ describe("POST /api/dify-upload essay OCR", () => {
     expect(signEssayOcrTextToken).not.toHaveBeenCalled()
   })
 
-  it("still fails the request when the required Dify upload fails", async () => {
-    let markOcrStarted!: () => void
-    const ocrStarted = new Promise<void>((resolve) => { markOcrStarted = resolve })
+  it("fails the request and cancels optional OCR when the required Dify upload fails", async () => {
+    let markOcrStarted!: (signal: AbortSignal) => void
+    const ocrStarted = new Promise<AbortSignal>((resolve) => { markOcrStarted = resolve })
     internalDifyFetch.mockImplementation(async () => {
       await ocrStarted
       return new Response("upstream unavailable", { status: 503 })
     })
-    extractEssayTextFromImage.mockImplementation(async () => {
-      markOcrStarted()
-      return {
-        text: "这是一篇待批改的作文。",
-        provider: "essay-ai-suite",
-      }
-    })
+    extractEssayTextFromImage.mockImplementation(({ signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true })
+      markOcrStarted(signal)
+    }))
     const source = await sharp({
       create: {
         width: 800,
@@ -166,6 +164,7 @@ describe("POST /api/dify-upload essay OCR", () => {
     ))
 
     expect(response.status).toBe(502)
+    expect((await ocrStarted).aborted).toBe(true)
     expect(extractEssayTextFromImage).toHaveBeenCalledTimes(1)
     expect(signEssayOcrTextToken).not.toHaveBeenCalled()
   })
@@ -210,6 +209,100 @@ describe("POST /api/dify-upload essay OCR", () => {
       expect(timeoutSpy).toHaveBeenCalledWith(40_000)
     } finally {
       timeoutSpy.mockRestore()
+    }
+  })
+
+  it("cancels an in-flight Dify upload and optional OCR when the requester disconnects", async () => {
+    const controller = new AbortController()
+    let markUploadStarted!: (signal: AbortSignal) => void
+    let markOcrStarted!: (signal: AbortSignal | undefined) => void
+    const uploadStarted = new Promise<AbortSignal>((resolve) => { markUploadStarted = resolve })
+    const ocrStarted = new Promise<AbortSignal | undefined>((resolve) => { markOcrStarted = resolve })
+    let finishUpload!: (response: Response) => void
+    let finishOcr!: (result: null) => void
+    internalDifyFetch.mockImplementation((_url, { signal }) => new Promise((resolve, reject) => {
+      finishUpload = resolve
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true })
+      markUploadStarted(signal)
+    }))
+    extractEssayTextFromImage.mockImplementation(({ signal }) => new Promise((resolve, reject) => {
+      finishOcr = resolve
+      signal?.addEventListener("abort", () => reject(signal.reason), { once: true })
+      markOcrStarted(signal)
+    }))
+    const source = await sharp({
+      create: { width: 32, height: 32, channels: 3, background: "white" },
+    }).png().toBuffer()
+    const { POST } = await import("@/app/api/dify-upload/route")
+    const response = POST(createUploadRequest(
+      new File([source], "essay.png", { type: "image/png" }),
+      "standard",
+      controller.signal,
+    ))
+    const [uploadSignal, ocrSignal] = await Promise.all([uploadStarted, ocrStarted])
+
+    try {
+      controller.abort()
+      expect(uploadSignal.aborted).toBe(true)
+      expect(ocrSignal?.aborted).toBe(true)
+      expect((await response).status).toBe(499)
+      expect(signEssayOcrTextToken).not.toHaveBeenCalled()
+    } finally {
+      finishUpload(successfulDifyUpload())
+      finishOcr(null)
+      await response
+    }
+
+    internalDifyFetch.mockImplementation(async () => successfulDifyUpload())
+    extractEssayTextFromImage.mockResolvedValue({
+      text: "这是一篇重新上传后顺利完成文字识别的作文。",
+      provider: "essay-ai-suite",
+    })
+    const retriedResponse = await POST(createUploadRequest(
+      new File([source], "essay.png", { type: "image/png" }),
+      "standard",
+    ))
+    expect(retriedResponse.status).toBe(200)
+    expect((await retriedResponse.json()).data.extracted_text_token).toBe("signed-ocr-proof")
+  })
+
+  it("cancels an in-flight image gateway upload when the requester disconnects", async () => {
+    const controller = new AbortController()
+    const originalToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN
+    process.env.DIFY_IMAGE_GATEWAY_TOKEN = "test-image-gateway-token"
+    let markUploadStarted!: (signal: AbortSignal) => void
+    const uploadStarted = new Promise<AbortSignal>((resolve) => { markUploadStarted = resolve })
+    let finishUpload!: (response: Response) => void
+    internalDifyFetch.mockImplementation((_url, { signal }) => new Promise((resolve, reject) => {
+      finishUpload = resolve
+      signal?.addEventListener("abort", () => reject(signal.reason), { once: true })
+      markUploadStarted(signal)
+    }))
+
+    try {
+      const source = await sharp({
+        create: { width: 32, height: 32, channels: 3, background: "white" },
+      }).png().toBuffer()
+      const { POST } = await import("@/app/api/dify-upload/route")
+      const response = POST(createUploadRequest(
+        new File([source], "reference.png", { type: "image/png" }),
+        "gpt-image-2",
+        controller.signal,
+      ))
+      const uploadSignal = await uploadStarted
+
+      try {
+        controller.abort()
+        expect(uploadSignal?.aborted).toBe(true)
+        expect((await response).status).toBe(499)
+        expect(extractEssayTextFromImage).not.toHaveBeenCalled()
+      } finally {
+        finishUpload(successfulDifyUpload())
+        await response
+      }
+    } finally {
+      if (originalToken === undefined) delete process.env.DIFY_IMAGE_GATEWAY_TOKEN
+      else process.env.DIFY_IMAGE_GATEWAY_TOKEN = originalToken
     }
   })
 

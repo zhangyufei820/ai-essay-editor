@@ -14,6 +14,7 @@ type EssayFallbackGrader = (
 
 type CreateEssayGradeFallbackRunnerParams = {
   verifiedOcr: VerifiedEssayOcrText | null
+  pastedEssay?: string
   requestId: string
   signal?: AbortSignal
   grade?: EssayFallbackGrader
@@ -37,7 +38,8 @@ export function createEssayGradeFallbackRunner(
   let attemptPromise: Promise<EssayFallbackGradeResult | null> | null = null
 
   const attempt = (reason: string) => {
-    if (!params.verifiedOcr || params.signal?.aborted) return Promise.resolve(null)
+    const text = params.verifiedOcr?.text || params.pastedEssay
+    if (!text || params.signal?.aborted) return Promise.resolve(null)
     if (attemptPromise) return attemptPromise
 
     state.attempted = true
@@ -45,18 +47,18 @@ export function createEssayGradeFallbackRunner(
     attemptPromise = (async () => {
       try {
         const result = await grade({
-          text: params.verifiedOcr!.text,
+          text,
           essayId: params.requestId,
           signal: params.signal,
           metadata: {
-            source: "dify-chat-image-fallback",
+            source: params.verifiedOcr ? "dify-chat-image-fallback" : "dify-chat-text-fallback",
             reason,
-            file_count: params.verifiedOcr!.fileIds.length,
+            file_count: params.verifiedOcr?.fileIds.length || 0,
           },
         })
         if (params.signal?.aborted) return null
         if (
-          (result.provider !== "llm" && result.provider !== "local")
+          (result.provider !== "llm" && !(params.verifiedOcr && result.provider === "local"))
           || !isValidEssayCorrectionResult(result.markdownReport)
         ) {
           state.errorCode = "ESSAY_FALLBACK_GRADE_INVALID"

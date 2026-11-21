@@ -57,6 +57,7 @@ import {
 } from "@/lib/essay-correction-result"
 import {
   getVerifiedEssayOcrTextFromAttachments,
+  MAX_ESSAY_OCR_TEXT_LENGTH,
 } from "@/lib/essay-image-fallback"
 import { createEssayGradeFallbackRunner } from "@/lib/essay-grade-fallback-runner"
 import { shouldAttemptEssayFallbackForHttpStatus } from "@/lib/essay-fallback-policy"
@@ -716,6 +717,8 @@ const DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS = 120_000
 const DEFAULT_DIFY_BLOCKING_RESPONSE_TIMEOUT_MS = readPositiveTimeoutMs(process.env.DIFY_BLOCKING_RESPONSE_TIMEOUT_MS, 600_000)
 const OPENCLAW_FIRST_BYTE_TIMEOUT_MS = 900_000
 const DEFAULT_DIFY_STREAM_IDLE_TIMEOUT_MS = readPositiveTimeoutMs(process.env.DIFY_STREAM_IDLE_TIMEOUT_MS, 180_000)
+const DEEP_CHAT_NO_PROGRESS_TIMEOUT_MS = 120_000
+const DEEP_CHAT_IDLE_RETRY_TIMEOUT_MS = 45_000
 const LONG_DIFY_STREAM_IDLE_TIMEOUT_MS = readPositiveTimeoutMs(process.env.DIFY_LONG_STREAM_IDLE_TIMEOUT_MS, 600_000)
 const DEFAULT_DIFY_STREAM_MAX_DURATION_MS = readPositiveTimeoutMs(process.env.DIFY_STREAM_MAX_DURATION_MS, 600_000)
 const LONG_DIFY_STREAM_MAX_DURATION_MS = readPositiveTimeoutMs(process.env.DIFY_LONG_STREAM_MAX_DURATION_MS, 840_000)
@@ -3378,10 +3381,14 @@ export async function POST(request: NextRequest) {
       : []
     const difyFiles = buildDifyLocalFileObjects(difyFileIds, fileAttachments)
     const fileUrls = pickUrlStrings(body.fileUrls)
-    // Image/file essay requests need an all-or-nothing result. Buffer their
-    // answer until the workflow finishes so a provider fallback placeholder
-    // cannot be shown or charged as a grading report.
-    const shouldBufferEssayCorrection = model === "standard" && (difyFileIds.length > 0 || fileUrls.length > 0)
+    const hasRequestAttachments = difyFileIds.length > 0 || fileUrls.length > 0
+      || (Array.isArray(fileAttachments) && fileAttachments.length > 0)
+    // This matches the Dify grading workflow's pasted-essay branch.
+    const pastedEssay = model === "standard" && !workflowSkillId && !hasRequestAttachments && typeof query === "string"
+      && query.trim().length > 150
+      ? query.trim()
+      : ""
+    const shouldBufferEssayCorrection = model === "standard" && (hasRequestAttachments || Boolean(pastedEssay))
     const difyFailurePublicMessage = model === "standard"
       ? "作文批改服务暂时不可用，请稍后重试。本次未扣费。"
       : "服务暂时不可用，请稍后重试。本次未扣费。"
@@ -3493,6 +3500,7 @@ export async function POST(request: NextRequest) {
     const essayFallbackAbortController = new AbortController()
     const essayFallbackRunner = createEssayGradeFallbackRunner({
       verifiedOcr: verifiedEssayOcr,
+      pastedEssay: pastedEssay.length < MAX_ESSAY_OCR_TEXT_LENGTH ? pastedEssay : undefined,
       requestId: taskRun.requestId,
       signal: essayFallbackAbortController.signal,
     })
@@ -3523,11 +3531,13 @@ export async function POST(request: NextRequest) {
     }
 
     const createEarlyEssayFallbackResponse = async (reason: string): Promise<Response | null> => {
-      if (!shouldBufferEssayCorrection || !verifiedEssayOcr || clientAborted) return null
+      if (!shouldBufferEssayCorrection || clientAborted) return null
 
-      essayFallbackAttempted = true
-      essayFallbackReason = reason
-      const result = await essayFallbackRunner.attempt(reason)
+      const attempt = essayFallbackRunner.attempt(reason)
+      const fallbackState = essayFallbackRunner.getState()
+      essayFallbackAttempted = fallbackState.attempted
+      essayFallbackReason = fallbackState.reason
+      const result = await attempt
       if (!result || clientAborted) return null
 
       essayFallbackUsed = true
@@ -4609,6 +4619,9 @@ export async function POST(request: NextRequest) {
     let hasReceivedContent = false  // 🔥 标记是否收到了实际内容（用于判断是否扣费）
     let latestParsedUsage: ParsedDifyUsage | null = null
     let taskCompleted = false
+    let completedDeepChatAnswer = ""
+    let deepChatIdleRetryAttempted = false
+    let difyStreamStartedWork = false
     let workflowNodeFailure: { message: string; code: string } | null = null
     let pendingEssayNodeFailure: { message: string; code: string } | null = null
     let essayDisplaySent = false
@@ -4704,7 +4717,7 @@ export async function POST(request: NextRequest) {
       reason: string,
       controller?: SseByteController,
     ): Promise<boolean> => {
-      if (!shouldBufferEssayCorrection || !verifiedEssayOcr || taskCompleted || clientAborted) {
+      if (!shouldBufferEssayCorrection || taskCompleted || clientAborted) {
         return Promise.resolve(false)
       }
       const fallbackResultPromise = essayFallbackRunner.attempt(reason)
@@ -4741,7 +4754,7 @@ export async function POST(request: NextRequest) {
                   metadata: {
                     essay_fallback_attempted: true,
                     essay_fallback_reason: fallbackState.reason,
-                    verified_ocr_file_count: verifiedEssayOcr.fileIds.length,
+                    verified_ocr_file_count: verifiedEssayOcr?.fileIds.length || 0,
                   },
                 }),
                 TASK_TRACE_FINALIZE_TIMEOUT_MS,
@@ -4772,7 +4785,7 @@ export async function POST(request: NextRequest) {
           console.warn("[Essay Fallback] validated report recovered the request", {
             requestId: taskRun.requestId,
             reason,
-            fileCount: verifiedEssayOcr.fileIds.length,
+            fileCount: verifiedEssayOcr?.fileIds.length || 0,
             model: result.model,
           })
           return true
@@ -4927,6 +4940,7 @@ export async function POST(request: NextRequest) {
         { event: "workflow_finished", data: record },
         {
           publicMessage: difyFailurePublicMessage,
+          requireSuccessfulWorkflow: shouldBufferEssayCorrection,
         },
       )
       const hasValidEssayFallback = shouldBufferEssayCorrection && canRecoverPartialEssayCorrection(
@@ -5138,6 +5152,7 @@ export async function POST(request: NextRequest) {
                 has_received_content: hasReceivedContent,
                 node_failure: workflowNodeFailure,
                 dify_response_mode: actualDifyResponseMode,
+                deep_chat_idle_retry: deepChatIdleRetryAttempted || undefined,
                 essay_fallback_attempted: essayFallbackAttempted,
                 essay_fallback_used: essayFallbackUsed,
                 essay_fallback_reason: essayFallbackReason,
@@ -5266,12 +5281,67 @@ export async function POST(request: NextRequest) {
       streamStatus.timeoutMessage = failure.message
     }
 
+    const canRetryIdleDeepChat = () => model === "gpt-5" && !workflowSkillId && !hasRequestAttachments
+      && (!inputs || Object.keys(inputs).length === 0) && !conversation_id && !conversationId
+      && !difyStreamStartedWork && !jsonBuffer.trim() && !hasReceivedContent && !workflowNodeFailure
+      && !clientAborted && !taskCompleted && !deepChatIdleRetryAttempted
+      && typeof query === "string" && Boolean(query.trim())
+
+    const retryIdleDeepChat = async (controller: SseByteController) => {
+      if (!canRetryIdleDeepChat()) return false
+      deepChatIdleRetryAttempted = true
+      const timeout = createTimeoutSignal(DEEP_CHAT_IDLE_RETRY_TIMEOUT_MS)
+      const signal = AbortSignal.any([request.signal, timeout.signal])
+      try {
+        enqueueSseStatus(controller, { stage: "正在重新连接服务", progress: 25 })
+        const retry = await internalDifyFetch(`${DIFY_BASE_URL}/chat-messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${selectedCredential}` },
+          body: JSON.stringify({
+            inputs: {}, query: effectiveQuery, response_mode: "blocking", user: difyServiceUser,
+            conversation_id: null, auto_generate_name: false,
+          } satisfies DifyChatRequest),
+          signal,
+        })
+        if (!retry.ok) {
+          void retry.body?.cancel().catch(() => undefined)
+          return false
+        }
+
+        const payload = await retry.json()
+        if (signal.aborted || clientAborted || typeof payload?.answer !== "string" || !payload.answer.trim()
+          || !normalizeDifyConversationId(payload.conversation_id, modelPrefix)
+          || getDifyTerminalFailure({ event: payload.event === "error" ? "error" : "message_end", data: payload })) return false
+
+        actualDifyResponseMode = "blocking"
+        await applyBlockingDifyPayload(payload, controller)
+        await finalizeDifyChatResponse(controller, "连接超时后重试成功")
+        return true
+      } catch (error) {
+        console.warn("[Dify Chat] idle retry did not complete", {
+          requestId: taskRun.requestId,
+          kind: error instanceof Error ? error.name : "unknown",
+        })
+        return false
+      } finally {
+        timeout.clear()
+      }
+    }
+
     const handleDifyStreamTimeout = async (
       reason: "first_byte" | DifyStreamTimeoutReason,
       controller: SseByteController,
     ) => {
       if (taskCompleted) return essayFallbackUsed
       clearFirstByteTimeout()
+      // Chatflows send usage in message_end. Let that event settle the normal
+      // stream, and recover only if the final workflow answer is still intact.
+      if (reason === "idle" && completedDeepChatAnswer && completedDeepChatAnswer === fullResponseText.trim()
+        && !workflowNodeFailure && !clientAborted) {
+        streamStatus.controller?.abort()
+        await finalizeDifyChatResponse(controller, "工作流完成后连接未关闭")
+        return true
+      }
       noteDifyStreamTimeout(reason)
       const failure = getDifyStreamTimeoutFailure(reason)
       streamStatus.controller?.abort()
@@ -5281,10 +5351,14 @@ export async function POST(request: NextRequest) {
         responseLength: fullResponseText.length,
       })
 
+      if (reason === "idle" && await retryIdleDeepChat(controller)) return true
+
       if (await tryEssayGradeFallback(`dify_stream_${reason}_timeout`, controller)) {
         await finalizeDifyChatResponse(controller, "上游超时后备用作文批改完成")
         return true
       }
+
+      if (clientAborted) return true
 
       taskCompleted = true
       workflowNodeFailure = { message: failure.message, code: failure.code }
@@ -5311,6 +5385,7 @@ export async function POST(request: NextRequest) {
                 prompt_tokens: promptTokens,
                 completion_tokens: completionTokens,
                 dify_response_mode: actualDifyResponseMode,
+                deep_chat_idle_retry: deepChatIdleRetryAttempted || undefined,
               },
             }),
             TASK_TRACE_FINALIZE_TIMEOUT_MS,
@@ -5338,11 +5413,13 @@ export async function POST(request: NextRequest) {
     ) => {
       if (!["workflow_finished", "message_end", "error"].includes(json.event || "")) return false
 
+      const outputs = json.data?.outputs ?? json.outputs
       const terminalFailure = getDifyTerminalFailure(json, {
         publicMessage: difyFailurePublicMessage,
+        requireSuccessfulWorkflow: shouldBufferEssayCorrection,
       })
       const terminalEssayText = shouldBufferEssayCorrection
-        ? sanitizeDifyAnswerForModel(extractDifyTextOutput(json.data?.outputs || json.outputs || json), model)
+        ? sanitizeDifyAnswerForModel(extractDifyTextOutput(outputs ?? json), model)
         : ""
       const hasValidEssayFallback = shouldBufferEssayCorrection && canRecoverPartialEssayCorrection(
         json,
@@ -5393,8 +5470,7 @@ export async function POST(request: NextRequest) {
       if (json.event !== "workflow_finished") return false
 
       const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
-      if (json.data?.outputs) {
-        const outputs = json.data.outputs
+      if (outputs) {
         if (model === "vocab-card") {
           const safeOutputs = sanitizeVocabCardOutputs(outputs)
           fullResponseText += JSON.stringify({ outputs: safeOutputs })
@@ -5407,12 +5483,18 @@ export async function POST(request: NextRequest) {
             ? rewriteOpenClawMediaReferencesWithSignedUrls(rawOutputText, undefined, userId)
             : rawOutputText
           if (outputText) {
+            const isCompleteDeepChatAnswer = model === "gpt-5" && !workflowSkillId
+              && (json.data?.status || json.status) === "succeeded"
+              && (!fullResponseText.trim() || fullResponseText.trim() === outputText.trim())
             if (shouldBufferEssayCorrection) {
               if (!isValidEssayCorrectionResult(fullResponseText) && isValidEssayCorrectionResult(outputText)) {
                 fullResponseText = outputText
               } else if (!fullResponseText.includes(outputText) && !outputText.includes(fullResponseText)) {
                 fullResponseText += outputText
               }
+            } else if (isCompleteDeepChatAnswer) {
+              completedDeepChatAnswer = outputText.trim()
+              fullResponseText = outputText
             } else {
               fullResponseText += outputText
             }
@@ -5440,7 +5522,7 @@ export async function POST(request: NextRequest) {
         stage: "任务已完成，正在结算",
         progress: 95,
         workflowRunId,
-        artifacts: extractArtifactsFromUnknown(json.data?.outputs || json.outputs || fullResponseText),
+        artifacts: extractArtifactsFromUnknown(outputs ?? fullResponseText),
       }).catch((error) => console.warn("[AI Task Trace] workflow finish update failed:", error))
 
       return false
@@ -5490,6 +5572,7 @@ export async function POST(request: NextRequest) {
 
             try {
               const json = JSON.parse(data)
+              if (json.event !== "ping") difyStreamStartedWork = true
 
 	              // 🧠 记录工作流节点事件（用于前端思考过程显示）
 	              if (json.event === 'node_started' || json.event === 'node_finished') {
@@ -5830,6 +5913,7 @@ export async function POST(request: NextRequest) {
       const encoder = new TextEncoder()
       let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
       let heartbeatId: ReturnType<typeof setInterval> | null = null
+      let noProgressTimeoutId: ReturnType<typeof setTimeout> | null = null
       let closed = false
       const heartbeatLabel = isAllInOneAgent
         ? "all-in-one-keepalive"
@@ -5843,11 +5927,20 @@ export async function POST(request: NextRequest) {
           clearInterval(heartbeatId)
           heartbeatId = null
         }
+        if (noProgressTimeoutId) clearTimeout(noProgressTimeoutId)
       }
 
       return new ReadableStream<Uint8Array>({
         start(controller) {
           reader = body.getReader()
+          if (canRetryIdleDeepChat()) {
+            noProgressTimeoutId = setTimeout(() => {
+              if (closed || !canRetryIdleDeepChat()) return
+              noteDifyStreamTimeout("idle")
+              streamStatus.controller?.abort()
+            }, Math.max(1, DEEP_CHAT_NO_PROGRESS_TIMEOUT_MS - (nowMs() - apiStartedAt)))
+            noProgressTimeoutId.unref?.()
+          }
           heartbeatId = setInterval(() => {
             if (closed) return
             try {

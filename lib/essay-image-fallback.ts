@@ -52,6 +52,7 @@ export type ExtractEssayTextFromImageParams = {
   imageBase64: string
   fileName?: string
   mimeType?: string
+  signal?: AbortSignal
 }
 
 export type EssayImageOcrResult = {
@@ -200,6 +201,7 @@ function readOpenAiText(content: unknown) {
 
 async function callSuiteOcr(
   params: ReturnType<typeof parseImageInput> & Pick<ExtractEssayTextFromImageParams, "fileName">,
+  signal?: AbortSignal,
 ): Promise<string> {
   const response = await callEssayAiSuite<OcrResult>(
     "/api/ocr/image",
@@ -209,6 +211,7 @@ async function callSuiteOcr(
       image_base64: params.imageBase64,
     },
     ESSAY_AI_SUITE_OCR_TIMEOUT_MS,
+    signal,
   )
   if (
     !response.ok
@@ -226,7 +229,7 @@ function getLlmGatewayConfig() {
   return { baseUrl, apiKey }
 }
 
-async function callGatewayOcr(params: ReturnType<typeof parseImageInput>) {
+async function callGatewayOcr(params: ReturnType<typeof parseImageInput>, signal?: AbortSignal) {
   const { baseUrl, apiKey } = getLlmGatewayConfig()
   if (!baseUrl || !apiKey) {
     throw new EssayImageFallbackError("ESSAY_OCR_GATEWAY_NOT_CONFIGURED")
@@ -234,6 +237,7 @@ async function callGatewayOcr(params: ReturnType<typeof parseImageInput>) {
 
   let response: Response
   try {
+    const timeout = AbortSignal.timeout(LLM_GATEWAY_OCR_TIMEOUT_MS)
     response = await internalDifyFetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -264,9 +268,10 @@ async function callGatewayOcr(params: ReturnType<typeof parseImageInput>) {
           },
         ],
       }),
-      signal: AbortSignal.timeout(LLM_GATEWAY_OCR_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     })
   } catch {
+    signal?.throwIfAborted()
     throw new EssayImageFallbackError("ESSAY_OCR_GATEWAY_FAILED")
   }
 
@@ -275,6 +280,7 @@ async function callGatewayOcr(params: ReturnType<typeof parseImageInput>) {
   }
 
   const payload = await response.json().catch(() => null) as OpenAiChatResponse | null
+  signal?.throwIfAborted()
   const choice = payload?.choices?.[0]
   const text = readUsableEssayOcrText(
     readOpenAiText(choice?.message?.content),
@@ -292,19 +298,23 @@ async function callGatewayOcr(params: ReturnType<typeof parseImageInput>) {
 export async function extractEssayTextFromImage(
   params: ExtractEssayTextFromImageParams,
 ): Promise<EssayImageOcrResult> {
+  const { signal } = params
+  signal?.throwIfAborted()
   const image = parseImageInput(params)
 
+  let suiteText: string
   try {
-    const suiteText = await callSuiteOcr({ ...image, fileName: params.fileName })
-    if (suiteText) {
-      return { text: suiteText, provider: "essay-ai-suite" }
-    }
+    suiteText = await callSuiteOcr({ ...image, fileName: params.fileName }, signal)
   } catch {
-    // The gateway below is the independent OCR fallback.
+    suiteText = ""
+  }
+  signal?.throwIfAborted()
+  if (suiteText) {
+    return { text: suiteText, provider: "essay-ai-suite" }
   }
 
   return {
-    text: await callGatewayOcr(image),
+    text: await callGatewayOcr(image, signal),
     provider: "llm-gateway",
   }
 }

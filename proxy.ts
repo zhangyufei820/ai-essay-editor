@@ -2,6 +2,8 @@ import { updateSession } from "@/lib/supabase/middleware"
 import { applyCorsHeaders } from "@/lib/cors"
 import type { NextRequest } from "next/server"
 
+const unusedProbePath = /\/(?:\.env(?:\.[^/]+)?|\.git|wp-admin|wp-login\.php|xmlrpc\.php|phpmyadmin)(?:\/|$)/i
+
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isApiRoute = pathname.startsWith("/api/")
@@ -18,6 +20,10 @@ export async function proxy(request: NextRequest) {
 
   if (request.headers.has("next-action") || isServerActionProbe) {
     return new Response("Server Actions are not enabled for this app.", { status: 410 })
+  }
+
+  if (!isApiRoute && unusedProbePath.test(pathname)) {
+    return new Response(null, { status: 404 })
   }
 
   const response = await updateSession(request)
