@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { randomUUID } from "crypto"
 import { requireUser } from "@/lib/auth/verified-user"
 import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
+import { redactAssistantRoutingPayload } from "@/lib/chat-message-guards"
 import { isOperationTimeoutError, withTimeout } from "@/lib/server-timeout"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -28,9 +29,10 @@ function isMissingDifyConversationColumn(error: unknown) {
 
 function toPublicChatMessage(message: Record<string, unknown>) {
   if (message.role !== "assistant") return message
+  const content = typeof message.content === "string" ? redactAssistantRoutingPayload(message.content) : message.content
   return {
     ...message,
-    content: sanitizeAssistantMessageForPublicDisplay(message.content),
+    content: sanitizeAssistantMessageForPublicDisplay(content),
   }
 }
 

@@ -223,6 +223,6 @@ describe("Dify file routing integration", () => {
     expect(route.match(/await processDifyTerminalEvent\(json, controller\)/g)).toHaveLength(2)
     expect(route).toContain("[terminalEssayText]")
     expect(route).toContain('const nodeFailed = ["failed", "error"].includes(nodeStatus)')
-    expect(route).toContain('(shouldBufferEssayCorrection && ["exception", "cancelled", "canceled", "stopped"].includes(nodeStatus))')
+    expect(route).toContain('((shouldBufferEssayCorrection || shouldBufferWorkflowSkill) && ["exception", "cancelled", "canceled", "stopped"].includes(nodeStatus))')
   })
 })

@@ -42,7 +42,7 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import { MarkdownCodeBlock, extractLanguageFromClassName } from "@/components/chat/MarkdownCodeBlock"
 import { cleanLLMText } from "@/lib/text-sanitizer"
-import { isAssistantFailureContent } from "@/lib/chat-message-guards"
+import { isAssistantFailureContent, redactAssistantRoutingPayload } from "@/lib/chat-message-guards"
 import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
 import { GeneratedFilePreview } from "@/components/chat/GeneratedFilePreview"
 import { rewriteGeneratedFileReferences, shouldPreviewGeneratedFileLink } from "@/lib/generated-file-preview"
@@ -588,6 +588,7 @@ function AssistantMarkdownCard({
   actions,
   templateType,
   isStreaming,
+  isFailureContent,
   showMistakeActions,
   isSavingMistake,
 }: {
@@ -595,6 +596,7 @@ function AssistantMarkdownCard({
   actions: MessageActions
   templateType: string
   isStreaming?: boolean
+  isFailureContent: boolean
   showMistakeActions?: boolean
   isSavingMistake?: boolean
 }) {
@@ -603,7 +605,6 @@ function AssistantMarkdownCard({
   const [isLong, setIsLong] = useState(false)
   const parsedContent = useMemo(() => splitThinkingContent(content), [content])
   const answerContent = parsedContent.answer || (parsedContent.hasOpenThinking ? "" : content)
-  const isFailureContent = isAssistantFailureContent(answerContent || content)
 
   useEffect(() => {
     setCollapsed(true)
@@ -699,15 +700,15 @@ const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = role === "user"
   const publicContent = useMemo(
-    () => isUser ? content : sanitizeAssistantMessageForPublicDisplay(content),
+    () => isUser ? content : sanitizeAssistantMessageForPublicDisplay(redactAssistantRoutingPayload(content)),
     [content, isUser],
   )
+  const isFailureContent = !isUser && (isAssistantFailureContent(content) || isAssistantFailureContent(publicContent))
   const essayReviewArtifact = useMemo(() => {
     const isEssayModel = model === "standard" || model === "essay-correction"
     if (isUser || !isEssayModel) return null
     return parseEssayReview(publicContent)
   }, [isUser, model, publicContent])
-  const isFailureContent = !isUser && isAssistantFailureContent(publicContent)
   const templateType = useMemo(() => {
     if (isUser) return "user"
     if (isFailureContent) return "markdown"
@@ -877,6 +878,7 @@ const MessageBubble = memo(function MessageBubble({
                         actions={actions}
                         templateType={templateType}
                         isStreaming={isStreaming}
+                        isFailureContent={isFailureContent}
                         showMistakeActions={showMistakeActions}
                         isSavingMistake={isSavingMistake}
                       />
@@ -898,6 +900,7 @@ const MessageBubble = memo(function MessageBubble({
                         actions={actions}
                         templateType={templateType}
                         isStreaming={isStreaming}
+                        isFailureContent={isFailureContent}
                         showMistakeActions={showMistakeActions}
                         isSavingMistake={isSavingMistake}
                       />
@@ -910,6 +913,7 @@ const MessageBubble = memo(function MessageBubble({
                         actions={actions}
                         templateType={templateType}
                         isStreaming={isStreaming}
+                        isFailureContent={isFailureContent}
                         showMistakeActions={showMistakeActions}
                         isSavingMistake={isSavingMistake}
                       />

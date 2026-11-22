@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
 import { requireLearningUserId } from "@/lib/learning-user"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
+import { isAssistantFailureContent } from "@/lib/chat-message-guards"
 import {
   awardShareCredits,
   generateUniqueShareCode,
@@ -34,6 +35,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "分享标题不能为空" }, { status: 400 })
     }
     const aiResult = typeof payload.contentData.ai_result === "string" ? payload.contentData.ai_result : ""
+    if (isAssistantFailureContent(aiResult)) {
+      return NextResponse.json({ error: "回复未完成，暂时无法分享" }, { status: 400 })
+    }
     const rewardAmount = aiResult.trim().length >= 800 ? 10 : 5
 
     const supabase = getSupabaseAdmin()

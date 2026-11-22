@@ -1,4 +1,4 @@
-import { isAssistantFailureContent } from "@/lib/chat-message-guards"
+import { isAssistantFailureContent, redactAssistantRoutingPayload } from "@/lib/chat-message-guards"
 import {
   getSafeUpstreamErrorMessage,
   hasInternalAiDetailText,
@@ -22,6 +22,29 @@ describe("chat message guards", () => {
     expect(isAssistantFailureContent("OpenClaw 任务已结束，但没有返回可展示内容。")).toBe(true)
     expect(isAssistantFailureContent("PluginInvokeError: contents is required")).toBe(true)
     expect(isAssistantFailureContent("这是一份正常的教学评价报告。")).toBe(false)
+  })
+
+  it("blocks legacy routing output and its sanitized service error from sharing", () => {
+    const legacyRoutingFailure = [
+      "```json",
+      "{",
+      '  "skill": "thesis-helper",',
+      "  服务暂时不可用，请稍后重试。",
+      "}",
+      "```",
+    ].join("\n")
+    const thoughtThenFailure = `<think>内部处理信息</think>\n${legacyRoutingFailure}`
+    const safeFailure = redactAssistantRoutingPayload(thoughtThenFailure)
+    const example = "以下是示例 JSON：\n```json\n{\"skill\":\"thesis-helper\",\"topic\":\"学习设计\"}\n```\n请按自己的主题填写。"
+    expect(isAssistantFailureContent(legacyRoutingFailure)).toBe(true)
+    expect(isAssistantFailureContent(thoughtThenFailure)).toBe(true)
+    expect(safeFailure).toContain("本次没有生成可展示的回复，请稍后重试。")
+    expect(safeFailure).not.toMatch(/thesis-helper|内部处理信息|```/)
+    expect(isAssistantFailureContent(safeFailure)).toBe(true)
+    expect(isAssistantFailureContent("服务暂时不可用，请稍后重试。")).toBe(true)
+    expect(isAssistantFailureContent("草稿正文\n\n---\n*内容生成已中断：服务暂时不可用。*")).toBe(true)
+    expect(isAssistantFailureContent(example)).toBe(false)
+    expect(redactAssistantRoutingPayload(example)).toBe(example)
   })
 
   it("hides technical upstream error details from the user-facing copy", () => {
@@ -143,7 +166,8 @@ describe("chat message guards", () => {
     expect(messageBubble).toContain("text: publicContent")
     expect(enhancedChat).toContain("sanitizeAssistantMessageForPublicDisplay(sanitizeDifyAnswerForModel")
     expect(chatSession).toContain("toPublicChatMessage")
-    expect(chatSession).toContain("sanitizeAssistantMessageForPublicDisplay(message.content)")
+    expect(chatSession).toContain("redactAssistantRoutingPayload(message.content)")
+    expect(chatSession).toContain("sanitizeAssistantMessageForPublicDisplay(content)")
     expect(saveMessage).toContain("sanitizeAssistantMessageForPublicDisplay(content)")
     expect(saveMessage).toContain("content: safeContent")
   })

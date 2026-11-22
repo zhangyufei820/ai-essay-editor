@@ -101,11 +101,133 @@ function getEvents(response: string) {
     .map((line) => JSON.parse(line.slice("data: ".length)))
 }
 
+function requestWriting(overrides: Record<string, unknown> = {}) {
+  return requestDeepChat({ model: "ai-writing-paper", query: "请给出论文写作建议", ...overrides })
+}
+
 describe("Dify chat recovery", () => {
   beforeEach(() => {
     jest.resetAllMocks()
     jest.mocked(updateTaskRun).mockResolvedValue(undefined)
     jest.mocked(chargeCreditsSafely).mockResolvedValue(true)
+  })
+
+  it.each([
+    {}, { model: "gpt-5", workflowSkillId: "thesis-helper" },
+  ])("keeps routing fragments out of the answer and records a failed writing run (%j)", async (overrides) => {
+    jest.mocked(internalDifyFetch).mockResolvedValueOnce(difyStream(
+      { event: "message", answer: "```json\n{\n  \"skill\": \"thesis-helper\",\n" },
+      { event: "text_chunk", data: { text: "  服务暂时不可用，请稍后重试。\n}\n```" } },
+      { event: "workflow_finished", data: { status: "partial-succeeded" } },
+      { event: "message_end", metadata: { usage: { prompt_tokens: 45, completion_tokens: 16 } } },
+    ))
+
+    const response = await POST(requestWriting(overrides))
+    const events = getEvents(await response.text())
+
+    expect(events.filter(({ event }) => ["message", "text_chunk", "workflow_finished", "message_end"].includes(event))).toEqual([])
+    expect(events.filter(({ event }) => event === "error")).toHaveLength(1)
+    expect(chargeCreditsSafely).not.toHaveBeenCalled()
+    expect(updateTaskRun).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ status: "failed" }))
+  })
+
+  it("keeps a short legitimate writing answer and bills it only once", async () => {
+    const answer = "先明确论文研究问题，再按现状、方法与讨论三节安排提纲。"
+    jest.mocked(internalDifyFetch).mockResolvedValueOnce(difyStream(
+      { event: "message", answer },
+      { event: "workflow_finished", data: { status: "succeeded", outputs: { answer } } },
+      { event: "message_end", metadata: { usage: { prompt_tokens: 45, completion_tokens: 16 } } },
+    ))
+
+    const response = await POST(requestWriting())
+    const events = getEvents(await response.text())
+
+    expect(events.filter(({ event }) => event === "message").map(({ answer }) => answer)).toEqual([answer])
+    expect(events.filter(({ event }) => event === "error")).toEqual([])
+    expect(chargeCreditsSafely).toHaveBeenCalledTimes(1)
+  })
+
+  it("prefers the finished writing answer over intermediate routing chunks", async () => {
+    const answer = "先用两句话界定关键概念，再补充一段解释研究所用的材料。"
+    jest.mocked(internalDifyFetch).mockResolvedValueOnce(difyStream(
+      { event: "message", answer: '```json\n{"skill":"thesis-helper","query":"请评估论文"}\n```' },
+      { event: "text_chunk", data: { text: answer.slice(0, 18) } },
+      { event: "workflow_finished", data: { status: "succeeded", outputs: { answer } } },
+      { event: "message_end", metadata: { usage: { prompt_tokens: 45, completion_tokens: 16 } } },
+    ))
+
+    const response = await POST(requestWriting())
+    const events = getEvents(await response.text())
+
+    expect(events.filter(({ event }) => event === "message").map(({ answer }) => answer)).toEqual([answer])
+    expect(events.filter(({ event }) => event === "error")).toEqual([])
+  })
+
+  it("does not bill earlier writing fragments when the terminal answer is a service fallback", async () => {
+    jest.mocked(internalDifyFetch).mockResolvedValueOnce(difyStream(
+      { event: "message", answer: "先从这一段的基本概念开始讨论。" },
+      { event: "workflow_finished", data: { status: "succeeded", outputs: { answer: "论文写作暂时无法处理这次请求，请重试。" } } },
+      { event: "message_end", metadata: { usage: { prompt_tokens: 45, completion_tokens: 16 } } },
+    ))
+
+    const response = await POST(requestWriting())
+    expect(getEvents(await response.text()).map(({ event }) => event)).toEqual(["error"])
+    expect(chargeCreditsSafely).not.toHaveBeenCalled()
+    expect(updateTaskRun).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: "failed", errorCode: "DIFY_UPSTREAM_UNAVAILABLE",
+    }))
+  })
+
+  it.each([
+    { answer: '```json\n{"skill":"thesis-helper","query":"请评估我的论文"}\n```', expectedCode: "DIFY_INVALID_WORKFLOW_SKILL_RESULT" },
+    { answer: "论文写作暂时无法处理这次请求，请重试。", expectedCode: "DIFY_UPSTREAM_UNAVAILABLE" },
+  ])("rejects in-band router/failure result in blocking mode: $expectedCode", async ({ answer, expectedCode }) => {
+    jest.mocked(internalDifyFetch).mockResolvedValueOnce(Response.json({
+      answer,
+      metadata: { usage: { prompt_tokens: 45, completion_tokens: 16 } },
+    }))
+
+    const response = await POST(requestWriting())
+    const events = getEvents(await response.text())
+
+    expect(events.filter(({ event }) => event !== "status").map(({ event }) => event)).toEqual(["error"])
+    expect(chargeCreditsSafely).not.toHaveBeenCalled()
+    expect(updateTaskRun).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: "failed", errorCode: expectedCode,
+      metadata: expect.objectContaining({ has_received_content: false, response_length: 0 }),
+    }))
+  })
+
+  it("does not treat an abruptly closed writing stream as successful", async () => {
+    jest.mocked(internalDifyFetch).mockResolvedValueOnce(difyStream(
+      { event: "message", answer: "先清晰界定论文研究问题，再归纳" },
+    ))
+
+    const response = await POST(requestWriting())
+    expect(getEvents(await response.text()).map(({ event }) => event)).toEqual(["error"])
+    expect(chargeCreditsSafely).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { events: [{ event: "node_finished", data: { status: "exception", title: "写作 Agent", error: "PluginInvokeError: Request timed out" } },
+      { event: "workflow_finished", data: { status: "failed", error: "PluginInvokeError: Request timed out" } }] },
+    { events: [{ event: "node_finished", data: { status: "exception", title: "写作 Agent", error: "PluginInvokeError: Request timed out" } },
+      { event: "message_end", metadata: { usage: { prompt_tokens: 45, completion_tokens: 16 } } }] },
+    { events: [{ event: "message_end", metadata: { usage: { prompt_tokens: 45, completion_tokens: 16 } } }] },
+    { events: [] },
+  ])("withholds a failed writing answer with terminal sequence %j", async ({ events: terminal }) => {
+    jest.mocked(internalDifyFetch).mockResolvedValueOnce(difyStream(
+      { event: "message", answer: "论文写作暂时无法处理这次请求，请重试。" },
+      ...terminal,
+    ))
+
+    const response = await POST(requestWriting())
+    const events = getEvents(await response.text())
+
+    expect(events.filter(({ event }) => ["message", "workflow_finished", "message_end"].includes(event))).toEqual([])
+    expect(events.filter(({ event }) => event === "error")).toHaveLength(1)
+    expect(chargeCreditsSafely).not.toHaveBeenCalled()
+    expect(updateTaskRun).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ status: "failed" }))
   })
 
   it("replaces a failed pasted-essay grading stream with one validated no-charge report", async () => {

@@ -4,6 +4,7 @@ import { createHash } from "crypto"
 import { requireUser } from "@/lib/auth/verified-user"
 import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
 import { isOperationTimeoutError, withTimeout } from "@/lib/server-timeout"
+import { getWritingAnswerFailure } from "@/lib/workflow-skill-result"
 
 const AUTH_TIMEOUT_MS = 5_000
 const SESSION_LOOKUP_TIMEOUT_MS = 4_000
@@ -96,6 +97,9 @@ export async function POST(request: NextRequest) {
     const safeContent = role === "assistant"
       ? sanitizeAssistantMessageForPublicDisplay(content)
       : content
+    if (role === "assistant" && (getWritingAnswerFailure(content) || getWritingAnswerFailure(safeContent))) {
+      return NextResponse.json({ error: "回复未完成，暂时无法保存" }, { status: 400 })
+    }
 
     const { data: message, error: messageError } = await withTimeout(
       Promise.resolve(

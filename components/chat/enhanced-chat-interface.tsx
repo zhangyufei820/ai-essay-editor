@@ -52,7 +52,7 @@ import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
 import { getSafeUpstreamErrorMessage, hasInternalAiDetailText, hasTechnicalUpstreamErrorText, sanitizeAssistantMessageForPublicDisplay, sanitizePublicAiError, sanitizePublicAiStatus } from "@/lib/chat-error-sanitizer"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
-import { isAssistantFailureContent } from "@/lib/chat-message-guards"
+import { isAssistantFailureContent, redactAssistantRoutingPayload } from "@/lib/chat-message-guards"
 import { containsRawDifyWordCardPayload, normalizeDifyWordCardResponse, type FrontendWordCard } from "@/lib/word-card-normalizer"
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, resolveVocabCardResult } from "@/lib/vocab-card-workflow"
 import { resolveChatAgentParam } from "@/lib/teacher-agent-route"
@@ -1846,7 +1846,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const historyMessages = data.map((m: any) => ({
            id: m.id,
            role: m.role,
-           content: m.role === "assistant" ? sanitizeAssistantMessageForPublicDisplay(m.content) : m.content,
+           content: m.role === "assistant" ? sanitizeAssistantMessageForPublicDisplay(redactAssistantRoutingPayload(m.content)) : m.content,
            metadata: m.metadata || null,  // 🔥 包含音乐等附加数据
            wordCard: m.metadata?.wordCard || normalizeDifyWordCardResponse(m.content)
         }))
@@ -3118,7 +3118,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         })
 
         // 🔥 保留已生成的内容（如果 fullText 有内容，说明 AI 已经输出了部分内容）
-        if (fullText.trim()) {
+        if (fullText.trim() && !isAssistantFailureContent(fullText)) {
           // 保留消息并在末尾添加中断提示
           setMessages(p => p.map(m => m.id === botId ? { ...m, content: `${fullText}\n\n---\n*内容生成已中断：${getSafeAssistantErrorContent(errorMsg)}*` } : m))
           toast.error("内容生成中断，已保留已生成的部分", { duration: 4000 })
@@ -3563,7 +3563,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       ? getPreviousUserMessage(messages, index)
                       : null
                     const cleanAssistantContent = message.role === "assistant"
-                      ? sanitizeAssistantMessageForPublicDisplay(sanitizeDifyAnswerForModel(message.content, selectedModel))
+                      ? sanitizeAssistantMessageForPublicDisplay(sanitizeDifyAnswerForModel(redactAssistantRoutingPayload(message.content), selectedModel))
                       : message.content
                     const showProblemActions = message.role === "assistant" &&
                       selectedModel === "problem" &&

@@ -37,7 +37,7 @@ import { hasUsefulOpenClawResult, sanitizeDifyAnswerForModel } from "@/lib/dify-
 import { getSafeUpstreamErrorMessage, sanitizePublicAiError, sanitizePublicAiErrorCode, sanitizePublicAiStatus, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
 import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
-import { isInvalidWorkflowSkillResult } from "@/lib/workflow-skill-result"
+import { getWritingAnswerFailure, isInvalidWorkflowSkillResult } from "@/lib/workflow-skill-result"
 import {
   buildDifyLocalFileObjects,
   buildWorkflowSkillQuery,
@@ -3398,7 +3398,7 @@ export async function POST(request: NextRequest) {
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
     const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL || model === SUPER_ALL_IN_ONE_AGENT_MODEL
     const effectiveQuery = query || "你好"
-    const shouldBufferWorkflowSkill = Boolean(workflowSkillId && effectiveQuery.trim().length >= 80)
+    const shouldBufferWorkflowSkill = model === "ai-writing-paper" || Boolean(workflowSkillId)
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} workflowSkill=${workflowSkillId || "none"} files=${difyFileIds.length} urls=${fileUrls.length}`)
@@ -4624,6 +4624,7 @@ export async function POST(request: NextRequest) {
     let difyStreamStartedWork = false
     let workflowNodeFailure: { message: string; code: string } | null = null
     let pendingEssayNodeFailure: { message: string; code: string } | null = null
+    let writingTerminalSucceeded = false
     let essayDisplaySent = false
     let essayFallbackTerminalSent = false
     let allInOneDisplaySent = false
@@ -4940,7 +4941,7 @@ export async function POST(request: NextRequest) {
         { event: "workflow_finished", data: record },
         {
           publicMessage: difyFailurePublicMessage,
-          requireSuccessfulWorkflow: shouldBufferEssayCorrection,
+          requireSuccessfulWorkflow: shouldBufferEssayCorrection || shouldBufferWorkflowSkill,
         },
       )
       const hasValidEssayFallback = shouldBufferEssayCorrection && canRecoverPartialEssayCorrection(
@@ -4955,7 +4956,7 @@ export async function POST(request: NextRequest) {
           message: terminalFailure.publicMessage,
           code: terminalFailure.code,
         }
-        enqueueSseError(controller, terminalFailure.publicMessage, terminalFailure.code)
+        if (!shouldBufferWorkflowSkill) enqueueSseError(controller, terminalFailure.publicMessage, terminalFailure.code)
         return
       }
 
@@ -4987,18 +4988,22 @@ export async function POST(request: NextRequest) {
         hasReceivedContent = true
       }
 
-      enqueueSseEvent(controller, {
-        event: "message_end",
-        conversation_id: conversationId || undefined,
-        metadata: {
-          usage: parsedUsage.rawUsage || null,
-          usage_source: parsedUsage.usageSource,
-          estimated: parsedUsage.estimated,
-          prompt_tokens: promptTokens,
-          completion_tokens: completionTokens,
-          total_tokens: totalTokens,
-        },
-      })
+      if (shouldBufferWorkflowSkill) {
+        writingTerminalSucceeded = true
+      } else {
+        enqueueSseEvent(controller, {
+          event: "message_end",
+          conversation_id: conversationId || undefined,
+          metadata: {
+            usage: parsedUsage.rawUsage || null,
+            usage_source: parsedUsage.usageSource,
+            estimated: parsedUsage.estimated,
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens: totalTokens,
+          },
+        })
+      }
 
       if (conversationId) {
         fireAndForget(
@@ -5052,18 +5057,24 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (shouldBufferWorkflowSkill && !workflowNodeFailure) {
+      if (shouldBufferWorkflowSkill) {
         if (!hasReceivedContent && finalNodeOutputText.trim()) {
           fullResponseText = finalNodeOutputText
           hasReceivedContent = true
         }
-        if (isInvalidWorkflowSkillResult(workflowSkillId, effectiveQuery, fullResponseText)) {
+        const answerFailure = getWritingAnswerFailure(fullResponseText)
+        if (!workflowNodeFailure && (!writingTerminalSucceeded || !fullResponseText.trim() || answerFailure
+          || isInvalidWorkflowSkillResult(workflowSkillId, effectiveQuery, fullResponseText))) {
           workflowNodeFailure = {
             message: "写作技能未返回有效结果，请重新提交。本次未扣费。",
-            code: "DIFY_INVALID_WORKFLOW_SKILL_RESULT",
+            code: answerFailure === "provider_error" ? "DIFY_UPSTREAM_UNAVAILABLE" : "DIFY_INVALID_WORKFLOW_SKILL_RESULT",
           }
+        }
+        if (workflowNodeFailure) {
+          fullResponseText = ""
+          hasReceivedContent = false
           enqueueSseError(controller, workflowNodeFailure.message, workflowNodeFailure.code)
-        } else if (fullResponseText.trim()) {
+        } else {
           enqueueSseAnswer(controller, fullResponseText)
         }
       }
@@ -5416,7 +5427,7 @@ export async function POST(request: NextRequest) {
       const outputs = json.data?.outputs ?? json.outputs
       const terminalFailure = getDifyTerminalFailure(json, {
         publicMessage: difyFailurePublicMessage,
-        requireSuccessfulWorkflow: shouldBufferEssayCorrection,
+        requireSuccessfulWorkflow: shouldBufferEssayCorrection || shouldBufferWorkflowSkill,
       })
       const terminalEssayText = shouldBufferEssayCorrection
         ? sanitizeDifyAnswerForModel(extractDifyTextOutput(outputs ?? json), model)
@@ -5467,6 +5478,9 @@ export async function POST(request: NextRequest) {
         return true
       }
 
+      if (shouldBufferWorkflowSkill && (json.event === "message_end" || (json.data?.status || json.status) === "succeeded")) {
+        writingTerminalSucceeded = true
+      }
       if (json.event !== "workflow_finished") return false
 
       const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
@@ -5492,6 +5506,8 @@ export async function POST(request: NextRequest) {
               } else if (!fullResponseText.includes(outputText) && !outputText.includes(fullResponseText)) {
                 fullResponseText += outputText
               }
+            } else if (shouldBufferWorkflowSkill) {
+              fullResponseText = outputText
             } else if (isCompleteDeepChatAnswer) {
               completedDeepChatAnswer = outputText.trim()
               fullResponseText = outputText
@@ -5596,7 +5612,7 @@ export async function POST(request: NextRequest) {
 	                  })
 	                }
                   const nodeFailed = ["failed", "error"].includes(nodeStatus)
-                    || (shouldBufferEssayCorrection && ["exception", "cancelled", "canceled", "stopped"].includes(nodeStatus))
+                    || ((shouldBufferEssayCorrection || shouldBufferWorkflowSkill) && ["exception", "cancelled", "canceled", "stopped"].includes(nodeStatus))
 	                  if (json.event === "node_finished" && nodeFailed) {
 	                    const title = sanitizePublicAiLabel(nodeTitle || "", "任务处理")
 	                    const errorMessage = String(
@@ -5645,7 +5661,7 @@ export async function POST(request: NextRequest) {
 	                        message: publicErrorMessage,
 	                        code: publicErrorCode,
 	                      }
-                      enqueueSseError(controller, publicErrorMessage, workflowNodeFailure.code)
+                      if (!shouldBufferWorkflowSkill) enqueueSseError(controller, publicErrorMessage, workflowNodeFailure.code)
                       updateTaskRun(taskRun.id, {
                         status: "running",
                         stage: `${title}处理失败`,
